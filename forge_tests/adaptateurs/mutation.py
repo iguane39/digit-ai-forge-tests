@@ -6,11 +6,14 @@ survivants. Un mutant survivant est nommé avec sa ligne — jamais un total agr
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from forge_tests.noyau import Finding, SortieAdaptateur
+from forge_tests.risque import coter
 
 NOM, PAN, SEUIL = "mutation-python", "back", 0.70
 CIBLE_RELATIVE = Path("backend/app/calcul.py")
@@ -76,13 +79,23 @@ def generer_mutants(source: Path) -> list[Mutant]:
     return mutants
 
 
+def _purger_bytecode(racine: Path) -> None:
+    """Un mutant a la MEME TAILLE que l original ; si la restauration tombe dans la meme
+    seconde, Python reutilise un .pyc perime et la suite juge un code qui n existe plus."""
+    for cache in racine.rglob("__pycache__"):
+        shutil.rmtree(cache, ignore_errors=True)
+
+
 def _suite_verte(banc: Path, python: Path) -> bool:
+    racine = banc / "backend"
+    _purger_bytecode(racine)
     resultat = subprocess.run(
         [str(python), "-m", "pytest", SUITE_RELATIVE, "-q", "--no-header", "-p", "no:cacheprovider"],
-        cwd=banc / "backend",
+        cwd=racine,
         capture_output=True,
         text=True,
         timeout=120,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
     )
     return resultat.returncode == 0
 
@@ -125,6 +138,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 survivants.append(mutant)
     finally:
         source.write_text(original, encoding="utf-8")
+        _purger_bytecode(cible / "backend")
 
     tues = viables - len(survivants)
     score = tues / viables if viables else 0.0
@@ -137,6 +151,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             localisation=f"{source}:{m.ligne + 1}",
             message=f"mutant {m.avant} -> {m.apres} non tué : la suite reste verte",
             severite="signale",
+            risque=coter(PAN, m.id, str(source)),
         )
         for m in survivants
     ]
@@ -147,6 +162,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 classe="seuil-non-tenu",
                 localisation=str(cible),
                 message=f"score de mutation {score:.0%} sous le seuil {SEUIL:.0%}",
+                risque=coter(PAN, f"seuil:{PAN}", str(source)),
             )
         )
     bloquants = [f for f in findings if f.severite == "bloquant"]

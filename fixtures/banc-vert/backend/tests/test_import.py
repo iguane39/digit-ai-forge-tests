@@ -48,3 +48,9 @@ def test_f6_rapprochement_ok() -> None:
 def test_f6_rapprochement_ecart_refuse() -> None:
     with pytest.raises(ValueError, match="rapprochement"):
         importer_csv(b"plat,quantite\ncurry,2\nTOTAL,9\n")
+
+
+# F0 - fichier vide : chemin de rejet revele par la couverture d execution
+def test_f0_fichier_vide() -> None:
+    with pytest.raises(ValueError, match="vide"):
+        importer_csv(b"")

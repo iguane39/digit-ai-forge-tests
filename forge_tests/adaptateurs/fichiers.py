@@ -1,46 +1,81 @@
-"""Adaptateur Fichiers — variantes de format déclarées dans la source."""
+"""Adaptateur Fichiers — chemins de parsing par AST (P3), couverture par exécution (P2).
+
+Même bascule que le pan Batch : plus de tuple VARIANTES déclaré dans la source, plus de
+recoupement textuel. Les chemins de parsing sont dérivés de l arbre syntaxique, et « exercé »
+veut dire « ligne réellement exécutée par la suite ».
+"""
 
 from __future__ import annotations
 
-import re
+import ast
 from pathlib import Path
 
+from forge_tests.execution import NON_JUGE as NON_JUGE_EXEC
+from forge_tests.execution import executees
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "fichiers-python", "fichiers", 1.0
-_VARIANTES = re.compile(r"VARIANTES\s*=\s*\(([^)]*)\)")
-_ITEM = re.compile(r"\"([^\"]+)\"")
+FICHIER = "importer.py"
 
 NON_JUGE = [
-    "fichiers : l inventaire s appuie sur le tuple VARIANTES déclaré dans la source ; un projet "
-    "sans déclaration exige une analyse des chemins de parsing, non implémentée",
+    "fichiers : les chemins sont les branches du module de parsing ; une variante de format qui "
+    "ne produit aucune branche dédiée (encodage géré par la bibliothèque) reste invisible",
+    *NON_JUGE_EXEC,
 ]
 
 
 def _src(cible: Path) -> Path:
-    return cible / "backend" / "app" / "importer.py"
+    return cible / "backend" / "app" / FICHIER
 
 
 def inventaire(cible: Path) -> list[Element]:
     src = _src(cible)
     if not src.exists():
         return []
+    arbre = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))
     elements: list[Element] = []
-    for bloc in _VARIANTES.findall(src.read_text(encoding="utf-8")):
-        for variante in _ITEM.findall(bloc):
+    vus: set[int] = set()
+    for noeud in ast.walk(arbre):
+        blocs: list[tuple[str, list[ast.stmt]]] = []
+        if isinstance(noeud, ast.If):
+            blocs = [("condition vraie", noeud.body), ("condition fausse", noeud.orelse)]
+        elif isinstance(noeud, ast.ExceptHandler):
+            blocs = [("repli sur exception", noeud.body)]
+        elif isinstance(noeud, (ast.For, ast.While)):
+            blocs = [("itération", noeud.body)]
+        for libelle, corps in blocs:
+            if not corps or corps[0].lineno in vus:
+                continue
+            ligne = corps[0].lineno
+            vus.add(ligne)
             elements.append(
-                Element(f"variante:{variante}", PAN, f"variante de format {variante}", str(src))
+                Element(
+                    f"chemin:{FICHIER}:{ligne}",
+                    PAN,
+                    f"chemin de parsing — {libelle}, ligne {ligne}",
+                    str(src),
+                )
             )
     return elements
 
 
-def exerces(cible: Path) -> set[str]:
-    textes = " ".join(
-        f.read_text(encoding="utf-8").lower()
-        for f in sorted((cible / "backend" / "tests").glob("test_*.py"))
-    )
-    return {e.id for e in inventaire(cible) if e.id.split(":", 1)[1].lower() in textes}
+def exerces(cible: Path) -> set[str] | None:
+    lignes = executees(cible, FICHIER)
+    if lignes is None:
+        return None
+    return {
+        e.id for e in inventaire(cible) if int(e.id.rsplit(":", 1)[1]) in lignes
+    }
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
-    return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), exerces(cible), SEUIL, NON_JUGE)
+    couvert = exerces(cible)
+    if couvert is None:
+        return SortieAdaptateur(
+            NOM,
+            PAN,
+            str(cible),
+            "SKIP",
+            non_juge=[*NON_JUGE, "couverture d exécution indisponible : suite rouge ou env absent"],
+        )
+    return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)

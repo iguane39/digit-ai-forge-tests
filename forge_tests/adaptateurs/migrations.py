@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
+from forge_tests.risque import coter
 
 NOM, PAN, SEUIL = "migrations-sql", "migrations", 1.0
 SENS = ("aller", "retour", "rejeu")
@@ -61,6 +62,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     classe="divergence",
                     localisation=str(fichier),
                     message="migration sans section de retour : elle ne peut pas être inversée",
+                    risque=coter(PAN, "migration:retour", str(fichier)),
                 )
             )
             sortie.verdict = "FAIL"

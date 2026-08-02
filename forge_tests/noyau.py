@@ -83,6 +83,8 @@ def evaluer_surface(
     non_juge: list[str],
 ) -> SortieAdaptateur:
     """Compare l inventaire au perimetre exerce. Tout element non exerce est un FAIL NOMME."""
+    from forge_tests.risque import coter
+
     manquants = [e for e in inventaire if e.id not in exerces]
     total = len(inventaire)
     ratio = (total - len(manquants)) / total if total else 1.0
@@ -92,17 +94,22 @@ def evaluer_surface(
             classe="element-non-exerce",
             localisation=e.source,
             message=f"{e.libelle} : inventorie, jamais exerce par la suite",
+            risque=coter(pan, e.id, e.source),
         )
         for e in manquants
     ]
+    # P1 — le plus risque d abord : sans tri, 83 findings egaux forment une liste qu on ne lit pas.
+    findings.sort(key=lambda f: f.risque or 0, reverse=True)
     if total and ratio < seuil:
-        findings.append(
+        findings.insert(
+            0,
             Finding(
                 id=f"seuil:{pan}",
                 classe="seuil-non-tenu",
                 localisation=cible,
                 message=f"couverture de surface {ratio:.0%} sous le seuil {seuil:.0%}",
-            )
+                risque=coter(pan, f"seuil:{pan}", inventaire[0].source if inventaire else cible),
+            ),
         )
     return SortieAdaptateur(
         adaptateur=adaptateur,
@@ -142,9 +149,19 @@ def verifier_regle_conjointe(sorties: list[SortieAdaptateur]) -> None:
 
 def rapport(sorties: list[SortieAdaptateur], pans_attendus: list[str]) -> dict:
     """Assemble le rapport. Un pan sans adaptateur est NOMME, jamais omis."""
+    from forge_tests.risque import NON_JUGE as NON_JUGE_RISQUE
+
     verifier_regle_conjointe(sorties)
     couverts = {s.pan for s in sorties}
     non_couverts = [p for p in pans_attendus if p not in couverts]
+    tous = sorted(
+        (f for s in sorties for f in s.findings),
+        key=lambda f: f.risque or 0,
+        reverse=True,
+    )
+    bandes = {"critique": 0, "standard": 0, "differe": 0, "non_cote": 0}
+    for f in tous:
+        bandes["non_cote" if f.risque is None else bande(f.risque)] += 1
     return {
         "adaptateurs": [
             {"nom": s.adaptateur, "pan": s.pan, "verdict": s.verdict} for s in sorties
@@ -154,8 +171,9 @@ def rapport(sorties: list[SortieAdaptateur], pans_attendus: list[str]) -> dict:
         },
         "mutation": {s.pan: s.mutation for s in sorties if s.mutation is not None},
         "pans_non_couverts": non_couverts,
-        "findings": [asdict(f) for s in sorties for f in s.findings],
-        "non_juge": sorted({n for s in sorties for n in s.non_juge}),
+        "bandes_de_risque": bandes,
+        "findings": [asdict(f) for f in tous],
+        "non_juge": sorted({n for s in sorties for n in s.non_juge} | set(NON_JUGE_RISQUE)),
         "verdict": (
             "PARTIEL"
             if non_couverts

@@ -10,7 +10,10 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.2"]
+dev = [
+    "coverage>=7.15.2",
+    "pytest>=8.2",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

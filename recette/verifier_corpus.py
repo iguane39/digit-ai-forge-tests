@@ -29,7 +29,7 @@ CORPUS = [
     ("H-04", "data", "contraintes jamais violées", ("contrainte:",)),
     ("H-05", "migrations", "migrations ni inversées ni rejouées", ("migration:",)),
     ("H-06", "batch", "branches de rejet et reprise non parcourues", ("branche:", "rejet:")),
-    ("H-07", "fichiers", "variantes de format non soumises", ("variante:",)),
+    ("H-07", "fichiers", "chemins de parsing non exercés", ("chemin:",)),
     ("H-08", "back", "assertions permissives", ("mutant:", "seuil:back")),
 ]
 

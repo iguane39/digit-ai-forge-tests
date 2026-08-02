@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "note": "Dette de jugement du framework. `todo` = à outiller · `assume` = limite acceptée et déclarée pour toujours · `ok` = comblée. Régénéré depuis le code : ne pas éditer les énoncés à la main, seulement les statuts et les notes.",
+  "dette": [
+    {
+      "id": "api-fastapi-36917142",
+      "domaine": "api-fastapi",
+      "enonce": "api : un code asserte dans une fonction de test est rattache a TOUS les appels de cette fonction ; l oracle ne relie pas l assertion a un appel precis",
+      "statut": "todo"
+    },
+    {
+      "id": "api-fastapi-e3cc430e",
+      "domaine": "api-fastapi",
+      "enonce": "api : codes produits par le framework sans declaration explicite dans responses=",
+      "statut": "todo"
+    },
+    {
+      "id": "batch-python-b6a8e2ea",
+      "domaine": "batch-python",
+      "enonce": "batch : les branches sont dérivées de l AST du module ; une branche implicite (opérateur ternaire, court-circuit booléen) n est pas inventoriée séparément",
+      "statut": "todo"
+    },
+    {
+      "id": "batch-python-e6621c0d",
+      "domaine": "batch-python",
+      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
+      "statut": "todo"
+    },
+    {
+      "id": "batch-python-edbe4456",
+      "domaine": "batch-python",
+      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
+      "statut": "todo"
+    },
+    {
+      "id": "data-sql-6376a933",
+      "domaine": "data-sql",
+      "enonce": "data : une contrainte est réputée exercée si son nom ou sa colonne apparaît dans un test attendant un rejet ; l oracle ne vérifie pas que le rejet porte bien sur cette contrainte",
+      "statut": "todo"
+    },
+    {
+      "id": "data-sql-b61e6dfa",
+      "domaine": "data-sql",
+      "enonce": "data : contraintes créées hors migrations (ORM seul, triggers, index partiels)",
+      "statut": "todo"
+    },
+    {
+      "id": "execution-e6621c0d",
+      "domaine": "execution",
+      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
+      "statut": "todo"
+    },
+    {
+      "id": "execution-edbe4456",
+      "domaine": "execution",
+      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
+      "statut": "todo"
+    },
+    {
+      "id": "fichiers-python-b1c45a6d",
+      "domaine": "fichiers-python",
+      "enonce": "fichiers : les chemins sont les branches du module de parsing ; une variante de format qui ne produit aucune branche dédiée (encodage géré par la bibliothèque) reste invisible",
+      "statut": "todo"
+    },
+    {
+      "id": "fichiers-python-e6621c0d",
+      "domaine": "fichiers-python",
+      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
+      "statut": "todo"
+    },
+    {
+      "id": "fichiers-python-edbe4456",
+      "domaine": "fichiers-python",
+      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
+      "statut": "todo"
+    },
+    {
+      "id": "front-react-fe504d65",
+      "domaine": "front-react",
+      "enonce": "front : un element mentionne par la suite est repute exerce ; l oracle ne verifie pas que l interaction a lieu ni qu elle assert quelque chose",
+      "statut": "todo"
+    },
+    {
+      "id": "front-react-48d7dbe0",
+      "domaine": "front-react",
+      "enonce": "front : elements rendus dynamiquement sans data-testid statique (non inventoriables ici)",
+      "statut": "todo"
+    },
+    {
+      "id": "migrations-sql-a4b8f19a",
+      "domaine": "migrations-sql",
+      "enonce": "migrations : un sens est réputé exercé si un test le nomme ; l oracle ne vérifie pas que la migration a réellement été appliquée dans ce sens",
+      "statut": "todo"
+    },
+    {
+      "id": "mutation-python-0a4363f6",
+      "domaine": "mutation-python",
+      "enonce": "mutation : périmètre limité au module de calcul ; le reste du back n est pas muté",
+      "statut": "todo"
+    },
+    {
+      "id": "mutation-python-f496a011",
+      "domaine": "mutation-python",
+      "enonce": "mutation : les mutants équivalents ne sont pas détectés — un survivant peut être un mutant sémantiquement identique à l original",
+      "statut": "assume",
+      "note": "indécidable en général : aucune version future ne les éliminera. Triage humain des survivants."
+    },
+    {
+      "id": "mutation-python-f5a0e6e6",
+      "domaine": "mutation-python",
+      "enonce": "mutation : opérateurs arithmétiques et constantes numériques seulement",
+      "statut": "todo"
+    },
+    {
+      "id": "risque-d7aeecaa",
+      "domaine": "risque",
+      "enonce": "risque : la criticité et le coût de détection tardive sont DÉCLARÉS par pan, pas mesurés — un projet dont les enjeux diffèrent doit redéclarer la table COTATION_PAN",
+      "statut": "assume",
+      "note": "choix de conception assumé et versionné dans COTATION_PAN ; à redéclarer par projet."
+    },
+    {
+      "id": "risque-e5a9984f",
+      "domaine": "risque",
+      "enonce": "risque : la probabilité de défaillance est approchée par le nombre de commits touchant le fichier ; hors dépôt git, elle retombe sur une valeur neutre",
+      "statut": "todo"
+    }
+  ]
+}

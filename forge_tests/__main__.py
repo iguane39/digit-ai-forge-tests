@@ -37,8 +37,19 @@ def _resume(rap: dict) -> str:
     if rap["pans_non_couverts"]:
         lignes.append("")
         lignes.append("pans NON COUVERTS (adaptateur absent) : " + ", ".join(rap["pans_non_couverts"]))
+    bandes = rap["bandes_de_risque"]
     lignes.append("")
-    lignes.append(f"findings nommés : {len(rap['findings'])}")
+    lignes.append(
+        f"findings nommés : {len(rap['findings'])}  "
+        f"(critique {bandes['critique']} · standard {bandes['standard']} · "
+        f"différé {bandes['differe']} · non coté {bandes['non_cote']})"
+    )
+    if rap["findings"]:
+        lignes.append("")
+        lignes.append("les plus risqués")
+        for f in rap["findings"][:8]:
+            cote = f"{f['risque']:>3}" if f["risque"] is not None else "  -"
+            lignes.append(f"  risque {cote}  {f['id']}")
     return "\n".join(lignes)
 
 
