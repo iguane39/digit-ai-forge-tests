@@ -207,6 +207,18 @@
       "domaine": "mutation-python",
       "enonce": "mutation : opérateurs arithmétiques et de comparaison ; ni suppression d instruction, ni permutation d arguments, ni mutation de littéraux non numériques",
       "statut": "todo"
+    },
+    {
+      "id": "securite-oracles-507f7f68",
+      "domaine": "securite-oracles",
+      "enonce": "securite : le perimetre scanne est le dossier applicatif ; ni l historique git, ni l infrastructure, ni la configuration de deploiement",
+      "statut": "todo"
+    },
+    {
+      "id": "securite-oracles-d85fe366",
+      "domaine": "securite-oracles",
+      "enonce": "securite : aucun test d intrusion ni d authentification/autorisation au niveau metier",
+      "statut": "todo"
     }
   ]
 }

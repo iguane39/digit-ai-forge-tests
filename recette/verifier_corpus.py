@@ -37,6 +37,7 @@ CORPUS = [
     ("H-06", "batch", "branches de rejet et reprise non parcourues", ("branche:", "rejet:")),
     ("H-07", "fichiers", "chemins de parsing non exercés", ("chemin:",)),
     ("H-08", "back", "assertions permissives", ("mutant:", "seuil:back")),
+    ("H-09", "securite", "execution dynamique non signalee", ("securite:",)),
 ]
 
 
@@ -65,7 +66,7 @@ def main() -> int:
             print(f"             -> ... et {len(trouves) - 2} autre(s) élément(s) nommé(s)")
 
     print("-" * 78)
-    print(f"  banc ROUGE : {detectes}/8 défauts détectés · {len(rouge['findings'])} findings nommés")
+    print(f"  banc ROUGE : {detectes}/{len(CORPUS)} défauts détectés · {len(rouge['findings'])} findings nommés")
     bloquants_vert = [f for f in vert["findings"] if f.get("severite") == "bloquant"]
     signales_vert = [f for f in vert["findings"] if f.get("severite") != "bloquant"]
     print(f"  banc VERT  : {len(bloquants_vert)} finding(s) bloquant(s) — attendu 0")
@@ -74,7 +75,7 @@ def main() -> int:
         print(f"                 - {f['id']}")
     print(f"  verdicts   : rouge={rouge['verdict']} · vert={vert['verdict']}")
 
-    succes = detectes == 8 and not bloquants_vert
+    succes = detectes == len(CORPUS) and not bloquants_vert
     print("=" * 78)
     print("  S-01 TENU" if succes else "  S-01 NON TENU")
     return 0 if succes else 1
