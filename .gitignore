@@ -14,3 +14,5 @@ dist/
 test-results/
 playwright-report/
 resultat-playwright.json
+.visuel/*.html
+.visuel/*.jsonl

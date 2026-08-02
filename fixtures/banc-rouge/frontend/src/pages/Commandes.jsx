@@ -1,6 +1,6 @@
 export default function Commandes() {
   return (
-    <section>
+    <section style={{ padding: "90px 40px", lineHeight: "3rem" }}>
       <select data-testid="filtre-statut" defaultValue="brouillon">
         <option value="brouillon">Brouillon</option>
         <option value="validee">Validee</option>
@@ -9,7 +9,7 @@ export default function Commandes() {
       <button data-testid="tri-date">Trier par date</button>
       <button data-testid="bouton-nouvelle">Nouvelle</button>
       <button data-testid="bouton-export">Exporter</button>
-      <nav data-testid="pagination">1 2 3</nav>
+      <nav data-testid="pagination"></nav>
     </section>
   );
 }

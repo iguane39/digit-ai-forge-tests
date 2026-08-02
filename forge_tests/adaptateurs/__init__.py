@@ -2,6 +2,7 @@
 
 from forge_tests.adaptateurs import (
     accessibilite, api, batch, data, fichiers, front, migrations, mutation, securite,
+    visuel,
 )
 
 REGISTRE = {
@@ -14,9 +15,10 @@ REGISTRE = {
     "mutation-python": mutation,
     "securite-oracles": securite,
     "accessibilite-a11y": accessibilite,
+    "visuel-golden": visuel,
 }
 
 PANS_ATTENDUS = [
     "front", "api", "data", "migrations", "batch", "fichiers", "back", "securite",
-    "accessibilite",
+    "accessibilite", "visuel",
 ]

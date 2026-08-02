@@ -39,6 +39,7 @@ CORPUS = [
     ("H-08", "back", "assertions permissives", ("mutant:", "seuil:back")),
     ("H-09", "securite", "execution dynamique non signalee", ("securite:",)),
     ("H-10", "accessibilite", "controles sans nom accessible", ("a11y:",)),
+    ("H-11", "visuel", "regression visuelle de mise en page", ("visuel:",)),
 ]
 
 

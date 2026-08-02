@@ -117,6 +117,8 @@ def _juger(capture: Path) -> dict | None:
     resultat = subprocess.run(
         [python, str(_ORACLE), str(capture)],
         capture_output=True, text=True, timeout=180, encoding="utf-8", errors="replace",
+        # Sans cela l oracle plante en ECRIVANT son verdict : console cp1252, JSON accentue.
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
     )
     sortie = (resultat.stdout or "").strip()
     try:

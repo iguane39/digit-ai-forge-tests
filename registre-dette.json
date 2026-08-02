@@ -285,6 +285,18 @@
       "domaine": "securite-oracles",
       "enonce": "securite : le perimetre scanne est le dossier du projet analyse ; ni l historique git, ni l infrastructure declaree ailleurs (conteneurs, pipelines, secrets d execution)",
       "statut": "todo"
+    },
+    {
+      "id": "visuel-golden-195c578f",
+      "domaine": "visuel-golden",
+      "enonce": "visuel : un diff dit qu il y a changement, pas si le changement est VOULU — la decision reste humaine (limite propre de l oracle, reprise telle quelle)",
+      "statut": "todo"
+    },
+    {
+      "id": "visuel-golden-f02d7e5b",
+      "domaine": "visuel-golden",
+      "enonce": "visuel : le rendu compare est le DOM capture a l etat initial de chaque route, sans style externe charge depuis le serveur",
+      "statut": "todo"
     }
   ]
 }
