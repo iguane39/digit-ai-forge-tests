@@ -1,0 +1,20 @@
+# Manifeste opposable (P-18) lu par digit-ai-saas-forge.
+# `has_ui = false` : Forge Tests est un outil en ligne de commande, pas une application.
+# Le gate design n'a donc pas d'objet et doit être neutralisé — pas contourné, déclaré.
+#
+# Ce manifeste n'est honoré qu'à partir du correctif V-1 (PR #39 de digit-ai-saas-forge) :
+# avant lui, `select_onramp` consultait `detect_stack` en premier et un dépôt portant un
+# `pyproject.toml` à la racine se voyait imposer le profil curé `fastapi-saas`, has_ui compris.
+
+name = "forge-tests"
+has_ui = false
+
+[roles]
+cli = "."
+
+[pkg_managers]
+cli = "uv"
+
+[commands.cli]
+test = "uv run pytest"
+lint = "uv run ruff check ."
