@@ -72,11 +72,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.generer is not None:
         from forge_tests.execution import schema_openapi
         from forge_tests.generateur import ecrire
+        from forge_tests.generateur_data import ecrire as ecrire_data
 
         produit = ecrire(
             rap, args.generer.resolve(), schema=schema_openapi(str(args.cible.resolve()))
         )
-        print(f"cas generes -> {produit}" if produit else "aucun cas a generer")
+        produit_data = ecrire_data(rap, args.cible.resolve(), args.generer.resolve())
+        for chemin, pan in ((produit, "api"), (produit_data, "data")):
+            print(f"cas generes ({pan}) -> {chemin}" if chemin else f"aucun cas ({pan})")
     print(json.dumps(rap, ensure_ascii=False, indent=2) if args.json else _resume(rap))
     if rap["verdict"] == "PARTIEL":
         return 3

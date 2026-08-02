@@ -3,6 +3,13 @@
   "note": "Dette de jugement du framework. `todo` = à outiller · `assume` = limite acceptée et déclarée pour toujours · `ok` = comblée. Régénéré depuis le code : ne pas éditer les énoncés à la main, seulement les statuts et les notes.",
   "dette": [
     {
+      "id": "accessibilite-a11y-076c4976",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
+      "statut": "assume",
+      "note": "limite propre de oracle-a11y, reprise telle quelle : audit axe-core complet, contraste et navigation clavier sortent de son contrat."
+    },
+    {
       "id": "api-fastapi-28e9b332",
       "domaine": "api-fastapi",
       "enonce": "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une ASSERTION porte sur lui — c est le role du second contre-oracle",
@@ -10,11 +17,39 @@
       "note": "par conception : la faiblesse d assertion est mesuree par la mutation, pas par la couverture. Architecture, pas dette."
     },
     {
+      "id": "batch-python-b6a8e2ea",
+      "domaine": "batch-python",
+      "enonce": "batch : les branches sont dérivées de l AST du module ; une branche implicite (opérateur ternaire, court-circuit booléen) n est pas inventoriée séparément",
+      "statut": "assume",
+      "note": "non levable par les arcs de couverture : un ternaire tient sur une seule ligne, il n existe aucun arc entre ses deux issues. Exigerait une instrumentation AST du code teste."
+    },
+    {
+      "id": "data-sql-6f7294ed",
+      "domaine": "data-sql",
+      "enonce": "data : sur SQLite les clés étrangères restent non attribuables (le moteur ne nomme pas la contrainte violée) ; l attribution complète exige un moteur qui les nomme, comme PostgreSQL",
+      "statut": "assume",
+      "note": "limite du MOTEUR, pas de l outil : le banc tourne sur PostgreSQL, qui nomme tout. Note de portabilite pour un projet reste sur SQLite."
+    },
+    {
+      "id": "execution-edbe4456",
+      "domaine": "execution",
+      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
+      "statut": "assume",
+      "note": "par conception : la faiblesse d assertion est mesuree par la mutation, jamais par la couverture. Deux contre-oracles, deux roles."
+    },
+    {
       "id": "fichiers-python-b1c45a6d",
       "domaine": "fichiers-python",
       "enonce": "fichiers : les chemins sont les branches du module de parsing ; une variante de format qui ne produit aucune branche dédiée (encodage géré par la bibliothèque) reste invisible",
       "statut": "assume",
       "note": "une variante sans branche dediee est indistinguable du chemin nominal par analyse de flot."
+    },
+    {
+      "id": "front-react-60be323d",
+      "domaine": "front-react",
+      "enonce": "front : un element manipule pendant la suite est repute exerce ; la trace dit qu il a ete atteint, pas qu une ASSERTION porte sur son effet",
+      "statut": "assume",
+      "note": "par conception : la faiblesse d assertion est mesuree par la mutation, jamais par la couverture. Deux contre-oracles, deux roles."
     },
     {
       "id": "front-react-48d7dbe0",
@@ -57,6 +92,13 @@
       "enonce": "risque : la probabilité de défaillance est approchée par le nombre de commits touchant le fichier ; hors dépôt git, elle retombe sur une valeur neutre",
       "statut": "assume",
       "note": "proxy assume : sans historique il n existe pas de meilleur signal que la valeur neutre declaree."
+    },
+    {
+      "id": "securite-oracles-d85fe366",
+      "domaine": "securite-oracles",
+      "enonce": "securite : aucun test d intrusion ni d authentification/autorisation au niveau metier",
+      "statut": "assume",
+      "note": "hors du contrat d un oracle statique : un test d intrusion releve d une demarche offensive, pas d une mesure de couverture."
     },
     {
       "id": "api-fastapi-36917142",
@@ -185,31 +227,16 @@
       "statut": "resolue"
     },
     {
+      "id": "securite-oracles-507f7f68",
+      "domaine": "securite-oracles",
+      "enonce": "securite : le perimetre scanne est le dossier applicatif ; ni l historique git, ni l infrastructure, ni la configuration de deploiement",
+      "statut": "resolue"
+    },
+    {
       "id": "accessibilite-a11y-6343ef4f",
       "domaine": "accessibilite-a11y",
       "enonce": "accessibilite : le DOM est capture a l etat INITIAL de chaque route ; les etats atteints apres interaction (menu ouvert, modale, message d erreur) ne sont pas audites",
       "statut": "todo"
-    },
-    {
-      "id": "accessibilite-a11y-076c4976",
-      "domaine": "accessibilite-a11y",
-      "enonce": "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
-      "statut": "assume",
-      "note": "limite propre de oracle-a11y, reprise telle quelle : audit axe-core complet, contraste et navigation clavier sortent de son contrat."
-    },
-    {
-      "id": "batch-python-b6a8e2ea",
-      "domaine": "batch-python",
-      "enonce": "batch : les branches sont dérivées de l AST du module ; une branche implicite (opérateur ternaire, court-circuit booléen) n est pas inventoriée séparément",
-      "statut": "assume",
-      "note": "non levable par les arcs de couverture : un ternaire tient sur une seule ligne, il n existe aucun arc entre ses deux issues. Exigerait une instrumentation AST du code teste."
-    },
-    {
-      "id": "data-sql-6f7294ed",
-      "domaine": "data-sql",
-      "enonce": "data : sur SQLite les clés étrangères restent non attribuables (le moteur ne nomme pas la contrainte violée) ; l attribution complète exige un moteur qui les nomme, comme PostgreSQL",
-      "statut": "assume",
-      "note": "limite du MOTEUR, pas de l outil : le banc tourne sur PostgreSQL, qui nomme tout. Note de portabilite pour un projet reste sur SQLite."
     },
     {
       "id": "data-sql-8c45c77b",
@@ -224,23 +251,15 @@
       "statut": "todo"
     },
     {
-      "id": "execution-edbe4456",
-      "domaine": "execution",
-      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
-      "statut": "assume",
-      "note": "par conception : la faiblesse d assertion est mesuree par la mutation, jamais par la couverture. Deux contre-oracles, deux roles."
-    },
-    {
-      "id": "front-react-60be323d",
-      "domaine": "front-react",
-      "enonce": "front : un element manipule pendant la suite est repute exerce ; la trace dit qu il a ete atteint, pas qu une ASSERTION porte sur son effet",
-      "statut": "assume",
-      "note": "par conception : la faiblesse d assertion est mesuree par la mutation, jamais par la couverture. Deux contre-oracles, deux roles."
-    },
-    {
       "id": "generateur-bf878b82",
       "domaine": "generateur",
       "enonce": "generateur : couvre le seul pan API ; les autres pans ne sont pas generes",
+      "statut": "todo"
+    },
+    {
+      "id": "generateur-data-1c4024e3",
+      "domaine": "generateur-data",
+      "enonce": "generateur data : la valeur violante est derivee du TYPE de contrainte (unicite, non-nullite, cle etrangere, verification) ; une contrainte de verification a expression complexe n est pas resolue et n est pas generee",
       "statut": "todo"
     },
     {
@@ -262,17 +281,10 @@
       "statut": "todo"
     },
     {
-      "id": "securite-oracles-507f7f68",
+      "id": "securite-oracles-a0a08e45",
       "domaine": "securite-oracles",
-      "enonce": "securite : le perimetre scanne est le dossier applicatif ; ni l historique git, ni l infrastructure, ni la configuration de deploiement",
+      "enonce": "securite : le perimetre scanne est le dossier du projet analyse ; ni l historique git, ni l infrastructure declaree ailleurs (conteneurs, pipelines, secrets d execution)",
       "statut": "todo"
-    },
-    {
-      "id": "securite-oracles-d85fe366",
-      "domaine": "securite-oracles",
-      "enonce": "securite : aucun test d intrusion ni d authentification/autorisation au niveau metier",
-      "statut": "assume",
-      "note": "hors du contrat d un oracle statique : un test d intrusion releve d une demarche offensive, pas d une mesure de couverture."
     }
   ]
 }

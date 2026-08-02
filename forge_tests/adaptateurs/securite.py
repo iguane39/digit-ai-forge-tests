@@ -28,8 +28,8 @@ _DEFAUT = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts"
 # Nom attendu par le registre de dette. Les non_juge des oracles delegues s y ajoutent a
 # l execution : ils dependent des outils reellement presents (semgrep, gitleaks, pip-audit).
 NON_JUGE = [
-    "securite : le perimetre scanne est le dossier applicatif ; ni l historique git, ni "
-    "l infrastructure, ni la configuration de deploiement",
+    "securite : le perimetre scanne est le dossier du projet analyse ; ni l historique git, "
+    "ni l infrastructure declaree ailleurs (conteneurs, pipelines, secrets d execution)",
     "securite : aucun test d intrusion ni d authentification/autorisation au niveau metier",
 ]
 
@@ -64,7 +64,9 @@ def _lancer(script: Path, cible: Path) -> dict | None:
 
 def analyser(cible: Path) -> SortieAdaptateur:
     racine = _racine_oracles()
-    application = cible / "backend" / "app"
+    # Perimetre elargi : le code applicatif ET tout ce qui l entoure — configuration, tests,
+    # scripts. Un secret en dur vit rarement dans le module metier.
+    application = cible / "backend"
     if racine is None or not application.is_dir():
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",

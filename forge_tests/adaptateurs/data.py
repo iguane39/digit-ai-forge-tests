@@ -6,7 +6,8 @@ import re
 from pathlib import Path
 
 from forge_tests.execution import instructions_sql, violations_levees
-from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
+from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
+from forge_tests.risque import coter
 
 NOM, PAN, SEUIL = "data-sql", "data", 1.0
 _TABLE = re.compile(r"CREATE TABLE (\w+)\s*\(", re.IGNORECASE)
@@ -178,4 +179,35 @@ def _repli_textuel(cible: Path, elements: list[Element]) -> set[str]:
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
-    return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), exerces(cible), SEUIL, NON_JUGE)
+    couvert = exerces(cible)
+    if couvert is None:
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            non_juge=[*NON_JUGE, "sonde indisponible : suite rouge ou environnement absent"],
+        )
+    inv = inventaire(cible)
+    sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)
+
+    # Une contrainte declaree au MODELE mais absente des MIGRATIONS est une divergence : le code
+    # croit la base protegee, la base ne l est pas. Aucun test ne peut la reveler — il n y a rien
+    # a violer. Seule la comparaison des deux sources la nomme.
+    migrations = " ".join(f.read_text(encoding="utf-8") for f in _sql(cible))
+    modeles = cible / "backend" / "app" / "models.py"
+    if modeles.exists():
+        for nom in _ORM_NOMMEE.findall(modeles.read_text(encoding="utf-8")):
+            if nom in migrations:
+                continue
+            sortie.findings.append(
+                Finding(
+                    id=f"divergence:contrainte:{nom}",
+                    classe="divergence",
+                    localisation=str(modeles),
+                    message=(
+                        f"contrainte {nom} declaree au modele mais absente des migrations : "
+                        "la base ne l applique pas"
+                    ),
+                    risque=coter(PAN, f"contrainte:{nom}", str(modeles)),
+                )
+            )
+            sortie.verdict = "FAIL"
+    return sortie
