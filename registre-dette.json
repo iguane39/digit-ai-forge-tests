@@ -24,11 +24,25 @@
       "note": "non levable par les arcs de couverture : un ternaire tient sur une seule ligne, il n existe aucun arc entre ses deux issues. Exigerait une instrumentation AST du code teste."
     },
     {
+      "id": "batch-python-dc664872",
+      "domaine": "batch-python",
+      "enonce": "batch : une branche dont le corps tient sur la MEME ligne que son test (`if x: y`) n est pas distinguable — les arcs de coverage.py vont de ligne a ligne, il n en existe aucun entre une ligne et elle-meme. Repli sur la couverture de ligne, moins precis",
+      "statut": "assume",
+      "note": "non levable par les arcs : coverage.py les emet de ligne a ligne, il n en existe aucun entre une ligne et elle-meme. Exigerait une instrumentation AST du code teste."
+    },
+    {
       "id": "data-sql-6f7294ed",
       "domaine": "data-sql",
       "enonce": "data : sur SQLite les clés étrangères restent non attribuables (le moteur ne nomme pas la contrainte violée) ; l attribution complète exige un moteur qui les nomme, comme PostgreSQL",
       "statut": "assume",
       "note": "limite du MOTEUR, pas de l outil : le banc tourne sur PostgreSQL, qui nomme tout. Note de portabilite pour un projet reste sur SQLite."
+    },
+    {
+      "id": "data-sql-8c45c77b",
+      "domaine": "data-sql",
+      "enonce": "data : un index ou un trigger est réputé exercé si son instruction de création a été envoyée au moteur ; son EFFET (unicité réellement testée, trigger réellement déclenché) n est pas vérifié",
+      "statut": "assume",
+      "note": "l effet d un index (performance) ou d un trigger sort du contrat d un oracle de couverture ; son existence et son application sont, elles, verifiees."
     },
     {
       "id": "execution-edbe4456",
@@ -73,6 +87,13 @@
       "note": "arbitrage precision/rappel assume : remplir un optionnel au hasard produit des faux positifs."
     },
     {
+      "id": "generateur-data-1c4024e3",
+      "domaine": "generateur-data",
+      "enonce": "generateur data : la valeur violante est derivee du TYPE de contrainte (unicite, non-nullite, cle etrangere, verification) ; une contrainte de verification a expression complexe n est pas resolue et n est pas generee",
+      "statut": "assume",
+      "note": "une contrainte CHECK a expression arbitraire demande un solveur ; hors contrat, la contrainte est signalee non generable plutot que generee a tort."
+    },
+    {
       "id": "mutation-python-f496a011",
       "domaine": "mutation-python",
       "enonce": "mutation : les mutants équivalents ne sont pas détectés — un survivant peut être un mutant sémantiquement identique à l original",
@@ -94,11 +115,32 @@
       "note": "proxy assume : sans historique il n existe pas de meilleur signal que la valeur neutre declaree."
     },
     {
+      "id": "securite-oracles-a0a08e45",
+      "domaine": "securite-oracles",
+      "enonce": "securite : le perimetre scanne est le dossier du projet analyse ; ni l historique git, ni l infrastructure declaree ailleurs (conteneurs, pipelines, secrets d execution)",
+      "statut": "assume",
+      "note": "l historique git et l infrastructure relevent d autres oracles du registre, pas de celui-ci — perimetre assume, pas oubli."
+    },
+    {
       "id": "securite-oracles-d85fe366",
       "domaine": "securite-oracles",
       "enonce": "securite : aucun test d intrusion ni d authentification/autorisation au niveau metier",
       "statut": "assume",
       "note": "hors du contrat d un oracle statique : un test d intrusion releve d une demarche offensive, pas d une mesure de couverture."
+    },
+    {
+      "id": "visuel-golden-195c578f",
+      "domaine": "visuel-golden",
+      "enonce": "visuel : un diff dit qu il y a changement, pas si le changement est VOULU — la decision reste humaine (limite propre de l oracle, reprise telle quelle)",
+      "statut": "assume",
+      "note": "indecidable par construction : seul un humain sait si un changement de rendu est voulu. C est la raison d etre du feu vert sur les goldens."
+    },
+    {
+      "id": "visuel-golden-f02d7e5b",
+      "domaine": "visuel-golden",
+      "enonce": "visuel : le rendu compare est le DOM capture a l etat initial de chaque route, sans style externe charge depuis le serveur",
+      "statut": "assume",
+      "note": "le DOM capture est autoportant par choix : dependre du serveur au moment du jugement rendrait le verdict non reproductible."
     },
     {
       "id": "api-fastapi-36917142",
@@ -227,6 +269,12 @@
       "statut": "resolue"
     },
     {
+      "id": "migrations-sql-d2d9e0bb",
+      "domaine": "migrations-sql",
+      "enonce": "migrations : un sens est exercé si les instructions de sa section ont été RÉELLEMENT envoyées au moteur ; l oracle ne vérifie pas que leur effet sur le schéma est correct",
+      "statut": "resolue"
+    },
+    {
       "id": "mutation-python-0a4363f6",
       "domaine": "mutation-python",
       "enonce": "mutation : périmètre limité au module de calcul ; le reste du back n est pas muté",
@@ -263,20 +311,6 @@
       "statut": "todo"
     },
     {
-      "id": "batch-python-dc664872",
-      "domaine": "batch-python",
-      "enonce": "batch : une branche dont le corps tient sur la MEME ligne que son test (`if x: y`) n est pas distinguable — les arcs de coverage.py vont de ligne a ligne, il n en existe aucun entre une ligne et elle-meme. Repli sur la couverture de ligne, moins precis",
-      "statut": "assume",
-      "note": "non levable par les arcs : coverage.py les emet de ligne a ligne, il n en existe aucun entre une ligne et elle-meme. Exigerait une instrumentation AST du code teste."
-    },
-    {
-      "id": "data-sql-8c45c77b",
-      "domaine": "data-sql",
-      "enonce": "data : un index ou un trigger est réputé exercé si son instruction de création a été envoyée au moteur ; son EFFET (unicité réellement testée, trigger réellement déclenché) n est pas vérifié",
-      "statut": "assume",
-      "note": "l effet d un index (performance) ou d un trigger sort du contrat d un oracle de couverture ; son existence et son application sont, elles, verifiees."
-    },
-    {
       "id": "execution-1dfcb298",
       "domaine": "execution",
       "enonce": "exécution : la couverture combine lignes et ARCS de branchement ; une branche implicite (ternaire, court-circuit booléen) reste hors de portée de coverage.py",
@@ -289,16 +323,9 @@
       "statut": "todo"
     },
     {
-      "id": "generateur-data-1c4024e3",
-      "domaine": "generateur-data",
-      "enonce": "generateur data : la valeur violante est derivee du TYPE de contrainte (unicite, non-nullite, cle etrangere, verification) ; une contrainte de verification a expression complexe n est pas resolue et n est pas generee",
-      "statut": "assume",
-      "note": "une contrainte CHECK a expression arbitraire demande un solveur ; hors contrat, la contrainte est signalee non generable plutot que generee a tort."
-    },
-    {
-      "id": "migrations-sql-d2d9e0bb",
+      "id": "migrations-sql-2fdea760",
       "domaine": "migrations-sql",
-      "enonce": "migrations : un sens est exercé si les instructions de sa section ont été RÉELLEMENT envoyées au moteur ; l oracle ne vérifie pas que leur effet sur le schéma est correct",
+      "enonce": "migrations : l effet verifie est l EXISTENCE des objets nommes (tables, contraintes, index) apres application ; ni leur definition exacte, ni les donnees migrees",
       "statut": "todo"
     },
     {
@@ -312,27 +339,6 @@
       "domaine": "mutation-python",
       "enonce": "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance, bornes numériques et suppression d instruction ; ni permutation d arguments, ni littéraux non numériques",
       "statut": "todo"
-    },
-    {
-      "id": "securite-oracles-a0a08e45",
-      "domaine": "securite-oracles",
-      "enonce": "securite : le perimetre scanne est le dossier du projet analyse ; ni l historique git, ni l infrastructure declaree ailleurs (conteneurs, pipelines, secrets d execution)",
-      "statut": "assume",
-      "note": "l historique git et l infrastructure relevent d autres oracles du registre, pas de celui-ci — perimetre assume, pas oubli."
-    },
-    {
-      "id": "visuel-golden-195c578f",
-      "domaine": "visuel-golden",
-      "enonce": "visuel : un diff dit qu il y a changement, pas si le changement est VOULU — la decision reste humaine (limite propre de l oracle, reprise telle quelle)",
-      "statut": "assume",
-      "note": "indecidable par construction : seul un humain sait si un changement de rendu est voulu. C est la raison d etre du feu vert sur les goldens."
-    },
-    {
-      "id": "visuel-golden-f02d7e5b",
-      "domaine": "visuel-golden",
-      "enonce": "visuel : le rendu compare est le DOM capture a l etat initial de chaque route, sans style externe charge depuis le serveur",
-      "statut": "assume",
-      "note": "le DOM capture est autoportant par choix : dependre du serveur au moment du jugement rendrait le verdict non reproductible."
     }
   ]
 }

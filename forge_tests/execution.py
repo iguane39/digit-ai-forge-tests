@@ -209,3 +209,26 @@ def front_execute(banc_str: str) -> dict | None:
                         routes.add(url)
     del collections
     return {"routes": sorted(routes), "testids": sorted(testids)}
+
+
+@lru_cache(maxsize=16)
+def schema_obtenu(banc_str: str) -> dict | None:
+    """Schema REELLEMENT produit par l application des migrations sur une base neuve."""
+    banc = Path(banc_str)
+    python = _python(banc)
+    if python is None:
+        return None
+    with tempfile.TemporaryDirectory() as temporaire:
+        sortie = Path(temporaire) / "schema.json"
+        resultat = subprocess.run(
+            [
+                str(python), str(SONDES / "verifier_schema.py"),
+                str(banc / "backend"), str(sortie),
+            ],
+            cwd=banc / "backend", capture_output=True, text=True, timeout=900,
+            env={**os.environ, "PYTHONPATH": ".", "PYTHONDONTWRITEBYTECODE": "1"},
+        )
+        if resultat.returncode != 0 or not sortie.exists():
+            return None
+        donnees = json.loads(sortie.read_text(encoding="utf-8"))
+    return None if "erreur" in donnees else donnees

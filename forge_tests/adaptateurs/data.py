@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from forge_tests.execution import instructions_sql, violations_levees
+from forge_tests.execution import instructions_sql, schema_obtenu, violations_levees
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
 from forge_tests.risque import coter
 
@@ -191,11 +191,20 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # Une contrainte declaree au MODELE mais absente des MIGRATIONS est une divergence : le code
     # croit la base protegee, la base ne l est pas. Aucun test ne peut la reveler — il n y a rien
     # a violer. Seule la comparaison des deux sources la nomme.
-    migrations = " ".join(f.read_text(encoding="utf-8") for f in _sql(cible))
+    # Ce qui existe VRAIMENT apres application des migrations, pas ce que leur texte annonce :
+    # une instruction peut s executer sans produire l objet qu on croit qu elle produit.
+    schema = schema_obtenu(str(cible))
+    if schema is None:
+        reference = " ".join(f.read_text(encoding="utf-8") for f in _sql(cible))
+        sortie.non_juge.append(
+            "data : schema reel non introspectable — divergence jugee sur le TEXTE des migrations"
+        )
+    else:
+        reference = " ".join(schema["contraintes"] + schema["index"] + schema["tables"])
     modeles = cible / "backend" / "app" / "models.py"
     if modeles.exists():
         for nom in _ORM_NOMMEE.findall(modeles.read_text(encoding="utf-8")):
-            if nom in migrations:
+            if nom in reference:
                 continue
             sortie.findings.append(
                 Finding(

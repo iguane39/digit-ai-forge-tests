@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from forge_tests.execution import instructions_sql
+import re
+
+from forge_tests.execution import instructions_sql, schema_obtenu
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
 from forge_tests.risque import coter
 
@@ -17,8 +19,8 @@ _MOTS = {
 }
 
 NON_JUGE = [
-    "migrations : un sens est exercé si les instructions de sa section ont été RÉELLEMENT "
-    "envoyées au moteur ; l oracle ne vérifie pas que leur effet sur le schéma est correct",
+    "migrations : l effet verifie est l EXISTENCE des objets nommes (tables, contraintes, "
+    "index) apres application ; ni leur definition exacte, ni les donnees migrees",
     "migrations : le rejeu est déduit d une seconde exécution de TOUTES les instructions de "
     "la section ; deux migrations rigoureusement identiques resteraient indiscernables",
 ]
@@ -112,6 +114,33 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     localisation=str(fichier),
                     message="migration sans section de retour : elle ne peut pas être inversée",
                     risque=coter(PAN, "migration:retour", str(fichier)),
+                )
+            )
+            sortie.verdict = "FAIL"
+    # Effet REEL : un objet qu une section pretend creer doit exister apres application.
+    schema = schema_obtenu(str(cible))
+    if schema is None:
+        sortie.non_juge.append("migrations : schema reel non introspectable, effet non verifie")
+        return sortie
+    presents = set(schema["tables"]) | set(schema["contraintes"]) | set(schema["index"])
+    for fichier in _fichiers(cible):
+        haut = _sections(fichier)[0]
+        # `DROP CONSTRAINT x` n ANNONCE pas x, il le retire : le compter serait accuser la
+        # migration qui defait au lieu de celle qui promet.
+        annonces = set(re.findall(r"(?<!DROP )CONSTRAINT (\w+)", haut, re.IGNORECASE))
+        annonces |= set(re.findall(r"CREATE (?:UNIQUE )?INDEX (\w+)", haut, re.IGNORECASE))
+        annonces |= set(re.findall(r"CREATE TABLE (\w+)", haut, re.IGNORECASE))
+        for nom in sorted(annonces - presents):
+            sortie.findings.append(
+                Finding(
+                    id=f"divergence:migration:{fichier.stem}:{nom}",
+                    classe="divergence",
+                    localisation=str(fichier),
+                    message=(
+                        f"{nom} annonce par la migration mais absent du schema obtenu : "
+                        "l instruction s execute sans produire son objet"
+                    ),
+                    risque=coter(PAN, f"migration:{nom}", str(fichier)),
                 )
             )
             sortie.verdict = "FAIL"
