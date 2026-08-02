@@ -1,0 +1,18 @@
+[project]
+name = "banc-essai-commandes"
+version = "0.0.0"
+description = "Banc essai Forge Tests - application de gestion de commandes de repas"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "httpx>=0.27",
+    "sqlalchemy>=2.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

@@ -119,18 +119,25 @@ Import CSV des commandes, via `/api/import`.
 
 Ce tableau est **l'oracle de la capacité 1 du contrat d'adaptateur**. Un adaptateur qui énumère la surface du banc d'essai doit produire ces nombres. Un écart est un défaut de l'adaptateur, pas du banc.
 
-| Pan | Grandeur inventoriée | Valeur de référence |
-|---|---|---|
-| Front | Routes | 5 |
-| Front | Éléments interactifs | 20 |
-| API | Couples endpoint × méthode | 7 |
-| API | Codes de retour déclarés | 26 (dont 19 d'erreur) |
-| Data | Tables | 3 |
-| Data | Contraintes hors clés primaires | 8 |
-| Data | Migrations | 3 |
-| Batch | Branches | 5 |
-| Batch | Codes de rejet | 2 |
-| Fichiers | Variantes de format | 6 |
+| Pan | Grandeur inventoriée | Valeur de référence | Mesuré le 2026-08-02 |
+|---|---|---|---|
+| Front | Routes | 5 | 5 |
+| Front | Éléments interactifs | 20 | 20 |
+| API | Couples endpoint × méthode | 7 | 7 |
+| API | Codes de retour déclarés | 26 (dont 19 d'erreur) | 26 |
+| Data | Tables | 3 | 3 |
+| Data | Contraintes hors clés primaires | **13** | 13 |
+| Data | Migrations × sens (aller, retour, rejeu) | 9 | 9 |
+| Batch | Branches | 5 | 5 |
+| Batch | Codes de rejet | 2 | 2 |
+| Fichiers | Variantes de format | 6 | 6 |
+
+**Deux corrections apportées après construction du banc, par mesure et non par arbitrage :**
+
+1. **Contraintes Data : 13, pas 8.** Le décompte initial ne retenait que les contraintes *nommées* (`UNIQUE`, `FOREIGN KEY`, `CHECK`). L'adaptateur énumère aussi les **8 colonnes `NOT NULL`**, qui sont des contraintes à part entière et méritent d'être exercées par violation. 5 nommées + 8 `NOT NULL` = 13. La valeur de référence est corrigée à la hausse : elle décrivait moins que ce qui existe.
+2. **Codes API : le décompte initial tombait à 25.** L'endpoint `GET /api/commandes` ne déclarait que `200` et `401` ; un `400` (filtre de statut inconnu) a été ajouté pour que la surface tienne les 26 codes annoncés, dont 19 d'erreur.
+
+Les valeurs de la colonne « mesuré » sont la sortie de `forge-tests` sur `banc-vert`, pas une relecture du code.
 
 ---
 
