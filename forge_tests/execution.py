@@ -98,3 +98,26 @@ def codes_emis(banc: Path) -> list[dict] | None:
     if mesure is None:
         return None
     return mesure["codes"]
+
+
+@lru_cache(maxsize=32)
+def schema_openapi(banc_str: str) -> dict | None:
+    """Schema OpenAPI declare par l application analysee (source qui fait foi, regle R3)."""
+    banc = Path(banc_str)
+    python = _python(banc)
+    if python is None:
+        return None
+    with tempfile.TemporaryDirectory() as temporaire:
+        sortie = Path(temporaire) / "openapi.json"
+        resultat = subprocess.run(
+            [str(python), str(SONDES / "dump_openapi.py"), str(sortie)],
+            cwd=banc / "backend",
+            capture_output=True,
+            text=True,
+            timeout=180,
+            env={**os.environ, "PYTHONPATH": ".", "PYTHONDONTWRITEBYTECODE": "1"},
+        )
+        if resultat.returncode != 0 or not sortie.exists():
+            return None
+        donnees = json.loads(sortie.read_text(encoding="utf-8"))
+    return None if "erreur" in donnees else donnees

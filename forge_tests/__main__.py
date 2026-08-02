@@ -70,9 +70,12 @@ def main(argv: list[str] | None = None) -> int:
     # pas résoudre un binaire donné en relatif. Le résoudre ici évite un SKIP silencieux.
     rap = analyser(args.cible.resolve(), args.pans)
     if args.generer is not None:
+        from forge_tests.execution import schema_openapi
         from forge_tests.generateur import ecrire
 
-        produit = ecrire(rap, args.generer.resolve())
+        produit = ecrire(
+            rap, args.generer.resolve(), schema=schema_openapi(str(args.cible.resolve()))
+        )
         print(f"cas generes -> {produit}" if produit else "aucun cas a generer")
     print(json.dumps(rap, ensure_ascii=False, indent=2) if args.json else _resume(rap))
     if rap["verdict"] == "PARTIEL":

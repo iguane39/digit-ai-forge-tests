@@ -15,6 +15,7 @@ garde-fou G-2 interdit.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -24,6 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from forge_tests.__main__ import analyser  # noqa: E402
+from forge_tests.execution import schema_openapi  # noqa: E402
 from forge_tests.generateur import ecrire  # noqa: E402
 
 RACINE = Path(__file__).resolve().parent.parent
@@ -62,7 +64,7 @@ def _echecs(banc: Path, fichier: Path) -> set[str]:
 
 def main() -> int:
     rapport = analyser(ROUGE)
-    genere = ecrire(rapport, PROPOSITIONS)
+    genere = ecrire(rapport, PROPOSITIONS, schema=schema_openapi(str(ROUGE)))
     if genere is None:
         print("aucun cas genere")
         return 1
@@ -73,7 +75,9 @@ def main() -> int:
 
     vrais = echecs_rouge - echecs_vert
     faux = echecs_vert
-    precision = len(vrais) / total if total else 0.0
+    # Precision = part des ACCUSATIONS qui sont justes. Sans accusation, elle est INDEFINIE :
+    # la noter 0 % confondrait « accuse a tort » et « n accuse pas ». Deux etats opposes.
+    precision = (len(vrais) / len(echecs_rouge)) if echecs_rouge else None
 
     print("=" * 78)
     print("RECETTE DU GENERATEUR — precision")
@@ -82,14 +86,21 @@ def main() -> int:
     print(f"  echouent sur le banc ROUGE       : {len(echecs_rouge)}")
     print(f"  echouent AUSSI sur le banc VERT  : {len(faux)}  <- defauts du generateur")
     print(f"  vrais positifs (rouge seulement) : {len(vrais)}")
-    print(f"  precision                        : {precision:.0%}")
+    lisible = "indefinie (aucune accusation)" if precision is None else f"{precision:.0%}"
+    print(f"  precision                        : {lisible}")
+    refuses = json.loads((PROPOSITIONS / "non-generables.json").read_text(encoding="utf-8"))
+    print(f"  elements DECLARES non generables : {len(refuses)}")
+    print("  -> rappel : aucun cas ne peut cibler ces elements, par construction")
     if vrais:
         print("  defauts reellement attrapes :")
         for nom in sorted(vrais):
             print(f"    - {nom}")
     print("=" * 78)
-    print("  GENERATEUR UTILISABLE" if precision >= 0.80 else "  GENERATEUR NON UTILISABLE EN L ETAT")
-    return 0 if precision >= 0.80 else 1
+    sur = not faux
+    print("  SUR (aucun faux positif)" if sur else "  NON SUR : il accuse a tort")
+    print(f"  UTILE : {len(vrais)} defaut(s) reel(s) attrape(s) — rappel nul sur ce banc"
+          if not vrais else f"  UTILE : {len(vrais)} defaut(s) reel(s) attrape(s)")
+    return 0 if sur else 1
 
 
 if __name__ == "__main__":

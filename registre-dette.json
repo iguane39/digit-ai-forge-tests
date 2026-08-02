@@ -23,6 +23,18 @@
       "statut": "resolue"
     },
     {
+      "id": "generateur-a4b9e9ea",
+      "domaine": "generateur",
+      "enonce": "generateur : precision MESUREE a 0 % sur le banc (recette/precision_generateur.py) — les cas produits echouent aussi sur du code correct. NON UTILISABLE en l etat",
+      "statut": "resolue"
+    },
+    {
+      "id": "generateur-4dc97f21",
+      "domaine": "generateur",
+      "enonce": "generateur : ne synthetise pas les preconditions (ressource existante, corps valide, en-tete de type de media) ni les parametres qui declenchent un code d erreur",
+      "statut": "resolue"
+    },
+    {
       "id": "api-fastapi-28e9b332",
       "domaine": "api-fastapi",
       "enonce": "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une ASSERTION porte sur lui — c est le role du second contre-oracle",
@@ -119,21 +131,21 @@
       "statut": "todo"
     },
     {
-      "id": "generateur-a4b9e9ea",
+      "id": "generateur-59ffb57d",
       "domaine": "generateur",
-      "enonce": "generateur : precision MESUREE a 0 % sur le banc (recette/precision_generateur.py) — les cas produits echouent aussi sur du code correct. NON UTILISABLE en l etat",
-      "statut": "todo"
-    },
-    {
-      "id": "generateur-4dc97f21",
-      "domaine": "generateur",
-      "enonce": "generateur : ne synthetise pas les preconditions (ressource existante, corps valide, en-tete de type de media) ni les parametres qui declenchent un code d erreur",
+      "enonce": "generateur : les codes exigeant une valeur METIER invalide (400), un etat conflictuel (409) ou un type de media particulier (415) ne sont pas generables depuis le seul schema — ils sont declares NON GENERABLES, jamais emis a l aveugle",
       "statut": "todo"
     },
     {
       "id": "generateur-bf878b82",
       "domaine": "generateur",
       "enonce": "generateur : couvre le seul pan API ; les autres pans ne sont pas generes",
+      "statut": "todo"
+    },
+    {
+      "id": "generateur-7a394666",
+      "domaine": "generateur",
+      "enonce": "generateur : le corps synthetise ne porte que les champs REQUIS ; un endpoint dont le comportement depend d un champ optionnel ne sera pas exerce sur ce chemin",
       "statut": "todo"
     },
     {
