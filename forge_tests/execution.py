@@ -72,9 +72,11 @@ def mesurer(banc_str: str) -> dict | None:
         if lance.returncode != 0:
             return None
         codes = json.loads(releve.read_text(encoding="utf-8")) if releve.exists() else []
-        violations = (
-            json.loads(releve_data.read_text(encoding="utf-8")) if releve_data.exists() else []
+        brut_data = (
+            json.loads(releve_data.read_text(encoding="utf-8")) if releve_data.exists() else {}
         )
+        violations = brut_data.get("violations", [])
+        instructions = brut_data.get("instructions", [])
 
     rapport = subprocess.run(
         [str(python), "-m", "coverage", "json", "-o", "-", "--quiet"],
@@ -87,7 +89,12 @@ def mesurer(banc_str: str) -> dict | None:
         Path(chemin).name: frozenset(detail.get("executed_lines", []))
         for chemin, detail in donnees.get("files", {}).items()
     }
-    return {"lignes": lignes, "codes": codes, "violations": violations}
+    return {
+        "lignes": lignes,
+        "codes": codes,
+        "violations": violations,
+        "instructions": instructions,
+    }
 
 
 def executees(banc: Path, fichier: str) -> frozenset[int] | None:
@@ -102,6 +109,12 @@ def violations_levees(banc: Path) -> list[str] | None:
     """Messages de violation de contrainte reellement levees par la base pendant la suite."""
     mesure = mesurer(str(banc))
     return None if mesure is None else mesure["violations"]
+
+
+def instructions_sql(banc: Path) -> list[str] | None:
+    """Instructions SQL reellement envoyees au moteur pendant la suite."""
+    mesure = mesurer(str(banc))
+    return None if mesure is None else mesure["instructions"]
 
 
 def codes_emis(banc: Path) -> list[dict] | None:

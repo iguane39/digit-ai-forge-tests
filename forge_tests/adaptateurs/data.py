@@ -5,13 +5,15 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from forge_tests.execution import violations_levees
+from forge_tests.execution import instructions_sql, violations_levees
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "data-sql", "data", 1.0
 _TABLE = re.compile(r"CREATE TABLE (\w+)\s*\(", re.IGNORECASE)
 _CONTRAINTE = re.compile(r"CONSTRAINT (\w+)", re.IGNORECASE)
 _NOT_NULL = re.compile(r"^\s*(\w+)\s+\w+\s+NOT NULL", re.IGNORECASE | re.MULTILINE)
+_INDEX = re.compile(r"CREATE (?:UNIQUE )?INDEX (\w+)", re.IGNORECASE)
+_TRIGGER = re.compile(r"CREATE TRIGGER (\w+)", re.IGNORECASE)
 
 _ORM_NOMMEE = re.compile(r"(?:UniqueConstraint|CheckConstraint|ForeignKey)\([^)]*name=\"(\w+)\"")
 _ORM_NOT_NULL = re.compile(r"^\s*(\w+)\s*=\s*Column\([^)]*nullable=False", re.MULTILINE)
@@ -27,8 +29,9 @@ _UQ = re.compile(r"UNIQUE constraint failed: (\w+)\.(\w+)")
 NON_JUGE = [
     "data : sur SQLite les clés étrangères restent non attribuables (le moteur ne nomme pas la "
     "contrainte violée) ; l attribution complète exige un moteur qui les nomme, comme PostgreSQL",
-    "data : la présence d une table est déduite du texte des tests, pas de son usage réel",
-    "data : triggers et index partiels ne sont pas inventoriés",
+    "data : un index ou un trigger est réputé exercé si son instruction de création a été "
+    "envoyée au moteur ; son EFFET (unicité réellement testée, trigger réellement déclenché) "
+    "n est pas vérifié",
 ]
 
 
@@ -51,6 +54,16 @@ def inventaire(cible: Path) -> list[Element]:
                 elements.append(
                     Element(f"contrainte:{nom}", PAN, f"contrainte {nom}", str(fichier))
                 )
+        for nom in _INDEX.findall(haut):
+            cle = f"index:{nom}"
+            if cle not in vus:
+                vus.add(cle)
+                elements.append(Element(cle, PAN, f"index {nom}", str(fichier)))
+        for nom in _TRIGGER.findall(haut):
+            cle = f"trigger:{nom}"
+            if cle not in vus:
+                vus.add(cle)
+                elements.append(Element(cle, PAN, f"trigger {nom}", str(fichier)))
         for colonne in _NOT_NULL.findall(haut):
             cle = f"contrainte:{colonne}.not_null"
             if cle not in vus:
@@ -136,10 +149,14 @@ def exerces(cible: Path) -> set[str] | None:
                 if table in nom and colonne in nom:
                     couvert.add(f"contrainte:{nom}")
 
-    # Repli DÉCLARÉ, réduit aux seules tables : les contraintes sont désormais toutes
-    # attribuables par exécution sur un moteur qui les nomme.
-    a_repli = {e.id for e in inv if e.id.startswith("table:")} - couvert
-    couvert |= _repli_textuel(cible, [e for e in inv if e.id in a_repli])
+    # Tables, index et triggers : exerces si une instruction envoyee au moteur les nomme.
+    # Plus de repli textuel — c est l execution qui tranche, pour toutes les classes.
+    envoyees = instructions_sql(cible) or []
+    corpus = " ".join(envoyees).lower()
+    for element in inv:
+        classe, nom = element.id.split(":", 1)
+        if classe in ("table", "index", "trigger") and nom.lower() in corpus:
+            couvert.add(element.id)
     return couvert
 
 

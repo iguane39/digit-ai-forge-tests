@@ -113,6 +113,18 @@
       "statut": "resolue"
     },
     {
+      "id": "data-sql-bd3bc805",
+      "domaine": "data-sql",
+      "enonce": "data : la présence d une table est déduite du texte des tests, pas de son usage réel",
+      "statut": "resolue"
+    },
+    {
+      "id": "data-sql-da2e6595",
+      "domaine": "data-sql",
+      "enonce": "data : triggers et index partiels ne sont pas inventoriés",
+      "statut": "resolue"
+    },
+    {
       "id": "fichiers-python-e6621c0d",
       "domaine": "fichiers-python",
       "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
@@ -149,6 +161,12 @@
       "statut": "resolue"
     },
     {
+      "id": "migrations-sql-33be9de9",
+      "domaine": "migrations-sql",
+      "enonce": "migrations : un sens est exercé si une ligne de test RÉELLEMENT EXÉCUTÉE le nomme ; l oracle ne vérifie pas que la migration a été appliquée dans ce sens, seulement que le code qui la nomme a tourné",
+      "statut": "resolue"
+    },
+    {
       "id": "mutation-python-0a4363f6",
       "domaine": "mutation-python",
       "enonce": "mutation : périmètre limité au module de calcul ; le reste du back n est pas muté",
@@ -176,30 +194,27 @@
       "id": "accessibilite-a11y-076c4976",
       "domaine": "accessibilite-a11y",
       "enonce": "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "limite propre de oracle-a11y, reprise telle quelle : audit axe-core complet, contraste et navigation clavier sortent de son contrat."
     },
     {
       "id": "batch-python-b6a8e2ea",
       "domaine": "batch-python",
       "enonce": "batch : les branches sont dérivées de l AST du module ; une branche implicite (opérateur ternaire, court-circuit booléen) n est pas inventoriée séparément",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "non levable par les arcs de couverture : un ternaire tient sur une seule ligne, il n existe aucun arc entre ses deux issues. Exigerait une instrumentation AST du code teste."
     },
     {
       "id": "data-sql-6f7294ed",
       "domaine": "data-sql",
       "enonce": "data : sur SQLite les clés étrangères restent non attribuables (le moteur ne nomme pas la contrainte violée) ; l attribution complète exige un moteur qui les nomme, comme PostgreSQL",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "limite du MOTEUR, pas de l outil : le banc tourne sur PostgreSQL, qui nomme tout. Note de portabilite pour un projet reste sur SQLite."
     },
     {
-      "id": "data-sql-bd3bc805",
+      "id": "data-sql-8c45c77b",
       "domaine": "data-sql",
-      "enonce": "data : la présence d une table est déduite du texte des tests, pas de son usage réel",
-      "statut": "todo"
-    },
-    {
-      "id": "data-sql-da2e6595",
-      "domaine": "data-sql",
-      "enonce": "data : triggers et index partiels ne sont pas inventoriés",
+      "enonce": "data : un index ou un trigger est réputé exercé si son instruction de création a été envoyée au moteur ; son EFFET (unicité réellement testée, trigger réellement déclenché) n est pas vérifié",
       "statut": "todo"
     },
     {
@@ -212,13 +227,15 @@
       "id": "execution-edbe4456",
       "domaine": "execution",
       "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "par conception : la faiblesse d assertion est mesuree par la mutation, jamais par la couverture. Deux contre-oracles, deux roles."
     },
     {
       "id": "front-react-60be323d",
       "domaine": "front-react",
       "enonce": "front : un element manipule pendant la suite est repute exerce ; la trace dit qu il a ete atteint, pas qu une ASSERTION porte sur son effet",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "par conception : la faiblesse d assertion est mesuree par la mutation, jamais par la couverture. Deux contre-oracles, deux roles."
     },
     {
       "id": "generateur-bf878b82",
@@ -227,9 +244,15 @@
       "statut": "todo"
     },
     {
-      "id": "migrations-sql-33be9de9",
+      "id": "migrations-sql-d2d9e0bb",
       "domaine": "migrations-sql",
-      "enonce": "migrations : un sens est exercé si une ligne de test RÉELLEMENT EXÉCUTÉE le nomme ; l oracle ne vérifie pas que la migration a été appliquée dans ce sens, seulement que le code qui la nomme a tourné",
+      "enonce": "migrations : un sens est exercé si les instructions de sa section ont été RÉELLEMENT envoyées au moteur ; l oracle ne vérifie pas que leur effet sur le schéma est correct",
+      "statut": "todo"
+    },
+    {
+      "id": "migrations-sql-9b7eabfc",
+      "domaine": "migrations-sql",
+      "enonce": "migrations : le rejeu est déduit d une seconde exécution des mêmes instructions — deux migrations aux instructions identiques seraient confondues",
       "statut": "todo"
     },
     {
@@ -248,7 +271,8 @@
       "id": "securite-oracles-d85fe366",
       "domaine": "securite-oracles",
       "enonce": "securite : aucun test d intrusion ni d authentification/autorisation au niveau metier",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "hors du contrat d un oracle statique : un test d intrusion releve d une demarche offensive, pas d une mesure de couverture."
     }
   ]
 }

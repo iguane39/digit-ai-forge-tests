@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
 
 MIGRATIONS = sorted((Path(__file__).parent.parent / "migrations").glob("*.sql"))
 
@@ -17,12 +17,15 @@ def _haut(chemin: Path) -> str:
 
 
 @pytest.fixture()
-def cx() -> sqlite3.Connection:
-    connexion = sqlite3.connect(":memory:")
-    yield connexion
-    connexion.close()
+def base(moteur):
+    with moteur.begin() as cx:
+        for table in ("ligne_commande", "commande_nouveau", "commande", "utilisateur"):
+            cx.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
+    return moteur
 
 
-def test_migrations_aller(cx: sqlite3.Connection) -> None:
+def test_migrations_aller(base) -> None:
     for migration in MIGRATIONS:
-        cx.executescript(_haut(migration))
+        with base.begin() as cx:
+            for instruction in [s.strip() for s in _haut(migration).split(";") if s.strip()]:
+                cx.execute(text(instruction))

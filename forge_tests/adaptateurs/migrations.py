@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from forge_tests.execution import executees
+from forge_tests.execution import instructions_sql
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
 from forge_tests.risque import coter
 
@@ -17,9 +17,10 @@ _MOTS = {
 }
 
 NON_JUGE = [
-    "migrations : un sens est exercé si une ligne de test RÉELLEMENT EXÉCUTÉE le nomme ; "
-    "l oracle ne vérifie pas que la migration a été appliquée dans ce sens, seulement que le "
-    "code qui la nomme a tourné",
+    "migrations : un sens est exercé si les instructions de sa section ont été RÉELLEMENT "
+    "envoyées au moteur ; l oracle ne vérifie pas que leur effet sur le schéma est correct",
+    "migrations : le rejeu est déduit d une seconde exécution des mêmes instructions — deux "
+    "migrations aux instructions identiques seraient confondues",
 ]
 
 
@@ -40,25 +41,46 @@ def inventaire(cible: Path) -> list[Element]:
     ]
 
 
-def exerces(cible: Path) -> set[str] | None:
-    """Sens exercés : seules comptent les lignes de test qui ont REELLEMENT tourné.
+def _instructions(section: str) -> list[str]:
+    """Instructions normalisées d une section de migration, comparables au relevé du moteur."""
+    brutes = [" ".join(s.split()) for s in section.split(";")]
+    return [s for s in brutes if s and not s.startswith("--")]
 
-    Un test mort, sauté ou jamais collecté ne couvre plus rien — c est tout l écart avec le
-    recoupement textuel, qui comptait la simple présence du mot dans un fichier.
+
+def exerces(cible: Path) -> set[str] | None:
+    """Sens exercés : les instructions de la section ont-elles ÉTÉ ENVOYÉES au moteur ?
+
+    Écart avec le recoupement textuel : un test qui nomme « retour » sans jamais appliquer la
+    section de retour ne couvre plus rien. C est le fait d exécution qui compte, pas le mot.
     """
-    fichiers = sorted((cible / "backend" / "tests").glob("test_*.py"))
-    lignes_vues: list[str] = []
-    for fichier in fichiers:
-        executees_ = executees(cible, fichier.name)
-        if executees_ is None:
-            return None
-        source = fichier.read_text(encoding="utf-8").splitlines()
-        lignes_vues.extend(
-            source[i - 1].lower() for i in sorted(executees_) if 0 < i <= len(source)
-        )
-    texte = " ".join(lignes_vues)
-    sens_couverts = {s for s in SENS if any(mot in texte for mot in _MOTS[s])}
-    return {e.id for e in inventaire(cible) if e.id.rsplit(":", 1)[1] in sens_couverts}
+    executees_ = instructions_sql(cible)
+    if executees_ is None:
+        return None
+    vues = [" ".join(s.split()) for s in executees_]
+
+    def comptees(instructions: list[str]) -> int:
+        if not instructions:
+            return 0
+        reference = instructions[0][:120]
+        return sum(1 for vue in vues if reference and reference in vue)
+
+    couvert: set[str] = set()
+    for fichier in _fichiers(cible):
+        haut, bas = _sections(fichier)
+        occurrences_aller = comptees(_instructions(haut))
+        if occurrences_aller >= 1:
+            couvert.add(f"migration:{fichier.stem}:aller")
+        if occurrences_aller >= 2:
+            couvert.add(f"migration:{fichier.stem}:rejeu")
+        if comptees(_instructions(bas)) >= 1:
+            couvert.add(f"migration:{fichier.stem}:retour")
+    return couvert
+
+
+def _sections(fichier: Path) -> tuple[str, str]:
+    texte = fichier.read_text(encoding="utf-8")
+    haut, _, bas = texte.partition("-- +migrate Down")
+    return haut.replace("-- +migrate Up", ""), bas
 
 
 def analyser(cible: Path) -> SortieAdaptateur:

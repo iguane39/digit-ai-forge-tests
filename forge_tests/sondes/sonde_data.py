@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 
 MESSAGES: list[str] = []
+INSTRUCTIONS: list[str] = []
 
 
 def pytest_sessionstart(session) -> None:  # noqa: ANN001, ARG001
@@ -31,11 +32,22 @@ def pytest_sessionstart(session) -> None:  # noqa: ANN001, ARG001
         if original is not None:
             MESSAGES.append(str(original))
 
+    @event.listens_for(Engine, "before_cursor_execute")
+    def _tracer(conn, curseur, instruction, parametres, contexte, executemany) -> None:  # noqa: ANN001, ARG001
+        # Toute instruction REELLEMENT envoyee au moteur. Sert a savoir quelles tables sont
+        # touchees et quelles migrations sont appliquees — deux faits qu on deduisait du texte.
+        INSTRUCTIONS.append(" ".join(str(instruction).split())[:400])
+
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ANN001, ARG001
     destination = os.environ.get("FORGE_TESTS_SONDE_DATA")
     if not destination:
         return
     Path(destination).write_text(
-        json.dumps(sorted(set(MESSAGES)), ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(
+            {"violations": sorted(set(MESSAGES)), "instructions": INSTRUCTIONS[-4000:]},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
     )
