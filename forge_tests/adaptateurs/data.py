@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from forge_tests.execution import violations_levees
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "data-sql", "data", 1.0
@@ -15,9 +16,15 @@ _NOT_NULL = re.compile(r"^\s*(\w+)\s+\w+\s+NOT NULL", re.IGNORECASE | re.MULTILI
 _ORM_NOMMEE = re.compile(r"(?:UniqueConstraint|CheckConstraint|ForeignKey)\([^)]*name=\"(\w+)\"")
 _ORM_NOT_NULL = re.compile(r"^\s*(\w+)\s*=\s*Column\([^)]*nullable=False", re.MULTILINE)
 
+_NN = re.compile(r"NOT NULL constraint failed: (\w+)\.(\w+)")
+_CK = re.compile(r"CHECK constraint failed: (\w+)")
+_UQ = re.compile(r"UNIQUE constraint failed: (\w+)\.(\w+)")
+
 NON_JUGE = [
-    "data : une contrainte est réputée exercée si son nom ou sa colonne apparaît dans un test "
-    "attendant un rejet ; l oracle ne vérifie pas que le rejet porte bien sur cette contrainte",
+    "data : les clés étrangères ne sont PAS attribuables par exécution — SQLite ne nomme pas la "
+    "contrainte dans « FOREIGN KEY constraint failed ». Elles restent sur le recoupement "
+    "textuel, moins sûr, jusqu à confrontation à un moteur qui nomme ses contraintes",
+    "data : la présence d une table est déduite du texte des tests, pas de son usage réel",
     "data : triggers et index partiels ne sont pas inventoriés",
 ]
 
@@ -89,13 +96,47 @@ def blocs_de_test(texte: str) -> list[str]:
     return blocs
 
 
-def exerces(cible: Path) -> set[str]:
-    couvert: set[str] = set()
+def exerces(cible: Path) -> set[str] | None:
+    """Contraintes RÉELLEMENT violées pendant la suite, lues dans les erreurs de la base.
+
+    Repli textuel assumé et déclaré pour les tables et les clés étrangères : SQLite ne nomme
+    pas la contrainte de clé étrangère violée, donc aucune attribution n est possible.
+    """
+    violations = violations_levees(cible)
+    if violations is None:
+        return None
     inv = inventaire(cible)
+    noms = {e.id.split(":", 1)[1] for e in inv}
+    couvert: set[str] = set()
+
+    for message in violations:
+        trouve = _NN.search(message)
+        if trouve:
+            couvert.add(f"contrainte:{trouve.group(2)}.not_null")
+            continue
+        trouve = _CK.search(message)
+        if trouve:
+            couvert.add(f"contrainte:{trouve.group(1)}")
+            continue
+        trouve = _UQ.search(message)
+        if trouve:
+            table, colonne = trouve.groups()
+            for nom in noms:
+                if table in nom and colonne in nom:
+                    couvert.add(f"contrainte:{nom}")
+
+    # Repli DÉCLARÉ : tables et clés étrangères, non attribuables par exécution.
+    a_repli = {e.id for e in inv if e.id.startswith("table:") or e.id.endswith("_fk")}
+    couvert |= _repli_textuel(cible, [e for e in inv if e.id in a_repli])
+    return couvert
+
+
+def _repli_textuel(cible: Path, elements: list[Element]) -> set[str]:
+    couvert: set[str] = set()
     for fichier in sorted((cible / "backend" / "tests").glob("test_*.py")):
         for bloc in blocs_de_test(fichier.read_text(encoding="utf-8")):
             rejet_attendu = "raises" in bloc
-            for element in inv:
+            for element in elements:
                 cle = element.id.split(":", 1)[1]
                 if element.id.startswith("table:"):
                     if cle in bloc.lower():

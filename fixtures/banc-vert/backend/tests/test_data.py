@@ -91,3 +91,49 @@ def test_quantite_positive_viole(session: Session) -> None:
     session.add(LigneCommande(commande_id=c.id, plat="curry", quantite=0))
     with pytest.raises(IntegrityError):
         session.commit()
+
+
+# C9 - commande.utilisateur_id NOT NULL (trou revele par la sonde d execution)
+def test_commande_utilisateur_id_non_nul_viole(session: Session) -> None:
+    session.add(Commande(utilisateur_id=None, statut="brouillon", cree_le="2026-08-02"))
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+# C10 - commande.statut NOT NULL
+def test_commande_statut_non_nul_viole(session: Session) -> None:
+    u = _utilisateur(session, "k@l.fr")
+    session.add(Commande(utilisateur_id=u.id, statut=None, cree_le="2026-08-02"))
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+# C11 - ligne_commande.commande_id NOT NULL
+def test_ligne_commande_id_non_nul_viole(session: Session) -> None:
+    session.add(LigneCommande(commande_id=None, plat="curry", quantite=1))
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+def _commande(session: Session, email: str):
+    u = _utilisateur(session, email)
+    c = Commande(utilisateur_id=u.id, statut="brouillon", cree_le="2026-08-02")
+    session.add(c)
+    session.commit()
+    return c
+
+
+# C12 - ligne_commande.plat NOT NULL
+def test_ligne_plat_non_nul_viole(session: Session) -> None:
+    c = _commande(session, "m@n.fr")
+    session.add(LigneCommande(commande_id=c.id, plat=None, quantite=1))
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+# C13 - ligne_commande.quantite NOT NULL
+def test_ligne_quantite_non_nul_viole(session: Session) -> None:
+    c = _commande(session, "o@p.fr")
+    session.add(LigneCommande(commande_id=c.id, plat="curry", quantite=None))
+    with pytest.raises(IntegrityError):
+        session.commit()

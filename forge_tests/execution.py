@@ -52,9 +52,11 @@ def mesurer(banc_str: str) -> dict | None:
     racine = banc / "backend"
     with tempfile.TemporaryDirectory() as temporaire:
         releve = Path(temporaire) / "sonde.json"
+        releve_data = Path(temporaire) / "sonde-data.json"
         env = {
             **os.environ,
             "FORGE_TESTS_SONDE": str(releve),
+            "FORGE_TESTS_SONDE_DATA": str(releve_data),
             "PYTHONPATH": str(SONDES),
             "PYTHONDONTWRITEBYTECODE": "1",
         }
@@ -62,13 +64,16 @@ def mesurer(banc_str: str) -> dict | None:
             [
                 str(python), "-m", "coverage", "run", "--branch", "--source=app,tests",
                 "-m", "pytest", "-q", "--no-header",
-                "-p", "no:cacheprovider", "-p", "no:warnings", "-p", "sonde_api",
+                "-p", "no:cacheprovider", "-p", "no:warnings", "-p", "sonde_api", "-p", "sonde_data",
             ],
             cwd=racine, capture_output=True, text=True, timeout=900, env=env,
         )
         if lance.returncode != 0:
             return None
         codes = json.loads(releve.read_text(encoding="utf-8")) if releve.exists() else []
+        violations = (
+            json.loads(releve_data.read_text(encoding="utf-8")) if releve_data.exists() else []
+        )
 
     rapport = subprocess.run(
         [str(python), "-m", "coverage", "json", "-o", "-", "--quiet"],
@@ -81,7 +86,7 @@ def mesurer(banc_str: str) -> dict | None:
         Path(chemin).name: frozenset(detail.get("executed_lines", []))
         for chemin, detail in donnees.get("files", {}).items()
     }
-    return {"lignes": lignes, "codes": codes}
+    return {"lignes": lignes, "codes": codes, "violations": violations}
 
 
 def executees(banc: Path, fichier: str) -> frozenset[int] | None:
@@ -90,6 +95,12 @@ def executees(banc: Path, fichier: str) -> frozenset[int] | None:
     if mesure is None:
         return None
     return mesure["lignes"].get(fichier)
+
+
+def violations_levees(banc: Path) -> list[str] | None:
+    """Messages de violation de contrainte reellement levees par la base pendant la suite."""
+    mesure = mesurer(str(banc))
+    return None if mesure is None else mesure["violations"]
 
 
 def codes_emis(banc: Path) -> list[dict] | None:
