@@ -3,6 +3,41 @@
   "note": "Dette de jugement du framework. `todo` = à outiller · `assume` = limite acceptée et déclarée pour toujours · `ok` = comblée. Régénéré depuis le code : ne pas éditer les énoncés à la main, seulement les statuts et les notes.",
   "dette": [
     {
+      "id": "api-fastapi-28e9b332",
+      "domaine": "api-fastapi",
+      "enonce": "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une ASSERTION porte sur lui — c est le role du second contre-oracle",
+      "statut": "assume",
+      "note": "par conception : la faiblesse d assertion est mesuree par la mutation, pas par la couverture. Architecture, pas dette."
+    },
+    {
+      "id": "fichiers-python-b1c45a6d",
+      "domaine": "fichiers-python",
+      "enonce": "fichiers : les chemins sont les branches du module de parsing ; une variante de format qui ne produit aucune branche dédiée (encodage géré par la bibliothèque) reste invisible",
+      "statut": "assume",
+      "note": "une variante sans branche dediee est indistinguable du chemin nominal par analyse de flot."
+    },
+    {
+      "id": "front-react-48d7dbe0",
+      "domaine": "front-react",
+      "enonce": "front : elements rendus dynamiquement sans data-testid statique (non inventoriables ici)",
+      "statut": "assume",
+      "note": "limite de l inventaire statique ; leve seulement par un crawl navigateur (pan front, dette ouverte)."
+    },
+    {
+      "id": "generateur-59ffb57d",
+      "domaine": "generateur",
+      "enonce": "generateur : les codes exigeant une valeur METIER invalide (400), un etat conflictuel (409) ou un type de media particulier (415) ne sont pas generables depuis le seul schema — ils sont declares NON GENERABLES, jamais emis a l aveugle",
+      "statut": "assume",
+      "note": "non derivable du schema : exige des invariants metier declares (enum, bornes) que OpenAPI ne porte pas."
+    },
+    {
+      "id": "generateur-7a394666",
+      "domaine": "generateur",
+      "enonce": "generateur : le corps synthetise ne porte que les champs REQUIS ; un endpoint dont le comportement depend d un champ optionnel ne sera pas exerce sur ce chemin",
+      "statut": "assume",
+      "note": "arbitrage precision/rappel assume : remplir un optionnel au hasard produit des faux positifs."
+    },
+    {
       "id": "mutation-python-f496a011",
       "domaine": "mutation-python",
       "enonce": "mutation : les mutants équivalents ne sont pas détectés — un survivant peut être un mutant sémantiquement identique à l original",
@@ -15,6 +50,13 @@
       "enonce": "risque : la criticité et le coût de détection tardive sont DÉCLARÉS par pan, pas mesurés — un projet dont les enjeux diffèrent doit redéclarer la table COTATION_PAN",
       "statut": "assume",
       "note": "choix de conception assumé et versionné dans COTATION_PAN ; à redéclarer par projet."
+    },
+    {
+      "id": "risque-e5a9984f",
+      "domaine": "risque",
+      "enonce": "risque : la probabilité de défaillance est approchée par le nombre de commits touchant le fichier ; hors dépôt git, elle retombe sur une valeur neutre",
+      "statut": "assume",
+      "note": "proxy assume : sans historique il n existe pas de meilleur signal que la valeur neutre declaree."
     },
     {
       "id": "api-fastapi-36917142",
@@ -35,6 +77,12 @@
       "statut": "resolue"
     },
     {
+      "id": "api-fastapi-e3cc430e",
+      "domaine": "api-fastapi",
+      "enonce": "api : codes produits par le framework sans declaration explicite dans responses=",
+      "statut": "resolue"
+    },
+    {
       "id": "batch-python-e6621c0d",
       "domaine": "batch-python",
       "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
@@ -44,6 +92,12 @@
       "id": "batch-python-edbe4456",
       "domaine": "batch-python",
       "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
+      "statut": "resolue"
+    },
+    {
+      "id": "data-sql-b61e6dfa",
+      "domaine": "data-sql",
+      "enonce": "data : contraintes créées hors migrations (ORM seul, triggers, index partiels)",
       "statut": "resolue"
     },
     {
@@ -71,6 +125,12 @@
       "statut": "resolue"
     },
     {
+      "id": "migrations-sql-a4b8f19a",
+      "domaine": "migrations-sql",
+      "enonce": "migrations : un sens est réputé exercé si un test le nomme ; l oracle ne vérifie pas que la migration a réellement été appliquée dans ce sens",
+      "statut": "resolue"
+    },
+    {
       "id": "mutation-python-0a4363f6",
       "domaine": "mutation-python",
       "enonce": "mutation : périmètre limité au module de calcul ; le reste du back n est pas muté",
@@ -81,19 +141,6 @@
       "domaine": "mutation-python",
       "enonce": "mutation : opérateurs arithmétiques et constantes numériques seulement",
       "statut": "resolue"
-    },
-    {
-      "id": "api-fastapi-28e9b332",
-      "domaine": "api-fastapi",
-      "enonce": "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une ASSERTION porte sur lui — c est le role du second contre-oracle",
-      "statut": "assume",
-      "note": "par conception : la faiblesse d assertion est mesuree par la mutation, pas par la couverture. Architecture, pas dette."
-    },
-    {
-      "id": "api-fastapi-e3cc430e",
-      "domaine": "api-fastapi",
-      "enonce": "api : codes produits par le framework sans declaration explicite dans responses=",
-      "statut": "todo"
     },
     {
       "id": "batch-python-b6a8e2ea",
@@ -108,9 +155,9 @@
       "statut": "todo"
     },
     {
-      "id": "data-sql-b61e6dfa",
+      "id": "data-sql-da2e6595",
       "domaine": "data-sql",
-      "enonce": "data : contraintes créées hors migrations (ORM seul, triggers, index partiels)",
+      "enonce": "data : triggers et index partiels ne sont pas inventoriés",
       "statut": "todo"
     },
     {
@@ -126,31 +173,10 @@
       "statut": "todo"
     },
     {
-      "id": "fichiers-python-b1c45a6d",
-      "domaine": "fichiers-python",
-      "enonce": "fichiers : les chemins sont les branches du module de parsing ; une variante de format qui ne produit aucune branche dédiée (encodage géré par la bibliothèque) reste invisible",
-      "statut": "assume",
-      "note": "une variante sans branche dediee est indistinguable du chemin nominal par analyse de flot."
-    },
-    {
       "id": "front-react-fe504d65",
       "domaine": "front-react",
       "enonce": "front : un element mentionne par la suite est repute exerce ; l oracle ne verifie pas que l interaction a lieu ni qu elle assert quelque chose",
       "statut": "todo"
-    },
-    {
-      "id": "front-react-48d7dbe0",
-      "domaine": "front-react",
-      "enonce": "front : elements rendus dynamiquement sans data-testid statique (non inventoriables ici)",
-      "statut": "assume",
-      "note": "limite de l inventaire statique ; leve seulement par un crawl navigateur (pan front, dette ouverte)."
-    },
-    {
-      "id": "generateur-59ffb57d",
-      "domaine": "generateur",
-      "enonce": "generateur : les codes exigeant une valeur METIER invalide (400), un etat conflictuel (409) ou un type de media particulier (415) ne sont pas generables depuis le seul schema — ils sont declares NON GENERABLES, jamais emis a l aveugle",
-      "statut": "assume",
-      "note": "non derivable du schema : exige des invariants metier declares (enum, bornes) que OpenAPI ne porte pas."
     },
     {
       "id": "generateur-bf878b82",
@@ -159,16 +185,9 @@
       "statut": "todo"
     },
     {
-      "id": "generateur-7a394666",
-      "domaine": "generateur",
-      "enonce": "generateur : le corps synthetise ne porte que les champs REQUIS ; un endpoint dont le comportement depend d un champ optionnel ne sera pas exerce sur ce chemin",
-      "statut": "assume",
-      "note": "arbitrage precision/rappel assume : remplir un optionnel au hasard produit des faux positifs."
-    },
-    {
-      "id": "migrations-sql-a4b8f19a",
+      "id": "migrations-sql-33be9de9",
       "domaine": "migrations-sql",
-      "enonce": "migrations : un sens est réputé exercé si un test le nomme ; l oracle ne vérifie pas que la migration a réellement été appliquée dans ce sens",
+      "enonce": "migrations : un sens est exercé si une ligne de test RÉELLEMENT EXÉCUTÉE le nomme ; l oracle ne vérifie pas que la migration a été appliquée dans ce sens, seulement que le code qui la nomme a tourné",
       "statut": "todo"
     },
     {
@@ -176,13 +195,6 @@
       "domaine": "mutation-python",
       "enonce": "mutation : opérateurs arithmétiques et de comparaison ; ni suppression d instruction, ni permutation d arguments, ni mutation de littéraux non numériques",
       "statut": "todo"
-    },
-    {
-      "id": "risque-e5a9984f",
-      "domaine": "risque",
-      "enonce": "risque : la probabilité de défaillance est approchée par le nombre de commits touchant le fichier ; hors dépôt git, elle retombe sur une valeur neutre",
-      "statut": "assume",
-      "note": "proxy assume : sans historique il n existe pas de meilleur signal que la valeur neutre declaree."
     }
   ]
 }

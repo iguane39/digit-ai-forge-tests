@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from forge_tests.execution import executees
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
 from forge_tests.risque import coter
 
@@ -16,8 +17,9 @@ _MOTS = {
 }
 
 NON_JUGE = [
-    "migrations : un sens est réputé exercé si un test le nomme ; l oracle ne vérifie pas que "
-    "la migration a réellement été appliquée dans ce sens",
+    "migrations : un sens est exercé si une ligne de test RÉELLEMENT EXÉCUTÉE le nomme ; "
+    "l oracle ne vérifie pas que la migration a été appliquée dans ce sens, seulement que le "
+    "code qui la nomme a tourné",
 ]
 
 
@@ -38,20 +40,36 @@ def inventaire(cible: Path) -> list[Element]:
     ]
 
 
-def exerces(cible: Path) -> set[str]:
-    textes = " ".join(
-        f.read_text(encoding="utf-8").lower()
-        for f in sorted((cible / "backend" / "tests").glob("test_*.py"))
-    )
-    sens_couverts = {s for s in SENS if any(mot in textes for mot in _MOTS[s])}
-    return {
-        e.id for e in inventaire(cible) if e.id.rsplit(":", 1)[1] in sens_couverts
-    }
+def exerces(cible: Path) -> set[str] | None:
+    """Sens exercés : seules comptent les lignes de test qui ont REELLEMENT tourné.
+
+    Un test mort, sauté ou jamais collecté ne couvre plus rien — c est tout l écart avec le
+    recoupement textuel, qui comptait la simple présence du mot dans un fichier.
+    """
+    fichiers = sorted((cible / "backend" / "tests").glob("test_*.py"))
+    lignes_vues: list[str] = []
+    for fichier in fichiers:
+        executees_ = executees(cible, fichier.name)
+        if executees_ is None:
+            return None
+        source = fichier.read_text(encoding="utf-8").splitlines()
+        lignes_vues.extend(
+            source[i - 1].lower() for i in sorted(executees_) if 0 < i <= len(source)
+        )
+    texte = " ".join(lignes_vues)
+    sens_couverts = {s for s in SENS if any(mot in texte for mot in _MOTS[s])}
+    return {e.id for e in inventaire(cible) if e.id.rsplit(":", 1)[1] in sens_couverts}
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
+    couvert = exerces(cible)
+    if couvert is None:
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            non_juge=[*NON_JUGE, "couverture d exécution indisponible : suite rouge ou env absent"],
+        )
     sortie = evaluer_surface(
-        NOM, PAN, str(cible), inventaire(cible), exerces(cible), SEUIL, list(NON_JUGE)
+        NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, list(NON_JUGE)
     )
     # Une migration sans section de retour est une DIVERGENCE de la source, pas un trou de suite.
     for fichier in _fichiers(cible):

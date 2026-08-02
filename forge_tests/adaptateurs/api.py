@@ -5,8 +5,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from forge_tests.execution import codes_emis
-from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
+from forge_tests.execution import codes_emis, schema_openapi
+from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
+from forge_tests.risque import coter
 
 NOM, PAN, SEUIL = "api-fastapi", "api", 1.0
 _ROUTE = re.compile(r'@app\.(get|post|patch|put|delete)\(\s*"([^"]+)"(.*?)\)\s*\n', re.DOTALL)
@@ -17,7 +18,6 @@ _STATUT = re.compile(r"status_code\s*==\s*(\d{3})")
 NON_JUGE = [
     "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une "
     "ASSERTION porte sur lui — c est le role du second contre-oracle",
-    "api : codes produits par le framework sans declaration explicite dans responses=",
 ]
 
 
@@ -61,4 +61,22 @@ def analyser(cible: Path) -> SortieAdaptateur:
             NOM, PAN, str(cible), "SKIP",
             non_juge=[*NON_JUGE, "sonde indisponible : suite rouge ou environnement absent"],
         )
-    return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)
+    inv = inventaire(cible)
+    sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)
+    # Un code EMIS pendant la suite mais absent de `responses=` est une divergence entre ce que
+    # la source declare et ce que le code fait. Ni un trou de couverture, ni un silence : un ecart.
+    declares = {e.id for e in inv if e.id.startswith("code:")}
+    for identifiant in sorted(couvert - declares):
+        if not identifiant.startswith("code:"):
+            continue
+        sortie.findings.append(
+            Finding(
+                id=identifiant,
+                classe="divergence",
+                localisation=str(cible / "backend" / "app" / "main.py"),
+                message="code emis par l application mais absent de sa declaration responses=",
+                severite="signale",
+                risque=coter(PAN, identifiant, str(cible / "backend" / "app" / "main.py")),
+            )
+        )
+    return sortie

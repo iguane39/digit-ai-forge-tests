@@ -60,7 +60,7 @@ def mesurer(banc_str: str) -> dict | None:
         }
         lance = subprocess.run(
             [
-                str(python), "-m", "coverage", "run", "--branch", "--source=app",
+                str(python), "-m", "coverage", "run", "--branch", "--source=app,tests",
                 "-m", "pytest", "-q", "--no-header",
                 "-p", "no:cacheprovider", "-p", "no:warnings", "-p", "sonde_api",
             ],

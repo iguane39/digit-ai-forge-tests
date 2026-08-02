@@ -12,10 +12,13 @@ _TABLE = re.compile(r"CREATE TABLE (\w+)\s*\(", re.IGNORECASE)
 _CONTRAINTE = re.compile(r"CONSTRAINT (\w+)", re.IGNORECASE)
 _NOT_NULL = re.compile(r"^\s*(\w+)\s+\w+\s+NOT NULL", re.IGNORECASE | re.MULTILINE)
 
+_ORM_NOMMEE = re.compile(r"(?:UniqueConstraint|CheckConstraint|ForeignKey)\([^)]*name=\"(\w+)\"")
+_ORM_NOT_NULL = re.compile(r"^\s*(\w+)\s*=\s*Column\([^)]*nullable=False", re.MULTILINE)
+
 NON_JUGE = [
     "data : une contrainte est réputée exercée si son nom ou sa colonne apparaît dans un test "
     "attendant un rejet ; l oracle ne vérifie pas que le rejet porte bien sur cette contrainte",
-    "data : contraintes créées hors migrations (ORM seul, triggers, index partiels)",
+    "data : triggers et index partiels ne sont pas inventoriés",
 ]
 
 
@@ -43,6 +46,26 @@ def inventaire(cible: Path) -> list[Element]:
             if cle not in vus:
                 vus.add(cle)
                 elements.append(Element(cle, PAN, f"{colonne} NOT NULL", str(fichier)))
+
+    # Contraintes declarees dans l ORM : elles existent au modele meme si aucune migration ne
+    # les porte. Leur absence des migrations est justement le genre de divergence a exposer.
+    modeles = cible / "backend" / "app" / "models.py"
+    if modeles.exists():
+        source = modeles.read_text(encoding="utf-8")
+        for nom in _ORM_NOMMEE.findall(source):
+            cle = f"contrainte:{nom}"
+            if cle not in vus:
+                vus.add(cle)
+                elements.append(
+                    Element(cle, PAN, f"contrainte {nom} (ORM, hors migration)", str(modeles))
+                )
+        for colonne in _ORM_NOT_NULL.findall(source):
+            cle = f"contrainte:{colonne}.not_null"
+            if cle not in vus:
+                vus.add(cle)
+                elements.append(
+                    Element(cle, PAN, f"{colonne} NOT NULL (ORM)", str(modeles))
+                )
     return elements
 
 
