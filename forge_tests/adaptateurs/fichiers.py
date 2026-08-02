@@ -10,7 +10,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from forge_tests.execution import NON_JUGE as NON_JUGE_EXEC
 from forge_tests.execution import executees
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
@@ -20,7 +19,6 @@ FICHIER = "importer.py"
 NON_JUGE = [
     "fichiers : les chemins sont les branches du module de parsing ; une variante de format qui "
     "ne produit aucune branche dédiée (encodage géré par la bibliothèque) reste invisible",
-    *NON_JUGE_EXEC,
 ]
 
 

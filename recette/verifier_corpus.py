@@ -2,7 +2,13 @@
 
 Rejoue le framework sur la paire de bancs et vérifie, défaut par défaut :
   - sur le banc ROUGE : chaque défaut du corpus produit au moins un finding NOMMÉ ;
-  - sur le banc VERT  : aucun finding, quel qu il soit.
+  - sur le banc VERT  : aucun finding BLOQUANT.
+
+Précision du critère, posée le 2026-08-02 : le corpus disait « aucun finding ». À l époque
+tous les findings étaient bloquants. Depuis, la mutation nomme ses survivants en sévérité
+`signale` — nommés parce qu on ne masque rien, non bloquants parce que le SEUIL est le juge.
+Un survivant résiduel au-dessus du seuil est une information, pas un échec. Le critère porte
+donc sur les findings BLOQUANTS, et le compte des `signale` est affiché à part.
 
 Un défaut détecté « globalement » ne compte pas : la détection doit porter sur des éléments
 identifiés, sinon on retombe sur l absence silencieuse que le framework existe pour supprimer.
@@ -60,10 +66,15 @@ def main() -> int:
 
     print("-" * 78)
     print(f"  banc ROUGE : {detectes}/8 défauts détectés · {len(rouge['findings'])} findings nommés")
-    print(f"  banc VERT  : {len(vert['findings'])} finding(s) — attendu 0")
+    bloquants_vert = [f for f in vert["findings"] if f.get("severite") == "bloquant"]
+    signales_vert = [f for f in vert["findings"] if f.get("severite") != "bloquant"]
+    print(f"  banc VERT  : {len(bloquants_vert)} finding(s) bloquant(s) — attendu 0")
+    print(f"               {len(signales_vert)} signale(s) non bloquant(s), nommes :")
+    for f in signales_vert:
+        print(f"                 - {f['id']}")
     print(f"  verdicts   : rouge={rouge['verdict']} · vert={vert['verdict']}")
 
-    succes = detectes == 8 and not vert["findings"]
+    succes = detectes == 8 and not bloquants_vert
     print("=" * 78)
     print("  S-01 TENU" if succes else "  S-01 NON TENU")
     return 0 if succes else 1

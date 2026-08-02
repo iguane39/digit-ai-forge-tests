@@ -2,6 +2,11 @@
 
 Mutation réellement exécutée : on altère la source, on relance la suite, on compte les
 survivants. Un mutant survivant est nommé avec sa ligne — jamais un total agrégé seul.
+
+P6 : le périmètre couvre désormais TOUS les modules applicatifs, plus le seul module de
+calcul, et les opérateurs de comparaison s ajoutent aux opérateurs arithmétiques. Le nombre
+de mutants est plafonné pour borner la durée — et le plafond atteint est DÉCLARÉ, jamais
+une troncature silencieuse.
 """
 
 from __future__ import annotations
@@ -16,21 +21,29 @@ from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
 NOM, PAN, SEUIL = "mutation-python", "back", 0.70
-CIBLE_RELATIVE = Path("backend/app/calcul.py")
-SUITE_RELATIVE = "tests/test_calcul.py"
+DOSSIER_SOURCE = Path("backend/app")
+SUITE = "tests"
+PLAFOND_MUTANTS = 60
 
 NON_JUGE = [
-    "mutation : périmètre limité au module de calcul ; le reste du back n est pas muté",
     "mutation : les mutants équivalents ne sont pas détectés — un survivant peut être un mutant "
     "sémantiquement identique à l original",
-    "mutation : opérateurs arithmétiques et constantes numériques seulement",
+    "mutation : opérateurs arithmétiques et de comparaison ; ni suppression d instruction, "
+    "ni permutation d arguments, ni mutation de littéraux non numériques",
 ]
 
 _SUBSTITUTIONS = (("+", "-"), ("-", "+"), ("*", "/"), ("/", "*"))
+_COMPARAISONS = (
+    (" < ", " <= "),
+    (" > ", " >= "),
+    (" == ", " != "),
+    (" != ", " == "),
+)
 
 
 @dataclass(frozen=True)
 class Mutant:
+    fichier: str
     ligne: int
     colonne: int
     avant: str
@@ -38,14 +51,14 @@ class Mutant:
 
     @property
     def id(self) -> str:
-        return f"mutant:calcul.py:{self.ligne}:{self.avant}->{self.apres}"
+        return f"mutant:{self.fichier}:{self.ligne + 1}:{self.avant.strip()}->{self.apres.strip()}"
 
 
 def _lignes_calculantes(lignes: list[str]) -> list[int]:
-    """Lignes portant du calcul EXÉCUTABLE.
+    """Lignes portant du code EXÉCUTABLE, hors docstrings.
 
-    L intérieur des docstrings est exclu : y muter un opérateur produit un mutant équivalent
-    par construction, qui survit toujours et fait chuter le score sans rien signaler de vrai.
+    Muter l intérieur d une docstring produit un mutant équivalent par construction, qui
+    survit toujours et fait chuter le score sans rien signaler de vrai.
     """
     retenues: list[int] = []
     dans_docstring = False
@@ -59,99 +72,149 @@ def _lignes_calculantes(lignes: list[str]) -> list[int]:
         if marqueurs == 1:
             dans_docstring = True
             continue
-        if marqueurs >= 2:  # docstring sur une seule ligne
+        if marqueurs >= 2 or not nu or nu.startswith(("#", "from ", "import ", "@")):
             continue
-        if not nu or nu.startswith(("#", "if ", "raise ", "from ", "import ")):
-            continue
-        if any(op in nu for op, _ in _SUBSTITUTIONS) and ("=" in nu or nu.startswith("return")):
-            retenues.append(i)
+        retenues.append(i)
     return retenues
 
 
-def generer_mutants(source: Path) -> list[Mutant]:
-    lignes = source.read_text(encoding="utf-8").splitlines()
+def _zones_litterales(texte: str) -> dict[int, list[tuple[int, int]]]:
+    """Plages de colonnes occupées par des chaînes et des commentaires, par ligne (0-indexée).
+
+    Muter à l intérieur d une chaîne ne mute pas du CODE. Pire : quand la même constante sert
+    au code et au test (« REJ-VIDE », « utf-8 »), le mutant est équivalent par construction et
+    survit toujours — il fait chuter le score sans jamais désigner une faiblesse de la suite.
+    """
+    import io
+    import tokenize
+
+    zones: dict[int, list[tuple[int, int]]] = {}
+    try:
+        jetons = list(tokenize.generate_tokens(io.StringIO(texte).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return zones
+    for jeton in jetons:
+        if jeton.type not in (tokenize.STRING, tokenize.COMMENT):
+            continue
+        (ligne_debut, col_debut), (ligne_fin, col_fin) = jeton.start, jeton.end
+        for ligne in range(ligne_debut, ligne_fin + 1):
+            debut = col_debut if ligne == ligne_debut else 0
+            fin = col_fin if ligne == ligne_fin else 10**6
+            zones.setdefault(ligne - 1, []).append((debut, fin))
+    return zones
+
+
+def generer_mutants(source: Path, nom_court: str) -> list[Mutant]:
+    texte = source.read_text(encoding="utf-8")
+    lignes = texte.splitlines()
+    zones = _zones_litterales(texte)
+
+    def dans_litteral(ligne: int, colonne: int) -> bool:
+        return any(debut <= colonne < fin for debut, fin in zones.get(ligne, ()))
+
     mutants: list[Mutant] = []
     for i in _lignes_calculantes(lignes):
-        for j, caractere in enumerate(lignes[i]):
+        ligne = lignes[i]
+        for avant, apres in _COMPARAISONS:
+            position = ligne.find(avant)
+            if position >= 0 and not dans_litteral(i, position + 1):
+                mutants.append(Mutant(nom_court, i, position, avant, apres))
+        for j, caractere in enumerate(ligne):
+            if dans_litteral(i, j):
+                continue
             for avant, apres in _SUBSTITUTIONS:
                 if caractere == avant:
-                    mutants.append(Mutant(i, j, avant, apres))
+                    mutants.append(Mutant(nom_court, i, j, avant, apres))
     return mutants
 
 
 def _purger_bytecode(racine: Path) -> None:
-    """Un mutant a la MEME TAILLE que l original ; si la restauration tombe dans la meme
-    seconde, Python reutilise un .pyc perime et la suite juge un code qui n existe plus."""
+    """Un mutant a la MÊME TAILLE que l original ; si la restauration tombe dans la même
+    seconde, Python réutilise un .pyc périmé et la suite juge un code qui n existe plus."""
     for cache in racine.rglob("__pycache__"):
         shutil.rmtree(cache, ignore_errors=True)
 
 
-def _suite_verte(banc: Path, python: Path) -> bool:
-    racine = banc / "backend"
+def _suite_verte(racine: Path, python: Path) -> bool:
     _purger_bytecode(racine)
     resultat = subprocess.run(
-        [str(python), "-m", "pytest", SUITE_RELATIVE, "-q", "--no-header", "-p", "no:cacheprovider"],
+        [
+            str(python), "-m", "pytest", SUITE, "-q", "--no-header",
+            "-p", "no:cacheprovider", "-p", "no:warnings", "-x",
+        ],
         cwd=racine,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=600,
         env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
     )
     return resultat.returncode == 0
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
-    source = cible / CIBLE_RELATIVE
-    python = cible / "backend" / ".venv" / "Scripts" / "python.exe"
+    racine = cible / "backend"
+    dossier = cible / DOSSIER_SOURCE
+    python = racine / ".venv" / "Scripts" / "python.exe"
     if not python.exists():
-        python = cible / "backend" / ".venv" / "bin" / "python"
-    if not source.exists() or not python.exists():
+        python = racine / ".venv" / "bin" / "python"
+    if not dossier.is_dir() or not python.exists():
         return SortieAdaptateur(
-            NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, "environnement du banc absent"]
+            NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, "environnement du projet absent"]
         )
 
-    original = source.read_text(encoding="utf-8")
-    mutants = generer_mutants(source)
+    modules = [f for f in sorted(dossier.glob("*.py")) if f.name != "__init__.py"]
+    originaux = {f: f.read_text(encoding="utf-8") for f in modules}
+    tous = [(f, m) for f in modules for m in generer_mutants(f, f.name)]
+
+    non_juge = list(NON_JUGE)
+    if len(tous) > PLAFOND_MUTANTS:
+        non_juge.append(
+            f"mutation : plafond de {PLAFOND_MUTANTS} mutants atteint — "
+            f"{len(tous) - PLAFOND_MUTANTS} mutants non joués, score calculé sur le "
+            "sous-ensemble DÉCLARÉ"
+        )
+    retenus = tous[:PLAFOND_MUTANTS]
+
     survivants: list[Mutant] = []
     viables = 0
     try:
-        if not _suite_verte(cible, python):
+        if not _suite_verte(racine, python):
             return SortieAdaptateur(
-                NOM,
-                PAN,
-                str(cible),
-                "SKIP",
-                non_juge=[*NON_JUGE, "suite rouge avant mutation : score non calculable"],
+                NOM, PAN, str(cible), "SKIP",
+                non_juge=[*non_juge, "suite rouge avant mutation : score non calculable"],
             )
-        for mutant in mutants:
+        for fichier, mutant in retenus:
+            original = originaux[fichier]
             lignes = original.splitlines()
             ligne = lignes[mutant.ligne]
-            lignes[mutant.ligne] = ligne[: mutant.colonne] + mutant.apres + ligne[mutant.colonne + 1 :]
+            lignes[mutant.ligne] = (
+                ligne[: mutant.colonne] + mutant.apres + ligne[mutant.colonne + len(mutant.avant) :]
+            )
             mute = "\n".join(lignes) + "\n"
             try:
-                compile(mute, str(source), "exec")
+                compile(mute, str(fichier), "exec")
             except SyntaxError:
-                continue  # mutant non viable : ignoré du dénominateur
+                continue  # mutant non viable : hors du dénominateur
             viables += 1
-            source.write_text(mute, encoding="utf-8")
-            if _suite_verte(cible, python):
+            fichier.write_text(mute, encoding="utf-8")
+            if _suite_verte(racine, python):
                 survivants.append(mutant)
+            fichier.write_text(original, encoding="utf-8")
     finally:
-        source.write_text(original, encoding="utf-8")
-        _purger_bytecode(cible / "backend")
+        for fichier, contenu in originaux.items():
+            fichier.write_text(contenu, encoding="utf-8")
+        _purger_bytecode(racine)
 
     tues = viables - len(survivants)
     score = tues / viables if viables else 0.0
-    # Un survivant est NOMMÉ (on ne masque jamais), mais c est le SEUIL qui bloque : au-dessus,
-    # des survivants résiduels sont une information, pas un échec.
     findings = [
         Finding(
             id=m.id,
             classe="mutant-survivant",
-            localisation=f"{source}:{m.ligne + 1}",
-            message=f"mutant {m.avant} -> {m.apres} non tué : la suite reste verte",
+            localisation=f"{dossier / m.fichier}:{m.ligne + 1}",
+            message=f"mutant {m.avant.strip()} -> {m.apres.strip()} non tué : la suite reste verte",
             severite="signale",
-            risque=coter(PAN, m.id, str(source)),
+            risque=coter(PAN, m.id, str(dossier / m.fichier)),
         )
         for m in survivants
     ]
@@ -162,7 +225,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 classe="seuil-non-tenu",
                 localisation=str(cible),
                 message=f"score de mutation {score:.0%} sous le seuil {SEUIL:.0%}",
-                risque=coter(PAN, f"seuil:{PAN}", str(source)),
+                risque=coter(PAN, f"seuil:{PAN}", str(dossier)),
             )
         )
     bloquants = [f for f in findings if f.severite == "bloquant"]
@@ -172,11 +235,12 @@ def analyser(cible: Path) -> SortieAdaptateur:
         cible=str(cible),
         verdict="FAIL" if bloquants else "PASS",
         findings=findings,
-        non_juge=list(NON_JUGE),
+        non_juge=non_juge,
         mutation={
             "mutants_viables": viables,
             "tues": tues,
             "score": round(score, 4),
+            "modules": [f.name for f in modules],
             "survivants": [m.id for m in survivants],
         },
     )

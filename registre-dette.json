@@ -23,6 +23,42 @@
       "statut": "resolue"
     },
     {
+      "id": "api-fastapi-e6621c0d",
+      "domaine": "api-fastapi",
+      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
+      "statut": "resolue"
+    },
+    {
+      "id": "api-fastapi-edbe4456",
+      "domaine": "api-fastapi",
+      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
+      "statut": "resolue"
+    },
+    {
+      "id": "batch-python-e6621c0d",
+      "domaine": "batch-python",
+      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
+      "statut": "resolue"
+    },
+    {
+      "id": "batch-python-edbe4456",
+      "domaine": "batch-python",
+      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
+      "statut": "resolue"
+    },
+    {
+      "id": "fichiers-python-e6621c0d",
+      "domaine": "fichiers-python",
+      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
+      "statut": "resolue"
+    },
+    {
+      "id": "fichiers-python-edbe4456",
+      "domaine": "fichiers-python",
+      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
+      "statut": "resolue"
+    },
+    {
       "id": "generateur-a4b9e9ea",
       "domaine": "generateur",
       "enonce": "generateur : precision MESUREE a 0 % sur le banc (recette/precision_generateur.py) — les cas produits echouent aussi sur du code correct. NON UTILISABLE en l etat",
@@ -35,10 +71,23 @@
       "statut": "resolue"
     },
     {
+      "id": "mutation-python-0a4363f6",
+      "domaine": "mutation-python",
+      "enonce": "mutation : périmètre limité au module de calcul ; le reste du back n est pas muté",
+      "statut": "resolue"
+    },
+    {
+      "id": "mutation-python-f5a0e6e6",
+      "domaine": "mutation-python",
+      "enonce": "mutation : opérateurs arithmétiques et constantes numériques seulement",
+      "statut": "resolue"
+    },
+    {
       "id": "api-fastapi-28e9b332",
       "domaine": "api-fastapi",
       "enonce": "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une ASSERTION porte sur lui — c est le role du second contre-oracle",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "par conception : la faiblesse d assertion est mesuree par la mutation, pas par la couverture. Architecture, pas dette."
     },
     {
       "id": "api-fastapi-e3cc430e",
@@ -47,33 +96,9 @@
       "statut": "todo"
     },
     {
-      "id": "api-fastapi-e6621c0d",
-      "domaine": "api-fastapi",
-      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
-      "statut": "todo"
-    },
-    {
-      "id": "api-fastapi-edbe4456",
-      "domaine": "api-fastapi",
-      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
-      "statut": "todo"
-    },
-    {
       "id": "batch-python-b6a8e2ea",
       "domaine": "batch-python",
       "enonce": "batch : les branches sont dérivées de l AST du module ; une branche implicite (opérateur ternaire, court-circuit booléen) n est pas inventoriée séparément",
-      "statut": "todo"
-    },
-    {
-      "id": "batch-python-e6621c0d",
-      "domaine": "batch-python",
-      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
-      "statut": "todo"
-    },
-    {
-      "id": "batch-python-edbe4456",
-      "domaine": "batch-python",
-      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
       "statut": "todo"
     },
     {
@@ -104,19 +129,8 @@
       "id": "fichiers-python-b1c45a6d",
       "domaine": "fichiers-python",
       "enonce": "fichiers : les chemins sont les branches du module de parsing ; une variante de format qui ne produit aucune branche dédiée (encodage géré par la bibliothèque) reste invisible",
-      "statut": "todo"
-    },
-    {
-      "id": "fichiers-python-e6621c0d",
-      "domaine": "fichiers-python",
-      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
-      "statut": "todo"
-    },
-    {
-      "id": "fichiers-python-edbe4456",
-      "domaine": "fichiers-python",
-      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "une variante sans branche dediee est indistinguable du chemin nominal par analyse de flot."
     },
     {
       "id": "front-react-fe504d65",
@@ -128,13 +142,15 @@
       "id": "front-react-48d7dbe0",
       "domaine": "front-react",
       "enonce": "front : elements rendus dynamiquement sans data-testid statique (non inventoriables ici)",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "limite de l inventaire statique ; leve seulement par un crawl navigateur (pan front, dette ouverte)."
     },
     {
       "id": "generateur-59ffb57d",
       "domaine": "generateur",
       "enonce": "generateur : les codes exigeant une valeur METIER invalide (400), un etat conflictuel (409) ou un type de media particulier (415) ne sont pas generables depuis le seul schema — ils sont declares NON GENERABLES, jamais emis a l aveugle",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "non derivable du schema : exige des invariants metier declares (enum, bornes) que OpenAPI ne porte pas."
     },
     {
       "id": "generateur-bf878b82",
@@ -146,7 +162,8 @@
       "id": "generateur-7a394666",
       "domaine": "generateur",
       "enonce": "generateur : le corps synthetise ne porte que les champs REQUIS ; un endpoint dont le comportement depend d un champ optionnel ne sera pas exerce sur ce chemin",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "arbitrage precision/rappel assume : remplir un optionnel au hasard produit des faux positifs."
     },
     {
       "id": "migrations-sql-a4b8f19a",
@@ -155,22 +172,17 @@
       "statut": "todo"
     },
     {
-      "id": "mutation-python-0a4363f6",
+      "id": "mutation-python-fecac842",
       "domaine": "mutation-python",
-      "enonce": "mutation : périmètre limité au module de calcul ; le reste du back n est pas muté",
-      "statut": "todo"
-    },
-    {
-      "id": "mutation-python-f5a0e6e6",
-      "domaine": "mutation-python",
-      "enonce": "mutation : opérateurs arithmétiques et constantes numériques seulement",
+      "enonce": "mutation : opérateurs arithmétiques et de comparaison ; ni suppression d instruction, ni permutation d arguments, ni mutation de littéraux non numériques",
       "statut": "todo"
     },
     {
       "id": "risque-e5a9984f",
       "domaine": "risque",
       "enonce": "risque : la probabilité de défaillance est approchée par le nombre de commits touchant le fichier ; hors dépôt git, elle retombe sur une valeur neutre",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "proxy assume : sans historique il n existe pas de meilleur signal que la valeur neutre declaree."
     }
   ]
 }

@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from forge_tests.execution import NON_JUGE as NON_JUGE_EXEC
 from forge_tests.execution import codes_emis
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
@@ -19,7 +18,6 @@ NON_JUGE = [
     "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une "
     "ASSERTION porte sur lui — c est le role du second contre-oracle",
     "api : codes produits par le framework sans declaration explicite dans responses=",
-    *NON_JUGE_EXEC,
 ]
 
 

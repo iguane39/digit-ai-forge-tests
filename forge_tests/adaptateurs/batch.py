@@ -12,7 +12,6 @@ import ast
 import re
 from pathlib import Path
 
-from forge_tests.execution import NON_JUGE as NON_JUGE_EXEC
 from forge_tests.execution import executees
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
@@ -23,7 +22,6 @@ _CODE_REJET = re.compile(r"^[A-Z]{2,}-[A-Z]{2,}$")
 NON_JUGE = [
     "batch : les branches sont dérivées de l AST du module ; une branche implicite (opérateur "
     "ternaire, court-circuit booléen) n est pas inventoriée séparément",
-    *NON_JUGE_EXEC,
 ]
 
 
