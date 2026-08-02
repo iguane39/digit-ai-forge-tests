@@ -167,6 +167,18 @@
       "statut": "resolue"
     },
     {
+      "id": "accessibilite-a11y-6343ef4f",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : le DOM est capture a l etat INITIAL de chaque route ; les etats atteints apres interaction (menu ouvert, modale, message d erreur) ne sont pas audites",
+      "statut": "todo"
+    },
+    {
+      "id": "accessibilite-a11y-076c4976",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
+      "statut": "todo"
+    },
+    {
       "id": "batch-python-b6a8e2ea",
       "domaine": "batch-python",
       "enonce": "batch : les branches sont dérivées de l AST du module ; une branche implicite (opérateur ternaire, court-circuit booléen) n est pas inventoriée séparément",

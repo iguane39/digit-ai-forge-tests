@@ -1,7 +1,7 @@
 export default function Commandes() {
   return (
     <section>
-      <select data-testid="filtre-statut" defaultValue="brouillon">
+      <select data-testid="filtre-statut" defaultValue="brouillon" aria-label="Filtrer par statut">
         <option value="brouillon">Brouillon</option>
         <option value="validee">Validee</option>
         <option value="annulee">Annulee</option>

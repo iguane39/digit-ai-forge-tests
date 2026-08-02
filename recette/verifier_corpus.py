@@ -38,6 +38,7 @@ CORPUS = [
     ("H-07", "fichiers", "chemins de parsing non exercés", ("chemin:",)),
     ("H-08", "back", "assertions permissives", ("mutant:", "seuil:back")),
     ("H-09", "securite", "execution dynamique non signalee", ("securite:",)),
+    ("H-10", "accessibilite", "controles sans nom accessible", ("a11y:",)),
 ]
 
 

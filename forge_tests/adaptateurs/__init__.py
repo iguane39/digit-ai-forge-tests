@@ -1,7 +1,7 @@
 """Registre des adaptateurs — un adaptateur = un couple (pan x technologie)."""
 
 from forge_tests.adaptateurs import (
-    api, batch, data, fichiers, front, migrations, mutation, securite,
+    accessibilite, api, batch, data, fichiers, front, migrations, mutation, securite,
 )
 
 REGISTRE = {
@@ -13,8 +13,10 @@ REGISTRE = {
     "fichiers-python": fichiers,
     "mutation-python": mutation,
     "securite-oracles": securite,
+    "accessibilite-a11y": accessibilite,
 }
 
 PANS_ATTENDUS = [
     "front", "api", "data", "migrations", "batch", "fichiers", "back", "securite",
+    "accessibilite",
 ]

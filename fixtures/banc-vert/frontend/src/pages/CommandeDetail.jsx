@@ -1,8 +1,8 @@
 export default function CommandeDetail() {
   return (
     <section>
-      <input data-testid="champ-quantite" type="number" defaultValue={1} />
-      <select data-testid="selecteur-plat" defaultValue="curry">
+      <input data-testid="champ-quantite" type="number" defaultValue={1} aria-label="Quantite" />
+      <select data-testid="selecteur-plat" defaultValue="curry" aria-label="Choix du plat">
         <option value="curry">Curry</option>
         <option value="soupe">Soupe</option>
       </select>
