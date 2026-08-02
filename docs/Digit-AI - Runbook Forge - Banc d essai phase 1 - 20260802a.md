@@ -45,7 +45,7 @@ Le gate design est déclaré non applicable, et rien n'est écrit dans le dépô
 
 | # | Précondition | État constaté | Action |
 |---|---|---|---|
-| P-1 | `uv` installé et dans le PATH | **Absent** | À installer |
+| P-1 | `uv` installé et dans le PATH | **Levée le 2026-08-02** — uv 0.11.32 installé par winget. Vérifié par `uv sync --dev` puis `uv run ruff` / `uv run mypy` / `uv run pytest` : 265 passed, 1 skipped, et `conductor --version` répond | Rien |
 | P-2 | Node et npm | Présents — Node v25.2.1, npm 11.6.2 | Rien |
 | P-3 | `gh` authentifié | Présent — compte `iguane39`, portées `repo` et `workflow` | Rien |
 | P-4 | Python ≥ 3.11 | Présent — 3.14.2 | Rien |
