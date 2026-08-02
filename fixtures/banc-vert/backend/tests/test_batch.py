@@ -46,3 +46,11 @@ def test_b5_idempotence() -> None:
     second = cloture_journaliere([_commande(1)], stock, journal)
     assert second["cloturees"] == premier["cloturees"]
     assert stock["curry"] == 4  # aucun effet au second passage
+
+
+# B6 - journee sans aucune commande cloturable (branche sur une seule ligne)
+def test_b6_aucune_cloture() -> None:
+    journal: dict = {}
+    res = cloture_journaliere([{"id": 9, "lignes": []}], {"curry": 5}, journal)
+    assert res["cloturees"] == []
+    assert journal.get("vide") is True

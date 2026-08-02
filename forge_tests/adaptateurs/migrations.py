@@ -19,8 +19,8 @@ _MOTS = {
 NON_JUGE = [
     "migrations : un sens est exercé si les instructions de sa section ont été RÉELLEMENT "
     "envoyées au moteur ; l oracle ne vérifie pas que leur effet sur le schéma est correct",
-    "migrations : le rejeu est déduit d une seconde exécution des mêmes instructions — deux "
-    "migrations aux instructions identiques seraient confondues",
+    "migrations : le rejeu est déduit d une seconde exécution de TOUTES les instructions de "
+    "la section ; deux migrations rigoureusement identiques resteraient indiscernables",
 ]
 
 
@@ -59,10 +59,19 @@ def exerces(cible: Path) -> set[str] | None:
     vues = [" ".join(s.split()) for s in executees_]
 
     def comptees(instructions: list[str]) -> int:
+        """Nombre de fois ou la section ENTIERE a ete envoyee.
+
+        Se fier a la premiere instruction confondait deux migrations qui commencent pareil.
+        On exige desormais que TOUTES les instructions de la section aient ete vues, et on
+        compte les passages par la moins frequente d entre elles.
+        """
         if not instructions:
             return 0
-        reference = instructions[0][:120]
-        return sum(1 for vue in vues if reference and reference in vue)
+        passages = []
+        for instruction in instructions:
+            reference = instruction[:200]
+            passages.append(sum(1 for vue in vues if reference and reference in vue))
+        return min(passages)
 
     couvert: set[str] = set()
     for fichier in _fichiers(cible):

@@ -24,7 +24,7 @@ NON_JUGE = [
     "generateur : les codes exigeant une valeur METIER invalide (400), un etat conflictuel "
     "(409) ou un type de media particulier (415) ne sont pas generables depuis le seul schema "
     "— ils sont declares NON GENERABLES, jamais emis a l aveugle",
-    "generateur : couvre le seul pan API ; les autres pans ne sont pas generes",
+    "generateur : pans API et Data generes ; Front, Batch et Fichiers ne le sont pas — leurs cas exigent un scenario, pas une seule requete",
     "generateur : le corps synthetise ne porte que les champs REQUIS ; un endpoint dont le comportement depend d un champ optionnel ne sera pas exerce sur ce chemin",
 ]
 

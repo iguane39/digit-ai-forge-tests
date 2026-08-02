@@ -28,9 +28,9 @@ PLAFOND_MUTANTS = 90
 NON_JUGE = [
     "mutation : les mutants équivalents ne sont pas détectés — un survivant peut être un mutant "
     "sémantiquement identique à l original",
-    "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance et bornes "
-    "numériques ; ni suppression d instruction, ni permutation d arguments, ni littéraux "
-    "non numériques",
+    "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance, bornes "
+    "numériques et suppression d instruction ; ni permutation d arguments, ni littéraux non "
+    "numériques",
 ]
 
 _SUBSTITUTIONS = (("+", "-"), ("-", "+"), ("*", "/"), ("/", "*"))
@@ -134,6 +134,12 @@ def generer_mutants(source: Path, nom_court: str) -> list[Mutant]:
             for avant, apres in _SUBSTITUTIONS:
                 if caractere == avant:
                     mutants.append(Mutant(nom_court, i, j, avant, apres))
+        # Suppression d instruction : neutraliser un appel dont le retour n est pas utilise.
+        # Un test qui ne verifie que l absence d exception ne le remarque jamais.
+        nu = ligne.strip()
+        if nu.endswith(")") and "=" not in nu and not nu.startswith(("return", "raise", "assert")):
+            indentation = len(ligne) - len(ligne.lstrip())
+            mutants.append(Mutant(nom_court, i, indentation, nu[:1], "pass  # "))
     return mutants
 
 

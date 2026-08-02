@@ -167,6 +167,12 @@
       "statut": "resolue"
     },
     {
+      "id": "execution-e6621c0d",
+      "domaine": "execution",
+      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
+      "statut": "resolue"
+    },
+    {
       "id": "fichiers-python-e6621c0d",
       "domaine": "fichiers-python",
       "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
@@ -197,6 +203,12 @@
       "statut": "resolue"
     },
     {
+      "id": "generateur-bf878b82",
+      "domaine": "generateur",
+      "enonce": "generateur : couvre le seul pan API ; les autres pans ne sont pas generes",
+      "statut": "resolue"
+    },
+    {
       "id": "migrations-sql-a4b8f19a",
       "domaine": "migrations-sql",
       "enonce": "migrations : un sens est réputé exercé si un test le nomme ; l oracle ne vérifie pas que la migration a réellement été appliquée dans ce sens",
@@ -206,6 +218,12 @@
       "id": "migrations-sql-33be9de9",
       "domaine": "migrations-sql",
       "enonce": "migrations : un sens est exercé si une ligne de test RÉELLEMENT EXÉCUTÉE le nomme ; l oracle ne vérifie pas que la migration a été appliquée dans ce sens, seulement que le code qui la nomme a tourné",
+      "statut": "resolue"
+    },
+    {
+      "id": "migrations-sql-9b7eabfc",
+      "domaine": "migrations-sql",
+      "enonce": "migrations : le rejeu est déduit d une seconde exécution des mêmes instructions — deux migrations aux instructions identiques seraient confondues",
       "statut": "resolue"
     },
     {
@@ -227,6 +245,12 @@
       "statut": "resolue"
     },
     {
+      "id": "mutation-python-3c7ef86c",
+      "domaine": "mutation-python",
+      "enonce": "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance et bornes numériques ; ni suppression d instruction, ni permutation d arguments, ni littéraux non numériques",
+      "statut": "resolue"
+    },
+    {
       "id": "securite-oracles-507f7f68",
       "domaine": "securite-oracles",
       "enonce": "securite : le perimetre scanne est le dossier applicatif ; ni l historique git, ni l infrastructure, ni la configuration de deploiement",
@@ -239,28 +263,37 @@
       "statut": "todo"
     },
     {
+      "id": "batch-python-dc664872",
+      "domaine": "batch-python",
+      "enonce": "batch : une branche dont le corps tient sur la MEME ligne que son test (`if x: y`) n est pas distinguable — les arcs de coverage.py vont de ligne a ligne, il n en existe aucun entre une ligne et elle-meme. Repli sur la couverture de ligne, moins precis",
+      "statut": "assume",
+      "note": "non levable par les arcs : coverage.py les emet de ligne a ligne, il n en existe aucun entre une ligne et elle-meme. Exigerait une instrumentation AST du code teste."
+    },
+    {
       "id": "data-sql-8c45c77b",
       "domaine": "data-sql",
       "enonce": "data : un index ou un trigger est réputé exercé si son instruction de création a été envoyée au moteur ; son EFFET (unicité réellement testée, trigger réellement déclenché) n est pas vérifié",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "l effet d un index (performance) ou d un trigger sort du contrat d un oracle de couverture ; son existence et son application sont, elles, verifiees."
     },
     {
-      "id": "execution-e6621c0d",
+      "id": "execution-1dfcb298",
       "domaine": "execution",
-      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
+      "enonce": "exécution : la couverture combine lignes et ARCS de branchement ; une branche implicite (ternaire, court-circuit booléen) reste hors de portée de coverage.py",
       "statut": "todo"
     },
     {
-      "id": "generateur-bf878b82",
+      "id": "generateur-543141fc",
       "domaine": "generateur",
-      "enonce": "generateur : couvre le seul pan API ; les autres pans ne sont pas generes",
+      "enonce": "generateur : pans API et Data generes ; Front, Batch et Fichiers ne le sont pas — leurs cas exigent un scenario, pas une seule requete",
       "statut": "todo"
     },
     {
       "id": "generateur-data-1c4024e3",
       "domaine": "generateur-data",
       "enonce": "generateur data : la valeur violante est derivee du TYPE de contrainte (unicite, non-nullite, cle etrangere, verification) ; une contrainte de verification a expression complexe n est pas resolue et n est pas generee",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "une contrainte CHECK a expression arbitraire demande un solveur ; hors contrat, la contrainte est signalee non generable plutot que generee a tort."
     },
     {
       "id": "migrations-sql-d2d9e0bb",
@@ -269,34 +302,37 @@
       "statut": "todo"
     },
     {
-      "id": "migrations-sql-9b7eabfc",
+      "id": "migrations-sql-74e7319c",
       "domaine": "migrations-sql",
-      "enonce": "migrations : le rejeu est déduit d une seconde exécution des mêmes instructions — deux migrations aux instructions identiques seraient confondues",
+      "enonce": "migrations : le rejeu est déduit d une seconde exécution de TOUTES les instructions de la section ; deux migrations rigoureusement identiques resteraient indiscernables",
       "statut": "todo"
     },
     {
-      "id": "mutation-python-3c7ef86c",
+      "id": "mutation-python-d8fe9aa8",
       "domaine": "mutation-python",
-      "enonce": "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance et bornes numériques ; ni suppression d instruction, ni permutation d arguments, ni littéraux non numériques",
+      "enonce": "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance, bornes numériques et suppression d instruction ; ni permutation d arguments, ni littéraux non numériques",
       "statut": "todo"
     },
     {
       "id": "securite-oracles-a0a08e45",
       "domaine": "securite-oracles",
       "enonce": "securite : le perimetre scanne est le dossier du projet analyse ; ni l historique git, ni l infrastructure declaree ailleurs (conteneurs, pipelines, secrets d execution)",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "l historique git et l infrastructure relevent d autres oracles du registre, pas de celui-ci — perimetre assume, pas oubli."
     },
     {
       "id": "visuel-golden-195c578f",
       "domaine": "visuel-golden",
       "enonce": "visuel : un diff dit qu il y a changement, pas si le changement est VOULU — la decision reste humaine (limite propre de l oracle, reprise telle quelle)",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "indecidable par construction : seul un humain sait si un changement de rendu est voulu. C est la raison d etre du feu vert sur les goldens."
     },
     {
       "id": "visuel-golden-f02d7e5b",
       "domaine": "visuel-golden",
       "enonce": "visuel : le rendu compare est le DOM capture a l etat initial de chaque route, sans style externe charge depuis le serveur",
-      "statut": "todo"
+      "statut": "assume",
+      "note": "le DOM capture est autoportant par choix : dependre du serveur au moment du jugement rendrait le verdict non reproductible."
     }
   ]
 }

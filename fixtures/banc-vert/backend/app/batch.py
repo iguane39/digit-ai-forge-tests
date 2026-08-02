@@ -45,5 +45,6 @@ def cloture_journaliere(
             stock[ligne["plat"]] -= ligne["quantite"]
         cloturees.append(commande["id"])  # B1
 
+    if not cloturees: journal["vide"] = True
     journal.update({"cloturee": True, "cloturees": cloturees, "rejets": rejets})
     return {"cloturees": cloturees, "rejets": rejets, "reprise": reprise}

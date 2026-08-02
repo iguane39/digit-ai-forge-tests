@@ -12,7 +12,7 @@ import ast
 import re
 from pathlib import Path
 
-from forge_tests.execution import executees
+from forge_tests.execution import arcs_executes, executees
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "batch-python", "batch", 0.90
@@ -22,11 +22,18 @@ _CODE_REJET = re.compile(r"^[A-Z]{2,}-[A-Z]{2,}$")
 NON_JUGE = [
     "batch : les branches sont dérivées de l AST du module ; une branche implicite (opérateur "
     "ternaire, court-circuit booléen) n est pas inventoriée séparément",
+    "batch : une branche dont le corps tient sur la MEME ligne que son test (`if x: y`) n est "
+    "pas distinguable — les arcs de coverage.py vont de ligne a ligne, il n en existe aucun "
+    "entre une ligne et elle-meme. Repli sur la couverture de ligne, moins precis",
 ]
 
 
 def _src(cible: Path) -> Path:
     return cible / "backend" / "app" / FICHIER
+
+
+# ligne du corps -> ligne du test qui y mene. Rempli a l inventaire, lu a la couverture.
+_ARCS_ATTENDUS: dict[int, int] = {}
 
 
 def _premiere_ligne(corps: list[ast.stmt]) -> int | None:
@@ -46,6 +53,9 @@ def inventaire(cible: Path) -> list[Element]:
         blocs: list[tuple[str, list[ast.stmt]]] = []
         if isinstance(noeud, ast.If):
             blocs = [("si", noeud.body), ("sinon", noeud.orelse)]
+            _ARCS_ATTENDUS.update(
+                {corps[0].lineno: noeud.lineno for _, corps in blocs if corps}
+            )
         elif isinstance(noeud, ast.ExceptHandler):
             blocs = [("except", noeud.body)]
         elif isinstance(noeud, (ast.For, ast.While)):
@@ -79,10 +89,22 @@ def exerces(cible: Path) -> set[str] | None:
     if lignes is None:
         return None
     couvert: set[str] = set()
-    for element in inventaire(cible):
-        if element.id.startswith("branche:"):
-            if int(element.id.rsplit(":", 1)[1]) in lignes:
+    inv = inventaire(cible)  # remplit _ARCS_ATTENDUS
+    arcs = arcs_executes(cible, FICHIER)
+    for element in inv:
+        if not element.id.startswith("branche:"):
+            continue
+        ligne = int(element.id.rsplit(":", 1)[1])
+        origine = _ARCS_ATTENDUS.get(ligne)
+        # L arc tranche quand le corps est sur une AUTRE ligne que son test. Quand il partage
+        # sa ligne (`if x: y`), coverage.py n emet aucun arc distinctif — les arcs vont de ligne
+        # a ligne. On retombe alors sur la ligne, et la limite est declaree.
+        if arcs is not None and origine is not None and origine != ligne:
+            if (origine, ligne) in arcs:
                 couvert.add(element.id)
+            continue
+        if ligne in lignes:
+            couvert.add(element.id)
     # Un code de rejet est exercé si la ligne qui le produit a été exécutée.
     src = _src(cible)
     arbre = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))

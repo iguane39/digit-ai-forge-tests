@@ -23,8 +23,8 @@ from pathlib import Path
 SONDES = Path(__file__).resolve().parent / "sondes"
 
 NON_JUGE = [
-    "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne "
-    "ne sont pas distinguées",
+    "exécution : la couverture combine lignes et ARCS de branchement ; une branche implicite "
+    "(ternaire, court-circuit booléen) reste hors de portée de coverage.py",
     "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du "
     "second contre-oracle (mutation)",
 ]
@@ -89,8 +89,15 @@ def mesurer(banc_str: str) -> dict | None:
         Path(chemin).name: frozenset(detail.get("executed_lines", []))
         for chemin, detail in donnees.get("files", {}).items()
     }
+    arcs = {
+        Path(chemin).name: frozenset(
+            (int(a), int(b)) for a, b in detail.get("executed_branches", [])
+        )
+        for chemin, detail in donnees.get("files", {}).items()
+    }
     return {
         "lignes": lignes,
+        "arcs": arcs,
         "codes": codes,
         "violations": violations,
         "instructions": instructions,
@@ -109,6 +116,12 @@ def violations_levees(banc: Path) -> list[str] | None:
     """Messages de violation de contrainte reellement levees par la base pendant la suite."""
     mesure = mesurer(str(banc))
     return None if mesure is None else mesure["violations"]
+
+
+def arcs_executes(banc: Path, fichier: str) -> frozenset[tuple[int, int]] | None:
+    """Arcs de branchement reellement pris (ligne du test -> ligne atteinte)."""
+    mesure = mesurer(str(banc))
+    return None if mesure is None else mesure["arcs"].get(fichier)
 
 
 def instructions_sql(banc: Path) -> list[str] | None:
