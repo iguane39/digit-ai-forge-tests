@@ -3,8 +3,8 @@ import { test, expect } from "@playwright/test";
 
 test("accueil", async ({ page }) => {
   await page.goto("/");
-  await page.getByTestId("lien-connexion").click();
-  await page.getByTestId("lien-commandes").click();
+  await expect(page.getByTestId("lien-connexion")).toBeVisible();
+  await expect(page.getByTestId("lien-commandes")).toBeVisible();
 });
 
 test("login", async ({ page }) => {
@@ -26,7 +26,7 @@ test("liste des commandes", async ({ page }) => {
 test("detail de commande", async ({ page }) => {
   await page.goto("/commandes/1");
   await page.getByTestId("champ-quantite").fill("3");
-  await page.getByTestId("selecteur-plat").selectOption("curry");
+  await page.getByTestId("selecteur-plat").selectOption("soupe");
   await page.getByTestId("bouton-enregistrer").click();
   await page.getByTestId("bouton-annuler").click();
   await page.getByTestId("bouton-dupliquer").click();
@@ -35,7 +35,9 @@ test("detail de commande", async ({ page }) => {
 
 test("administration", async ({ page }) => {
   await page.goto("/admin");
-  await page.getByTestId("import-fichier").setInputFiles("commandes.csv");
+  await page.getByTestId("import-fichier").setInputFiles({
+    name: "commandes.csv", mimeType: "text/csv", buffer: Buffer.from("plat,quantite\ncurry,2\n"),
+  });
   await page.getByTestId("bouton-cloture").click();
   await page.getByTestId("bouton-purge").click();
   await page.getByTestId("filtre-utilisateur").selectOption("chef");

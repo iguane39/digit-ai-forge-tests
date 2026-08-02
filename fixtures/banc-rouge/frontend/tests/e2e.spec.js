@@ -1,10 +1,10 @@
 // Suite Front.
-import { test } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 
 test("accueil", async ({ page }) => {
   await page.goto("/");
-  await page.getByTestId("lien-connexion").click();
-  await page.getByTestId("lien-commandes").click();
+  await expect(page.getByTestId("lien-connexion")).toBeVisible();
+  await expect(page.getByTestId("lien-commandes")).toBeVisible();
 });
 
 test("login", async ({ page }) => {

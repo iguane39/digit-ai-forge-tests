@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from functools import lru_cache
@@ -132,3 +133,53 @@ def schema_openapi(banc_str: str) -> dict | None:
             return None
         donnees = json.loads(sortie.read_text(encoding="utf-8"))
     return None if "erreur" in donnees else donnees
+
+
+@lru_cache(maxsize=16)
+def front_execute(banc_str: str) -> dict | None:
+    """Routes visitees et elements reellement manipules pendant la suite front.
+
+    Lance la suite Playwright du projet avec la TRACE activee, puis lit la trace : chaque action
+    y porte son selecteur et chaque navigation son URL. Aucune modification du projet analyse —
+    l instrumentation est un drapeau de ligne de commande.
+    """
+    import collections
+    import re
+    import zipfile
+
+    banc = Path(banc_str)
+    front = banc / "frontend"
+    if not (front / "node_modules").is_dir():
+        return None
+    npx = shutil.which("npx")
+    if npx is None:
+        return None
+    resultat = subprocess.run(
+        [npx, "playwright", "test", "--trace", "on", "--reporter=line"],
+        cwd=front, capture_output=True, text=True, timeout=900,
+        env={**os.environ, "CI": "1"},
+    )
+    if resultat.returncode != 0:
+        return None
+    testids: set[str] = set()
+    routes: set[str] = set()
+    motif = re.compile(r'data-testid="([^"]+)"')
+    for archive in (front / "test-results").rglob("trace.zip"):
+        with zipfile.ZipFile(archive) as arc:
+            for nom in arc.namelist():
+                if not nom.endswith(".trace"):
+                    continue
+                for ligne in arc.read(nom).decode("utf-8", "replace").splitlines():
+                    try:
+                        entree = json.loads(ligne)
+                    except json.JSONDecodeError:
+                        continue
+                    params = entree.get("params") or {}
+                    trouve = motif.search(str(params.get("selector", "")))
+                    if trouve:
+                        testids.add(trouve.group(1))
+                    url = params.get("url")
+                    if isinstance(url, str) and url.startswith("/"):
+                        routes.add(url)
+    del collections
+    return {"routes": sorted(routes), "testids": sorted(testids)}

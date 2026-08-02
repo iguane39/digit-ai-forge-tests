@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.models import Base, Commande, LigneCommande, Utilisateur
 
 
 @pytest.fixture()
-def session() -> Session:
-    moteur = create_engine("sqlite+pysqlite:///:memory:")
+def session(moteur) -> Session:  # noqa: ANN001 — moteur PostgreSQL ephemere (conftest)
+    Base.metadata.drop_all(moteur)
     Base.metadata.create_all(moteur)
     with Session(moteur) as s:
         yield s

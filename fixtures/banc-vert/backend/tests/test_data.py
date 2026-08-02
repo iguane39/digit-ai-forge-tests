@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import create_engine, event
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,13 +10,8 @@ from app.models import Base, Commande, LigneCommande, Utilisateur
 
 
 @pytest.fixture()
-def session() -> Session:
-    moteur = create_engine("sqlite+pysqlite:///:memory:")
-
-    @event.listens_for(moteur, "connect")
-    def _fk(dbapi_connection, _record) -> None:  # noqa: ANN001
-        dbapi_connection.execute("PRAGMA foreign_keys=ON")
-
+def session(moteur) -> Session:  # noqa: ANN001 — moteur PostgreSQL ephemere (conftest)
+    Base.metadata.drop_all(moteur)
     Base.metadata.create_all(moteur)
     with Session(moteur) as s:
         yield s

@@ -16,14 +16,17 @@ _NOT_NULL = re.compile(r"^\s*(\w+)\s+\w+\s+NOT NULL", re.IGNORECASE | re.MULTILI
 _ORM_NOMMEE = re.compile(r"(?:UniqueConstraint|CheckConstraint|ForeignKey)\([^)]*name=\"(\w+)\"")
 _ORM_NOT_NULL = re.compile(r"^\s*(\w+)\s*=\s*Column\([^)]*nullable=False", re.MULTILINE)
 
+# PostgreSQL nomme TOUTES ses contraintes, cles etrangeres comprises.
+_PG_NOMMEE = re.compile(r'violates (?:foreign key|unique|check) constraint "(\w+)"')
+_PG_NOT_NULL = re.compile(r'null value in column "(\w+)" of relation "\w+"')
+# SQLite : conserve pour les projets qui l utilisent, avec son angle mort sur les cles etrangeres.
 _NN = re.compile(r"NOT NULL constraint failed: (\w+)\.(\w+)")
 _CK = re.compile(r"CHECK constraint failed: (\w+)")
 _UQ = re.compile(r"UNIQUE constraint failed: (\w+)\.(\w+)")
 
 NON_JUGE = [
-    "data : les clés étrangères ne sont PAS attribuables par exécution — SQLite ne nomme pas la "
-    "contrainte dans « FOREIGN KEY constraint failed ». Elles restent sur le recoupement "
-    "textuel, moins sûr, jusqu à confrontation à un moteur qui nomme ses contraintes",
+    "data : sur SQLite les clés étrangères restent non attribuables (le moteur ne nomme pas la "
+    "contrainte violée) ; l attribution complète exige un moteur qui les nomme, comme PostgreSQL",
     "data : la présence d une table est déduite du texte des tests, pas de son usage réel",
     "data : triggers et index partiels ne sont pas inventoriés",
 ]
@@ -110,6 +113,14 @@ def exerces(cible: Path) -> set[str] | None:
     couvert: set[str] = set()
 
     for message in violations:
+        trouve = _PG_NOMMEE.search(message)
+        if trouve:
+            couvert.add(f"contrainte:{trouve.group(1)}")
+            continue
+        trouve = _PG_NOT_NULL.search(message)
+        if trouve:
+            couvert.add(f"contrainte:{trouve.group(1)}.not_null")
+            continue
         trouve = _NN.search(message)
         if trouve:
             couvert.add(f"contrainte:{trouve.group(2)}.not_null")
@@ -125,8 +136,9 @@ def exerces(cible: Path) -> set[str] | None:
                 if table in nom and colonne in nom:
                     couvert.add(f"contrainte:{nom}")
 
-    # Repli DÉCLARÉ : tables et clés étrangères, non attribuables par exécution.
-    a_repli = {e.id for e in inv if e.id.startswith("table:") or e.id.endswith("_fk")}
+    # Repli DÉCLARÉ, réduit aux seules tables : les contraintes sont désormais toutes
+    # attribuables par exécution sur un moteur qui les nomme.
+    a_repli = {e.id for e in inv if e.id.startswith("table:")} - couvert
     couvert |= _repli_textuel(cible, [e for e in inv if e.id in a_repli])
     return couvert
 

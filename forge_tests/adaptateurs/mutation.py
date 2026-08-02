@@ -23,13 +23,14 @@ from forge_tests.risque import coter
 NOM, PAN, SEUIL = "mutation-python", "back", 0.70
 DOSSIER_SOURCE = Path("backend/app")
 SUITE = "tests"
-PLAFOND_MUTANTS = 60
+PLAFOND_MUTANTS = 90
 
 NON_JUGE = [
     "mutation : les mutants équivalents ne sont pas détectés — un survivant peut être un mutant "
     "sémantiquement identique à l original",
-    "mutation : opérateurs arithmétiques et de comparaison ; ni suppression d instruction, "
-    "ni permutation d arguments, ni mutation de littéraux non numériques",
+    "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance et bornes "
+    "numériques ; ni suppression d instruction, ni permutation d arguments, ni littéraux "
+    "non numériques",
 ]
 
 _SUBSTITUTIONS = (("+", "-"), ("-", "+"), ("*", "/"), ("/", "*"))
@@ -38,7 +39,15 @@ _COMPARAISONS = (
     (" > ", " >= "),
     (" == ", " != "),
     (" != ", " == "),
+    (" <= ", " < "),
+    (" >= ", " > "),
+    (" and ", " or "),
+    (" or ", " and "),
+    (" in ", " not in "),
+    (" is not ", " is "),
 )
+# Litteraux numeriques : decaler une borne revele les tests qui ne verifient que le sens.
+_BORNES = ((" 0", " 1"), (" 1", " 0"), (" 100", " 99"))
 
 
 @dataclass(frozen=True)
@@ -115,7 +124,7 @@ def generer_mutants(source: Path, nom_court: str) -> list[Mutant]:
     mutants: list[Mutant] = []
     for i in _lignes_calculantes(lignes):
         ligne = lignes[i]
-        for avant, apres in _COMPARAISONS:
+        for avant, apres in (*_COMPARAISONS, *_BORNES):
             position = ligne.find(avant)
             if position >= 0 and not dans_litteral(i, position + 1):
                 mutants.append(Mutant(nom_court, i, position, avant, apres))

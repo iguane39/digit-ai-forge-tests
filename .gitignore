@@ -9,3 +9,8 @@ dist/
 build/
 *.egg-info/
 propositions/
+node_modules/
+dist/
+test-results/
+playwright-report/
+resultat-playwright.json

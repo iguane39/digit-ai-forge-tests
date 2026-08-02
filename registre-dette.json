@@ -107,6 +107,12 @@
       "statut": "resolue"
     },
     {
+      "id": "data-sql-b06b45c0",
+      "domaine": "data-sql",
+      "enonce": "data : les clés étrangères ne sont PAS attribuables par exécution — SQLite ne nomme pas la contrainte dans « FOREIGN KEY constraint failed ». Elles restent sur le recoupement textuel, moins sûr, jusqu à confrontation à un moteur qui nomme ses contraintes",
+      "statut": "resolue"
+    },
+    {
       "id": "fichiers-python-e6621c0d",
       "domaine": "fichiers-python",
       "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
@@ -116,6 +122,12 @@
       "id": "fichiers-python-edbe4456",
       "domaine": "fichiers-python",
       "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
+      "statut": "resolue"
+    },
+    {
+      "id": "front-react-fe504d65",
+      "domaine": "front-react",
+      "enonce": "front : un element mentionne par la suite est repute exerce ; l oracle ne verifie pas que l interaction a lieu ni qu elle assert quelque chose",
       "statut": "resolue"
     },
     {
@@ -149,15 +161,21 @@
       "statut": "resolue"
     },
     {
+      "id": "mutation-python-fecac842",
+      "domaine": "mutation-python",
+      "enonce": "mutation : opérateurs arithmétiques et de comparaison ; ni suppression d instruction, ni permutation d arguments, ni mutation de littéraux non numériques",
+      "statut": "resolue"
+    },
+    {
       "id": "batch-python-b6a8e2ea",
       "domaine": "batch-python",
       "enonce": "batch : les branches sont dérivées de l AST du module ; une branche implicite (opérateur ternaire, court-circuit booléen) n est pas inventoriée séparément",
       "statut": "todo"
     },
     {
-      "id": "data-sql-b06b45c0",
+      "id": "data-sql-6f7294ed",
       "domaine": "data-sql",
-      "enonce": "data : les clés étrangères ne sont PAS attribuables par exécution — SQLite ne nomme pas la contrainte dans « FOREIGN KEY constraint failed ». Elles restent sur le recoupement textuel, moins sûr, jusqu à confrontation à un moteur qui nomme ses contraintes",
+      "enonce": "data : sur SQLite les clés étrangères restent non attribuables (le moteur ne nomme pas la contrainte violée) ; l attribution complète exige un moteur qui les nomme, comme PostgreSQL",
       "statut": "todo"
     },
     {
@@ -185,9 +203,9 @@
       "statut": "todo"
     },
     {
-      "id": "front-react-fe504d65",
+      "id": "front-react-60be323d",
       "domaine": "front-react",
-      "enonce": "front : un element mentionne par la suite est repute exerce ; l oracle ne verifie pas que l interaction a lieu ni qu elle assert quelque chose",
+      "enonce": "front : un element manipule pendant la suite est repute exerce ; la trace dit qu il a ete atteint, pas qu une ASSERTION porte sur son effet",
       "statut": "todo"
     },
     {
@@ -203,9 +221,9 @@
       "statut": "todo"
     },
     {
-      "id": "mutation-python-fecac842",
+      "id": "mutation-python-3c7ef86c",
       "domaine": "mutation-python",
-      "enonce": "mutation : opérateurs arithmétiques et de comparaison ; ni suppression d instruction, ni permutation d arguments, ni mutation de littéraux non numériques",
+      "enonce": "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance et bornes numériques ; ni suppression d instruction, ni permutation d arguments, ni littéraux non numériques",
       "statut": "todo"
     },
     {

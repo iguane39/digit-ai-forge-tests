@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from forge_tests.execution import front_execute
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "front-react", "front", 0.90
@@ -18,8 +19,8 @@ _GOTO = re.compile(r'goto\(\s*"([^"]+)"')
 _BYTESTID = re.compile(r'getByTestId\(\s*"([^"]+)"')
 
 NON_JUGE = [
-    "front : un element mentionne par la suite est repute exerce ; l oracle ne verifie pas que "
-    "l interaction a lieu ni qu elle assert quelque chose",
+    "front : un element manipule pendant la suite est repute exerce ; la trace dit qu il a ete "
+    "atteint, pas qu une ASSERTION porte sur son effet",
     "front : elements rendus dynamiquement sans data-testid statique (non inventoriables ici)",
 ]
 
@@ -43,16 +44,21 @@ def inventaire(cible: Path) -> list[Element]:
     return elements
 
 
-def exerces(cible: Path) -> set[str]:
-    couvert: set[str] = set()
-    for spec in sorted((_racine(cible) / "tests").glob("*.spec.js")):
-        texte = spec.read_text(encoding="utf-8")
-        for chemin in _GOTO.findall(texte):
-            couvert.add(f"route:{re.sub(r'/\d+', '/:id', chemin)}")
-        for tid in _BYTESTID.findall(texte):
-            couvert.add(f"element:{tid}")
+def exerces(cible: Path) -> set[str] | None:
+    """Routes visitees et elements manipules REELLEMENT, lus dans la trace du navigateur."""
+    mesure = front_execute(str(cible))
+    if mesure is None:
+        return None
+    couvert = {f"element:{tid}" for tid in mesure["testids"]}
+    couvert |= {f"route:{re.sub(r'/\d+', '/:id', url)}" for url in mesure["routes"]}
     return couvert
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
-    return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), exerces(cible), SEUIL, NON_JUGE)
+    couvert = exerces(cible)
+    if couvert is None:
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            non_juge=[*NON_JUGE, "suite front non executable : dependances ou navigateur absents"],
+        )
+    return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)
