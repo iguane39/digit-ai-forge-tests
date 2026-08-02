@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 
 from forge_tests.execution import codes_emis, schema_openapi
+from forge_tests.invariants import NON_JUGE as NON_JUGE_INV
+from forge_tests.invariants import codes_par_fonction, handlers
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
 from forge_tests.risque import coter
 
@@ -65,6 +67,34 @@ def analyser(cible: Path) -> SortieAdaptateur:
     sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)
     # Un code EMIS pendant la suite mais absent de `responses=` est une divergence entre ce que
     # la source declare et ce que le code fait. Ni un trou de couverture, ni un silence : un ecart.
+    # Un code d invariant metier DECLARE mais qu aucune garde du code ne peut produire est une
+    # divergence : la source promet une erreur que le comportement ne sait plus lever.
+    source = cible / "backend" / "app" / "main.py"
+    par_fonction = codes_par_fonction(source)
+    table = handlers(source)
+    for element in inv:
+        if not element.id.startswith("code:"):
+            continue
+        signature, code = element.id[len("code:") :].rsplit("=", 1)
+        methode, chemin = signature.split(" ", 1)
+        code = int(code)
+        fonction = table.get((methode, chemin))
+        gardes = par_fonction.get(fonction or "", set())
+        if code in (400, 409) and code not in gardes:
+            sortie.findings.append(
+                Finding(
+                    id=f"divergence:{element.id}",
+                    classe="divergence",
+                    localisation=str(source),
+                    message=(
+                        f"code {code} declare pour {signature} mais aucune garde de "
+                        f"{fonction or '?'}() ne le leve"
+                    ),
+                    risque=coter(PAN, element.id, str(source)),
+                )
+            )
+            sortie.verdict = "FAIL"
+
     declares = {e.id for e in inv if e.id.startswith("code:")}
     for identifiant in sorted(couvert - declares):
         if not identifiant.startswith("code:"):
