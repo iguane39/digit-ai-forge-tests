@@ -58,11 +58,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("cible", type=Path, help="racine du projet à analyser")
     parser.add_argument("--json", action="store_true", help="sortie machine complète")
     parser.add_argument("--pans", nargs="*", default=None, help="restreindre à ces pans")
+    parser.add_argument(
+        "--generer",
+        type=Path,
+        default=None,
+        help="deposer les cas generes dans ce dossier de PROPOSITION (jamais dans le projet)",
+    )
     args = parser.parse_args(argv)
 
     # Chemin ABSOLU : un adaptateur qui lance un sous-processus avec un `cwd` différent ne peut
     # pas résoudre un binaire donné en relatif. Le résoudre ici évite un SKIP silencieux.
     rap = analyser(args.cible.resolve(), args.pans)
+    if args.generer is not None:
+        from forge_tests.generateur import ecrire
+
+        produit = ecrire(rap, args.generer.resolve())
+        print(f"cas generes -> {produit}" if produit else "aucun cas a generer")
     print(json.dumps(rap, ensure_ascii=False, indent=2) if args.json else _resume(rap))
     if rap["verdict"] == "PARTIEL":
         return 3

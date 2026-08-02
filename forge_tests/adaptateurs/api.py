@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from forge_tests.execution import NON_JUGE as NON_JUGE_EXEC
+from forge_tests.execution import codes_emis
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "api-fastapi", "api", 1.0
@@ -14,9 +16,10 @@ _APPEL = re.compile(r'client\.(get|post|patch|put|delete)\(\s*f?"([^"]+)"')
 _STATUT = re.compile(r"status_code\s*==\s*(\d{3})")
 
 NON_JUGE = [
-    "api : un code asserte dans une fonction de test est rattache a TOUS les appels de cette "
-    "fonction ; l oracle ne relie pas l assertion a un appel precis",
+    "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une "
+    "ASSERTION porte sur lui — c est le role du second contre-oracle",
     "api : codes produits par le framework sans declaration explicite dans responses=",
+    *NON_JUGE_EXEC,
 ]
 
 
@@ -54,4 +57,10 @@ def exerces(cible: Path) -> set[str]:
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
-    return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), exerces(cible), SEUIL, NON_JUGE)
+    couvert = exerces(cible)
+    if couvert is None:
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            non_juge=[*NON_JUGE, "sonde indisponible : suite rouge ou environnement absent"],
+        )
+    return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)

@@ -3,15 +3,47 @@
   "note": "Dette de jugement du framework. `todo` = à outiller · `assume` = limite acceptée et déclarée pour toujours · `ok` = comblée. Régénéré depuis le code : ne pas éditer les énoncés à la main, seulement les statuts et les notes.",
   "dette": [
     {
+      "id": "mutation-python-f496a011",
+      "domaine": "mutation-python",
+      "enonce": "mutation : les mutants équivalents ne sont pas détectés — un survivant peut être un mutant sémantiquement identique à l original",
+      "statut": "assume",
+      "note": "indécidable en général : aucune version future ne les éliminera. Triage humain des survivants."
+    },
+    {
+      "id": "risque-d7aeecaa",
+      "domaine": "risque",
+      "enonce": "risque : la criticité et le coût de détection tardive sont DÉCLARÉS par pan, pas mesurés — un projet dont les enjeux diffèrent doit redéclarer la table COTATION_PAN",
+      "statut": "assume",
+      "note": "choix de conception assumé et versionné dans COTATION_PAN ; à redéclarer par projet."
+    },
+    {
       "id": "api-fastapi-36917142",
       "domaine": "api-fastapi",
       "enonce": "api : un code asserte dans une fonction de test est rattache a TOUS les appels de cette fonction ; l oracle ne relie pas l assertion a un appel precis",
+      "statut": "resolue"
+    },
+    {
+      "id": "api-fastapi-28e9b332",
+      "domaine": "api-fastapi",
+      "enonce": "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une ASSERTION porte sur lui — c est le role du second contre-oracle",
       "statut": "todo"
     },
     {
       "id": "api-fastapi-e3cc430e",
       "domaine": "api-fastapi",
       "enonce": "api : codes produits par le framework sans declaration explicite dans responses=",
+      "statut": "todo"
+    },
+    {
+      "id": "api-fastapi-e6621c0d",
+      "domaine": "api-fastapi",
+      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
+      "statut": "todo"
+    },
+    {
+      "id": "api-fastapi-edbe4456",
+      "domaine": "api-fastapi",
+      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
       "statut": "todo"
     },
     {
@@ -87,6 +119,24 @@
       "statut": "todo"
     },
     {
+      "id": "generateur-a4b9e9ea",
+      "domaine": "generateur",
+      "enonce": "generateur : precision MESUREE a 0 % sur le banc (recette/precision_generateur.py) — les cas produits echouent aussi sur du code correct. NON UTILISABLE en l etat",
+      "statut": "todo"
+    },
+    {
+      "id": "generateur-4dc97f21",
+      "domaine": "generateur",
+      "enonce": "generateur : ne synthetise pas les preconditions (ressource existante, corps valide, en-tete de type de media) ni les parametres qui declenchent un code d erreur",
+      "statut": "todo"
+    },
+    {
+      "id": "generateur-bf878b82",
+      "domaine": "generateur",
+      "enonce": "generateur : couvre le seul pan API ; les autres pans ne sont pas generes",
+      "statut": "todo"
+    },
+    {
       "id": "migrations-sql-a4b8f19a",
       "domaine": "migrations-sql",
       "enonce": "migrations : un sens est réputé exercé si un test le nomme ; l oracle ne vérifie pas que la migration a réellement été appliquée dans ce sens",
@@ -99,24 +149,10 @@
       "statut": "todo"
     },
     {
-      "id": "mutation-python-f496a011",
-      "domaine": "mutation-python",
-      "enonce": "mutation : les mutants équivalents ne sont pas détectés — un survivant peut être un mutant sémantiquement identique à l original",
-      "statut": "assume",
-      "note": "indécidable en général : aucune version future ne les éliminera. Triage humain des survivants."
-    },
-    {
       "id": "mutation-python-f5a0e6e6",
       "domaine": "mutation-python",
       "enonce": "mutation : opérateurs arithmétiques et constantes numériques seulement",
       "statut": "todo"
-    },
-    {
-      "id": "risque-d7aeecaa",
-      "domaine": "risque",
-      "enonce": "risque : la criticité et le coût de détection tardive sont DÉCLARÉS par pan, pas mesurés — un projet dont les enjeux diffèrent doit redéclarer la table COTATION_PAN",
-      "statut": "assume",
-      "note": "choix de conception assumé et versionné dans COTATION_PAN ; à redéclarer par projet."
     },
     {
       "id": "risque-e5a9984f",

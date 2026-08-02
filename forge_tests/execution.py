@@ -5,16 +5,21 @@ la suite ATTEINT réellement. Le recoupement textuel était le `non_juge` le plu
 framework : un test citant une route dans un commentaire comptait comme couverture, ce qui
 réintroduisait le défaut D-01 à l étage du framework lui-même.
 
-Règle R3 — on s appuie sur l outil qui fait foi (coverage.py), on ne réimplémente pas la
-mesure d exécution.
+Une seule exécution de la suite produit les deux mesures : lignes couvertes (coverage.py,
+règle R3 — l outil qui fait foi) et codes de retour réellement émis (sonde ASGI greffée de
+l extérieur, sans toucher un fichier du projet).
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
 from functools import lru_cache
 from pathlib import Path
+
+SONDES = Path(__file__).resolve().parent / "sondes"
 
 NON_JUGE = [
     "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne "
@@ -35,47 +40,61 @@ def _python(banc: Path) -> Path | None:
 
 
 @lru_cache(maxsize=32)
-def lignes_executees(banc_str: str) -> dict[str, frozenset[int]] | None:
-    """Lance la suite du projet sous coverage et renvoie les lignes réellement exécutées.
+def mesurer(banc_str: str) -> dict | None:
+    """Lance la suite UNE fois, sous coverage et sous sonde. None si la mesure est impossible.
 
-    Renvoie None si la mesure est impossible (environnement absent, suite rouge) — l appelant
-    doit alors DÉCLARER qu il ne juge pas, jamais supposer une couverture.
+    None n est pas « rien à signaler » : l appelant doit DÉCLARER qu il ne juge pas.
     """
     banc = Path(banc_str)
     python = _python(banc)
     if python is None:
         return None
     racine = banc / "backend"
-    commun = ["-p", "no:cacheprovider"]
-    lance = subprocess.run(
-        [str(python), "-m", "coverage", "run", "--branch", "--source=app", "-m", "pytest", "-q", *commun],
-        cwd=racine,
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
-    if lance.returncode != 0:
-        return None
+    with tempfile.TemporaryDirectory() as temporaire:
+        releve = Path(temporaire) / "sonde.json"
+        env = {
+            **os.environ,
+            "FORGE_TESTS_SONDE": str(releve),
+            "PYTHONPATH": str(SONDES),
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+        lance = subprocess.run(
+            [
+                str(python), "-m", "coverage", "run", "--branch", "--source=app",
+                "-m", "pytest", "-q", "--no-header",
+                "-p", "no:cacheprovider", "-p", "no:warnings", "-p", "sonde_api",
+            ],
+            cwd=racine, capture_output=True, text=True, timeout=900, env=env,
+        )
+        if lance.returncode != 0:
+            return None
+        codes = json.loads(releve.read_text(encoding="utf-8")) if releve.exists() else []
+
     rapport = subprocess.run(
         [str(python), "-m", "coverage", "json", "-o", "-", "--quiet"],
-        cwd=racine,
-        capture_output=True,
-        text=True,
-        timeout=120,
+        cwd=racine, capture_output=True, text=True, timeout=120,
     )
     if rapport.returncode != 0 or not rapport.stdout.strip():
         return None
     donnees = json.loads(rapport.stdout)
-    resultat: dict[str, frozenset[int]] = {}
-    for chemin, detail in donnees.get("files", {}).items():
-        nom = Path(chemin).name
-        resultat[nom] = frozenset(detail.get("executed_lines", []))
-    return resultat
+    lignes = {
+        Path(chemin).name: frozenset(detail.get("executed_lines", []))
+        for chemin, detail in donnees.get("files", {}).items()
+    }
+    return {"lignes": lignes, "codes": codes}
 
 
 def executees(banc: Path, fichier: str) -> frozenset[int] | None:
     """Lignes exécutées du fichier demandé, ou None si la mesure n a pas pu être faite."""
-    tout = lignes_executees(str(banc))
-    if tout is None:
+    mesure = mesurer(str(banc))
+    if mesure is None:
         return None
-    return tout.get(fichier)
+    return mesure["lignes"].get(fichier)
+
+
+def codes_emis(banc: Path) -> list[dict] | None:
+    """Couples (méthode, gabarit, code) réellement émis pendant la suite."""
+    mesure = mesurer(str(banc))
+    if mesure is None:
+        return None
+    return mesure["codes"]

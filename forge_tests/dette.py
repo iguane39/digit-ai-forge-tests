@@ -24,12 +24,13 @@ def _identifiant(domaine: str, enonce: str) -> str:
 
 def collecter() -> list[dict]:
     """Rassemble les non_juge déclarés par le noyau, le risque, l exécution et les adaptateurs."""
-    from forge_tests import execution, risque
+    from forge_tests import execution, generateur, risque
     from forge_tests.adaptateurs import REGISTRE as ADAPTATEURS
 
     sources: list[tuple[str, list[str]]] = [
         ("risque", list(risque.NON_JUGE)),
         ("execution", list(execution.NON_JUGE)),
+        ("generateur", list(generateur.NON_JUGE)),
     ]
     for nom, module in ADAPTATEURS.items():
         sources.append((nom, list(getattr(module, "NON_JUGE", []))))
