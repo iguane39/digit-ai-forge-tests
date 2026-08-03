@@ -29,7 +29,49 @@ def _norm(chemin: str) -> str:
     return re.sub(r"/\d+", "/{}", chemin)
 
 
+def _codes_declares(cible: Path) -> set[str]:
+    """Codes ecrits A LA MAIN dans `responses=`, par opposition a ceux ajoutes par le cadre."""
+    src = cible / "backend" / "app" / "main.py"
+    if not src.exists():
+        return set()
+    declares: set[str] = set()
+    for methode, chemin, reste in _ROUTE.findall(src.read_text(encoding="utf-8")):
+        for code in _CODE.findall(reste):
+            declares.add(f"{methode.upper()} {_norm(chemin)}={code}")
+    return declares
+
+
+def _inventaire_openapi(cible: Path) -> list[Element]:
+    """Surface lue dans le schema que l application DECLARE — source primaire du CDC."""
+    schema = schema_openapi(str(cible))
+    if not schema:
+        return []
+    elements: list[Element] = []
+    source = str(cible / "backend" / "app" / "main.py")
+    for chemin, operations in schema.get("paths", {}).items():
+        c = _norm(chemin)
+        for methode, operation in operations.items():
+            if methode not in ("get", "post", "put", "patch", "delete"):
+                continue
+            m = methode.upper()
+            elements.append(Element(f"endpoint:{m} {c}", PAN, f"{m} {c}", source))
+            declares_source = _codes_declares(cible)
+            for code in operation.get("responses", {}):
+                # FastAPI ajoute un 422 a toute route validee, sans que personne l ait declare.
+                # Sur un GET sans corps il est inatteignable : l exiger accuse la suite d un
+                # trou qui n existe pas. Retenu SEULEMENT s il est declare a la main.
+                if code == "422" and f"{m} {c}=422" not in declares_source:
+                    continue
+                elements.append(
+                    Element(f"code:{m} {c}={code}", PAN, f"{m} {c} -> {code}", source)
+                )
+    return elements
+
+
 def inventaire(cible: Path) -> list[Element]:
+    par_schema = _inventaire_openapi(cible)
+    if par_schema:
+        return par_schema
     src = cible / "backend" / "app" / "main.py"
     if not src.exists():
         return []
@@ -43,27 +85,49 @@ def inventaire(cible: Path) -> list[Element]:
     return elements
 
 
-def exerces(cible: Path) -> set[str]:
+def exerces(cible: Path) -> set[str] | None:
+    """Couples et codes REELLEMENT emis pendant la suite (sonde ASGI), jamais deduits du texte.
+
+    None = couverture NON MESURABLE (suite non executee). A ne pas confondre avec un ensemble
+    vide, qui signifierait « rien n est couvert » — deux verdicts opposes.
+    """
+    releve = codes_emis(cible)
+    if releve is None:
+        return None
     couvert: set[str] = set()
-    for fichier in sorted((cible / "backend" / "tests").glob("test_*.py")):
-        for bloc in re.split(r"\ndef ", fichier.read_text(encoding="utf-8")):
-            appels = [(m.upper(), _norm(c)) for m, c in _APPEL.findall(bloc)]
-            codes = set(_STATUT.findall(bloc))
-            for m, c in appels:
-                couvert.add(f"endpoint:{m} {c}")
-                for code in codes:
-                    couvert.add(f"code:{m} {c}={code}")
+    for entree in releve:
+        methode = entree["methode"].upper()
+        gabarit = _norm(entree["gabarit"])
+        couvert.add(f"endpoint:{methode} {gabarit}")
+        couvert.add(f"code:{methode} {gabarit}={entree['code']}")
     return couvert
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
+    inv = inventaire(cible)
+    if exerces(cible) is None:
+        # « 0 % couvert » et « couverture non mesurable » sont deux verdicts OPPOSES. Les
+        # confondre accuse a tort une suite qu on n a simplement pas pu executer.
+        endpoints = sum(1 for e in inv if e.id.startswith("endpoint:"))
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            non_juge=[
+                *NON_JUGE,
+                f"api : {len(inv)} elements INVENTORIES ({endpoints} operations, "
+                f"{len(inv) - endpoints} codes) mais couverture non mesurable — "
+                "suite non executee sous sonde",
+            ],
+        )
     couvert = exerces(cible)
     if couvert is None:
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
-            non_juge=[*NON_JUGE, "sonde indisponible : suite rouge ou environnement absent"],
+            non_juge=[
+                *NON_JUGE,
+                f"api : {len(inv)} elements INVENTORIES (OpenAPI) mais couverture non mesurable — "
+                "la suite du projet n a pas pu etre executee sous sonde",
+            ],
         )
-    inv = inventaire(cible)
     sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)
     # Un code EMIS pendant la suite mais absent de `responses=` est une divergence entre ce que
     # la source declare et ce que le code fait. Ni un trou de couverture, ni un silence : un ecart.

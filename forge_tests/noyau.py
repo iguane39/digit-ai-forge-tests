@@ -85,9 +85,17 @@ def evaluer_surface(
     """Compare l inventaire au perimetre exerce. Tout element non exerce est un FAIL NOMME."""
     from forge_tests.risque import coter
 
+    if not inventaire:
+        # Un inventaire vide ne prouve pas que tout est couvert : il prouve que l adaptateur
+        # n a RIEN SU ENUMERER ici. Conclure « 100 % OK » serait l absence silencieuse que le
+        # framework existe pour interdire — revele par la phase 2, premier projet reel.
+        return SortieAdaptateur(
+            adaptateur, pan, cible, "SKIP",
+            non_juge=[*non_juge, f"{pan} : inventaire VIDE — surface non enumerable sur ce projet"],
+        )
     manquants = [e for e in inventaire if e.id not in exerces]
     total = len(inventaire)
-    ratio = (total - len(manquants)) / total if total else 1.0
+    ratio = (total - len(manquants)) / total
     findings = [
         Finding(
             id=e.id,
@@ -152,8 +160,13 @@ def rapport(sorties: list[SortieAdaptateur], pans_attendus: list[str]) -> dict:
     from forge_tests.risque import NON_JUGE as NON_JUGE_RISQUE
 
     verifier_regle_conjointe(sorties)
-    couverts = {s.pan for s in sorties}
+    couverts = {s.pan for s in sorties if s.verdict != "SKIP"}
     non_couverts = [p for p in pans_attendus if p not in couverts]
+    motifs_skip = {
+        s.pan: s.non_juge[-1] if s.non_juge else "sans motif"
+        for s in sorties
+        if s.verdict == "SKIP"
+    }
     tous = sorted(
         (f for s in sorties for f in s.findings),
         key=lambda f: f.risque or 0,
@@ -171,6 +184,7 @@ def rapport(sorties: list[SortieAdaptateur], pans_attendus: list[str]) -> dict:
         },
         "mutation": {s.pan: s.mutation for s in sorties if s.mutation is not None},
         "pans_non_couverts": non_couverts,
+        "motifs_non_couverture": motifs_skip,
         "bandes_de_risque": bandes,
         "findings": [asdict(f) for f in tous],
         "non_juge": sorted({n for s in sorties for n in s.non_juge} | set(NON_JUGE_RISQUE)),

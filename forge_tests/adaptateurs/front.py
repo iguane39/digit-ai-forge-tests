@@ -29,6 +29,27 @@ def _racine(cible: Path) -> Path:
     return cible / "frontend"
 
 
+def _routes_tanstack(racine: Path) -> list[tuple[str, Path]]:
+    """Routes par convention de fichiers (TanStack Router) : un .tsx sous src/routes = une route.
+
+    `__root` et `_layout` structurent sans etre des destinations ; `index` -> `/` ;
+    `$param` -> `:param`. Constate sur le premier projet reel."""
+    dossier = racine / "src" / "routes"
+    if not dossier.is_dir():
+        return []
+    routes: list[tuple[str, Path]] = []
+    for fichier in sorted(dossier.rglob("*.tsx")):
+        nom = fichier.relative_to(dossier).with_suffix("").as_posix()
+        segments = [s for s in nom.split("/") if not s.startswith(("__", "_"))]
+        if not segments:
+            continue
+        if segments[-1] == "index":
+            segments = segments[:-1]
+        chemin = "/" + "/".join(s.replace("$", ":") for s in segments)
+        routes.append((chemin if chemin != "//" else "/", fichier))
+    return routes
+
+
 def inventaire(cible: Path) -> list[Element]:
     racine = _racine(cible)
     elements: list[Element] = []
@@ -36,11 +57,23 @@ def inventaire(cible: Path) -> list[Element]:
     if routes_src.exists():
         for chemin in _ROUTE.findall(routes_src.read_text(encoding="utf-8")):
             elements.append(Element(f"route:{chemin}", PAN, f"route {chemin}", str(routes_src)))
-    for page in sorted((racine / "src" / "pages").glob("*.jsx")):
-        for tid in _TESTID.findall(page.read_text(encoding="utf-8")):
-            elements.append(
-                Element(f"element:{tid}", PAN, f"element interactif {tid}", str(page))
-            )
+    deja: set[str] = {e.id for e in elements}
+    for chemin, fichier in _routes_tanstack(racine):
+        # route.tsx et index.tsx d une meme section designent la MEME destination : dedupliquer.
+        if f"route:{chemin}" not in deja:
+            deja.add(f"route:{chemin}")
+            elements.append(Element(f"route:{chemin}", PAN, f"route {chemin}", str(fichier)))
+    sources_tid = sorted((racine / "src").rglob("*.jsx")) + sorted((racine / "src").rglob("*.tsx"))
+    vus: set[str] = set()
+    for page in sources_tid:
+        if "routeTree.gen" in page.name:
+            continue
+        for tid in _TESTID.findall(page.read_text(encoding="utf-8", errors="replace")):
+            if tid not in vus:
+                vus.add(tid)
+                elements.append(
+                    Element(f"element:{tid}", PAN, f"element interactif {tid}", str(page))
+                )
     return elements
 
 
@@ -57,8 +90,15 @@ def exerces(cible: Path) -> set[str] | None:
 def analyser(cible: Path) -> SortieAdaptateur:
     couvert = exerces(cible)
     if couvert is None:
+        inv = inventaire(cible)
+        routes = sum(1 for e in inv if e.id.startswith("route:"))
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
-            non_juge=[*NON_JUGE, "suite front non executable : dependances ou navigateur absents"],
+            non_juge=[
+                *NON_JUGE,
+                f"front : {len(inv)} elements INVENTORIES ({routes} routes, "
+                f"{len(inv) - routes} elements interactifs) mais couverture non mesurable — "
+                "suite e2e non executee",
+            ],
         )
     return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)

@@ -30,7 +30,16 @@ def _fichiers(cible: Path) -> list[Path]:
     return sorted((cible / "backend" / "migrations").glob("*.sql"))
 
 
+def _versions_alembic(cible: Path) -> list[Path]:
+    for base in ("backend/app/alembic/versions", "backend/alembic/versions", "alembic/versions"):
+        dossier = cible / base
+        if dossier.is_dir():
+            return sorted(p for p in dossier.glob("*.py") if p.name != "__init__.py")
+    return []
+
+
 def inventaire(cible: Path) -> list[Element]:
+    fichiers = _fichiers(cible) or _versions_alembic(cible)
     return [
         Element(
             f"migration:{fichier.stem}:{sens}",
@@ -38,9 +47,37 @@ def inventaire(cible: Path) -> list[Element]:
             f"migration {fichier.stem} au {sens}",
             str(fichier),
         )
-        for fichier in _fichiers(cible)
+        for fichier in fichiers
         for sens in SENS
     ]
+
+
+def _downgrades_vides(cible: Path) -> list[Path]:
+    """Migrations Alembic dont le downgrade est un `pass` : non reversibles, comme H-05."""
+    import ast as _ast
+
+    vides: list[Path] = []
+    for fichier in _versions_alembic(cible):
+        try:
+            arbre = _ast.parse(fichier.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for noeud in arbre.body:
+            if isinstance(noeud, _ast.FunctionDef) and noeud.name == "downgrade":
+                # Un appel `op.drop_table(...)` EST un ast.Expr : ne filtrer que les docstrings
+                # (Expr portant une Constante) et les `pass` — faux positif corrige sur le
+                # premier projet reel, ou 12 downgrades legitimes etaient signales vides.
+                corps = [
+                    n
+                    for n in noeud.body
+                    if not isinstance(n, _ast.Pass)
+                    and not (
+                        isinstance(n, _ast.Expr) and isinstance(n.value, _ast.Constant)
+                    )
+                ]
+                if not corps:
+                    vides.append(fichier)
+    return vides
 
 
 def _instructions(section: str) -> list[str]:
@@ -97,10 +134,28 @@ def _sections(fichier: Path) -> tuple[str, str]:
 def analyser(cible: Path) -> SortieAdaptateur:
     couvert = exerces(cible)
     if couvert is None:
-        return SortieAdaptateur(
+        inv = inventaire(cible)
+        sortie = SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
-            non_juge=[*NON_JUGE, "couverture d exécution indisponible : suite rouge ou env absent"],
+            non_juge=[
+                *NON_JUGE,
+                f"migrations : {len(inv)} elements inventories ({len(inv) // 3} migrations x 3 sens) "
+                "mais couverture non mesurable — suite non executable sous sonde",
+            ],
         )
+        # Les divergences STATIQUES restent detectables meme sans execution.
+        for fichier in _downgrades_vides(cible):
+            sortie.findings.append(
+                Finding(
+                    id=f"divergence:migration:{fichier.stem}:retour",
+                    classe="divergence",
+                    localisation=str(fichier),
+                    message="downgrade vide : la migration ne peut pas etre inversee",
+                    risque=coter(PAN, f"migration:{fichier.stem}", str(fichier)),
+                )
+            )
+            sortie.verdict = "FAIL"
+        return sortie
     sortie = evaluer_surface(
         NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, list(NON_JUGE)
     )
@@ -117,6 +172,18 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 )
             )
             sortie.verdict = "FAIL"
+    # Alembic : un downgrade vide est une migration NON REVERSIBLE — detectable statiquement.
+    for fichier in _downgrades_vides(cible):
+        sortie.findings.append(
+            Finding(
+                id=f"divergence:migration:{fichier.stem}:retour",
+                classe="divergence",
+                localisation=str(fichier),
+                message="downgrade vide : la migration ne peut pas etre inversee",
+                risque=coter(PAN, f"migration:{fichier.stem}", str(fichier)),
+            )
+        )
+        sortie.verdict = "FAIL"
     # Effet REEL : un objet qu une section pretend creer doit exister apres application.
     schema = schema_obtenu(str(cible))
     if schema is None:

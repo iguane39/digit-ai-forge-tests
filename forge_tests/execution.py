@@ -34,6 +34,9 @@ def _python(banc: Path) -> Path | None:
     for candidat in (
         banc / "backend" / ".venv" / "Scripts" / "python.exe",
         banc / "backend" / ".venv" / "bin" / "python",
+        # Workspace uv : le venv vit a la RACINE du depot (constate sur le premier projet reel)
+        banc / ".venv" / "Scripts" / "python.exe",
+        banc / ".venv" / "bin" / "python",
     ):
         if candidat.exists():
             return candidat
@@ -47,6 +50,11 @@ def mesurer(banc_str: str) -> dict | None:
     None n est pas « rien à signaler » : l appelant doit DÉCLARER qu il ne juge pas.
     """
     banc = Path(banc_str)
+    # Inventaire seul : executer la suite d un projet REEL peut exiger son infrastructure
+    # complete et durer sans borne. Ce mode la court-circuite en le DECLARANT — chaque
+    # adaptateur repond alors « inventorie N, couverture non mesurable », jamais un faux vert.
+    if os.environ.get("FORGE_TESTS_SANS_EXECUTION") == "1":
+        return None
     python = _python(banc)
     if python is None:
         return None

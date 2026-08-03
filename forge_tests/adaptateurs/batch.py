@@ -28,6 +28,16 @@ NON_JUGE = [
 ]
 
 
+def _sources(cible: Path) -> list[Path]:
+    classique = cible / "backend" / "app" / FICHIER
+    if classique.exists():
+        return [classique]
+    worker = cible / "backend" / "app" / "worker"
+    if worker.is_dir():
+        return sorted(p for p in worker.glob("*.py") if p.name != "__init__.py")
+    return []
+
+
 def _src(cible: Path) -> Path:
     return cible / "backend" / "app" / FICHIER
 
@@ -41,12 +51,17 @@ def _premiere_ligne(corps: list[ast.stmt]) -> int | None:
 
 
 def inventaire(cible: Path) -> list[Element]:
-    src = _src(cible)
-    if not src.exists():
-        return []
+    elements: list[Element] = []
+    for src in _sources(cible):
+        elements.extend(_inventaire_module(src))
+    return elements
+
+
+def _inventaire_module(src: Path) -> list[Element]:
     arbre = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))
     elements: list[Element] = []
     vus: set[int] = set()
+    nom_fichier = src.name
 
     for noeud in ast.walk(arbre):
         # Chaque branche = un bloc dont la première ligne exécutable identifie le chemin.
@@ -67,7 +82,7 @@ def inventaire(cible: Path) -> list[Element]:
             vus.add(ligne)
             elements.append(
                 Element(
-                    f"branche:{FICHIER}:{ligne}",
+                    f"branche:{nom_fichier}:{ligne}",
                     PAN,
                     f"branche {libelle} ligne {ligne}",
                     str(src),
@@ -118,11 +133,16 @@ def exerces(cible: Path) -> set[str] | None:
 def analyser(cible: Path) -> SortieAdaptateur:
     couvert = exerces(cible)
     if couvert is None:
+        inv = inventaire(cible)
         return SortieAdaptateur(
             NOM,
             PAN,
             str(cible),
             "SKIP",
-            non_juge=[*NON_JUGE, "couverture d exécution indisponible : suite rouge ou env absent"],
+            non_juge=[
+                *NON_JUGE,
+                f"batch : {len(inv)} branches/rejets INVENTORIES mais couverture non mesurable — "
+                "suite non executee sous sonde",
+            ],
         )
     return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)

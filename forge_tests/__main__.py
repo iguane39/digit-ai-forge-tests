@@ -36,7 +36,10 @@ def _resume(rap: dict) -> str:
         )
     if rap["pans_non_couverts"]:
         lignes.append("")
-        lignes.append("pans NON COUVERTS (adaptateur absent) : " + ", ".join(rap["pans_non_couverts"]))
+        lignes.append("pans NON COUVERTS — chacun avec son motif, jamais silencieux :")
+        for pan in rap["pans_non_couverts"]:
+            motif = rap.get("motifs_non_couverture", {}).get(pan, "adaptateur absent")
+            lignes.append(f"  {pan:<14} {motif[:100]}")
     bandes = rap["bandes_de_risque"]
     lignes.append("")
     lignes.append(
