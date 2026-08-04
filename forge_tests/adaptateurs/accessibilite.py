@@ -10,6 +10,7 @@ chaque capture à l oracle. Un pan entier de Q4 s ouvre sans qu une ligne de l o
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -68,7 +69,15 @@ def _routes(cible: Path) -> list[str]:
 
 
 def _capturer(cible: Path, routes: list[str], dossier: Path) -> dict[str, Path]:
-    """Sert le front, visite chaque route, ecrit le DOM rendu. {} si le rendu est impossible."""
+    """Sert le front, visite chaque route, ecrit le DOM rendu. {} si le rendu est impossible.
+
+    `FORGE_TESTS_BASE_URL` pointe vers une instance DEJA SERVIE (recette, preproduction). Le
+    parcours reste en LECTURE : navigation et capture, aucune ecriture. C est ce qui rend le
+    pan front auditable sur un projet qu on ne peut pas construire localement.
+    """
+    base = os.environ.get("FORGE_TESTS_BASE_URL")
+    if base:
+        return _capturer_distant(base.rstrip("/"), routes, dossier)
     front = cible / "frontend"
     npx = shutil.which("npx")
     if npx is None or not (front / "dist").is_dir():
@@ -107,6 +116,30 @@ def _capturer(cible: Path, routes: list[str], dossier: Path) -> dict[str, Path]:
             navigateur.close()
     finally:
         _tuer_arbre(serveur)
+    return captures
+
+
+def _capturer_distant(base: str, routes: list[str], dossier: Path) -> dict[str, Path]:
+    """Visite une instance servie ailleurs. GET seulement, aucune action mutante."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return {}
+    captures: dict[str, Path] = {}
+    with sync_playwright() as pw:
+        navigateur = pw.chromium.launch()
+        page = navigateur.new_page()
+        for route in routes:
+            concret = route.replace(":id", "1")
+            try:
+                page.goto(f"{base}{concret}", wait_until="networkidle", timeout=45000)
+            except Exception:  # noqa: BLE001 — route injoignable : declaree, pas supposee
+                continue
+            fichier = dossier / (concret.strip("/").replace("/", "_") or "racine")
+            fichier = fichier.with_suffix(".html")
+            fichier.write_text(page.content(), encoding="utf-8")
+            captures[route] = fichier
+        navigateur.close()
     return captures
 
 
@@ -171,6 +204,28 @@ def analyser(cible: Path) -> SortieAdaptateur:
                         risque=coter(PAN, identifiant, str(cible / "frontend")),
                     )
                 )
+        # N routes rendant le MEME DOM = une seule page reellement auditee. Sans ce controle,
+        # 13 redirections vers /login se lisent « 13 routes conformes » — un vert qui ne mesure
+        # rien. Constate sur le premier deploiement reel, faute d authentification.
+        empreintes = {
+            hashlib.sha256(page.read_bytes()).hexdigest() for page in captures.values()
+        }
+        if len(captures) > len(empreintes):
+            non_juge.append(
+                f"accessibilite : {len(captures)} routes visitees mais seulement "
+                f"{len(empreintes)} PAGES DISTINCTES rendues — les autres redirigent (sans "
+                "authentification, les routes protegees renvoient toutes la meme page). "
+                "Le verdict ne porte que sur les pages distinctes"
+            )
+        if len(captures) > 1 and len(empreintes) == 1:
+            return SortieAdaptateur(
+                NOM, PAN, str(cible), "SKIP",
+                non_juge=[
+                    *non_juge,
+                    f"accessibilite : les {len(captures)} routes rendent un DOM IDENTIQUE — "
+                    "aucune route demandee n a reellement ete auditee",
+                ],
+            )
     if not audites:
         return SortieAdaptateur(NOM, PAN, str(cible), "SKIP", non_juge=non_juge)
     non_juge.append(f"accessibilite : routes auditees — {', '.join(audites)}")
