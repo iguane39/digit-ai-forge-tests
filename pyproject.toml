@@ -4,7 +4,15 @@ version = "0.0.0"
 description = "Accélérateur de tests Digit-AI — noyau universel mince et adaptateurs par écosystème."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+# Le rendu du front (pans accessibilite et visuel) passe par un navigateur pilote. Sans cette
+# dependance DECLAREE, les deux pans tombaient en SKIP « front non servi » sur une machine
+# fraichement synchronisee et la recette perdait deux defauts du corpus (H-10, H-11).
+dependencies = [
+    "playwright>=1.47",
+    # `oracle-visual-diff.py` compare deux rendus pixel a pixel : sans Pillow il repond SKIP
+    # « outil de rendu absent » et le defaut de regression visuelle passe au travers.
+    "pillow>=10.0",
+]
 
 [dependency-groups]
 dev = [

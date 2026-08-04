@@ -16,10 +16,17 @@ identifiés, sinon on retombe sur l absence silencieuse que le framework existe 
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# La recette porte sur les bancs LOCAUX. Le `.env` de l operateur decrit une instance SERVIE
+# (projet client en recette) : laisse actif, les pans accessibilite et visuel auditaient cette
+# instance distante au lieu du banc — le banc VERT sortait alors a 10 findings bloquants et
+# S-01 devenait ininterpretable. Neutralise ici, jamais lu par accident.
+os.environ["FORGE_TESTS_BASE_URL"] = ""
 
 from forge_tests.__main__ import analyser  # noqa: E402
 
