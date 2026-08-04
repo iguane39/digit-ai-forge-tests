@@ -164,12 +164,16 @@ def _juger(capture: Path) -> dict | None:
     python = shutil.which("python") or shutil.which("python3")
     if python is None or not _ORACLE.exists():
         return None
-    resultat = subprocess.run(
-        [python, str(_ORACLE), str(capture)],
-        capture_output=True, text=True, timeout=180, encoding="utf-8", errors="replace",
-        # Sans cela l oracle plante en ECRIVANT son verdict : console cp1252, JSON accentue.
-        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
-    )
+    try:
+        resultat = subprocess.run(
+            [python, str(_ORACLE), str(capture)],
+            capture_output=True, text=True, timeout=180, encoding="utf-8", errors="replace",
+            # Sans cela l oracle plante en ECRIVANT son verdict : console cp1252, JSON accentue.
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        )
+    except subprocess.TimeoutExpired:
+        # Delai depasse : le pan se declare non mesure, il n emporte pas l audit entier.
+        return None
     sortie = (resultat.stdout or "").strip()
     try:
         return json.loads(sortie) if sortie else None

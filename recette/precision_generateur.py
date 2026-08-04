@@ -56,6 +56,7 @@ def _echecs(banc: Path, fichier: Path) -> set[str]:
                 "-q", "--no-header", "-p", "no:warnings", "-p", "no:cacheprovider",
             ],
             cwd=banc / "backend", capture_output=True, text=True, timeout=600,
+            encoding="utf-8", errors="replace",
         )
         return set(_ECHEC.findall(resultat.stdout))
     finally:

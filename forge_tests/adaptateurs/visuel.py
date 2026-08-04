@@ -58,16 +58,20 @@ def _juger(page: Path, accepter: bool = False) -> dict | None:
     commande = [python, str(_ORACLE), str(page)]
     if accepter:
         commande.append("--accepter")
-    resultat = subprocess.run(
-        commande,
-        capture_output=True,
-        text=True,
-        timeout=300,
-        encoding="utf-8",
-        errors="replace",
-        # Sans cela l oracle plante en ECRIVANT son verdict : console cp1252, JSON accentue.
-        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
-    )
+    try:
+        resultat = subprocess.run(
+            commande,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            encoding="utf-8",
+            errors="replace",
+            # Sans cela l oracle plante en ECRIVANT son verdict : console cp1252, JSON accentue.
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        )
+    except subprocess.TimeoutExpired:
+        # Delai depasse : le pan se declare non mesure, il n emporte pas l audit entier.
+        return None
     sortie = (resultat.stdout or "").strip()
     try:
         return json.loads(sortie) if sortie else None

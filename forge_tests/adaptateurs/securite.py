@@ -45,14 +45,18 @@ def _lancer(script: Path, cible: Path) -> dict | None:
     node = shutil.which("node")
     if node is None:
         return None
-    resultat = subprocess.run(
-        [node, str(script), str(cible)],
-        capture_output=True,
-        text=True,
-        timeout=300,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        resultat = subprocess.run(
+            [node, str(script), str(cible)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except subprocess.TimeoutExpired:
+        # Delai depasse : le pan se declare non mesure, il n emporte pas l audit entier.
+        return None
     sortie = (resultat.stdout or "").strip()
     if not sortie:
         return None

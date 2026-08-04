@@ -311,9 +311,21 @@
       "statut": "todo"
     },
     {
+      "id": "accessibilite-a11y-eb28ef09",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : sans compte configure (.env), les routes protegees redirigent vers la page publique — le nombre de PAGES DISTINCTES rendues le dit au rapport",
+      "statut": "todo"
+    },
+    {
       "id": "execution-1dfcb298",
       "domaine": "execution",
       "enonce": "exécution : la couverture combine lignes et ARCS de branchement ; une branche implicite (ternaire, court-circuit booléen) reste hors de portée de coverage.py",
+      "statut": "todo"
+    },
+    {
+      "id": "execution-35815eb3",
+      "domaine": "execution",
+      "enonce": "exécution : la configuration Playwright du projet peut démarrer son propre webServer, qui ÉCRIT dans l arbre analysé (build, code généré) — hors de portée du garde-fou lecture seule ; seuls les artefacts produits par Forge Tests sont routés hors du projet",
       "statut": "todo"
     },
     {

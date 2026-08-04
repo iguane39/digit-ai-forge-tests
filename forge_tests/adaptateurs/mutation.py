@@ -160,6 +160,8 @@ def _suite_verte(racine: Path, python: Path) -> bool:
         cwd=racine,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=600,
         env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
     )
@@ -215,6 +217,17 @@ def analyser(cible: Path) -> SortieAdaptateur:
             if _suite_verte(racine, python):
                 survivants.append(mutant)
             fichier.write_text(original, encoding="utf-8")
+    except subprocess.TimeoutExpired:
+        # Un délai dépassé ne doit jamais emporter l audit entier : le pan se DÉCLARE non
+        # mesuré (le `finally` restaure les sources avant toute chose).
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            non_juge=[
+                *non_juge,
+                "mutation : délai dépassé pendant le jeu des mutants — score non calculable, "
+                "les autres pans restent mesurés",
+            ],
+        )
     finally:
         for fichier, contenu in originaux.items():
             fichier.write_text(contenu, encoding="utf-8")

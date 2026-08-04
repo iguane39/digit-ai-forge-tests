@@ -59,6 +59,8 @@ def probabilite(fichier: str) -> int:
             cwd=chemin.parent,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=15,
         )
     except (OSError, subprocess.SubprocessError):
