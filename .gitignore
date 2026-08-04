@@ -16,3 +16,4 @@ playwright-report/
 resultat-playwright.json
 .visuel/*.html
 .visuel/*.jsonl
+.env

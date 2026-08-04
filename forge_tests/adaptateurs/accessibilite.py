@@ -29,6 +29,8 @@ _ORACLE = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts" / "
 NON_JUGE = [
     "accessibilite : le DOM est capture a l etat INITIAL de chaque route ; les etats atteints "
     "apres interaction (menu ouvert, modale, message d erreur) ne sont pas audites",
+    "accessibilite : sans compte configure (.env), les routes protegees redirigent vers la "
+    "page publique — le nombre de PAGES DISTINCTES rendues le dit au rapport",
     "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni "
     "contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
 ]
@@ -75,9 +77,12 @@ def _capturer(cible: Path, routes: list[str], dossier: Path) -> dict[str, Path]:
     parcours reste en LECTURE : navigation et capture, aucune ecriture. C est ce qui rend le
     pan front auditable sur un projet qu on ne peut pas construire localement.
     """
+    from forge_tests.authentification import charger_env
+
+    charger_env(cible)
     base = os.environ.get("FORGE_TESTS_BASE_URL")
     if base:
-        return _capturer_distant(base.rstrip("/"), routes, dossier)
+        return _capturer_distant(base.rstrip("/"), routes, dossier, cible)
     front = cible / "frontend"
     npx = shutil.which("npx")
     if npx is None or not (front / "dist").is_dir():
@@ -119,16 +124,28 @@ def _capturer(cible: Path, routes: list[str], dossier: Path) -> dict[str, Path]:
     return captures
 
 
-def _capturer_distant(base: str, routes: list[str], dossier: Path) -> dict[str, Path]:
-    """Visite une instance servie ailleurs. GET seulement, aucune action mutante."""
+def _capturer_distant(
+    base: str, routes: list[str], dossier: Path, cible: Path
+) -> dict[str, Path]:
+    """Visite une instance servie ailleurs. GET seulement, aucune action mutante.
+
+    Si un compte est configure (.env), le jeton est pose AVANT le premier rendu : sans lui,
+    les routes protegees redirigent toutes vers la meme page et l audit ne mesure rien.
+    """
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         return {}
+    from forge_tests.authentification import obtenir_jeton, script_injection
+
+    jeton = obtenir_jeton(cible)
     captures: dict[str, Path] = {}
     with sync_playwright() as pw:
         navigateur = pw.chromium.launch()
-        page = navigateur.new_page()
+        contexte = navigateur.new_context()
+        if jeton:
+            contexte.add_init_script(script_injection(jeton))
+        page = contexte.new_page()
         for route in routes:
             concret = route.replace(":id", "1")
             try:
