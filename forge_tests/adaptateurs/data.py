@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from forge_tests.execution import instructions_sql, schema_obtenu, violations_levees
+from forge_tests.execution import (
+    instructions_sql,
+    motif_indisponibilite,
+    schema_obtenu,
+    violations_levees,
+)
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
 from forge_tests.risque import coter
 
@@ -183,7 +188,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
     if couvert is None:
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
-            non_juge=[*NON_JUGE, "sonde indisponible : suite rouge ou environnement absent"],
+            non_juge=[
+                *NON_JUGE,
+                "data : couverture non mesurable — "
+                + motif_indisponibilite(
+                    cible, "backend", "sonde indisponible : suite rouge ou environnement absent"
+                ),
+            ],
         )
     inv = inventaire(cible)
     sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)

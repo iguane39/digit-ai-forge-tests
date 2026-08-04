@@ -12,7 +12,7 @@ import ast
 import re
 from pathlib import Path
 
-from forge_tests.execution import arcs_executes, executees
+from forge_tests.execution import arcs_executes, executees, motif_indisponibilite
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "batch-python", "batch", 0.90
@@ -142,7 +142,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             non_juge=[
                 *NON_JUGE,
                 f"batch : {len(inv)} branches/rejets INVENTORIES mais couverture non mesurable — "
-                "suite non executee sous sonde",
+                + motif_indisponibilite(cible, "backend", "suite non executee sous sonde"),
             ],
         )
     return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)

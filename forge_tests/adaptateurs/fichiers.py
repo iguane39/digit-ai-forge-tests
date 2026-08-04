@@ -10,7 +10,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from forge_tests.execution import executees
+from forge_tests.execution import executees, motif_indisponibilite
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "fichiers-python", "fichiers", 1.0
@@ -74,6 +74,12 @@ def analyser(cible: Path) -> SortieAdaptateur:
             PAN,
             str(cible),
             "SKIP",
-            non_juge=[*NON_JUGE, "couverture d exécution indisponible : suite rouge ou env absent"],
+            non_juge=[
+                *NON_JUGE,
+                "fichiers : couverture d exécution indisponible — "
+                + motif_indisponibilite(
+                    cible, "backend", "suite rouge ou environnement du projet absent"
+                ),
+            ],
         )
     return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)

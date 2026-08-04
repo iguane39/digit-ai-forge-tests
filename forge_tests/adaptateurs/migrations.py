@@ -6,7 +6,7 @@ from pathlib import Path
 
 import re
 
-from forge_tests.execution import instructions_sql, schema_obtenu
+from forge_tests.execution import instructions_sql, motif_indisponibilite, schema_obtenu
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
 from forge_tests.risque import coter
 
@@ -140,7 +140,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
             non_juge=[
                 *NON_JUGE,
                 f"migrations : {len(inv)} elements inventories ({len(inv) // 3} migrations x 3 sens) "
-                "mais couverture non mesurable — suite non executable sous sonde",
+                "mais couverture non mesurable — "
+                + motif_indisponibilite(cible, "backend", "suite non executable sous sonde"),
             ],
         )
         # Les divergences STATIQUES restent detectables meme sans execution.

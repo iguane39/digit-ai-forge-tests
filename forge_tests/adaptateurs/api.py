@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from forge_tests.execution import codes_emis, schema_openapi
+from forge_tests.execution import codes_emis, motif_indisponibilite, schema_openapi
 from forge_tests.invariants import NON_JUGE as NON_JUGE_INV
 from forge_tests.invariants import codes_par_fonction, handlers
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
@@ -115,7 +115,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 *NON_JUGE,
                 f"api : {len(inv)} elements INVENTORIES ({endpoints} operations, "
                 f"{len(inv) - endpoints} codes) mais couverture non mesurable — "
-                "suite non executee sous sonde",
+                + motif_indisponibilite(cible, "backend", "suite non executee sous sonde"),
             ],
         )
     couvert = exerces(cible)
@@ -125,7 +125,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
             non_juge=[
                 *NON_JUGE,
                 f"api : {len(inv)} elements INVENTORIES (OpenAPI) mais couverture non mesurable — "
-                "la suite du projet n a pas pu etre executee sous sonde",
+                + motif_indisponibilite(
+                    cible, "backend", "la suite du projet n a pas pu etre executee sous sonde"
+                ),
             ],
         )
     sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)

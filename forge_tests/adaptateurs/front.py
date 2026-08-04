@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from forge_tests.execution import front_execute
+from forge_tests.execution import front_execute, motif_indisponibilite
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "front-react", "front", 0.90
@@ -98,7 +98,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 *NON_JUGE,
                 f"front : {len(inv)} elements INVENTORIES ({routes} routes, "
                 f"{len(inv) - routes} elements interactifs) mais couverture non mesurable — "
-                "suite e2e non executee",
+                + motif_indisponibilite(cible, "front", "suite e2e non executee"),
             ],
         )
     return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)
