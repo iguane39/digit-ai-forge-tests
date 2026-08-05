@@ -24,7 +24,15 @@ def _identifiant(domaine: str, enonce: str) -> str:
 
 def collecter() -> list[dict]:
     """Rassemble les non_juge déclarés par le noyau, le risque, l exécution et les adaptateurs."""
-    from forge_tests import execution, generateur, generateur_data, risque
+    from forge_tests import (
+        execution,
+        generateur,
+        generateur_data,
+        qualification,
+        reprise,
+        risque,
+        sql,
+    )
     from forge_tests.adaptateurs import REGISTRE as ADAPTATEURS
 
     sources: list[tuple[str, list[str]]] = [
@@ -32,6 +40,9 @@ def collecter() -> list[dict]:
         ("execution", list(execution.NON_JUGE)),
         ("generateur", list(generateur.NON_JUGE)),
         ("generateur-data", list(generateur_data.NON_JUGE)),
+        ("sql", list(sql.NON_JUGE)),
+        ("qualification", list(qualification.NON_JUGE)),
+        ("reprise", list(reprise.NON_JUGE)),
     ]
     for nom, module in ADAPTATEURS.items():
         sources.append((nom, list(getattr(module, "NON_JUGE", []))))

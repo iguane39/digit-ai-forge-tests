@@ -3,10 +3,11 @@
 > Rendre la qualité d'un projet vérifiable, reproductible et enrichissable dans le temps —
 > sans dépendre de la mémoire d'un humain sur ce qu'il faut penser à vérifier.
 
-**État : outil en service.** Le noyau, dix adaptateurs, le générateur de cas, le registre de
+**État : outil en service.** Le noyau, onze adaptateurs, le générateur de cas, le registre de
 dette et la recette du corpus sont écrits et exécutables. La recette officielle
-(`recette/verifier_corpus.py`) détecte **12/12** des défauts plantés au banc rouge et ne lève
-**aucun finding bloquant** au banc vert.
+(`recette/verifier_corpus.py`) détecte **13/13** des défauts plantés au banc rouge, ne lève
+**aucun finding bloquant** au banc vert, et vérifie sur pièces le lecteur SQL (RT-8) et la
+qualification des non-testables (RT-6).
 
 ## Le problème
 
@@ -28,6 +29,7 @@ seuil — et nommer chaque élément non exercé plutôt que de produire un tota
 |---|---|---|
 | A-t-on **atteint** tout ce qui existe ? | Couverture de surface | Parcours tronqué, élément jamais exercé |
 | Ce qu'on atteint, le **vérifie**-t-on ? | Score de mutation | Assertion affaiblie, doublure trop permissive |
+| Ce qui est **promis** existe-t-il ? | Contrôle statique de l'interface | Bouton, lien, formulaire inertes — que nulle suite ne peut atteindre |
 
 **Règle dure** : le score de mutation ne peut jamais être publié seul. Il se calcule sur le
 seul périmètre atteint et flatte d'autant plus que la suite est lacunaire. Un rapport qui
@@ -44,9 +46,10 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 | Option | Effet |
 |---|---|
 | `--json` | rapport complet en JSON sur stdout (sinon résumé lisible) |
-| `--pans <pan> [...]` | restreint l'audit à ces pans (`front api data migrations batch fichiers back securite accessibilite visuel`) |
+| `--pans <pan> [...]` | restreint l'audit à ces pans (`front interface api data migrations batch fichiers back securite accessibilite visuel`) |
 | `--generer <dossier>` | dépose les cas de test générés dans ce dossier de **proposition** — jamais dans le projet analysé. Les messages partent sur stderr : `--generer --json` produit un stdout JSON pur |
 | `--sortie <fichier>` | persiste le rapport dans ce fichier, **à l'identique** de stdout (le dossier parent est créé au besoin) |
+| `--reprendre <rapport.json>` | relit un rapport antérieur et **ne rejoue que ce qui n'était pas vert** ; le rapport produit fusionne l'ancien et le neuf avec la provenance de chaque élément — voir « Audit de qualification avec reprise » |
 
 ### Codes de sortie
 
@@ -56,6 +59,139 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 | `1` | `FAIL` — au moins un élément inventorié n'est pas exercé, ou un seuil n'est pas tenu |
 | `2` | **Rapport refusé** (règle d'affichage conjoint) ou **erreur d'exécution**. Dans les deux cas stdout porte un JSON `{"verdict": "REFUSE"\|"ERREUR", "motif": "…"}` et la trace part sur stderr |
 | `3` | `PARTIEL` — au moins un pan attendu n'a pas pu être couvert. Chaque pan non couvert est nommé **avec son motif**. Non bloquant par décision de conception : un projet dont un pan n'a pas d'adaptateur reste auditable |
+
+## Audit de qualification avec reprise
+
+Un audit réel chez un client ne tient pas en une passe. La première bute sur ce qui n'est pas
+configuré — une clé d'API tierce, un compte de recette, un jeton. Un humain les saisit. La
+seconde passe ne devrait éclairer que ces trous-là. Deux mécanismes rendent ce cycle possible.
+
+### `non_testables[]` — ce qu'aucune exécution ne pouvait atteindre ici
+
+Section **toujours présente** au rapport, même vide (son absence serait indiscernable d'un
+« rien à signaler », qui est exactement le silence que le framework interdit). Chaque entrée
+porte `element`, `champs_requis[]`, `pan` et `motif` :
+
+```json
+"non_testables": [
+  { "element": "endpoint:GET /api/factures", "champs_requis": ["ZZ_JETON_CLIENT"],
+    "pan": "api", "motif": "api : non exercable sans configuration (constate) — fournir …" }
+]
+```
+
+Trois sources, de la plus sûre à la plus prudente :
+
+1. **constaté** — la trace du run en échec **cite** une variable absente : `KeyError: 'X'`,
+   `X is not set`, `Field required` de `pydantic-settings`, `SKIPPED … X`. Le projet audité dit
+   lui-même ce qui lui manque ;
+2. **constaté** — un adaptateur le déclare (l'authentification déclare `FORGE_TESTS_API_URL`,
+   `…_LOGIN`, `…_PASSWORD` quand aucun compte n'est configuré) ;
+3. **présumé** — le projet déclare ses clés dans un `.env.example` et l'environnement ne les
+   porte pas. Aucune exécution ne l'a dit : la provenance est marquée `presume`.
+
+Un nom cité mais **correctement fourni** n'est jamais retenu : ce serait du bruit de trace, pas
+un manque. Le mécanisme est générique — n'importe quel adaptateur peut remplir `non_testables`,
+et le noyau les agrège comme il agrège les `non_juge`. Le remplissage automatique se fait en un
+**point unique** au-dessus de tous les adaptateurs : un adaptateur futur en hérite sans une
+ligne de code.
+
+**Limites déclarées.** Un service tiers injoignable qui ne nomme jamais sa clé reste un pan non
+mesuré ordinaire, pas un non-testable. Les champs tirés d'un `.env.example` sont présumés
+requis : le fichier ne dit pas quel pan dépend de quelle clé.
+
+### `--reprendre` — rejouer ce qui manque, garder ce qui était vert
+
+```bash
+uv run python -m forge_tests <projet> --json --sortie rapport-1.json   # première passe
+# … l'humain saisit les identifiants manquants listés en non_testables …
+uv run python -m forge_tests <projet> --reprendre rapport-1.json --json --sortie rapport-2.json
+```
+
+Sont rejoués les pans qui **n'étaient pas verts** : pans non couverts, pans dont le verdict
+n'est pas `PASS`, pans porteurs d'éléments non exercés, de non-testables ou de findings. Les
+autres ne sont **même pas lancés** — leur contenu est repris tel quel.
+
+Le rapport fusionné porte une section `reprise` :
+
+| Champ | Contenu |
+|---|---|
+| `rapport_repris` | chemin du rapport rechargé |
+| `pans_rejoues` | pans réellement relancés par cette passe |
+| `pans_repris_sans_rejeu` | pans déjà verts, **non relancés** |
+| `provenance[pan]` | `exerce_le_run` : éléments exercés par cette passe · `repris_de` : éléments repris du rapport antérieur |
+
+Chaque finding porte aussi sa `provenance` (`exerce_le_run` ou `repris_de:<chemin>`). Un
+élément exercé au run précédent et non atteint par le nouveau reste **couvert**, et le finding
+« jamais exercé » correspondant disparaît — c'est tout l'objet de la reprise.
+
+**Limites déclarées.** La ré-exécution a la granularité du **pan** : un pan à rejouer l'est en
+entier, c'est l'unité qu'un adaptateur sait lancer. La provenance, elle, est donnée élément par
+élément. Et un élément repris atteste d'une mesure **passée** : si le code a changé entre les
+deux passes, seule une passe complète fait foi.
+
+## Contrôle statique de l'interface — pan `interface`
+
+> *Une affordance est câblée, ou elle n'existe pas.*
+
+La couverture endpoint × code ne voit pas les promesses d'interface non tenues. Une suite
+n'atteint jamais un bouton mort : il n'y a rien à atteindre. Le pan `interface` mesure autre
+chose, **en amont de toute exécution** — un `<button>` promet un effet, un `<a>` promet une
+destination, un `<form>` promet un envoi ; le contre-oracle vérifie que la promesse est câblée
+quelque part dans les sources et **nomme** celles qui ne le sont pas (fichier, ligne, élément,
+libellé).
+
+Périmètre : les gabarits rendus tels quels — `.html`, `.htm`, `.jinja`, `.jinja2`, `.j2`,
+`.twig`, `.ejs`, `.hbs` — hors `node_modules`, `.venv`, `dist`, `build`, `.visuel` et autres
+artefacts. Aucune exécution, aucun navigateur : le pan est disponible là où Playwright ne l'est
+pas (projet non constructible, front servi par le backend, gabarit rendu côté serveur).
+
+Est déclaré **inerte** :
+
+| Cas | Verdict |
+|---|---|
+| `<button>` hors formulaire, sans attribut de gestionnaire, dont ni l'`id`, ni une classe, ni un `data-*` n'est cité dans le JS du projet | inerte |
+| `<button type="submit">` dans un formulaire lui-même sans `action` ni gestionnaire | inerte |
+| `<a>` sans `href`, ou `href` valant `#`, vide, `javascript:;`, `javascript:void(0)` | inerte |
+| `<form>` sans `action` ni gestionnaire de soumission | inerte |
+
+Sont réputés câblés : tout attribut de gestionnaire (`onclick`, `@click`, `v-on:`, `x-on:`,
+`hx-*`, `wire:`, `ng-*`, `data-action`, `formaction`…), un `href` réel, une `action` réelle,
+`type="reset"` (effet natif), et un `id`/classe/`data-*` cité dans le JS du projet — script en
+ligne du document compris. Un élément `disabled` ou `aria-disabled="true"` n'est pas accusé :
+son inertie est **voulue et déclarée**.
+
+**Limites déclarées** (reprises telles quelles en `non_juge`) :
+
+- contrôle **statique** : un gestionnaire posé à l'exécution par un framework, ou une
+  délégation d'événement sur un ancêtre, est invisible ici. « Inerte » se lit *aucun câblage
+  lisible dans les sources* ;
+- un élément jugé câblé ne l'est que par **présomption** : la coïncidence de chaîne suffit à le
+  blanchir. Le pan attrape l'inerte flagrant, il ne certifie pas le câblé ;
+- le câblage prouve l'existence d'un gestionnaire, jamais que son **effet soit observable** —
+  un handler vide passerait pour câblé ;
+- les composants de framework (`.jsx`, `.tsx`, `.vue`, `.svelte`) ne sont pas analysés comme
+  gabarits ; leur surface est inventoriée par le pan `front` via `data-testid` ;
+- une ancre `#nom` dont la cible n'existe pas dans le document n'est pas jugée morte : la cible
+  peut être injectée au rendu.
+
+## Lecture du SQL — filtrer avant de découper
+
+Un `;` posé **dans un commentaire** de migration fabriquait une instruction qui n'avait jamais
+existé : jamais envoyée au moteur, donc jamais retrouvée dans le relevé de la sonde, donc
+migration déclarée non exercée. Un `FAIL` à tort, produit par le lecteur et non par le projet
+audité (constaté en production sur `0004_catalogues.sql`). Symétriquement, une **vraie**
+instruction précédée d'un commentaire de tête était rejetée en bloc.
+
+`forge_tests/sql.py` est désormais la source unique : commentaires `--` et `/* */` retirés
+**avant** le découpage, littéraux `'…'` et identifiants `"…"` préservés (un `;` ou un `--` dans
+une chaîne ne coupe rien et ne masque rien). Les quatre lecteurs SQL du dépôt en dépendent :
+l'adaptateur `migrations` (instructions et objets annoncés), l'adaptateur `data` (inventaire des
+tables, contraintes, index, triggers — une table mise en commentaire n'entre plus à
+l'inventaire) et la sonde `verifier_schema.py` qui rejoue les migrations sur base neuve.
+
+**Limite déclarée** : un `;` ou un `--` placé dans un littéral **dollar-quoté** (`$$…$$`, corps
+de fonction PL/pgSQL) ou dans une chaîne à échappement backslash (`E'…\'…'`) reste hors de
+portée — l'instruction serait coupée au mauvais endroit.
 
 ## Prérequis
 
@@ -205,6 +341,7 @@ de migrations tôt ne suffit pas ; c'est le volume qui SUIT qui décide.
 | Pan | Conventions appliquées | Seuil |
 |---|---|---|
 | `front` | routes dans `frontend/src/routes.jsx` (`path: "…"`) ou convention TanStack `frontend/src/routes/**.tsx` ; éléments interactifs = attributs `data-testid="…"` **statiques** dans `src/**.{jsx,tsx}` ; exercé = trace Playwright (navigations et sélecteurs `data-testid`) | 90 % |
+| `interface` | gabarits `.html/.htm/.jinja/.jinja2/.j2/.twig/.ejs/.hbs` hors artefacts ; « exercé » = **câblé** (gestionnaire, destination ou identifiant cité dans le JS) — voir « Contrôle statique de l'interface » | 100 % |
 | `batch` | branches dérivées de l'AST de `backend/app/batch.py` (à défaut, inventaire de `backend/app/worker/*.py` — mais **la mesure ne porte que sur `batch.py`**) ; codes de rejet = littéraux de la forme `XXX-YYY` en majuscules | 90 % |
 | `fichiers` | chemins de parsing dérivés de l'AST de `backend/app/importer.py` | 100 % |
 | `back` | mutation réelle : altération des modules de `backend/app`, relance de `tests`, plafond de 90 mutants (plafond atteint = déclaré) | 70 % de mutants tués |
@@ -238,7 +375,12 @@ uv run python -m forge_tests.dette         # régénère registre-dette.json dep
 ```
 
 La recette rejoue le framework sur la paire de bancs de `fixtures/` : chaque défaut planté du
-banc rouge doit produire un finding **nommé**, le banc vert aucun finding bloquant. Elle exige
+banc rouge doit produire un finding **nommé**, le banc vert aucun finding bloquant. Elle y
+ajoute deux vérifications **sur pièces**, pour des mécanismes qu'aucun banc ne peut exercer :
+le lecteur SQL (`;` dans un commentaire, en fin de ligne commentée, dans un bloc, dans un
+littéral — RT-8) et la qualification des non-testables (détection d'une variable absente citée
+par une trace, refus de compter une variable pourtant fournie — RT-6). Sans elles, ces deux
+mécanismes pourraient pourrir sans que rien ne le dise. Elle exige
 un venv sous `fixtures/banc-*/backend` (`uv sync --directory fixtures/banc-rouge/backend`), les
 dépendances des fronts (`npm ci` puis `npm run build` dans `fixtures/banc-*/frontend`) et
 Docker. Elle neutralise `FORGE_TESTS_BASE_URL` : elle porte sur les bancs locaux, jamais sur
@@ -298,6 +440,9 @@ aujourd'hui — c'est un écart connu, pas un vert.
   pan mutation modifie le source du projet le temps d'un mutant avant de le **restaurer** ; le
   pan visuel dépose ses captures et ses goldens dans `<projet>/.visuel/` — par conception, un
   golden est une référence **versionnée avec le projet**, pas un artefact jetable.
+- Le pan visuel ne crée plus `<projet>/.visuel/` quand le projet **n'a aucune route** à
+  capturer : un projet purement API, ou dont le front est servi par le backend, se voyait créer
+  un dossier vide dans son arbre pour un pan qui allait conclure `SKIP`.
 - Un délai dépassé, un outil absent ou une suite rouge **dégradent le pan concerné avec son
   motif** — jamais l'audit entier, jamais en silence.
 - Interdiction d'assouplir une assertion pour faire passer un test rouge

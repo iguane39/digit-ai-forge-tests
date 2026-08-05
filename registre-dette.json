@@ -341,6 +341,36 @@
       "statut": "todo"
     },
     {
+      "id": "interface-statique-492d8622",
+      "domaine": "interface-statique",
+      "enonce": "interface : controle STATIQUE — un gestionnaire pose a l execution par un framework (React, Vue, delegation d evenement sur un ancetre, composant compile) est INVISIBLE ici ; un element declare inerte doit etre lu comme « aucun cablage lisible dans les sources »",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-3805c1f5",
+      "domaine": "interface-statique",
+      "enonce": "interface : un element juge cable ne l est que par PRESUMPTION — son identifiant, sa classe ou son attribut de donnees est cite dans le JS du projet. La coincidence de chaine suffit a le blanchir : le pan attrape l inerte flagrant, il ne certifie pas le cable",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-949e5f47",
+      "domaine": "interface-statique",
+      "enonce": "interface : le cablage prouve l existence d un gestionnaire, jamais que son effet soit OBSERVABLE par l utilisateur — un handler vide passerait pour cable",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-ae53f8c3",
+      "domaine": "interface-statique",
+      "enonce": "interface : les composants de framework (.jsx, .tsx, .vue, .svelte) ne sont pas analyses comme gabarits ; leur surface est inventoriee par le pan front via `data-testid`",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-aecd7c09",
+      "domaine": "interface-statique",
+      "enonce": "interface : une ancre `#nom` dont la cible n existe pas dans le document n est pas jugee morte — la cible peut etre injectee au rendu",
+      "statut": "todo"
+    },
+    {
       "id": "migrations-sql-2fdea760",
       "domaine": "migrations-sql",
       "enonce": "migrations : l effet verifie est l EXISTENCE des objets nommes (tables, contraintes, index) apres application ; ni leur definition exacte, ni les donnees migrees",
@@ -356,6 +386,42 @@
       "id": "mutation-python-d8fe9aa8",
       "domaine": "mutation-python",
       "enonce": "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance, bornes numériques et suppression d instruction ; ni permutation d arguments, ni littéraux non numériques",
+      "statut": "todo"
+    },
+    {
+      "id": "qualification-3287f6c1",
+      "domaine": "qualification",
+      "enonce": "qualification : un manque de configuration n est reconnu que s il se DIT — variable citee par une trace d execution, declaration d adaptateur, ou cle d un `.env.example` du projet. Un service tiers injoignable sans jamais nommer sa cle reste un pan non mesure ordinaire",
+      "statut": "todo"
+    },
+    {
+      "id": "qualification-8d8a3b4d",
+      "domaine": "qualification",
+      "enonce": "qualification : les champs tires d un `.env.example` sont PRESUMES requis (le fichier ne dit pas quel pan depend de quelle cle) — la provenance de chaque entree le declare",
+      "statut": "todo"
+    },
+    {
+      "id": "reprise-efecb346",
+      "domaine": "reprise",
+      "enonce": "reprise : la re-execution a la granularite du PAN — un pan qui doit etre rejoue l est en entier. La provenance, elle, est donnee element par element",
+      "statut": "todo"
+    },
+    {
+      "id": "reprise-6e5aeb9a",
+      "domaine": "reprise",
+      "enonce": "reprise : un element repris d un rapport anterieur atteste d une mesure PASSEE, pas de l etat courant du projet — si le code a change entre les deux passes, seule une passe complete fait foi",
+      "statut": "todo"
+    },
+    {
+      "id": "sql-a452ff3c",
+      "domaine": "sql",
+      "enonce": "sql : le decoupage reconnait les litteraux `'...'` (echappement `''`) et les identifiants entre guillemets ; un `;` ou un `--` place dans un litteral DOLLAR-QUOTE (`$$...$$`, corps de fonction PL/pgSQL) ou dans une chaine a echappement backslash (`E'...\\'...'`) reste hors de portee — l instruction serait coupee au mauvais endroit",
+      "statut": "todo"
+    },
+    {
+      "id": "sql-f1c916a7",
+      "domaine": "sql",
+      "enonce": "sql : ce module lit le TEXTE des migrations, il ne l analyse pas grammaticalement — une instruction syntaxiquement invalide est rendue telle quelle, sans jugement",
       "statut": "todo"
     }
   ]
