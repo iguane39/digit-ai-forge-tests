@@ -9,6 +9,7 @@ from forge_tests.execution import (
     instructions_sql,
     motif_indisponibilite,
     schema_obtenu,
+    sources_sql,
     violations_levees,
 )
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
@@ -38,7 +39,32 @@ NON_JUGE = [
     "data : un index ou un trigger est réputé exercé si son instruction de création a été "
     "envoyée au moteur ; son EFFET (unicité réellement testée, trigger réellement déclenché) "
     "n est pas vérifié",
+    "data : le repli `sqlite3` relève les INSTRUCTIONS envoyées au pilote, pas les violations "
+    "de contrainte ; sur un projet sans SQLAlchemy les contraintes restent donc non "
+    "attribuables — tables, index et triggers, eux, sont mesurés",
 ]
+
+
+def _motif_surface_absente(cible: Path) -> str:
+    """Pourquoi il n y a RIEN à inventorier ici — jamais « exercé = 0 » sans explication.
+
+    Deux causes très différentes, qu un compteur à zéro confondait : le projet a bien une
+    couche SQL mais son schéma naît du code applicatif (aucune migration, aucun modèle ORM),
+    ou le projet n a aucune couche SQL observable.
+    """
+    envoyees = instructions_sql(cible) or []
+    vues = sources_sql(cible) or []
+    if envoyees:
+        return (
+            f"data : aucune migration SQL ni contrainte ORM à inventorier — surface data non "
+            f"énumérable, alors que {len(envoyees)} instructions SQL ont été OBSERVÉES pendant "
+            f"la suite (relevé {', '.join(vues)}) : le schéma de ce projet est créé par le code "
+            f"applicatif, hors migrations"
+        )
+    return (
+        "data : projet sans couche SQL observable — ni SQLAlchemy ni le repli sqlite3 n ont vu "
+        "passer d instruction pendant la suite : pans data/migrations non mesurables"
+    )
 
 
 def _sql(cible: Path) -> list[Path]:
@@ -197,6 +223,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
             ],
         )
     inv = inventaire(cible)
+    if not inv:
+        # `evaluer_surface` conclurait SKIP « inventaire VIDE », motif exact mais muet sur la
+        # CAUSE ; et la suite d `analyser` ajouterait par-dessus « schema reel non
+        # introspectable », qui devenait le motif publie — un contresens pour le lecteur.
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, _motif_surface_absente(cible)]
+        )
     sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)
 
     # Une contrainte declaree au MODELE mais absente des MIGRATIONS est une divergence : le code

@@ -317,6 +317,12 @@
       "statut": "todo"
     },
     {
+      "id": "data-sql-ba7a03f9",
+      "domaine": "data-sql",
+      "enonce": "data : le repli `sqlite3` relève les INSTRUCTIONS envoyées au pilote, pas les violations de contrainte ; sur un projet sans SQLAlchemy les contraintes restent donc non attribuables — tables, index et triggers, eux, sont mesurés",
+      "statut": "todo"
+    },
+    {
       "id": "execution-1dfcb298",
       "domaine": "execution",
       "enonce": "exécution : la couverture combine lignes et ARCS de branchement ; une branche implicite (ternaire, court-circuit booléen) reste hors de portée de coverage.py",

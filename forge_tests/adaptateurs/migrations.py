@@ -6,7 +6,12 @@ from pathlib import Path
 
 import re
 
-from forge_tests.execution import instructions_sql, motif_indisponibilite, schema_obtenu
+from forge_tests.execution import (
+    instructions_sql,
+    motif_indisponibilite,
+    schema_obtenu,
+    sources_sql,
+)
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
 from forge_tests.risque import coter
 
@@ -50,6 +55,23 @@ def inventaire(cible: Path) -> list[Element]:
         for fichier in fichiers
         for sens in SENS
     ]
+
+
+def _motif_sans_migration(cible: Path) -> str:
+    """Pourquoi il n y a AUCUNE migration à inventorier, plutôt qu un compteur à zéro."""
+    envoyees = instructions_sql(cible) or []
+    vues = sources_sql(cible) or []
+    if envoyees:
+        return (
+            f"migrations : aucune migration à inventorier — ni {cible / 'backend' / 'migrations'}"
+            f"/*.sql ni versions Alembic, alors que {len(envoyees)} instructions SQL ont été "
+            f"OBSERVÉES pendant la suite (relevé {', '.join(vues)}) : le schéma de ce projet "
+            f"n est pas versionné par migrations"
+        )
+    return (
+        "migrations : projet sans couche SQL observable — ni SQLAlchemy ni le repli sqlite3 "
+        "n ont vu passer d instruction pendant la suite : pan migrations non mesurable"
+    )
 
 
 def _downgrades_vides(cible: Path) -> list[Path]:
@@ -157,9 +179,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
             )
             sortie.verdict = "FAIL"
         return sortie
-    sortie = evaluer_surface(
-        NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, list(NON_JUGE)
-    )
+    inv = inventaire(cible)
+    if not inv:
+        # Sans ce motif, le SKIP publiait « schema reel non introspectable », ajoute plus bas :
+        # un contresens quand la vraie raison est qu il n y a aucune migration a inventorier.
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, _motif_sans_migration(cible)]
+        )
+    sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, list(NON_JUGE))
     # Une migration sans section de retour est une DIVERGENCE de la source, pas un trou de suite.
     for fichier in _fichiers(cible):
         if "-- +migrate Down" not in fichier.read_text(encoding="utf-8"):

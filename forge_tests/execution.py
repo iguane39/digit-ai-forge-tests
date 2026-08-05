@@ -174,6 +174,7 @@ def mesurer(banc_str: str) -> dict | None:
         )
         violations = brut_data.get("violations", [])
         instructions = brut_data.get("instructions", [])
+        sources_sql_ = brut_data.get("sources", [])
 
         # Le relevé vit dans le dossier temporaire : la lecture doit se faire AVANT sa
         # destruction, donc dans le meme bloc.
@@ -208,6 +209,7 @@ def mesurer(banc_str: str) -> dict | None:
         "codes": codes,
         "violations": violations,
         "instructions": instructions,
+        "sources_sql": sources_sql_,
     }
 
 
@@ -235,6 +237,16 @@ def instructions_sql(banc: Path) -> list[str] | None:
     """Instructions SQL reellement envoyees au moteur pendant la suite."""
     mesure = mesurer(str(banc))
     return None if mesure is None else mesure["instructions"]
+
+
+def sources_sql(banc: Path) -> list[str] | None:
+    """Points d observation qui ont VU passer du SQL : `sqlalchemy`, `sqlite3`, ou aucun.
+
+    Une liste vide n est pas un silence de plus : elle dit que le projet n a AUCUNE couche SQL
+    observable, ce que le rapport doit énoncer au lieu d afficher « exercé = 0 ».
+    """
+    mesure = mesurer(str(banc))
+    return None if mesure is None else mesure["sources_sql"]
 
 
 def codes_emis(banc: Path) -> list[dict] | None:
