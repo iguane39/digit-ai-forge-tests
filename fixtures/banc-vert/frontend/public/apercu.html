@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Apercu operateur — banc vert</title>
+</head>
+<body>
+  <a class="lien-evitement" href="#contenu">Aller au contenu</a>
+  <h1>Apercu operateur</h1>
+
+  <!-- Chaque affordance tient sa promesse, par un moyen DIFFERENT : attribut de gestionnaire,
+       destination reelle, action de formulaire, identifiant cable par le script du document.
+       Le banc vert doit rester a zero finding sur ce pan. -->
+  <button type="button" onclick="window.print()">Imprimer</button>
+  <a href="/commandes">Voir les commandes</a>
+
+  <form action="/recherche" method="get">
+    <label for="recherche">Rechercher une commande</label>
+    <input id="recherche" name="recherche" type="text">
+    <button type="submit">Chercher</button>
+  </form>
+
+  <button type="button" id="bouton-actualiser">Actualiser</button>
+  <button type="button" disabled>Archiver (indisponible)</button>
+
+  <main id="contenu">
+    <p>Rien a signaler.</p>
+  </main>
+
+  <script>
+    document.getElementById("bouton-actualiser").addEventListener("click", function () {
+      window.location.reload();
+    });
+  </script>
+</body>
+</html>

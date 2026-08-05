@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Apercu operateur — banc rouge</title>
+</head>
+<body>
+  <h1>Apercu operateur</h1>
+
+  <!-- H-13 : cinq affordances qui PROMETTENT un effet et n en produisent aucun. Aucune suite
+       de tests ne peut les attraper : il n y a rien a atteindre. Seul un contre-oracle
+       statique du gabarit les nomme. -->
+  <button class="zzz-exporter-tableau">Exporter le tableau</button>
+  <a href="#">Tout marquer comme lu</a>
+  <a href="javascript:void(0)">Aide</a>
+  <form>
+    <label for="zzz-recherche">Rechercher une commande</label>
+    <input id="zzz-recherche" name="recherche" type="text">
+    <button type="submit">Chercher</button>
+  </form>
+
+  <!-- Temoins CABLES : ils ne doivent produire aucun finding, sans quoi le pan crierait au loup. -->
+  <button type="button" onclick="window.print()">Imprimer</button>
+  <a href="/commandes">Voir les commandes</a>
+  <button type="button" disabled>Archiver (indisponible)</button>
+</body>
+</html>
