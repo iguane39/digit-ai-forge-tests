@@ -76,6 +76,17 @@ def _run(
         return None
 
 
+def _contrat_projet(banc: Path) -> None:
+    """Charge le contrat que le projet audité DÉCLARE dans `<projet>/.env.forge-tests`.
+
+    C est là que le projet désigne son application (`FORGE_TESTS_APP`) : une convention qui
+    porte sur le projet doit voyager AVEC lui, pas avec la machine de l opérateur.
+    """
+    from forge_tests.authentification import charger_env
+
+    charger_env(banc)
+
+
 def _python(banc: Path) -> Path | None:
     for candidat in (
         banc / "backend" / ".venv" / "Scripts" / "python.exe",
@@ -118,6 +129,7 @@ def mesurer(banc_str: str) -> dict | None:
     None n est pas « rien à signaler » : l appelant doit DÉCLARER qu il ne juge pas.
     """
     banc = Path(banc_str)
+    _contrat_projet(banc)
     # Inventaire seul : executer la suite d un projet REEL peut exiger son infrastructure
     # complete et durer sans borne. Ce mode la court-circuite en le DECLARANT — chaque
     # adaptateur repond alors « inventorie N, couverture non mesurable », jamais un faux vert.
@@ -261,6 +273,7 @@ def codes_emis(banc: Path) -> list[dict] | None:
 def schema_openapi(banc_str: str) -> dict | None:
     """Schema OpenAPI declare par l application analysee (source qui fait foi, regle R3)."""
     banc = Path(banc_str)
+    _contrat_projet(banc)
     python = _python(banc)
     if python is None:
         return None

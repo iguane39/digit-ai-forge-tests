@@ -22,6 +22,16 @@ NON_JUGE = [
     "ASSERTION porte sur lui — c est le role du second contre-oracle",
 ]
 
+# Piege le plus silencieux du premier produit reel : une suite batie sur une app factory
+# (`creer_app()` par test) n exerce JAMAIS l instance module instrumentee. Le releve sort vide,
+# la suite est verte, et le rapport accuse la suite de ne rien couvrir — alors que c est la
+# sonde qui n a rien vu. Un releve vide sur suite verte doit donc DIRE cette hypothese.
+AVERTISSEMENT_SONDE_MUETTE = (
+    "api : suite verte mais sonde API muette — l app exercee n est pas l instance module "
+    'designee ; la designer avec FORGE_TESTS_APP="module:attribut" (l attribut peut etre une '
+    "fabrique). Voir « Contrat du projet audite » au README"
+)
+
 
 def _norm(chemin: str) -> str:
     chemin = chemin.split("?")[0]
@@ -131,6 +141,20 @@ def analyser(cible: Path) -> SortieAdaptateur:
             ],
         )
     sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)
+    # `couvert` non nul veut dire que la suite a fini VERTE (sinon la mesure vaudrait None).
+    # Vide malgre un inventaire fourni : la sonde n a vu passer aucune requete.
+    if inv and not couvert:
+        sortie.non_juge.insert(0, AVERTISSEMENT_SONDE_MUETTE)
+        sortie.findings.insert(
+            0,
+            Finding(
+                id="sonde-muette:api",
+                classe="sonde-muette",
+                localisation=str(cible / "backend" / "app" / "main.py"),
+                message=AVERTISSEMENT_SONDE_MUETTE,
+                severite="signale",
+            ),
+        )
     # Un code EMIS pendant la suite mais absent de `responses=` est une divergence entre ce que
     # la source declare et ce que le code fait. Ni un trou de couverture, ni un silence : un ecart.
     # Un code d invariant metier DECLARE mais qu aucune garde du code ne peut produire est une
