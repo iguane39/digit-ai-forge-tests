@@ -16,11 +16,16 @@ SORTIE_OK, SORTIE_FAIL, SORTIE_ERREUR, SORTIE_PARTIEL = 0, 1, 2, 3
 
 
 def analyser(cible: Path, pans: list[str] | None = None) -> dict:
+    from forge_tests.qualification import qualifier
+
     sorties = [
         module.analyser(cible)
         for nom, module in REGISTRE.items()
         if pans is None or module.PAN in pans
     ]
+    # RT-6a — point d application UNIQUE : ce qu aucune execution ne pouvait atteindre FAUTE DE
+    # CONFIGURATION est nomme ici, pour tous les adaptateurs, avec les champs a fournir.
+    qualifier(sorties, cible, REGISTRE)
     return rapport(sorties, PANS_ATTENDUS)
 
 
@@ -44,6 +49,33 @@ def _resume(rap: dict) -> str:
         for pan in rap["pans_non_couverts"]:
             motif = rap.get("motifs_non_couverture", {}).get(pan, "adaptateur absent")
             lignes.append(f"  {pan:<14} {motif[:100]}")
+    reprise = rap.get("reprise")
+    if reprise:
+        lignes.append("")
+        lignes.append(f"reprise de {reprise['rapport_repris']}")
+        lignes.append(f"  pans rejoues        : {', '.join(reprise['pans_rejoues']) or 'aucun'}")
+        lignes.append(
+            "  pans repris tels quels (deja verts, NON rejoues) : "
+            + (", ".join(reprise["pans_repris_sans_rejeu"]) or "aucun")
+        )
+        for pan, detail in sorted(reprise["provenance"].items()):
+            if detail["repris_de"]:
+                lignes.append(
+                    f"  {pan:<12} {len(detail['exerce_le_run']):>3} exerce(s) ce run · "
+                    f"{len(detail['repris_de']):>3} repris du rapport"
+                )
+    if rap.get("non_testables"):
+        lignes.append("")
+        lignes.append("NON TESTABLES ici — configuration a fournir, puis `--reprendre` :")
+        par_champs: dict[tuple[str, ...], list[str]] = {}
+        for entree in rap["non_testables"]:
+            par_champs.setdefault(tuple(entree["champs_requis"]), []).append(entree["element"])
+        for champs, elements in sorted(par_champs.items()):
+            lignes.append(f"  {len(elements):>3} element(s) — requiert {', '.join(champs)}")
+            for element in elements[:3]:
+                lignes.append(f"        {element}")
+            if len(elements) > 3:
+                lignes.append(f"        ... et {len(elements) - 3} autre(s)")
     bandes = rap["bandes_de_risque"]
     lignes.append("")
     lignes.append(
@@ -101,12 +133,42 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="persister le rapport dans ce fichier, a l identique de stdout",
     )
+    parser.add_argument(
+        "--reprendre",
+        type=Path,
+        default=None,
+        metavar="RAPPORT.json",
+        help=(
+            "relire un rapport anterieur et ne rejouer QUE les pans non verts (elements non "
+            "exerces, non testables, findings) ; le rapport produit fusionne les deux avec la "
+            "provenance de chaque element"
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
         # Chemin ABSOLU : un adaptateur qui lance un sous-processus avec un `cwd` différent ne
         # peut pas résoudre un binaire donné en relatif. Le résoudre ici évite un SKIP silencieux.
-        rap = analyser(args.cible.resolve(), args.pans)
+        if args.reprendre is not None:
+            from forge_tests.reprise import charger, fusionner, pans_a_rejouer
+
+            ancien = charger(args.reprendre)
+            rejoues = pans_a_rejouer(ancien)
+            if args.pans is not None:
+                rejoues = [p for p in rejoues if p in args.pans]
+            # Une liste VIDE ne veut pas dire « tout rejouer » : elle veut dire « tout etait
+            # vert ». Passer None a `analyser` relancerait l audit complet, exactement ce que
+            # la reprise existe pour eviter.
+            neuf = analyser(args.cible.resolve(), rejoues) if rejoues else {
+                "adaptateurs": [], "couverture_par_pan": {}, "mutation": {},
+                "pans_non_couverts": [], "motifs_non_couverture": {}, "findings": [],
+                "non_testables": [], "non_juge": [],
+            }
+            rap = fusionner(
+                ancien, neuf, str(args.reprendre), rejoues, PANS_ATTENDUS
+            )
+        else:
+            rap = analyser(args.cible.resolve(), args.pans)
         if args.generer is not None:
             from forge_tests.execution import schema_openapi
             from forge_tests.generateur import ecrire

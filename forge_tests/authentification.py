@@ -51,6 +51,15 @@ def obtenir_jeton(cible: Path) -> str | None:
     login = os.environ.get("FORGE_TESTS_LOGIN")
     mdp = os.environ.get("FORGE_TESTS_PASSWORD")
     if not (api and login and mdp):
+        # RT-6a — l absence de compte n est plus un `None` muet : les champs a fournir sont
+        # DECLARES, et les pans qui en dependent les publient en `non_testables`.
+        from forge_tests.qualification import declarer
+
+        declarer(
+            cible,
+            "acces",
+            ("FORGE_TESTS_API_URL", "FORGE_TESTS_LOGIN", "FORGE_TESTS_PASSWORD"),
+        )
         return None
 
     chemin = os.environ.get("FORGE_TESTS_LOGIN_PATH", "/api/v1/login/access-token")

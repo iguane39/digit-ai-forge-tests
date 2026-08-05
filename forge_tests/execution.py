@@ -173,11 +173,25 @@ def mesurer(banc_str: str) -> dict | None:
         if lance is None:
             return None
         if lance.returncode != 0:
+            # RT-6a — une suite rouge FAUTE DE CONFIGURATION le dit dans sa propre trace. La
+            # lire ici est le seul endroit du framework où le projet audité nomme lui-même les
+            # identifiants qui lui manquent : sans cela, « suite rouge » couvre indistinctement
+            # un bug du projet et une clé tierce jamais saisie par l opérateur.
+            from forge_tests.qualification import detecter
+
+            manquants = detecter(
+                banc, "backend", f"{lance.stdout or ''}\n{lance.stderr or ''}"
+            )
+            complement = (
+                f" — configuration absente citée par la trace : {', '.join(sorted(manquants))}"
+                if manquants
+                else ""
+            )
             _declarer(
                 banc,
                 "backend",
                 f"la suite backend s est terminée en échec (code {lance.returncode}) — "
-                "couverture non mesurable tant que la suite est rouge",
+                f"couverture non mesurable tant que la suite est rouge{complement}",
             )
             return None
         codes = json.loads(releve.read_text(encoding="utf-8")) if releve.exists() else []
@@ -355,11 +369,21 @@ def front_execute(banc_str: str) -> dict | None:
         if resultat is None:
             return None
         if resultat.returncode != 0:
+            from forge_tests.qualification import detecter
+
+            manquants = detecter(
+                banc, "front", f"{resultat.stdout or ''}\n{resultat.stderr or ''}"
+            )
+            complement = (
+                f" — configuration absente citée par la trace : {', '.join(sorted(manquants))}"
+                if manquants
+                else ""
+            )
             _declarer(
                 banc,
                 "front",
                 f"la suite e2e s est terminée en échec (code {resultat.returncode}) — "
-                "couverture front non mesurable tant que la suite est rouge",
+                f"couverture front non mesurable tant que la suite est rouge{complement}",
             )
             return None
         for archive in Path(artefacts).rglob("trace.zip"):

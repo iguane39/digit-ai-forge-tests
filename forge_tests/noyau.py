@@ -35,6 +35,23 @@ class Finding:
     risque: int | None = None
 
 
+@dataclass(frozen=True)
+class NonTestable:
+    """Un element inventorie qu AUCUNE execution ne peut atteindre FAUTE DE CONFIGURATION.
+
+    RT-6 : distinguer « la suite ne l exerce pas » de « personne ne PEUT l exercer ici ». Le
+    premier est un trou de couverture, imputable au projet. Le second est un manque
+    d identifiants, de jeton ou de cle, imputable a l environnement d audit — et il se repare
+    en saisissant `champs_requis`, pas en ecrivant un test. Les confondre, c est soit accuser a
+    tort, soit taire un pan entier.
+    """
+
+    element: str
+    champs_requis: list[str]
+    pan: str = ""
+    motif: str = ""
+
+
 @dataclass
 class SortieAdaptateur:
     """Contrat de sortie commun a tous les adaptateurs."""
@@ -47,6 +64,8 @@ class SortieAdaptateur:
     non_juge: list[str] = field(default_factory=list)
     surface: dict | None = None
     mutation: dict | None = None
+    # RT-6a : tout adaptateur peut en declarer ; le noyau les agrege, comme les `non_juge`.
+    non_testables: list[NonTestable] = field(default_factory=list)
 
     def json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False, indent=2)
@@ -131,6 +150,9 @@ def evaluer_surface(
             "exerce": total - len(manquants),
             "ratio": round(ratio, 4),
             "seuil": seuil,
+            # RT-6b : la LISTE des elements exerces, pas seulement leur compte. Sans elle, une
+            # reprise ne saurait pas quel element etait deja vert et devrait tout rejouer.
+            "elements_exerces": sorted(e.id for e in inventaire if e.id in exerces),
             "elements_non_exerces": [e.id for e in manquants],
         },
     )
@@ -167,13 +189,15 @@ def rapport(sorties: list[SortieAdaptateur], pans_attendus: list[str]) -> dict:
         for s in sorties
         if s.verdict == "SKIP"
     }
+    # Le PAN de chaque finding est porte au rapport : sans lui, une reprise ne sait pas quels
+    # findings d un rapport anterieur appartiennent a un pan qu elle ne rejoue pas (RT-6b).
     tous = sorted(
-        (f for s in sorties for f in s.findings),
-        key=lambda f: f.risque or 0,
+        ((f, s.pan) for s in sorties for f in s.findings),
+        key=lambda couple: couple[0].risque or 0,
         reverse=True,
     )
     bandes = {"critique": 0, "standard": 0, "differe": 0, "non_cote": 0}
-    for f in tous:
+    for f, _ in tous:
         bandes["non_cote" if f.risque is None else bande(f.risque)] += 1
     return {
         "adaptateurs": [
@@ -186,7 +210,16 @@ def rapport(sorties: list[SortieAdaptateur], pans_attendus: list[str]) -> dict:
         "pans_non_couverts": non_couverts,
         "motifs_non_couverture": motifs_skip,
         "bandes_de_risque": bandes,
-        "findings": [asdict(f) for f in tous],
+        "findings": [{**asdict(f), "pan": pan} for f, pan in tous],
+        # RT-6a : ce qu aucune execution ne POUVAIT atteindre ici, et ce qu il faut fournir
+        # pour que la prochaine passe le puisse. Section toujours presente, meme vide.
+        "non_testables": [
+            asdict(n)
+            for n in sorted(
+                (n for s in sorties for n in s.non_testables),
+                key=lambda n: (n.pan, n.element),
+            )
+        ],
         "non_juge": sorted({n for s in sorties for n in s.non_juge} | set(NON_JUGE_RISQUE)),
         "verdict": (
             "PARTIEL"
