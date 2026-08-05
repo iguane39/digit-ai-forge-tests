@@ -48,7 +48,117 @@ CORPUS = [
     ("H-10", "accessibilite", "controles sans nom accessible", ("a11y:",)),
     ("H-11", "visuel", "regression visuelle de mise en page", ("visuel:",)),
     ("H-12", "migrations", "migration qui defait la precedente", ("divergence:migration:",)),
+    ("H-13", "interface", "affordances inertes — bouton, lien et formulaire sans effet",
+     ("interface:",)),
 ]
+
+# RT-8 — le lecteur SQL, verifie sur pieces. Ces cas ne passent par aucun banc : ils portent
+# sur le decoupage lui-meme, et c est LUI qui fabriquait de fausses instructions. Un `;` dans
+# un commentaire produisait une instruction jamais envoyee au moteur, donc une migration
+# declaree non exercee — un FAIL a tort, constate en production sur `0004_catalogues.sql`.
+LECTURE_SQL = [
+    (
+        "point-virgule dans un commentaire de ligne",
+        "-- attention ; ce commentaire ne fabrique rien\nCREATE TABLE t (id INT);",
+        ["CREATE TABLE t (id INT)"],
+    ),
+    (
+        "point-virgule en fin de ligne commentee",
+        "CREATE TABLE t (id INT);  -- fin de section ;\n",
+        ["CREATE TABLE t (id INT)"],
+    ),
+    (
+        "commentaire AU MILIEU d une instruction",
+        "CREATE UNIQUE INDEX i\n  -- unicite stricte ; posee ici\n  ON t (c);",
+        ["CREATE UNIQUE INDEX i ON t (c)"],
+    ),
+    (
+        "commentaire de bloc porteur d un point-virgule",
+        "/* note ; sur deux\n   lignes */\nALTER TABLE t ADD COLUMN c INT;",
+        ["ALTER TABLE t ADD COLUMN c INT"],
+    ),
+    (
+        "instruction precedee d un commentaire de tete (jadis rejetee en bloc)",
+        "-- ce qui suit est une VRAIE instruction\nDROP INDEX i;",
+        ["DROP INDEX i"],
+    ),
+    (
+        "point-virgule dans un litteral de chaine",
+        "COMMENT ON INDEX i IS 'un seul compte ; unicite metier';",
+        ["COMMENT ON INDEX i IS 'un seul compte ; unicite metier'"],
+    ),
+    (
+        "double tiret dans un litteral : ce n est pas un commentaire",
+        "INSERT INTO t (c) VALUES ('a--b'); SELECT 1;",
+        ["INSERT INTO t (c) VALUES ('a--b')", "SELECT 1"],
+    ),
+]
+
+
+def verifier_qualification() -> int:
+    """RT-6a — un manque de CONFIGURATION doit devenir un non-testable nommé, pas un silence.
+
+    Le mécanisme ne se déclenche que sur un projet réellement mal configuré : aucun banc ne
+    peut donc l exercer. Il est vérifié ici sur pièces, faute de quoi il pourrait pourrir sans
+    que rien ne le dise — exactement le genre d angle mort que le framework existe pour ôter.
+    """
+    from forge_tests import qualification
+    from forge_tests.noyau import SortieAdaptateur
+
+    echecs = 0
+    print("-" * 78)
+    print("  RT-6a — qualification : ce que la configuration absente rend non testable")
+
+    traces = [
+        ("KeyError Python", "KeyError: 'ZZ_JETON_CLIENT'", "ZZ_JETON_CLIENT"),
+        ("message explicite", "RuntimeError: ZZ_CLE_API is not set", "ZZ_CLE_API"),
+        ("pydantic-settings", "ZZ_MOT_DE_PASSE\n  Field required", "ZZ_MOT_DE_PASSE"),
+        ("saut pytest", "SKIPPED [1] tests/test_x.py:4: requires ZZ_URL_TIERS", "ZZ_URL_TIERS"),
+    ]
+    for libelle, trace, attendu in traces:
+        qualification.oublier("/projet-fictif")
+        trouves = qualification.detecter("/projet-fictif", "backend", trace)
+        ok = attendu in trouves
+        echecs += not ok
+        print(f"  [{'OK     ' if ok else 'ECHEC  '}] detection — {libelle} ({attendu})")
+
+    # Une variable CITEE mais FOURNIE n est pas un manque : ce serait du bruit, pas un fait.
+    os.environ["ZZ_DEJA_FOURNIE"] = "valeur"
+    qualification.oublier("/projet-fictif")
+    bruit = qualification.detecter("/projet-fictif", "backend", "KeyError: 'ZZ_DEJA_FOURNIE'")
+    ok = not bruit
+    echecs += not ok
+    print(f"  [{'OK     ' if ok else 'ECHEC  '}] une variable FOURNIE n est pas declaree manquante")
+    del os.environ["ZZ_DEJA_FOURNIE"]
+
+    # Bout en bout : trace -> declaration -> non_testables portes par la sortie d adaptateur.
+    qualification.oublier("/projet-fictif")
+    qualification.detecter("/projet-fictif", "backend", "KeyError: 'ZZ_JETON_CLIENT'")
+    sortie = SortieAdaptateur("api-fictif", "api", "/projet-fictif", "SKIP")
+    qualification.qualifier([sortie], Path("/projet-fictif"), {})
+    ok = bool(sortie.non_testables) and sortie.non_testables[0].champs_requis == ["ZZ_JETON_CLIENT"]
+    echecs += not ok
+    print(f"  [{'OK     ' if ok else 'ECHEC  '}] un pan SKIP mal configure porte ses champs_requis")
+    qualification.oublier("/projet-fictif")
+    return echecs
+
+
+def verifier_lecture_sql() -> int:
+    """Nombre de cas de lecture SQL en echec. Zero attendu."""
+    from forge_tests.sql import decouper
+
+    echecs = 0
+    print("-" * 78)
+    print("  RT-8 — lecture SQL : filtrer AVANT de decouper")
+    for libelle, source, attendu in LECTURE_SQL:
+        obtenu = decouper(source)
+        ok = obtenu == attendu
+        echecs += not ok
+        print(f"  [{'OK     ' if ok else 'ECHEC  '}] {libelle}")
+        if not ok:
+            print(f"             attendu {attendu}")
+            print(f"             obtenu  {obtenu}")
+    return echecs
 
 
 def _findings(rapport: dict, prefixes: tuple[str, ...]) -> list[dict]:
@@ -85,7 +195,24 @@ def main() -> int:
         print(f"                 - {f['id']}")
     print(f"  verdicts   : rouge={rouge['verdict']} · vert={vert['verdict']}")
 
-    succes = detectes == len(CORPUS) and not bloquants_vert
+    # RT-6a — la section existe TOUJOURS, meme vide : son absence serait indiscernable d un
+    # « rien a signaler », qui est precisement le silence que le framework interdit.
+    for nom, rap in (("ROUGE", rouge), ("VERT", vert)):
+        assert "non_testables" in rap, f"banc {nom} : section non_testables absente du rapport"
+    print(
+        f"  non_testables : rouge={len(rouge['non_testables'])} · "
+        f"vert={len(vert['non_testables'])} (section presente dans les deux)"
+    )
+
+    echecs_sql = verifier_lecture_sql()
+    echecs_qualification = verifier_qualification()
+
+    succes = (
+        detectes == len(CORPUS)
+        and not bloquants_vert
+        and not echecs_sql
+        and not echecs_qualification
+    )
     print("=" * 78)
     print("  S-01 TENU" if succes else "  S-01 NON TENU")
     return 0 if succes else 1
