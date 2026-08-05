@@ -46,9 +46,15 @@ def capturer(cible: Path) -> dict[str, Path]:
     """Ecrit le DOM rendu de chaque route dans `<cible>/.visuel/`. Reutilise la mecanique a11y."""
     from forge_tests.adaptateurs.accessibilite import _capturer
 
+    routes = _routes(cible)
+    # G-1 (lecture seule) : sans ce garde, un projet SANS route — front servi par le backend,
+    # projet purement API — se voyait creer un dossier `.visuel/` vide alors qu il n y avait
+    # RIEN a capturer : une ecriture dans l arbre audite, pour un pan qui allait conclure SKIP.
+    if not routes:
+        return {}
     dossier = cible / DOSSIER
     dossier.mkdir(parents=True, exist_ok=True)
-    return _capturer(cible, _routes(cible), dossier)
+    return _capturer(cible, routes, dossier)
 
 
 def _juger(page: Path, accepter: bool = False) -> dict | None:
