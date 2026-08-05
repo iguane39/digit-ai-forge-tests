@@ -11,9 +11,28 @@ constate.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
+
+
+def _lecteur_sql():
+    """Charge `forge_tests/sql.py` PAR CHEMIN, sans importer le paquet.
+
+    Ce script tourne dans l interpréteur du PROJET analysé, qui n a aucune raison de connaître
+    Forge Tests. Le charger par chemin évite d exiger le paquet là-bas, tout en gardant une
+    SEULE implémentation du découpage SQL — RT-8 corrigé ici comme dans les adaptateurs. Sans
+    ce partage, un `;` dans un commentaire faisait envoyer un fragment VIDE au moteur et
+    l introspection du schéma entier échouait : `schema_obtenu` rendait None et deux pans
+    perdaient leur contrôle d effet réel.
+    """
+    source = Path(__file__).resolve().parent.parent / "sql.py"
+    specification = importlib.util.spec_from_file_location("forge_tests_sql", source)
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
+
 
 REQUETE_CONTRAINTES = """
 SELECT c.conname
@@ -39,14 +58,14 @@ def main() -> int:
         destination.write_text(json.dumps({"erreur": str(exc)}), encoding="utf-8")
         return 2
 
+    lecteur = _lecteur_sql()
     migrations = sorted((racine / "migrations").glob("*.sql"))
     with PostgresContainer("postgres:16-alpine", driver="psycopg") as conteneur:
         moteur = create_engine(conteneur.get_connection_url())
         for migration in migrations:
             haut = migration.read_text(encoding="utf-8").partition("-- +migrate Down")[0]
-            haut = haut.replace("-- +migrate Up", "")
             with moteur.begin() as cx:
-                for instruction in [s.strip() for s in haut.split(";") if s.strip()]:
+                for instruction in lecteur.decouper(haut):
                     cx.execute(text(instruction))
         with moteur.connect() as cx:
             obtenu = {

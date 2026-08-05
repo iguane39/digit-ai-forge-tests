@@ -20,9 +20,57 @@ def _sections(chemin: Path) -> tuple[str, str]:
     return haut.replace("-- +migrate Up", ""), bas
 
 
+def _sans_commentaires(sql: str) -> str:
+    """Retire les commentaires `--` et `/* */`, littéraux `'...'` préservés.
+
+    Un runner de migrations qui découpe sur `;` AVANT de filtrer les commentaires envoie au
+    moteur un fragment vide dès qu un commentaire porte un point-virgule. C est exactement le
+    piège corrigé côté auditeur (RT-8) : filtrer d abord, découper ensuite.
+    """
+    morceaux, i, n = [], 0, len(sql)
+    while i < n:
+        if sql[i] == "'":
+            j = sql.find("'", i + 1)
+            j = n if j == -1 else j + 1
+            morceaux.append(sql[i:j])
+            i = j
+        elif sql.startswith("--", i):
+            saut = sql.find("\n", i)
+            morceaux.append("\n")
+            i = n if saut == -1 else saut + 1
+        elif sql.startswith("/*", i):
+            fin = sql.find("*/", i + 2)
+            morceaux.append(" ")
+            i = n if fin == -1 else fin + 2
+        else:
+            morceaux.append(sql[i])
+            i += 1
+    return "".join(morceaux)
+
+
+def _instructions(sql: str) -> list[str]:
+    propre = _sans_commentaires(sql)
+    morceaux, courante, i, n = [], [], 0, len(propre)
+    while i < n:
+        if propre[i] == "'":
+            j = propre.find("'", i + 1)
+            j = n if j == -1 else j + 1
+            courante.append(propre[i:j])
+            i = j
+        elif propre[i] == ";":
+            morceaux.append("".join(courante))
+            courante = []
+            i += 1
+        else:
+            courante.append(propre[i])
+            i += 1
+    morceaux.append("".join(courante))
+    return [m.strip() for m in morceaux if m.strip()]
+
+
 def _appliquer(moteur, sql: str) -> None:
     with moteur.begin() as cx:
-        for instruction in [s.strip() for s in sql.split(";") if s.strip()]:
+        for instruction in _instructions(sql):
             cx.execute(text(instruction))
 
 

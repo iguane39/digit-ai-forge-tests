@@ -14,6 +14,7 @@ from forge_tests.execution import (
 )
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
 from forge_tests.risque import coter
+from forge_tests.sql import decouper, sans_commentaires
 
 NOM, PAN, SEUIL = "migrations-sql", "migrations", 1.0
 SENS = ("aller", "retour", "rejeu")
@@ -103,9 +104,16 @@ def _downgrades_vides(cible: Path) -> list[Path]:
 
 
 def _instructions(section: str) -> list[str]:
-    """Instructions normalisées d une section de migration, comparables au relevé du moteur."""
-    brutes = [" ".join(s.split()) for s in section.split(";")]
-    return [s for s in brutes if s and not s.startswith("--")]
+    """Instructions normalisées d une section de migration, comparables au relevé du moteur.
+
+    RT-8 : le découpage se faisait sur `;` AVANT le filtrage des commentaires. Un `;` posé dans
+    un commentaire `--` fabriquait une instruction qui n avait jamais existé, que le moteur
+    n avait donc jamais vue, et la migration passait pour non exercée — un FAIL à tort constaté
+    en production sur `0004_catalogues.sql`. Symétriquement, une VRAIE instruction précédée d un
+    commentaire de tête était rejetée en bloc par le `startswith("--")` : la section entière
+    perdait son instruction la plus tardive. `forge_tests.sql` filtre d abord, découpe ensuite.
+    """
+    return decouper(section)
 
 
 def exerces(cible: Path) -> set[str] | None:
@@ -219,7 +227,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
         return sortie
     presents = set(schema["tables"]) | set(schema["contraintes"]) | set(schema["index"])
     for fichier in _fichiers(cible):
-        haut = _sections(fichier)[0]
+        # RT-8 generalise : lire les ANNONCES sur le texte brut faisait entrer a l inventaire
+        # un `CREATE TABLE` mis en commentaire — objet jamais cree, donc divergence fabriquee.
+        haut = sans_commentaires(_sections(fichier)[0])
         # `DROP CONSTRAINT x` n ANNONCE pas x, il le retire : le compter serait accuser la
         # migration qui defait au lieu de celle qui promet.
         annonces = set(re.findall(r"(?<!DROP )CONSTRAINT (\w+)", haut, re.IGNORECASE))

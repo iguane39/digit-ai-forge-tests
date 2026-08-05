@@ -14,6 +14,7 @@ from forge_tests.execution import (
 )
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
 from forge_tests.risque import coter
+from forge_tests.sql import sans_commentaires
 
 NOM, PAN, SEUIL = "data-sql", "data", 1.0
 _TABLE = re.compile(r"CREATE TABLE (\w+)\s*\(", re.IGNORECASE)
@@ -75,7 +76,12 @@ def inventaire(cible: Path) -> list[Element]:
     elements: list[Element] = []
     vus: set[str] = set()
     for fichier in _sql(cible):
-        haut = fichier.read_text(encoding="utf-8").partition("-- +migrate Down")[0]
+        # RT-8 generalise : les expressions regulieres d inventaire lisaient le TEXTE BRUT. Une
+        # table, un index ou une contrainte mis en COMMENTAIRE entraient donc a l inventaire —
+        # objets qui n existent pas, donc elements « jamais exerces » impossibles a couvrir.
+        haut = sans_commentaires(
+            fichier.read_text(encoding="utf-8").partition("-- +migrate Down")[0]
+        )
         for table in _TABLE.findall(haut):
             if f"table:{table}" not in vus and not table.endswith(("_nouveau", "_ancien")):
                 vus.add(f"table:{table}")
@@ -239,7 +245,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # une instruction peut s executer sans produire l objet qu on croit qu elle produit.
     schema = schema_obtenu(str(cible))
     if schema is None:
-        reference = " ".join(f.read_text(encoding="utf-8") for f in _sql(cible))
+        reference = " ".join(
+            sans_commentaires(f.read_text(encoding="utf-8")) for f in _sql(cible)
+        )
         sortie.non_juge.append(
             "data : schema reel non introspectable — divergence jugee sur le TEXTE des migrations"
         )
