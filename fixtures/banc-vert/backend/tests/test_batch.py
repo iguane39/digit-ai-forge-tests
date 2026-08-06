@@ -28,6 +28,16 @@ def test_b3_rejet_stock() -> None:
     assert res["rejets"] == [{"id": 3, "code": REJ_STOCK}]
 
 
+# B3bis — BORNE : un stock exactement egal a la quantite demandee SUFFIT.
+# « insuffisant » est une comparaison stricte ; la tester seulement loin de la borne
+# (stock 1 pour quantite 10) laisse passer un decalage d une unite.
+def test_b3_borne_stock_exactement_suffisant() -> None:
+    stock = {"curry": 5}
+    res = cloture_journaliere([_commande(3, quantite=5)], stock)
+    assert res["cloturees"] == [3] and res["rejets"] == []
+    assert stock["curry"] == 0
+
+
 # B4 — reprise au dernier point de contrôle
 def test_b4_reprise() -> None:
     journal = {"point_de_controle": [1], "cloturees": [1], "rejets": []}

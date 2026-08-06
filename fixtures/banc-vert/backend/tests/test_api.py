@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import COMMANDES, JETON, app
+from app.main import COMMANDES, JETON, _SEQ, app
 
 AUTH = {"Authorization": f"Bearer {JETON}"}
 CSV = "text/csv"
@@ -13,7 +13,13 @@ CSV = "text/csv"
 
 @pytest.fixture(autouse=True)
 def _isolation() -> None:
+    """Un test qui herite du compteur du precedent ne peut rien affirmer sur les identifiants.
+
+    Sans la remise a zero de `_SEQ`, aucune assertion ne pouvait porter sur la VALEUR du
+    premier identifiant : la mutation du compteur initial passait donc inapercue.
+    """
     COMMANDES.clear()
+    _SEQ["id"] = 0
 
 
 @pytest.fixture()
@@ -47,6 +53,18 @@ def test_lister_200(client: TestClient) -> None:
     assert client.get("/api/commandes", headers=AUTH).status_code == 200
 
 
+def test_lister_sans_filtre_rend_tout(client: TestClient) -> None:
+    """Sans `statut`, la liste rend TOUTES les commandes — pas une liste vide.
+
+    Le code 200 seul ne dit rien du corps : un filtre qui exclurait tout renverrait 200 avec
+    zero element, et la suite resterait verte.
+    """
+    _creer(client)
+    _creer(client)
+    corps = client.get("/api/commandes", headers=AUTH).json()
+    assert len(corps["commandes"]) == 2
+
+
 def test_lister_400_statut_inconnu(client: TestClient) -> None:
     assert client.get("/api/commandes?statut=zzz", headers=AUTH).status_code == 400
 
@@ -58,6 +76,12 @@ def test_lister_401(client: TestClient) -> None:
 # --- POST /api/commandes : 201, 400, 401, 422 ------------------------------------------------
 def test_creer_201(client: TestClient) -> None:
     assert _creer(client) >= 1
+
+
+def test_creer_premier_identifiant_vaut_un(client: TestClient) -> None:
+    """La sequence part de 1, pas d une valeur quelconque : `>= 1` ne l aurait jamais dit."""
+    assert _creer(client) == 1
+    assert _creer(client) == 2
 
 
 def test_creer_400_quantite_nulle(client: TestClient) -> None:

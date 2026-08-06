@@ -200,9 +200,25 @@ def _zones_litterales(texte: str) -> dict[int, list[tuple[int, int]]]:
     Muter à l intérieur d une chaîne ne mute pas du CODE. Pire : quand la même constante sert
     au code et au test (« REJ-VIDE », « utf-8 »), le mutant est équivalent par construction et
     survit toujours — il fait chuter le score sans jamais désigner une faiblesse de la suite.
+
+    **Les f-strings en font partie, et ne le faisaient pas.** Depuis Python 3.12, le texte d une
+    f-string n est plus un jeton `STRING` mais une suite de `FSTRING_MIDDLE` : ce filtre, écrit
+    sous 3.11, ne le reconnaissait plus. Chaque `f"colonnes attendues plat/quantite"` offrait
+    donc un mutant `/` -> `*` qui ne change QUE le libellé d un message — équivalent par
+    construction, survivant garanti. Constaté le 2026-08-06 : c est ce qui donnait 0,00 aux
+    modules `fournisseurs/` d ASD Mail Manager, dont le code est surtout fait de messages, et
+    ce qui rendait leur score illisible au lieu d accuser la suite à juste titre.
     """
     import io
     import tokenize
+
+    # `getattr` : les trois jetons n existent pas sous Python 3.11, où le filtre d origine
+    # suffisait. Le code doit rester juste sur les deux versions, pas sur la plus récente.
+    interdits = {tokenize.STRING, tokenize.COMMENT}
+    for nom in ("FSTRING_START", "FSTRING_MIDDLE", "FSTRING_END"):
+        jeton = getattr(tokenize, nom, None)
+        if jeton is not None:
+            interdits.add(jeton)
 
     zones: dict[int, list[tuple[int, int]]] = {}
     try:
@@ -210,7 +226,7 @@ def _zones_litterales(texte: str) -> dict[int, list[tuple[int, int]]]:
     except (tokenize.TokenError, IndentationError, SyntaxError):
         return zones
     for jeton in jetons:
-        if jeton.type not in (tokenize.STRING, tokenize.COMMENT):
+        if jeton.type not in interdits:
             continue
         (ligne_debut, col_debut), (ligne_fin, col_fin) = jeton.start, jeton.end
         for ligne in range(ligne_debut, ligne_fin + 1):

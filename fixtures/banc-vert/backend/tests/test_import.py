@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.importer import importer_csv
+from app.importer import _separateur, importer_csv
 
 BOM = b"\xef\xbb\xbf"
 
@@ -31,6 +31,15 @@ def test_f3_latin1() -> None:
 def test_f4_point_virgule() -> None:
     lignes, total = importer_csv(b"plat;quantite\ncurry;4\n")
     assert len(lignes) == 1 and total == 4
+
+
+# F4bis — BORNE de la regle : le point-virgule ne l emporte qu a la MAJORITE STRICTE.
+# A egalite, la virgule reste le separateur par defaut. Sans ce cas, la regle pouvait basculer
+# en « au moins autant » sans qu aucun test ne bronche.
+def test_f4_borne_a_egalite_la_virgule_lemporte() -> None:
+    assert _separateur("plat,quantite;note") == ","
+    assert _separateur("plat;quantite;note,x") == ";"
+    assert _separateur("plat,quantite") == ","
 
 
 # F5 — ligne vide en fin de fichier
