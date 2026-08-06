@@ -371,6 +371,24 @@
       "statut": "todo"
     },
     {
+      "id": "invariants-1ac7985d",
+      "domaine": "invariants",
+      "enonce": "invariants : extraits des gardes du code — donc l invariant TEL QU IMPLEMENTE, pas tel que voulu. Une garde fausse produit un cas qui confirme le bug au lieu de le reveler",
+      "statut": "todo"
+    },
+    {
+      "id": "invariants-caf00f8f",
+      "domaine": "invariants",
+      "enonce": "invariants : seules les gardes de forme simple sont lues (comparaison, appartenance, negation) ; une garde composee ou deportee dans une fonction n est pas extraite",
+      "statut": "todo"
+    },
+    {
+      "id": "invariants-d51221de",
+      "domaine": "invariants",
+      "enonce": "invariants : la resolution des gardes deportees s arrete a UN niveau d appel, par nom simple et dans le meme module (RT-9). Un helper qui en appelle un autre, un helper importe, un appel par attribut (`service.refuser()`) ou un status_code calcule restent invisibles — le code declare paraitra alors « jamais leve »",
+      "statut": "todo"
+    },
+    {
       "id": "migrations-sql-2fdea760",
       "domaine": "migrations-sql",
       "enonce": "migrations : l effet verifie est l EXISTENCE des objets nommes (tables, contraintes, index) apres application ; ni leur definition exacte, ni les donnees migrees",
@@ -386,6 +404,42 @@
       "id": "mutation-python-d8fe9aa8",
       "domaine": "mutation-python",
       "enonce": "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance, bornes numériques et suppression d instruction ; ni permutation d arguments, ni littéraux non numériques",
+      "statut": "todo"
+    },
+    {
+      "id": "mutation-python-5ae36d32",
+      "domaine": "mutation-python",
+      "enonce": "mutation : la profondeur est ECHANTILLONNEE par module (voir `mutation.taux_echantillon` au rapport) — un score de module porte sur les mutants JOUES, pas sur tous les mutants possibles ; le perimetre, lui, est total et ses exclusions sont nommees",
+      "statut": "todo"
+    },
+    {
+      "id": "mutation-python-2e5cde79",
+      "domaine": "mutation-python",
+      "enonce": "modules : un module est dit « exerce » des qu une ligne en est couverte — l etre ne dit pas qu il soit VERIFIE, c est le role du score de mutation qui l accompagne",
+      "statut": "todo"
+    },
+    {
+      "id": "qualif-navigateur-acab00ef",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : le pan LIT les ecouteurs attaches a chaque affordance, il ne CLIQUE jamais — sur une instance peuplee un clic ecrit vraiment (suppression, envoi, appel tiers facture). Un gestionnaire attache mais dont le corps ne fait rien passerait donc pour un effet",
+      "statut": "todo"
+    },
+    {
+      "id": "qualif-navigateur-3b3b73fc",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",
+      "statut": "todo"
+    },
+    {
+      "id": "qualif-navigateur-41ca0667",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : le marqueur de contenu par defaut est le titre de la page (premier `h1` non vide, sinon `title`) ; il atteste qu une page a RENDU quelque chose, pas qu elle ait rendu les BONNES donnees — un marqueur metier se declare par FORGE_TESTS_QUALIF_MARQUEURS",
+      "statut": "todo"
+    },
+    {
+      "id": "qualif-navigateur-31a319bb",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : quand une delegation d evenement est posee sur `document` ou `body`, aucun element ne peut plus etre declare inerte avec certitude — les elements concernes sont NOMMES en non_juge au lieu d etre accuses",
       "statut": "todo"
     },
     {

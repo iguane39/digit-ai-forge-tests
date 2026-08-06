@@ -28,6 +28,7 @@ def collecter() -> list[dict]:
         execution,
         generateur,
         generateur_data,
+        invariants,
         qualification,
         reprise,
         risque,
@@ -38,6 +39,10 @@ def collecter() -> list[dict]:
     sources: list[tuple[str, list[str]]] = [
         ("risque", list(risque.NON_JUGE)),
         ("execution", list(execution.NON_JUGE)),
+        # Les limites de l analyse STATIQUE des gardes (RT-9 : un seul niveau d appel resolu)
+        # etaient declarees dans `invariants` et collectees nulle part : elles ne figuraient au
+        # registre d aucun domaine. Une dette qui n entre pas au registre est de la prose.
+        ("invariants", list(invariants.NON_JUGE)),
         ("generateur", list(generateur.NON_JUGE)),
         ("generateur-data", list(generateur_data.NON_JUGE)),
         ("sql", list(sql.NON_JUGE)),

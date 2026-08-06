@@ -188,7 +188,12 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 ),
             ],
         )
-    sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)
+    # Le controle de divergence repose sur l analyse STATIQUE des gardes : ses limites (RT-9,
+    # un seul niveau d appel resolu) appartiennent au rapport de CE pan, pas a un module que
+    # personne ne lit. Elles etaient importees ici sans jamais etre publiees.
+    sortie = evaluer_surface(
+        NOM, PAN, str(cible), inv, couvert, SEUIL, [*NON_JUGE, *NON_JUGE_INV]
+    )
     # `couvert` non nul veut dire que la suite a fini VERTE (sinon la mesure vaudrait None).
     # Vide malgre un inventaire fourni : la sonde n a vu passer aucune requete.
     if inv and not couvert:
