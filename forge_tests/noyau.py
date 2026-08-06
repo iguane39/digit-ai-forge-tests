@@ -66,6 +66,9 @@ class SortieAdaptateur:
     mutation: dict | None = None
     # RT-6a : tout adaptateur peut en declarer ; le noyau les agrege, comme les `non_juge`.
     non_testables: list[NonTestable] = field(default_factory=list)
+    # A-2 : inventaire des modules SOURCES du projet, avec l etat de chacun. Porte par
+    # l adaptateur qui connait l arborescence du code ; agrege tel quel par le noyau.
+    modules: list[dict] = field(default_factory=list)
 
     def json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False, indent=2)
@@ -177,18 +180,43 @@ def verifier_regle_conjointe(sorties: list[SortieAdaptateur]) -> None:
         )
 
 
-def rapport(sorties: list[SortieAdaptateur], pans_attendus: list[str]) -> dict:
-    """Assemble le rapport. Un pan sans adaptateur est NOMME, jamais omis."""
+POUR_COUVRIR_DEFAUT = (
+    "écrire l adaptateur du pan, ou fournir au projet la convention qu il attend — voir "
+    "« Contrat du projet audité » au README"
+)
+
+
+def rapport(
+    sorties: list[SortieAdaptateur],
+    pans_attendus: list[str],
+    pour_couvrir: dict[str, str] | None = None,
+    modules: list[dict] | None = None,
+) -> dict:
+    """Assemble le rapport. Un pan sans adaptateur est NOMME, jamais omis.
+
+    A-5 : un pan non couvert ne sort plus un simple motif — il sort ce qu il FAUDRAIT pour le
+    couvrir. Un motif seul est un constat ; le couple motif + chemin est une action.
+    """
     from forge_tests.risque import NON_JUGE as NON_JUGE_RISQUE
+    from forge_tests.seuils import au_rapport as seuils_au_rapport
 
     verifier_regle_conjointe(sorties)
+    chemins = pour_couvrir or {}
     couverts = {s.pan for s in sorties if s.verdict != "SKIP"}
-    non_couverts = [p for p in pans_attendus if p not in couverts]
     motifs_skip = {
         s.pan: s.non_juge[-1] if s.non_juge else "sans motif"
         for s in sorties
         if s.verdict == "SKIP"
     }
+    non_couverts = [
+        {
+            "pan": p,
+            "motif": motifs_skip.get(p, "adaptateur absent : aucun module ne traite ce pan"),
+            "pour_couvrir": chemins.get(p, POUR_COUVRIR_DEFAUT),
+        }
+        for p in pans_attendus
+        if p not in couverts
+    ]
     # Le PAN de chaque finding est porte au rapport : sans lui, une reprise ne sait pas quels
     # findings d un rapport anterieur appartiennent a un pan qu elle ne rejoue pas (RT-6b).
     tous = sorted(
@@ -207,6 +235,12 @@ def rapport(sorties: list[SortieAdaptateur], pans_attendus: list[str]) -> dict:
             s.pan: s.surface for s in sorties if s.surface is not None
         },
         "mutation": {s.pan: s.mutation for s in sorties if s.mutation is not None},
+        # A-3 : les seuils opposables, valeur ET justification, dans le rapport lui-meme.
+        "seuils": seuils_au_rapport(),
+        # A-2 : l inventaire des modules SOURCES — exerce, mute, ou jamais exerce et NOMME.
+        "modules": modules if modules is not None else [
+            m for s in sorties for m in s.modules
+        ],
         "pans_non_couverts": non_couverts,
         "motifs_non_couverture": motifs_skip,
         "bandes_de_risque": bandes,

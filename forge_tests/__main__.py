@@ -26,7 +26,14 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     # RT-6a — point d application UNIQUE : ce qu aucune execution ne pouvait atteindre FAUTE DE
     # CONFIGURATION est nomme ici, pour tous les adaptateurs, avec les champs a fournir.
     qualifier(sorties, cible, REGISTRE)
-    return rapport(sorties, PANS_ATTENDUS)
+    # A-5 — le chemin de couverture est declare PAR L ADAPTATEUR (il sait ce qui lui manque),
+    # jamais par le noyau : celui-ci ne connait aucune technologie et ne saurait pas quoi dire.
+    chemins = {
+        module.PAN: getattr(module, "POUR_COUVRIR", None)
+        for module in REGISTRE.values()
+        if hasattr(module, "PAN") and getattr(module, "POUR_COUVRIR", None)
+    }
+    return rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins)
 
 
 def _resume(rap: dict) -> str:
@@ -42,13 +49,41 @@ def _resume(rap: dict) -> str:
         lignes.append(
             f"  {pan + ' (mutation)':<12} {mutation['tues']:>3}/{mutation['mutants_viables']:<3} "
             f"= {mutation['score']:.0%} tués"
+            + (
+                f" · {mutation['modules_mutes']}/{mutation['modules_inventories']} modules mutés"
+                if "modules_mutes" in mutation
+                else ""
+            )
         )
+    if rap.get("seuils"):
+        lignes.append("")
+        lignes.append("seuils opposables (versionnés dans forge_tests/seuils.py)")
+        for nom, detail in sorted(rap["seuils"].items()):
+            lignes.append(
+                f"  {nom:<28} {detail['valeur']:>6.0%}  [{detail['severite']}] "
+                f"{detail['porte_sur']}"
+            )
+    modules = rap.get("modules") or []
+    if modules:
+        exerces = [m for m in modules if m.get("exerce")]
+        jamais = [m for m in modules if m.get("exerce") is False]
+        mutes = [m for m in modules if m.get("mute")]
+        exclus = [m for m in modules if m.get("exclu")]
+        lignes.append("")
+        lignes.append(
+            f"modules sources : {len(modules)} inventoriés · {len(exerces)} exercés · "
+            f"{len(mutes)} mutés · {len(jamais)} JAMAIS exercés · {len(exclus)} exclus"
+        )
+        for module in jamais:
+            lignes.append(f"  JAMAIS EXERCE  {module['module']}")
+        for module in exclus:
+            lignes.append(f"  exclu          {module['module']} — {module['exclu'][:70]}")
     if rap["pans_non_couverts"]:
         lignes.append("")
-        lignes.append("pans NON COUVERTS — chacun avec son motif, jamais silencieux :")
-        for pan in rap["pans_non_couverts"]:
-            motif = rap.get("motifs_non_couverture", {}).get(pan, "adaptateur absent")
-            lignes.append(f"  {pan:<14} {motif[:100]}")
+        lignes.append("pans NON COUVERTS — motif ET chemin de couverture, jamais un constat seul :")
+        for entree in rap["pans_non_couverts"]:
+            lignes.append(f"  {entree['pan']:<14} {entree['motif'][:100]}")
+            lignes.append(f"  {'':<14} pour couvrir -> {entree['pour_couvrir'][:110]}")
     reprise = rap.get("reprise")
     if reprise:
         lignes.append("")

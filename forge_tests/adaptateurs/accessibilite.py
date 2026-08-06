@@ -24,6 +24,13 @@ from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
 NOM, PAN = "accessibilite-a11y", "accessibilite"
+
+# A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
+POUR_COUVRIR = (
+    "servir le front (build present et `npm`/navigateur disponibles) ou declarer l instance "
+    "SERVIE dans FORGE_TESTS_BASE_URL : le pan juge le DOM RENDU de chaque route, il n a rien "
+    "a lire tant qu aucune page n est rendue"
+)
 _ORACLE = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts" / "oracle-a11y.py"
 
 NON_JUGE = [

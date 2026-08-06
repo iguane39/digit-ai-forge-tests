@@ -14,6 +14,12 @@ from forge_tests.execution import executees, motif_indisponibilite
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "fichiers-python", "fichiers", 1.0
+
+# A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
+POUR_COUVRIR = (
+    "exposer le module d import/parsing sous `backend/app/importer.py` (ou un nom portant "
+    "`import`/`parse`/`fichier`) et exercer chacun de ses chemins d erreur"
+)
 FICHIER = "importer.py"
 
 NON_JUGE = [

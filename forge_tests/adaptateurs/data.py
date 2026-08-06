@@ -17,6 +17,13 @@ from forge_tests.risque import coter
 from forge_tests.sql import sans_commentaires
 
 NOM, PAN, SEUIL = "data-sql", "data", 1.0
+
+# A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
+POUR_COUVRIR = (
+    "nommer les contraintes de la base `<type>_<table>_<colonne>` dans les migrations, et "
+    "exercer chaque contrainte PAR VIOLATION dans la suite — la sonde data releve les "
+    "violations reellement levees par le moteur (SQLAlchemy ou sqlite3)"
+)
 _TABLE = re.compile(r"CREATE TABLE (\w+)\s*\(", re.IGNORECASE)
 _CONTRAINTE = re.compile(r"CONSTRAINT (\w+)", re.IGNORECASE)
 _NOT_NULL = re.compile(r"^\s*(\w+)\s+\w+\s+NOT NULL", re.IGNORECASE | re.MULTILINE)

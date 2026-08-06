@@ -13,6 +13,13 @@ from forge_tests.execution import front_execute, motif_indisponibilite
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "front-react", "front", 0.90
+
+# A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
+POUR_COUVRIR = (
+    "installer les dependances du front (`frontend/node_modules`), rendre la suite Playwright "
+    "du projet verte, et marquer les elements manipules par `data-testid` — la trace "
+    "Playwright est la source de ce qui a ete REELLEMENT atteint"
+)
 _ROUTE = re.compile(r'path:\s*"([^"]+)"')
 _TESTID = re.compile(r'data-testid="([^"]+)"')
 _GOTO = re.compile(r'goto\(\s*"([^"]+)"')

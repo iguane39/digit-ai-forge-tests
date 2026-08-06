@@ -21,6 +21,12 @@ from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
 NOM, PAN = "securite-oracles", "securite"
+
+# A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
+POUR_COUVRIR = (
+    "fournir des sources Python lisibles sous `backend/` : le pan est un controle statique, "
+    "il n a besoin d aucune execution mais il lui faut du code a lire"
+)
 ORACLES = ("sast", "secrets", "sca")
 
 _DEFAUT = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts"

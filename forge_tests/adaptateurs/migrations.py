@@ -17,6 +17,13 @@ from forge_tests.risque import coter
 from forge_tests.sql import decouper, sans_commentaires
 
 NOM, PAN, SEUIL = "migrations-sql", "migrations", 1.0
+
+# A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
+POUR_COUVRIR = (
+    "deposer les migrations sous `backend/migrations/*.sql` avec les marqueurs `-- +migrate "
+    "Up` / `-- +migrate Down`, et laisser le projet rejouable sur base neuve — le pan "
+    "applique REELLEMENT le DDL, il ne le lit pas"
+)
 SENS = ("aller", "retour", "rejeu")
 _MOTS = {
     "aller": ("aller", "up", "upgrade"),

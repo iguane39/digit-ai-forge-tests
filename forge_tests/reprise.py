@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from forge_tests.noyau import bande
+from forge_tests.noyau import POUR_COUVRIR_DEFAUT, bande
 
 NON_JUGE = [
     "reprise : la re-execution a la granularite du PAN — un pan qui doit etre rejoue l est en "
@@ -54,9 +54,24 @@ def _exerces(rapport: dict, pan: str) -> set[str]:
     return set(_surface(rapport, pan).get("elements_exerces") or [])
 
 
+def _noms_non_couverts(rapport: dict) -> list[str]:
+    """Noms des pans non couverts, quelle que soit la FORME du champ.
+
+    A-5 a enrichi `pans_non_couverts` de `[pan]` en `[{pan, motif, pour_couvrir}]`. Un rapport
+    produit avant ce changement reste relisible : une reprise qui refuserait les anciens
+    rapports transformerait une amélioration de rapport en rupture d outil.
+    """
+    noms: list[str] = []
+    for entree in rapport.get("pans_non_couverts") or []:
+        nom = entree.get("pan") if isinstance(entree, dict) else entree
+        if nom:
+            noms.append(str(nom))
+    return noms
+
+
 def pans_a_rejouer(ancien: dict) -> list[str]:
     """Pans qui ne sont PAS déjà verts : non couverts, incomplets, en échec, ou non testables."""
-    a_rejouer: set[str] = set(ancien.get("pans_non_couverts") or [])
+    a_rejouer: set[str] = set(_noms_non_couverts(ancien))
     for entree in ancien.get("adaptateurs") or []:
         if entree.get("verdict") != "PASS":
             a_rejouer.add(entree.get("pan", ""))
@@ -171,7 +186,22 @@ def fusionner(
         **(nouveau.get("motifs_non_couverture") or {}),
     }
     couverts = {pan for pan, e in adaptateurs.items() if e.get("verdict") != "SKIP"}
-    non_couverts = [p for p in pans_attendus if p not in couverts]
+    # A-5 : le chemin de couverture de chaque pan est repris du rapport qui le portait — le
+    # neuf d abord, l ancien à défaut. Il n est jamais réinventé ici.
+    chemins: dict[str, str] = {}
+    for source in (ancien, nouveau):
+        for entree in source.get("pans_non_couverts") or []:
+            if isinstance(entree, dict) and entree.get("pan") and entree.get("pour_couvrir"):
+                chemins.setdefault(entree["pan"], entree["pour_couvrir"])
+    non_couverts = [
+        {
+            "pan": p,
+            "motif": motifs.get(p, "adaptateur absent : aucun module ne traite ce pan"),
+            "pour_couvrir": chemins.get(p, POUR_COUVRIR_DEFAUT),
+        }
+        for p in pans_attendus
+        if p not in couverts
+    ]
 
     mutation = {
         pan: valeur for pan, valeur in (ancien.get("mutation") or {}).items()
@@ -183,8 +213,14 @@ def fusionner(
         "adaptateurs": [adaptateurs[p] for p in sorted(adaptateurs)],
         "couverture_par_pan": couverture,
         "mutation": mutation,
+        # A-3/A-2 : les seuils et l inventaire de modules viennent du rapport qui les a
+        # MESURES — le neuf s il a rejoue le pan back, l ancien sinon. Jamais recalcules ici.
+        "seuils": nouveau.get("seuils") or ancien.get("seuils") or {},
+        "modules": nouveau.get("modules") or ancien.get("modules") or [],
         "pans_non_couverts": non_couverts,
-        "motifs_non_couverture": {p: motifs[p] for p in non_couverts if p in motifs},
+        "motifs_non_couverture": {
+            e["pan"]: motifs[e["pan"]] for e in non_couverts if e["pan"] in motifs
+        },
         "bandes_de_risque": bandes,
         "findings": findings,
         "non_testables": non_testables,

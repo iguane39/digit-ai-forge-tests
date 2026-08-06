@@ -25,6 +25,13 @@ from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
 NOM, PAN = "visuel-golden", "visuel"
+
+# A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
+POUR_COUVRIR = (
+    "servir le front pour que chaque route soit capturable, puis ACCEPTER les goldens hors "
+    "boucle (`--accepter`) : aucun golden n est cree pendant un run, un rendu qui vient d "
+    "echouer ne s enterine pas tout seul"
+)
 DOSSIER = ".visuel"
 _ORACLE = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts" / "oracle-visual-diff.py"
 

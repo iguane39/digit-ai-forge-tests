@@ -29,6 +29,13 @@ from forge_tests.risque import coter
 
 NOM, PAN, SEUIL = "interface-statique", "interface", 1.0
 
+# A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
+POUR_COUVRIR = (
+    "fournir au moins un gabarit servi (.html, .jinja, .twig...) hors artefacts de "
+    "construction : le pan lit les affordances du GABARIT, les composants de framework "
+    "(.jsx/.vue) relevent du pan front"
+)
+
 # Gabarits rendus tels quels par un serveur ou servis en statique. Les composants de framework
 # (.jsx, .tsx, .vue, .svelte) sont volontairement HORS périmètre : leur câblage est une
 # expression du langage, pas un attribut du gabarit — les juger ici produirait du faux positif.
