@@ -229,9 +229,23 @@ def mesurer(banc_str: str) -> dict | None:
         )
         for chemin, detail in donnees.get("files", {}).items()
     }
+    # A-2 — le relevé par NOM DE FICHIER suffisait tant que le périmètre muté tenait dans un
+    # seul dossier plat. Dès qu on descend dans `services/` et `fournisseurs/`, deux modules
+    # peuvent porter le même nom : l inventaire de modules a besoin du chemin RELATIF complet,
+    # et du résumé chiffré (lignes, branches) que coverage publie déjà par fichier.
+    resume = {
+        Path(chemin).as_posix(): {
+            "lignes_couvertes": int(detail.get("summary", {}).get("covered_lines", 0)),
+            "lignes_total": int(detail.get("summary", {}).get("num_statements", 0)),
+            "branches_couvertes": int(detail.get("summary", {}).get("covered_branches", 0)),
+            "branches_total": int(detail.get("summary", {}).get("num_branches", 0)),
+        }
+        for chemin, detail in donnees.get("files", {}).items()
+    }
     return {
         "lignes": lignes,
         "arcs": arcs,
+        "resume_fichiers": resume,
         "codes": codes,
         "violations": violations,
         "instructions": instructions,
@@ -251,6 +265,16 @@ def violations_levees(banc: Path) -> list[str] | None:
     """Messages de violation de contrainte reellement levees par la base pendant la suite."""
     mesure = mesurer(str(banc))
     return None if mesure is None else mesure["violations"]
+
+
+def resume_fichiers(banc: Path) -> dict[str, dict] | None:
+    """Lignes et branches couvertes PAR FICHIER (chemin relatif au dossier `backend`).
+
+    None = la suite n a pas pu être exécutée. Un dictionnaire VIDE dirait autre chose : que la
+    suite a tourné sans rien couvrir. Les deux ne se confondent jamais.
+    """
+    mesure = mesurer(str(banc))
+    return None if mesure is None else mesure["resume_fichiers"]
 
 
 def arcs_executes(banc: Path, fichier: str) -> frozenset[tuple[int, int]] | None:
