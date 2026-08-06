@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Banc rouge — accueil de qualification</title>
+</head>
+<body>
+  <h1>Commandes de repas — accueil</h1>
+  <nav>
+    <a href="/liste.html">Voir les commandes</a>
+    <a href="/fiche.html">Fiche de la commande 1</a>
+    <a href="/rapports.html">Rapports mensuels</a>
+  </nav>
+  <p>Instance peuplée : 2 commandes enregistrées, 1 import traité.</p>
+  <table>
+    <tr><th>Commande</th><th>Plat</th><th>Quantité</th></tr>
+    <tr><td>1</td><td>Lasagnes</td><td>3</td></tr>
+    <tr><td>2</td><td>Poke bowl</td><td>1</td></tr>
+  </table>
+  <!-- Defaut plante n° 1 : affordance sans le moindre effet, ni attribut ni ecouteur. -->
+  <button id="btn-export-fantome">Exporter en CSV</button>
+  <!-- Defaut plante n° 2 : erreur console au chargement de la page. -->
+  <script>
+    console.error("chargement des totaux impossible : reponse inattendue du service");
+  </script>
+</body>
+</html>
