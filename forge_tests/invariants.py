@@ -28,6 +28,10 @@ NON_JUGE = [
     "voulu. Une garde fausse produit un cas qui confirme le bug au lieu de le reveler",
     "invariants : seules les gardes de forme simple sont lues (comparaison, appartenance, "
     "negation) ; une garde composee ou deportee dans une fonction n est pas extraite",
+    "invariants : la resolution des gardes deportees s arrete a UN niveau d appel, par nom "
+    "simple et dans le meme module (RT-9). Un helper qui en appelle un autre, un helper importe, "
+    "un appel par attribut (`service.refuser()`) ou un status_code calcule restent invisibles — "
+    "le code declare paraitra alors « jamais leve »",
 ]
 
 
@@ -169,6 +173,20 @@ def handlers(source: Path) -> dict[tuple[str, str], str]:
     return table
 
 
+def _appels_locaux(fonction: ast.AST) -> set[str]:
+    """Noms des fonctions du MÊME module appelées par celle-ci — `f()`, jamais `obj.f()`.
+
+    Un appel par attribut (`service.refuser()`) désigne un objet dont on ne sait pas, sans
+    résolution de types, quel code il exécute : le suivre serait deviner. Un appel par nom
+    simple, lui, se résout par lecture du module — c est la seule forme retenue.
+    """
+    appeles: set[str] = set()
+    for noeud in ast.walk(fonction):
+        if isinstance(noeud, ast.Call) and isinstance(noeud.func, ast.Name):
+            appeles.add(noeud.func.id)
+    return appeles
+
+
 def codes_par_fonction(source: Path) -> dict[str, set[int]]:
     """Codes HTTP levés par chaque fonction, QUEL QUE SOIT le contexte de la levée.
 
@@ -176,11 +194,24 @@ def codes_par_fonction(source: Path) -> dict[str, set[int]]:
     que la garde soit un `if`, un `except` ou un `assert`. `extraire` ne retient que les gardes
     dont on sait DERIVER la valeur declenchante — c est un sous-ensemble strict, utile a la
     generation, trompeur pour la detection de divergence.
+
+    **RT-9 (2026-08-06) — un niveau d appel est résolu.** L analyse ne reconnaissait que le
+    `raise … status_code=<littéral>` écrit DANS le corps de la route. Un produit réel qui
+    factorise son refus dans un helper (`_refuser_doublon()` d ASD Mail Manager, qui lève le
+    409) voyait donc son 409 déclaré « jamais levé » : deux passes de correction sur le produit
+    avant de retrouver la forme que l outil attendait — l outil imposait un style d écriture au
+    lieu de lire le comportement. Une fonction qui appelle, par son nom simple, un helper du
+    même module dont le corps lève avec un `status_code` constant hérite désormais de ce code.
+
+    Limite résiduelle, DÉCLARÉE (voir « Contrat du projet audité » au README) : un seul niveau.
+    Un helper qui en appelle un autre, un helper importé d un autre module, un helper atteint
+    par attribut (`self.refuser()`, `service.refuser()`) ou un code calculé restent invisibles.
     """
     if not source.exists():
         return {}
     arbre = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
-    table: dict[str, set[int]] = {}
+    directs: dict[str, set[int]] = {}
+    appels: dict[str, set[str]] = {}
     for fonction in ast.walk(arbre):
         if not isinstance(fonction, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -193,6 +224,18 @@ def codes_par_fonction(source: Path) -> dict[str, set[int]]:
                     valeur = _litteral(mot.value)
                     if isinstance(valeur, int):
                         codes.add(valeur)
-        if codes:
-            table[fonction.name] = codes
+        directs[fonction.name] = codes
+        appels[fonction.name] = _appels_locaux(fonction)
+
+    table: dict[str, set[int]] = {}
+    for nom, codes in directs.items():
+        herites = {
+            code
+            for appele in appels.get(nom, set())
+            if appele != nom  # une recursion n apporte aucun code nouveau
+            for code in directs.get(appele, set())
+        }
+        total = codes | herites
+        if total:
+            table[nom] = total
     return table

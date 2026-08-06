@@ -12,6 +12,14 @@ from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surfac
 from forge_tests.risque import coter
 
 NOM, PAN, SEUIL = "api-fastapi", "api", 1.0
+
+# A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
+POUR_COUVRIR = (
+    "declarer l application ASGI du projet dans `<projet>/.env.forge-tests` "
+    "(FORGE_TESTS_APP=« module:attribut ») et rendre la suite backend verte sous `coverage` — "
+    "voir la section « Contrat du projet audite » du README"
+)
+
 _ROUTE = re.compile(r'@app\.(get|post|patch|put|delete)\(\s*"([^"]+)"(.*?)\)\s*\n', re.DOTALL)
 _CODE = re.compile(r"(\d{3})\s*:")
 _APPEL = re.compile(r'client\.(get|post|patch|put|delete)\(\s*f?"([^"]+)"')
@@ -31,6 +39,46 @@ AVERTISSEMENT_SONDE_MUETTE = (
     'designee ; la designer avec FORGE_TESTS_APP="module:attribut" (l attribut peut etre une '
     "fabrique). Voir « Contrat du projet audite » au README"
 )
+
+
+def _montages(cible: Path) -> list[str]:
+    """Préfixes montés par `app.mount(...)` — fichiers statiques et sous-applications.
+
+    RT-10. Un montage n est pas une route : il n a pas de décorateur, donc pas de `responses=`,
+    et FastAPI n offre AUCUN moyen d en déclarer un. Le contrôle de divergence « code émis mais
+    absent de sa déclaration `responses=` » y produisait donc un finding STRUCTURELLEMENT
+    incorrigeable côté produit — constaté sur `GET /static/app.js` d ASD Mail Manager. Un
+    montage est réputé émettre 200 (fichier servi) et 404 (fichier absent) ; les deux sont le
+    comportement documenté de Starlette, pas une promesse du projet.
+    """
+    src = cible / "backend" / "app" / "main.py"
+    if not src.exists():
+        return []
+    import ast
+
+    try:
+        arbre = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))
+    except SyntaxError:
+        return []
+    prefixes: list[str] = []
+    for noeud in ast.walk(arbre):
+        if not isinstance(noeud, ast.Call) or not isinstance(noeud.func, ast.Attribute):
+            continue
+        if noeud.func.attr != "mount" or not noeud.args:
+            continue
+        premier = noeud.args[0]
+        if isinstance(premier, ast.Constant) and isinstance(premier.value, str):
+            prefixes.append(premier.value.rstrip("/") or "/")
+    return sorted(set(prefixes))
+
+
+def _sous_montage(identifiant: str, prefixes: list[str]) -> bool:
+    """L identifiant `code:GET /static/{} =200` porte-t-il sur un chemin monté ?"""
+    if not prefixes:
+        return False
+    signature = identifiant[len("code:") :].rsplit("=", 1)[0]
+    _, _, chemin = signature.partition(" ")
+    return any(chemin == prefixe or chemin.startswith(prefixe + "/") for prefixe in prefixes)
 
 
 def _norm(chemin: str) -> str:
@@ -186,8 +234,17 @@ def analyser(cible: Path) -> SortieAdaptateur:
             sortie.verdict = "FAIL"
 
     declares = {e.id for e in inv if e.id.startswith("code:")}
+    prefixes = _montages(cible)
+    if prefixes:
+        sortie.non_juge.append(
+            "api : montage(s) " + ", ".join(prefixes) + " EXCLUS du controle de divergence "
+            "(RT-10) — un `app.mount()` ne peut pas declarer de `responses=`, ses codes sont "
+            "reputes 200 (servi) et 404 (absent) par le cadre, pas promis par le projet"
+        )
     for identifiant in sorted(couvert - declares):
         if not identifiant.startswith("code:"):
+            continue
+        if _sous_montage(identifiant, prefixes):
             continue
         sortie.findings.append(
             Finding(
