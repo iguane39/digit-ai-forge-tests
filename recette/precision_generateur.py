@@ -16,6 +16,7 @@ garde-fou G-2 interdit.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -23,6 +24,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Le garde-fou que `verifier_corpus.py` posait et que celui-ci avait oublie. Sans lui, les pans
+# `accessibilite` et `visuel` visent l instance SERVIE decrite par le `.env` de l operateur —
+# et, plus grave que de fausser la mesure, ils ECRIVENT le DOM de cette instance etrangere dans
+# `fixtures/banc-*/.visuel/`. Constate le 2026-08-06 : lancer cette recette remplacait les
+# captures des bancs par celles d un projet client, sans que rien ne le dise. Un outil qui
+# pollue ses propres bancs de reference perd la seule chose qui rend ses verdicts comparables.
+os.environ["FORGE_TESTS_BASE_URL"] = ""
 
 from forge_tests.__main__ import analyser  # noqa: E402
 from forge_tests.execution import schema_openapi  # noqa: E402

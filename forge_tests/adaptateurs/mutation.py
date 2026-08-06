@@ -250,6 +250,72 @@ def generer_mutants(source: Path, nom_court: str) -> list[Mutant]:
     return mutants
 
 
+def appliquer(original: str, mutant: Mutant) -> str:
+    """Source du module une fois le mutant posé."""
+    lignes = original.splitlines()
+    ligne = lignes[mutant.ligne]
+    lignes[mutant.ligne] = (
+        ligne[: mutant.colonne] + mutant.apres + ligne[mutant.colonne + len(mutant.avant) :]
+    )
+    return "\n".join(lignes) + "\n"
+
+
+def poser(fichier: Path, texte: str) -> None:
+    """Écrit un mutant SANS traduction de fins de ligne.
+
+    `Path.write_text` passe par `open(mode="w")`, qui traduit `\\n` en `os.linesep` : sur
+    Windows un module en LF ressortait en CRLF. Pour un mutant c est sans conséquence — il ne
+    vit qu une exécution de suite — mais l idiome est le même que celui de la restauration, et
+    c est là qu il faisait des dégâts. Un seul point d écriture, en octets, pour les deux.
+    """
+    fichier.write_bytes(texte.encode("utf-8"))
+
+
+def restaurer(octets: dict[Path, bytes]) -> list[Path]:
+    """Remet chaque fichier dans son état EXACT. Renvoie ceux qu il a fallu réécrire.
+
+    Garde-fou G-1. Le 2026-08-06, un audit d ASD Mail Manager a laissé 23 fichiers source du
+    produit modifiés : la mutation était bien défaite, mais la restauration passait par
+    `write_text` et retournait les fins de ligne LF en CRLF. Une lecture seule qui réécrit les
+    fins de ligne n est pas une lecture seule. L écart était resté invisible tant que le
+    périmètre tenait dans huit modules déjà convertis par un audit antérieur — c est
+    l élargissement du périmètre (A-1) qui l a révélé.
+    """
+    reecrits: list[Path] = []
+    for fichier, contenu in octets.items():
+        try:
+            if fichier.read_bytes() == contenu:
+                continue
+        except OSError:
+            pass
+        fichier.write_bytes(contenu)
+        reecrits.append(fichier)
+    return reecrits
+
+
+def compilables(original: str, mutants: list[Mutant], nom: str) -> list[Mutant]:
+    """Mutants qui COMPILENT — les seuls dont la survie veuille dire quelque chose.
+
+    Filtrer AVANT d échantillonner, et non après, est ce qui garantit à chaque module son
+    score. La première version tirait trois mutants au hasard régulier puis jetait ceux qui ne
+    compilaient pas : sur le premier produit réel, huit modules — dont `auth.py`, `rbac.py` et
+    `services/courrier.py` — voyaient leurs trois mutants tomber tous les trois, et sortaient
+    SANS SCORE, avec un motif faux (« plafond ou délai ») alors que le plafond n avait pas
+    mordu. Un module de logique métier sans score est exactement le silence que A-1 solde.
+
+    Le coût est nul à l échelle de la mesure : compiler un module prend quelques millisecondes,
+    là où jouer un mutant coûte une exécution complète de la suite.
+    """
+    retenus: list[Mutant] = []
+    for mutant in mutants:
+        try:
+            compile(appliquer(original, mutant), nom, "exec")
+        except (SyntaxError, ValueError):
+            continue
+        retenus.append(mutant)
+    return retenus
+
+
 def echantillonner(mutants: list[Mutant], combien: int) -> list[Mutant]:
     """`combien` mutants répartis sur TOUT le module, jamais les `combien` premiers.
 
@@ -462,12 +528,30 @@ def analyser(cible: Path) -> SortieAdaptateur:
             modules=inventaire,
         )
 
+    # G-1, deux representations DISTINCTES du même fichier, et c est volontaire :
+    #   - `originaux` en TEXTE (fins de ligne normalisees par `read_text`) sert au calcul des
+    #     mutants, exactement comme `generer_mutants` qui lit de la meme facon — les colonnes
+    #     restent alignees ;
+    #   - `octets` est le contenu EXACT du fichier, seul admis pour la restauration.
+    # Restaurer depuis le texte reecrivait `\n` en `\r\n` sur Windows : le 2026-08-06, un audit
+    # d ASD Mail Manager a ainsi modifie 23 fichiers source du produit — mutation restauree,
+    # fins de ligne retournees. Une lecture seule qui reecrit les fins de ligne n est pas une
+    # lecture seule ; l ecart ne se voyait pas tant que le perimetre tenait dans huit modules
+    # deja convertis par un audit precedent.
     originaux = {f: f.read_text(encoding="utf-8") for f in retenus}
+    octets = {f: f.read_bytes() for f in retenus}
     plan: list[tuple[Path, Mutant]] = []
     par_fichier: dict[Path, list[Mutant]] = {}
+    candidats_par_fichier: dict[Path, int] = {}
     for fichier in retenus:
         relatif = fichier.relative_to(racine).as_posix()
-        tires = echantillonner(generer_mutants(fichier, relatif), par_module)
+        # Viabilite d abord, echantillon ensuite : l inverse laissait des modules entiers sans
+        # score quand leurs trois tires ne compilaient pas (voir `viables`).
+        candidats = compilables(
+            originaux[fichier], generer_mutants(fichier, relatif), str(fichier)
+        )
+        candidats_par_fichier[fichier] = len(candidats)
+        tires = echantillonner(candidats, par_module)
         par_fichier[fichier] = tires
         plan.extend((fichier, m) for m in tires)
     if len(plan) > plafond:
@@ -476,10 +560,6 @@ def analyser(cible: Path) -> SortieAdaptateur:
             f"{len(plan) - plafond} mutants non joués, score calculé sur le sous-ensemble DÉCLARÉ"
         )
         plan = plan[:plafond]
-
-    joues: dict[Path, list[Mutant]] = {}
-    for fichier, mutant in plan:
-        joues.setdefault(fichier, []).append(mutant)
 
     survivants: list[Mutant] = []
     viables_par_fichier: dict[Path, int] = {}
@@ -496,24 +576,21 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 modules=inventaire,
             )
         for fichier, mutant in plan:
-            original = originaux[fichier]
-            lignes = original.splitlines()
-            ligne = lignes[mutant.ligne]
-            lignes[mutant.ligne] = (
-                ligne[: mutant.colonne] + mutant.apres + ligne[mutant.colonne + len(mutant.avant) :]
-            )
-            mute = "\n".join(lignes) + "\n"
+            mute = appliquer(originaux[fichier], mutant)
+            # Garde-fou : le plan ne contient que des mutants deja compiles par `compilables`.
+            # Le revalider coute quelques millisecondes et interdit qu une regression du filtre
+            # fasse jouer un mutant qui ne compile pas — donc invariablement « tue ».
             try:
                 compile(mute, str(fichier), "exec")
             except SyntaxError:
-                continue  # mutant non viable : hors du dénominateur
+                continue  # hors du denominateur
             viables += 1
             viables_par_fichier[fichier] = viables_par_fichier.get(fichier, 0) + 1
-            fichier.write_text(mute, encoding="utf-8")
+            poser(fichier, mute)
             if _suite_verte(racine, python):
                 survivants.append(mutant)
                 survivants_par_fichier.setdefault(fichier, []).append(mutant)
-            fichier.write_text(original, encoding="utf-8")
+            restaurer({fichier: octets[fichier]})
     except subprocess.TimeoutExpired:
         # Un délai dépassé ne doit jamais emporter l audit entier : le pan se DÉCLARE non
         # mesuré (le `finally` restaure les sources avant toute chose).
@@ -522,8 +599,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
             f"{viables} mutant(s) déjà joués, les autres pans restent mesurés"
         )
     finally:
-        for fichier, contenu in originaux.items():
-            fichier.write_text(contenu, encoding="utf-8")
+        # Restauration a l OCTET PRES, inconditionnelle : c est le garde-fou G-1 lui-meme.
+        restaurer(octets)
         _purger_bytecode(racine)
     if interrompu:
         non_juge.append(interrompu)
@@ -533,15 +610,24 @@ def analyser(cible: Path) -> SortieAdaptateur:
         relatif = fichier.relative_to(racine).as_posix()
         viables_f = viables_par_fichier.get(fichier, 0)
         if not viables_f:
-            possible = len(par_fichier.get(fichier, []))
-            scores[relatif] = {
-                "mute": False,
-                "motif_non_mute": (
-                    "aucun mutant viable — le module ne porte aucune expression mutable"
-                    if not possible
-                    else "mutants non joués (plafond global ou délai dépassé)"
-                ),
-            }
+            candidats = candidats_par_fichier.get(fichier, 0)
+            tires = len(par_fichier.get(fichier, []))
+            # Trois causes DISTINCTES d absence de score. Les confondre sous un motif unique
+            # ferait passer un module non mesure pour un module non mesurable — et le second
+            # ne se repare pas, alors que le premier se repare en relancant.
+            if not candidats:
+                motif = (
+                    "aucun mutant compilable — le module ne porte aucune expression mutable "
+                    "sans casser la syntaxe"
+                )
+            elif not tires:
+                motif = f"{candidats} mutant(s) compilable(s), aucun echantillonne"
+            else:
+                motif = (
+                    f"{tires} mutant(s) echantillonne(s) sur {candidats} compilable(s), aucun "
+                    "joue — plafond global atteint ou delai depasse"
+                )
+            scores[relatif] = {"mute": False, "motif_non_mute": motif}
             continue
         tues_f = viables_f - len(survivants_par_fichier.get(fichier, []))
         scores[relatif] = {
