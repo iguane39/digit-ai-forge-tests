@@ -92,7 +92,7 @@ _PLAFOND_DEFAUT = 40
 
 # Descripteur de chaque affordance, lu dans le DOM RENDU (et non dans le gabarit source).
 _JS_AFFORDANCES = """
-() => Array.from(document.querySelectorAll(%s)).map((e, i) => {
+() => Array.from(document.querySelectorAll(__SELECTEUR__)).map((e, i) => {
   const attributs = {};
   for (const a of e.attributes) attributs[a.name.toLowerCase()] = a.value;
   const formulaire = e.closest('form');
@@ -108,9 +108,12 @@ _JS_AFFORDANCES = """
       : false,
   };
 })
-""" % json.dumps(_SELECTEUR)
+""".replace("__SELECTEUR__", json.dumps(_SELECTEUR))
 
-_JS_LIENS = "() => Array.from(document.querySelectorAll('a[href]')).map(a => a.getAttribute('href'))"
+_JS_LIENS = (
+    "() => Array.from(document.querySelectorAll('a[href]'))"
+    ".map(a => a.getAttribute('href'))"
+)
 _JS_TITRE = """
 () => {
   const h = Array.from(document.querySelectorAll('h1'))
@@ -384,7 +387,10 @@ def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN00
                 "statut": statut,
                 "problemes": problemes,
                 "affordances": affordances,
-                "corps": corps,
+                # Tronque : sur une instance reelle, garder 40 pages entieres en memoire pour
+                # n en relire que le debut a la recherche d une variable citee serait un cout
+                # sans contrepartie.
+                "corps": corps[:20000],
                 "console": list(journal),
             }
         )
@@ -456,7 +462,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
         inventaire.append(identifiant)
         # RT-6a : une route qui echoue en CITANT une configuration absente n accuse pas le
         # projet — elle nomme ce qu il manque ici, et `--reprendre` la rejouera une fois fourni.
-        manquants = detecter(cible, "acces", f"{page_vue['corps'][:20000]}\n" + "\n".join(
+        manquants = detecter(cible, "acces", f"{page_vue['corps']}\n" + "\n".join(
             page_vue["console"]
         )) if page_vue["problemes"] or page_vue["console"] else set()
         if manquants:

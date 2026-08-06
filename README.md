@@ -3,11 +3,11 @@
 > Rendre la qualité d'un projet vérifiable, reproductible et enrichissable dans le temps —
 > sans dépendre de la mémoire d'un humain sur ce qu'il faut penser à vérifier.
 
-**État : outil en service.** Le noyau, onze adaptateurs, le générateur de cas, le registre de
+**État : outil en service.** Le noyau, douze adaptateurs, le générateur de cas, le registre de
 dette et la recette du corpus sont écrits et exécutables. La recette officielle
-(`recette/verifier_corpus.py`) détecte **13/13** des défauts plantés au banc rouge, ne lève
-**aucun finding bloquant** au banc vert, et vérifie sur pièces le lecteur SQL (RT-8) et la
-qualification des non-testables (RT-6).
+(`recette/verifier_corpus.py`) détecte **16/16** des défauts plantés au banc rouge, ne lève
+**aucun finding bloquant** au banc vert, et vérifie sur pièces le lecteur SQL (RT-8), la
+qualification des non-testables (RT-6) et l'analyse statique des divergences (RT-9 / RT-10).
 
 ## Le problème
 
@@ -30,6 +30,8 @@ seuil — et nommer chaque élément non exercé plutôt que de produire un tota
 | A-t-on **atteint** tout ce qui existe ? | Couverture de surface | Parcours tronqué, élément jamais exercé |
 | Ce qu'on atteint, le **vérifie**-t-on ? | Score de mutation | Assertion affaiblie, doublure trop permissive |
 | Ce qui est **promis** existe-t-il ? | Contrôle statique de l'interface | Bouton, lien, formulaire inertes — que nulle suite ne peut atteindre |
+| Tout le **code** est-il seulement regardé ? | Inventaire de modules | Module jamais importé par la suite, module métier jamais muté |
+| Ce que l'**utilisateur** ouvre tient-il debout ? | Parcours d'une instance servie et peuplée | Page en erreur, console rouge, écran vide, bouton sans effet en conditions réelles |
 
 **Règle dure** : le score de mutation ne peut jamais être publié seul. Il se calcule sur le
 seul périmètre atteint et flatte d'autant plus que la suite est lacunaire. Un rapport qui
@@ -46,7 +48,7 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 | Option | Effet |
 |---|---|
 | `--json` | rapport complet en JSON sur stdout (sinon résumé lisible) |
-| `--pans <pan> [...]` | restreint l'audit à ces pans (`front interface api data migrations batch fichiers back securite accessibilite visuel`) |
+| `--pans <pan> [...]` | restreint l'audit à ces pans (`front interface api data migrations batch fichiers back securite accessibilite visuel qualif`) |
 | `--generer <dossier>` | dépose les cas de test générés dans ce dossier de **proposition** — jamais dans le projet analysé. Les messages partent sur stderr : `--generer --json` produit un stdout JSON pur |
 | `--sortie <fichier>` | persiste le rapport dans ce fichier, **à l'identique** de stdout (le dossier parent est créé au besoin) |
 | `--reprendre <rapport.json>` | relit un rapport antérieur et **ne rejoue que ce qui n'était pas vert** ; le rapport produit fusionne l'ancien et le neuf avec la provenance de chaque élément — voir « Audit de qualification avec reprise » |
@@ -58,7 +60,25 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 | `0` | `PASS` — tous les pans attendus couverts, aucun défaut bloquant |
 | `1` | `FAIL` — au moins un élément inventorié n'est pas exercé, ou un seuil n'est pas tenu |
 | `2` | **Rapport refusé** (règle d'affichage conjoint) ou **erreur d'exécution**. Dans les deux cas stdout porte un JSON `{"verdict": "REFUSE"\|"ERREUR", "motif": "…"}` et la trace part sur stderr |
-| `3` | `PARTIEL` — au moins un pan attendu n'a pas pu être couvert. Chaque pan non couvert est nommé **avec son motif**. Non bloquant par décision de conception : un projet dont un pan n'a pas d'adaptateur reste auditable |
+| `3` | `PARTIEL` — au moins un pan attendu n'a pas pu être couvert. Chaque pan non couvert est nommé **avec son motif ET son chemin de couverture**. Non bloquant par décision de conception : un projet dont un pan n'a pas d'adaptateur reste auditable |
+
+### Un pan non couvert sort une action, pas un constat
+
+`pans_non_couverts[]` porte, pour chaque pan, trois champs — jamais un nom seul :
+
+```json
+{
+  "pan": "qualif",
+  "motif": "qualif : aucune instance servie declaree — le pan exige une application EN SERVICE et PEUPLEE…",
+  "pour_couvrir": "servir une instance PEUPLEE du produit et declarer son URL dans FORGE_TESTS_QUALIF_URL ; fournir un compte par FORGE_TESTS_QUALIF_LOGIN / …"
+}
+```
+
+Le motif dit **pourquoi la mesure n'a pas eu lieu** ; `pour_couvrir` dit **ce qu'il faut faire
+pour qu'elle ait lieu** — adaptateur à écrire, configuration à fournir, convention à respecter.
+La sortie d'un audit partiel devient ainsi une liste de travaux, pas un relevé de manques. Le
+chemin est déclaré par l'adaptateur lui-même (constante `POUR_COUVRIR`), jamais par le noyau :
+lui ne connaît aucune technologie et ne saurait pas quoi dire.
 
 ## Audit de qualification avec reprise
 
@@ -174,6 +194,137 @@ son inertie est **voulue et déclarée**.
 - une ancre `#nom` dont la cible n'existe pas dans le document n'est pas jugée morte : la cible
   peut être injectée au rendu.
 
+## Seuils opposables — au-dessus des standards, et versionnés
+
+Les valeurs usuelles du marché sont un **plancher de recevabilité**, pas une cible : un produit
+qui les atteint tout juste a une suite qui accompagne son code, pas qui le contredit. Les
+seuils de Forge Tests sont donc plus durs, déclarés dans `forge_tests/seuils.py`, et **publiés
+au rapport** (section `seuils`) avec leur justification — un lecteur qui trouve le verdict
+sévère lit pourquoi sans ouvrir le code.
+
+| Seuil | Valeur | Sévérité | Porte sur | Pourquoi cette valeur |
+|---|---|---|---|---|
+| `mutation_globale` | **0,70** | bloquant | score de mutation agrégé du pan `back` | le standard de recevabilité (mutmut, Stryker) est de l'ordre de 0,60 ; 0,70 le dépasse sans exiger un 1,0 qui pousse à *supprimer* le mutant gênant plutôt qu'à écrire l'assertion manquante |
+| `mutation_module_metier` | **0,50** | bloquant | score de **chaque** module de logique métier muté | un score global de 0,70 se tient très bien avec un module métier à 0,0 noyé dans la masse. Le seuil par module **interdit la compensation** — c'est exactement le défaut soldé par la campagne A-1/A-3. Dès sa mise en service il a attrapé **trois trous d'assertion réels dans la suite du banc vert**, jusque-là réputée saine |
+| `branches_module_exerce` | **0,60** | signalé | couverture de **branches** de chaque module exercé | le standard usuel (0,70) porte sur l'ensemble du code et se laisse compenser ; par module il est plus dur à valeur nominale plus basse. Signalé et non bloquant : `coverage.py` ne voit pas les branches implicites (ternaire, court-circuit), le ratio est minoré par construction |
+| `couverture_surface_api` | **1,00** | bloquant | endpoints × codes de retour | un code d'erreur déclaré que la suite n'émet jamais est un chemin non vérifié : sur la surface d'API, l'exhaustivité est le standard maison |
+| `couverture_surface_interface` | **1,00** | bloquant | affordances câblées | « une affordance est câblée ou elle n'existe pas » n'a pas de fraction acceptable |
+| `couverture_surface_qualif` | **1,00** | bloquant | routes UI parcourues sans erreur | une route qui rend une erreur est vue par le premier utilisateur |
+
+**Ce qui est « logique métier ».** Le défaut est *oui* : l'exemption se déclare, jamais
+l'exigence. Sont réputés infrastructure les modules nommés `main`, `db`, `database`, `migrate`,
+`settings`, `config`, `conf`, `modeles`, `models`, `schemas`, `deps`, `dependencies`, `wsgi`,
+`asgi` (liste `SOCLE` de `forge_tests/seuils.py`). **Tout le reste** — `services/`,
+`fournisseurs/`, `auth`, `rbac`, adaptateurs — est soumis au seuil par module. Un projet dont
+l'architecture diffère redéclare la liste ; il ne la contourne pas silencieusement.
+
+## Périmètre de mutation total et inventaire des modules
+
+**Le périmètre n'est plus une liste blanche.** L'adaptateur de mutation lisait
+`backend/app/*.py` — un `glob` **non récursif**. Sur le premier produit réel, il mutait sept
+modules de socle et ignorait `services/` et `fournisseurs/`, c'est-à-dire toute la logique
+métier : le rapport annonçait *« mutation 37/37, score 1,0 »* sur un produit dont les deux
+tiers du code n'avaient jamais été touchés. La découverte est désormais **récursive sur toute
+l'arborescence des sources**, et toute exclusion est **nominative, motivée et publiée**.
+
+**Profondeur échantillonnée, périmètre total.** Le coût d'une mutation est une exécution de
+suite par mutant. C'est donc la profondeur — combien de mutants par module — qui est bornée,
+jamais le périmètre :
+
+| Variable | Défaut | Effet |
+|---|---|---|
+| `FORGE_TESTS_MUTANTS_PAR_MODULE` | `3` | mutants joués **par module**, répartis à intervalle régulier sur tout le fichier (jamais les *n* premiers, qui seraient tous en tête) |
+| `FORGE_TESTS_MUTATION_PLAFOND` | `400` | garde-fou global ; s'il mord, il est **déclaré** au rapport |
+| `FORGE_TESTS_MUTATION_EXCLUT` | — | motifs `fnmatch` d'exclusion (`app/fournisseurs/*`) ; chaque module écarté est **nommé avec son motif** dans `modules[]` |
+
+L'échantillon est **déterministe** : deux audits du même code jouent les mêmes mutants, et un
+écart de score se lit comme un écart de suite, pas comme un effet du tirage. Il est tiré parmi
+les mutants qui **compilent**, et non filtré après coup : l'ordre inverse laissait des modules
+entiers sans score — sur ASD Mail Manager, huit modules dont `auth.py`, `rbac.py` et
+`services/courrier.py` voyaient leurs trois mutants tirés tomber tous les trois à la
+compilation. Filtrer avant coûte quelques millisecondes ; jouer un mutant coûte une exécution
+complète de la suite.
+
+Un module sans score sort donc avec la **cause exacte**, jamais un motif fourre-tout : aucun
+mutant compilable, aucun échantillonné, ou échantillonné mais non joué (plafond ou délai).
+
+**Ce qui n'est pas muté, et pourquoi.** Docstrings, chaînes, commentaires — et, depuis le
+2026-08-06, le **texte des f-strings**. Sur Python 3.12+ celui-ci n'est plus un jeton `STRING`
+mais une suite de `FSTRING_MIDDLE` : le filtre, écrit sous 3.11, ne le voyait plus. Chaque
+`f"colonnes attendues plat/quantite"` offrait donc un mutant `/` → `*` qui ne change *que* le
+libellé d'un message — équivalent par construction, survivant garanti. L'effet ne se voyait pas
+tant que la mutation ne touchait que huit modules de socle ; le périmètre total l'a révélé en
+plein, les modules `fournisseurs/` d'ASD Mail Manager — surtout faits de messages d'erreur —
+sortant tous à 0,00, un score qui n'accusait pas la suite mais l'outil.
+
+**Aucun module silencieux — section `modules[]`.** Le rapport porte l'inventaire des modules
+sources avec l'état de chacun : exercé (lignes et branches couvertes), muté (score), ou
+**jamais exercé et nommé**. C'est le principe fondateur de la forge appliqué à l'étage du
+module — on nomme, on n'agrège pas.
+
+```json
+{
+  "module": "app/services/courrier.py",
+  "categorie": "metier",
+  "exerce": true,
+  "lignes_couvertes": 118, "lignes_total": 126, "ratio_lignes": 0.9365,
+  "branches_couvertes": 38, "branches_total": 44, "ratio_branches": 0.8636,
+  "mute": true, "mutants_viables": 3, "tues": 3, "score_mutation": 1.0
+}
+```
+
+Trois classes de finding en sortent, toutes **nommées** : `module-non-exerce:<module>` (jamais
+importé par la suite), `seuil:mutation-module:<module>` (module métier sous 0,50) et
+`seuil:branches:<module>` (module exercé sous 0,60, signalé).
+
+Une exclusion par défaut, et une seule : un module **sans aucune instruction exécutable** hors
+imports, docstring et constantes de ré-export — le cas type du `__init__.py` de paquet. Elle
+est décidée sur le **contenu**, pas sur le nom : un `__init__.py` porteur de logique reste dans
+le périmètre. Elle apparaît quand même dans `modules[]`, avec son motif.
+
+## Pan `qualif` — l'instance servie et peuplée
+
+Généralisation du prototype `qualif_populee.py` d'ASD Mail Manager (14 pages, Playwright,
+staging peuplé). Le prototype prouvait la valeur du contrôle mais était écrit *pour* un
+produit : routes en dur, marqueurs en dur, peuplement en dur. Le pan reprend le contrôle et
+laisse au projet ce qui lui appartient — **le peuplement**, car lui seul sait ce que « peuplé »
+veut dire chez lui.
+
+Contre une instance **servie et peuplée**, le pan parcourt les routes UI (exploration des liens
+depuis la racine, plus les routes d'amorce déclarées) et vérifie, route par route :
+
+| Contrôle | Défaut attrapé |
+|---|---|
+| statut HTTP | 5xx, ou 404 sur une route pourtant liée depuis une page |
+| trace d'exception rendue | `Internal Server Error`, `Traceback`, `jinja2.exceptions`, `TemplateNotFound`… |
+| erreur console | exception JavaScript non rattrapée, ressource manquante |
+| marqueur de contenu | page qui répond 200 sans rien afficher d'identifiable |
+| **élément interactif → effet, dynamique** | affordance sans aucun écouteur attaché, sans destination, sans soumission |
+
+Le dernier contrôle est le **pendant dynamique de RT-7** : le pan `interface` lit les gabarits,
+celui-ci interroge le DOM *rendu* via le protocole DevTools — il voit donc les gestionnaires
+posés à l'exécution par un framework, que l'analyse statique déclare hors de sa portée. Quand
+une **délégation d'événement** est posée sur `document` ou `body`, plus aucun élément ne peut
+être déclaré inerte avec certitude : les éléments concernés sont alors **nommés en `non_juge`
+au lieu d'être accusés**.
+
+**Aucun clic n'est émis.** L'instance visée est peuplée : cliquer y déclencherait des écritures
+réelles — suppression, envoi de courriel, appel d'API tierce facturée. Le pan lit les écouteurs
+attachés, il ne les déclenche pas. C'est le prix de la non-destructivité, et il est déclaré.
+
+Sans instance servie, le pan **ne devine rien** : `SKIP` avec son motif, ses champs à fournir
+(publiés en `non_testables[]` par le mécanisme RT-6a, sans une ligne spécifique) et son
+`pour_couvrir`. Une fois l'URL fournie, `--reprendre` rejoue ce seul pan.
+
+| Variable | Rôle |
+|---|---|
+| `FORGE_TESTS_QUALIF_URL` | instance servie **et peuplée** à parcourir (à défaut, `FORGE_TESTS_BASE_URL`) |
+| `FORGE_TESTS_QUALIF_LOGIN` / `_PASSWORD` | compte de lecture (à défaut, `FORGE_TESTS_LOGIN` / `_PASSWORD`) |
+| `FORGE_TESTS_QUALIF_CONNEXION` | route de la mire, si elle n'est ni `/connexion` ni `/login` |
+| `FORGE_TESTS_QUALIF_ROUTES` | routes d'amorce (virgule) — celles qu'aucun lien n'atteint |
+| `FORGE_TESTS_QUALIF_MARQUEURS` | JSON `{"/route": "marqueur métier"}` ; à défaut le titre de la page (premier `h1` non vide, sinon `title`) |
+| `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
+
 ## Lecture du SQL — filtrer avant de découper
 
 Un `;` posé **dans un commentaire** de migration fabriquait une instruction qui n'avait jamais
@@ -270,6 +421,38 @@ Codes de retour :
 - un code **émis** pendant la suite mais absent de la déclaration est une divergence `signale` ;
 - **aucune assertion de test n'est lue** : seul le couple réellement émis compte.
 
+#### Où la garde doit être écrite pour être reconnue (RT-9)
+
+L'analyse ne lisait que le `raise … status_code=<littéral>` écrit **dans le corps de la
+route**. Un produit qui factorise son refus dans un helper (`_refuser_doublon()` levant le 409)
+voyait donc son 409 déclaré « jamais levé » — deux passes de correction sur produit réel avant
+de retrouver la forme attendue : l'outil imposait un style d'écriture au lieu de lire le
+comportement. Depuis, **un niveau d'appel est résolu**.
+
+| Forme de la garde | Reconnue ? |
+|---|---|
+| `raise HTTPException(status_code=409, …)` dans la route | oui |
+| `_refuser_doublon()` — helper du **même module**, appelé **par son nom simple**, dont le corps lève avec un `status_code` **constant** | **oui (RT-9)** |
+| helper qui appelle lui-même un autre helper (deux niveaux) | non |
+| helper **importé** d'un autre module | non |
+| appel par attribut : `self.refuser()`, `service.refuser()` | non |
+| `status_code` calculé (variable, expression, table de correspondance) | non |
+
+Les quatre dernières lignes sont la **contrainte résiduelle**, déclarée aussi au registre de
+dette : dans ces cas le code déclaré paraîtra « jamais levé ». Le remède côté projet est
+d'écrire la levée dans la route, ou dans un helper local appelé par son nom.
+
+#### Ce qui n'est pas une route (RT-10)
+
+Les montages — `app.mount("/static", StaticFiles(…))`, sous-application ASGI — sont **exclus du
+contrôle de divergence**. Un montage n'a pas de décorateur, donc pas de `responses=`, et
+FastAPI n'offre aucun moyen d'en déclarer un : le finding « code émis absent de `responses=` »
+y était **structurellement incorrigeable** côté produit (constaté sur `GET /static/app.js`).
+Les codes d'un montage sont réputés `200` (fichier servi) et `404` (fichier absent) — c'est le
+comportement documenté de Starlette, pas une promesse du projet. Les préfixes exclus sont
+**nommés en `non_juge`** au rapport ; une vraie route dont le chemin commence par les mêmes
+lettres (`/statistiques` face au montage `/static`) n'est **pas** exclue.
+
 ### Couche SQL observable — pans `data` et `migrations`
 
 Deux points d'observation, dans cet ordre :
@@ -344,7 +527,8 @@ de migrations tôt ne suffit pas ; c'est le volume qui SUIT qui décide.
 | `interface` | gabarits `.html/.htm/.jinja/.jinja2/.j2/.twig/.ejs/.hbs` hors artefacts ; « exercé » = **câblé** (gestionnaire, destination ou identifiant cité dans le JS) — voir « Contrôle statique de l'interface » | 100 % |
 | `batch` | branches dérivées de l'AST de `backend/app/batch.py` (à défaut, inventaire de `backend/app/worker/*.py` — mais **la mesure ne porte que sur `batch.py`**) ; codes de rejet = littéraux de la forme `XXX-YYY` en majuscules | 90 % |
 | `fichiers` | chemins de parsing dérivés de l'AST de `backend/app/importer.py` | 100 % |
-| `back` | mutation réelle : altération des modules de `backend/app`, relance de `tests`, plafond de 90 mutants (plafond atteint = déclaré) | 70 % de mutants tués |
+| `back` | mutation réelle : altération de **tous** les modules de `backend/app` (récursif, `services/` et `fournisseurs/` compris), relance de `tests`, échantillon de 3 mutants par module (paramétrable, déclaré au rapport) ; inventaire `modules[]` | 70 % global **et** 50 % par module métier |
+| `qualif` | instance **servie et peuplée** déclarée par `FORGE_TESTS_QUALIF_URL` ; routes découvertes par les liens depuis la racine — voir « Pan `qualif` » | 100 % |
 | `securite` | oracles `quality-oracles` présents sur la machine ; leurs `non_juge` sont repris tels quels | — |
 | `accessibilite`, `visuel` | front **servi** : `FORGE_TESTS_BASE_URL`, ou build local présent dans `frontend/dist` plus `npx` et un navigateur Playwright ; un golden absent produit un SKIP motivé, jamais une référence créée pendant le run | — |
 
@@ -365,6 +549,15 @@ journalisé). Modèle : `.env.exemple`.
 | `FORGE_TESTS_LOGIN_PATH` | point d'authentification si le projet s'écarte de la convention FastAPI |
 | `FORGE_TESTS_SANS_EXECUTION=1` | inventaire seul, sans exécuter la suite du projet — la non-mesure est déclarée |
 | `FORGE_TESTS_ORACLES` | racine des scripts d'oracles |
+| `FORGE_TESTS_MUTANTS_PAR_MODULE` | profondeur de mutation par module (défaut `3`) — le **périmètre** reste total, seule la profondeur est échantillonnée, et le taux est publié au rapport |
+| `FORGE_TESTS_MUTATION_PLAFOND` | garde-fou global du nombre de mutants joués (défaut `400`) ; s'il mord, il est déclaré |
+| `FORGE_TESTS_MUTATION_EXCLUT` | motifs `fnmatch` de modules à exclure du périmètre (`app/fournisseurs/*`) — chaque exclusion est **nommée avec son motif** dans `modules[]`, jamais silencieuse |
+| `FORGE_TESTS_QUALIF_URL` | instance **servie et peuplée** parcourue par le pan `qualif` (à défaut, `FORGE_TESTS_BASE_URL` — donc à vérifier avant d'auditer un autre projet que celui que `.env` décrit) |
+| `FORGE_TESTS_QUALIF_LOGIN` / `_PASSWORD` | compte du pan `qualif` (à défaut `FORGE_TESTS_LOGIN` / `_PASSWORD`) |
+| `FORGE_TESTS_QUALIF_CONNEXION` | route de la mire si elle n'est ni `/connexion` ni `/login` |
+| `FORGE_TESTS_QUALIF_ROUTES` | routes d'amorce du parcours (virgule) — celles qu'aucun lien n'atteint |
+| `FORGE_TESTS_QUALIF_MARQUEURS` | JSON `{"/route": "marqueur métier"}` ; à défaut le titre de la page |
+| `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
 
 ## Recette et dette
 
@@ -374,17 +567,33 @@ uv run python recette/precision_generateur.py
 uv run python -m forge_tests.dette         # régénère registre-dette.json depuis le code
 ```
 
-La recette rejoue le framework sur la paire de bancs de `fixtures/` : chaque défaut planté du
-banc rouge doit produire un finding **nommé**, le banc vert aucun finding bloquant. Elle y
-ajoute deux vérifications **sur pièces**, pour des mécanismes qu'aucun banc ne peut exercer :
-le lecteur SQL (`;` dans un commentaire, en fin de ligne commentée, dans un bloc, dans un
-littéral — RT-8) et la qualification des non-testables (détection d'une variable absente citée
-par une trace, refus de compter une variable pourtant fournie — RT-6). Sans elles, ces deux
-mécanismes pourraient pourrir sans que rien ne le dise. Elle exige
-un venv sous `fixtures/banc-*/backend` (`uv sync --directory fixtures/banc-rouge/backend`), les
-dépendances des fronts (`npm ci` puis `npm run build` dans `fixtures/banc-*/frontend`) et
-Docker. Elle neutralise `FORGE_TESTS_BASE_URL` : elle porte sur les bancs locaux, jamais sur
-l'instance de l'opérateur.
+La recette rejoue le framework sur la paire de bancs de `fixtures/` : chacun des **16** défauts
+plantés du banc rouge doit produire un finding **nommé**, le banc vert aucun finding bloquant.
+
+Le pan `qualif` juge une application **en service** : il ne pourrait donc pas être exercé par
+un banc de fichiers, comme les onze autres. La recette **sert elle-même** `fixtures/banc-*/
+qualif-web/` sur un port libre (serveur de la bibliothèque standard) et déclare l'URL au pan.
+Le serveur est réel, le navigateur est réel, les erreurs console et les 404 sont réels — seul
+le *peuplement* est écrit en dur dans les pages du banc, parce que peupler une application est
+la responsabilité du projet audité, pas du framework. Les défauts plantés côté rouge : lien
+vers une page absente (404), trace d'exception rendue dans une page qui répond 200, page sans
+aucun marqueur de contenu, erreur console au chargement, bouton sans le moindre écouteur.
+
+Elle ajoute six vérifications **sur pièces**, pour des mécanismes qu'aucun banc ne peut
+exercer : le lecteur SQL (`;` dans un commentaire, en fin de ligne commentée, dans un bloc,
+dans un littéral — RT-8) ; la qualification des non-testables (variable absente citée par une
+trace, refus de compter une variable pourtant fournie — RT-6) ; l'analyse des divergences
+(garde déportée dans un helper local, montage `StaticFiles` exclu — RT-9 / RT-10) ; les
+chemins de couverture des pans non couverts (A-5), qu'aucun banc n'exerce puisque les douze
+pans y sont couverts ; la relecture des rapports **antérieurs** à A-5 par `--reprendre` ; et la
+restauration byte-exacte après mutation (G-1, fichier en LF et en CRLF). Sans elles, ces
+mécanismes pourraient pourrir sans que rien ne le dise. La recette empreinte en outre les
+sources des deux bancs en SHA-256 **avant et après** l'audit : aucun octet ne doit bouger.
+
+Elle exige un venv sous `fixtures/banc-*/backend` (`uv sync --directory
+fixtures/banc-rouge/backend`), les dépendances des fronts (`npm ci` puis `npm run build` dans
+`fixtures/banc-*/frontend`), un navigateur Playwright et Docker. Elle neutralise
+`FORGE_TESTS_BASE_URL` : elle porte sur les bancs locaux, jamais sur l'instance de l'opérateur.
 
 `registre-dette.json` est **régénéré depuis le code** : les `non_juge` déclarés par le noyau,
 le risque, l'exécution et les adaptateurs y deviennent des entrées à statut (`todo`, `assume`,
@@ -440,9 +649,23 @@ aujourd'hui — c'est un écart connu, pas un vert.
   pan mutation modifie le source du projet le temps d'un mutant avant de le **restaurer** ; le
   pan visuel dépose ses captures et ses goldens dans `<projet>/.visuel/` — par conception, un
   golden est une référence **versionnée avec le projet**, pas un artefact jetable.
+- **La restauration après mutation est byte-exacte, fins de ligne comprises.** Le 2026-08-06,
+  le premier audit à périmètre total a laissé **23 fichiers source du produit modifiés** : la
+  mutation était bien défaite, mais la restauration passait par `Path.write_text`, qui traduit
+  `\n` en `os.linesep` — les modules en LF revenaient en CRLF. Une lecture seule qui réécrit
+  les fins de ligne n'est pas une lecture seule. L'écart avait dormi depuis l'origine parce que
+  le périmètre d'avant A-1 ne touchait que huit modules déjà convertis en CRLF par un audit
+  antérieur. L'écriture et la restauration passent désormais par un point unique **en octets**,
+  et la restauration est **vérifiée** avant d'être déclarée. La recette le contrôle sur pièces
+  (fichier en LF *et* en CRLF, avec un témoin qui montre que l'ancien chemin altérait le
+  premier) et empreinte en SHA-256 les sources des deux bancs avant et après chaque audit.
 - Le pan visuel ne crée plus `<projet>/.visuel/` quand le projet **n'a aucune route** à
   capturer : un projet purement API, ou dont le front est servi par le backend, se voyait créer
   un dossier vide dans son arbre pour un pan qui allait conclure `SKIP`.
+- **Les deux recettes neutralisent `FORGE_TESTS_BASE_URL`.** `precision_generateur.py` ne le
+  faisait pas : le lancer capturait le DOM de l'instance cliente décrite par le `.env` de
+  l'opérateur et l'écrivait dans `fixtures/banc-*/.visuel/`. Un outil qui pollue ses propres
+  bancs de référence perd la seule chose qui rend ses verdicts comparables.
 - Un délai dépassé, un outil absent ou une suite rouge **dégradent le pan concerné avec son
   motif** — jamais l'audit entier, jamais en silence.
 - Interdiction d'assouplir une assertion pour faire passer un test rouge

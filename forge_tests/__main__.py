@@ -155,7 +155,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="forge-tests", description="Accélérateur de tests")
     parser.add_argument("cible", type=Path, help="racine du projet à analyser")
     parser.add_argument("--json", action="store_true", help="sortie machine complète")
-    parser.add_argument("--pans", nargs="*", default=None, help="restreindre à ces pans")
+    # La liste est DERIVEE du registre : ecrite a la main, elle aurait deja diverge au douzieme
+    # pan. Un `--help` qui ment sur les valeurs acceptees est un piege, pas une documentation.
+    parser.add_argument(
+        "--pans",
+        nargs="*",
+        default=None,
+        metavar="PAN",
+        help="restreindre à ces pans : " + ", ".join(PANS_ATTENDUS),
+    )
     parser.add_argument(
         "--generer",
         type=Path,
