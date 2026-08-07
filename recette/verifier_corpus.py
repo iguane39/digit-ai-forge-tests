@@ -17,6 +17,7 @@ identifiés, sinon on retombe sur l absence silencieuse que le framework existe 
 from __future__ import annotations
 
 import contextlib
+import datetime
 import functools
 import http.server
 import os
@@ -455,6 +456,405 @@ def _findings(rapport: dict, prefixes: tuple[str, ...]) -> list[dict]:
     return [f for f in rapport["findings"] if f["id"].startswith(prefixes)]
 
 
+# --- Mandats 1 a 4 : cahiers derives, jeux synthetiques, dashboard, actions -------------------
+JOUR_RECETTE = datetime.date(2026, 8, 7)
+
+
+def _rapport_sur_pieces() -> dict:
+    """Rapport de laboratoire exercant CHAQUE classe de finding, plus les deux causes d inaction.
+
+    Aucun banc ne peut le produire : il faudrait un projet a la fois mal configure, sans
+    adaptateur pour un pan, et porteur des onze classes de defaut. Le construire ici est le
+    seul moyen de verifier la classification TERNAIRE sur toute son etendue — et notamment la
+    branche `forge`, qui ne se declenche que sur une classe que la forge ne sait pas classer.
+    """
+    from forge_tests.actions import classifier
+
+    classes = [
+        ("element-non-exerce", "api", "code:GET /api/x=401"),
+        ("element-non-exerce", "batch", "branche:batch.py:42"),
+        ("element-non-exerce", "data", "contrainte:c_unique"),
+        ("seuil-non-tenu", "api", "seuil:api"),
+        ("mutant-survivant", "back", "mutant:app/calcul.py:12:+->-"),
+        ("module-non-exerce", "back", "module-non-exerce:app/recherche.py"),
+        ("affordance-inerte", "interface", "interface:ui/page.html:13:button"),
+        ("affordance-sans-effet", "qualif", "qualif:effet:/:3:button"),
+        ("divergence", "api", "divergence:code:GET /api/x=500"),
+        ("route-en-defaut", "qualif", "qualif:route:/panne"),
+        ("securite", "securite", "securite:app/main.py:8"),
+        ("accessibilite", "accessibilite", "a11y:/inscription"),
+        ("regression-visuelle", "visuel", "visuel:/accueil"),
+        ("sonde-muette", "api", "sonde-muette:api"),
+        # Classe INCONNUE du classifieur : elle doit produire un defaut d AUDITEUR nomme,
+        # jamais un finding sans suite.
+        ("classe-inventee-demain", "api", "futur:quelque-chose"),
+    ]
+    findings = [
+        {
+            "id": identifiant,
+            "classe": classe,
+            "pan": pan,
+            "localisation": "labo",
+            "message": f"constat mesure sur {identifiant}",
+            "severite": "bloquant",
+            "risque": 20 + rang,
+        }
+        for rang, (classe, pan, identifiant) in enumerate(classes)
+    ]
+    non_testables = [
+        {
+            "element": "pan:qualif",
+            "champs_requis": ["FORGE_TESTS_QUALIF_URL"],
+            "pan": "qualif",
+            "motif": "qualif : non exercable sans configuration (constate)",
+        }
+    ]
+    pans_non_couverts = [
+        {"pan": "qualif", "motif": "instance non servie", "pour_couvrir": "servir l instance"},
+        {"pan": "visuel", "motif": "adaptateur absent", "pour_couvrir": "ecrire l adaptateur"},
+    ]
+    return {
+        "verdict": "PARTIEL",
+        "adaptateurs": [],
+        "couverture_par_pan": {
+            "api": {
+                "inventorie": 3, "exerce": 2, "ratio": 0.6667, "seuil": 1.0,
+                "elements_exerces": ["code:GET /api/x=200", "endpoint:GET /api/x"],
+                "elements_non_exerces": ["code:GET /api/x=401"],
+            }
+        },
+        "mutation": {},
+        "seuils": {
+            "couverture_surface_api": {
+                "valeur": 1.0, "severite": "bloquant", "porte_sur": "endpoints x codes",
+                "justification": "exhaustivite de surface",
+            }
+        },
+        "modules": [{"module": "app/calcul.py", "exerce": True, "mute": True}],
+        "pans_non_couverts": pans_non_couverts,
+        "motifs_non_couverture": {},
+        "bandes_de_risque": {"critique": 0, "standard": len(findings), "differe": 0, "non_cote": 0},
+        "findings": findings,
+        "non_testables": non_testables,
+        "non_juge": [],
+        "actions": classifier(findings, non_testables, pans_non_couverts),
+    }
+
+
+def verifier_actions() -> int:
+    """Mandat 2 — la classification TERNAIRE vit au RAPPORT, et n oublie aucun finding."""
+    from forge_tests.actions import CATEGORIES, ETAPES, repartition
+
+    echecs = 0
+    print("-" * 78)
+    print("  M2 — actions[] : une suite classee pour chaque constat, au rapport JSON")
+
+    labo = _rapport_sur_pieces()
+    actions = labo["actions"]
+    compte = repartition(actions)
+    refs = [a["finding_ref"] for a in actions]
+
+    manquants = [
+        f"{f['pan']}/{f['id']}"
+        for f in labo["findings"]
+        if f"{f['pan']}/{f['id']}" not in refs
+    ]
+    inconnue = [
+        a for a in actions if a["finding_ref"] == "api/futur:quelque-chose"
+    ]
+    cas = [
+        ("chaque finding porte exactement une action", not manquants
+         and len([r for r in refs if not r.startswith(("non-testable:", "pan-non-couvert:"))])
+         == len(labo["findings"])),
+        ("au moins une action par CATEGORIE",
+         all(compte["par_categorie"][c] >= 1 for c in CATEGORIES)),
+        ("au moins une action par ETAPE CIBLE",
+         all(compte["par_etape"][e] >= 1 for e in ETAPES)),
+        ("une classe de finding inconnue sort un DEFAUT D AUDITEUR (etape `forge`)",
+         bool(inconnue) and inconnue[0]["etape_cible"] == "forge"),
+        ("la configuration absente est `manuelle_utilisateur` / `mep-config`",
+         any(a["categorie"] == "manuelle_utilisateur" and a["etape_cible"] == "mep-config"
+             for a in actions if a["finding_ref"].startswith("non-testable:"))),
+        ("un pan sans adaptateur est un defaut de la FORGE, pas de l exploitant",
+         any(a["etape_cible"] == "forge" for a in actions
+             if a["finding_ref"] == "pan-non-couvert:visuel")),
+        ("aucune categorie hors vocabulaire",
+         all(a["categorie"] in CATEGORIES for a in actions)),
+        ("aucune etape hors vocabulaire", all(a["etape_cible"] in ETAPES for a in actions)),
+        ("toute action porte un attendu non vide",
+         all(str(a.get("attendu") or "").strip() for a in actions)),
+    ]
+    for libelle, ok in cas:
+        echecs += not ok
+        print(f"  [{'OK     ' if ok else 'ECHEC  '}] {libelle}")
+    print(
+        "             repartition — "
+        + " · ".join(f"{c}={compte['par_categorie'][c]}" for c in CATEGORIES)
+    )
+    detail = " · ".join(f"{e}={compte['par_etape'][e]}" for e in ETAPES)
+    print("             etapes     — " + detail)
+    return echecs
+
+
+def verifier_jeux_de_donnees() -> int:
+    """Mandat 1 — le garde-fou des jeux de donnees REFUSE, il ne signale pas."""
+    from forge_tests.livrables import jeux
+
+    echecs = 0
+    print("-" * 78)
+    print("  M1 — jeux de donnees : synthetiques, et prouves tels AVANT ecriture")
+
+    os.environ["ZZ_CLE_API_PROJET"] = "valeur-de-production-a-ne-jamais-recopier"
+    try:
+        cas = []
+        propre = jeux.construire(
+            [
+                {
+                    "code": "T2", "famille": "technique",
+                    "sous_chapitres": [{"libelle": "table t", "elements": [{"id": "table:t"}]}],
+                }
+            ],
+            "Produit",
+        )
+        try:
+            jeux.verifier(propre, None)
+            cas.append(("un jeu genere par la forge passe le garde-fou", True))
+        except jeux.DonneeNonSynthetique as refus:
+            cas.append((f"un jeu genere par la forge passe le garde-fou ({refus})", False))
+
+        for libelle, charge in (
+            ("un courriel d un domaine REEL est refuse", {"a": "jean.dupont@asdpatrimoine.fr"}),
+            ("une cle d API est refusee", {"a": "sk-live-0123456789abcdefghij"}),
+            ("un jeton JWT est refuse", {"a": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.zz"}),
+            ("une empreinte hexadecimale longue est refusee", {"a": "a" * 40}),
+            ("une URL a identifiants est refusee", {"a": "postgres://u:motdepasse@h/db"}),
+        ):
+            refuse = False
+            try:
+                jeux.verifier(charge, None)
+            except jeux.DonneeNonSynthetique:
+                refuse = True
+            cas.append((libelle, refuse))
+
+        refuse = False
+        try:
+            jeux.verifier({"a": "extrait : valeur-de-production-a-ne-jamais-recopier"}, None)
+        except jeux.DonneeNonSynthetique:
+            refuse = True
+        cas.append(("une valeur de configuration du projet audite est refusee", refuse))
+
+        # Le courriel synthetique, lui, doit passer : un garde-fou qui refuse tout ne garde rien.
+        passe = True
+        try:
+            jeux.verifier({"a": f"alix.martel@{jeux.DOMAINE}"}, None)
+        except jeux.DonneeNonSynthetique:
+            passe = False
+        cas.append(("un courriel du domaine reserve passe (le garde-fou DISCRIMINE)", passe))
+    finally:
+        del os.environ["ZZ_CLE_API_PROJET"]
+
+    for libelle, ok in cas:
+        echecs += not ok
+        print(f"  [{'OK     ' if ok else 'ECHEC  '}] {libelle}")
+    return echecs
+
+
+def verifier_cahiers(rouge: dict) -> int:
+    """Mandat 1 — exhaustivite opposable, sceau qui trahit l edition, deux runs identiques."""
+    import tempfile
+
+    from forge_tests.adaptateurs import REGISTRE as ADAPTATEURS
+    from forge_tests.livrables import produire
+    from forge_tests.livrables import surface as surface_mod
+    from forge_tests.livrables.nommage import empreinte, verifier_sceau
+
+    echecs = 0
+    print("-" * 78)
+    print("  M1 — cahiers derives : exhaustivite, sceau, determinisme")
+
+    cas: list[tuple[str, bool]] = []
+    with tempfile.TemporaryDirectory() as t1, tempfile.TemporaryDirectory() as t2:
+        premiers = produire(rouge, ROUGE, Path(t1), jour=JOUR_RECETTE, rapport_nom="rouge.json")
+        seconds = produire(rouge, ROUGE, Path(t2), jour=JOUR_RECETTE, rapport_nom="rouge.json")
+
+        # 1. Determinisme : deux productions du MEME rapport donnent le MEME octet.
+        for nature in ("fonctionnel", "technique", "jeu", "dashboard"):
+            identique = (
+                empreinte(premiers[nature].read_bytes()) == empreinte(seconds[nature].read_bytes())
+            )
+            cas.append((f"deux runs produisent un {nature} identique (sha256)", identique))
+
+        # 2. Le sceau atteste le corps, et TRAHIT une edition manuelle.
+        for nature in ("fonctionnel", "technique"):
+            texte = premiers[nature].read_text(encoding="utf-8")
+            intact, motif = verifier_sceau(texte)
+            cas.append((f"le cahier {nature} est scelle et intact ({motif[:40]}…)", intact))
+            altere, _ = verifier_sceau(texte.replace("au moins un cas", "au moins deux cas", 1))
+            cas.append((f"une edition manuelle du cahier {nature} est TRAHIE par le sceau",
+                        not altere))
+        cas.append(("un document sans sceau n est pas repute intact",
+                    not verifier_sceau("# cahier ecrit a la main")[0]))
+
+        # 3. Exhaustivite opposable : chaque element du rapport porte un cas OU est declare.
+        fonctionnel = premiers["fonctionnel"].read_text(encoding="utf-8")
+        technique = premiers["technique"].read_text(encoding="utf-8")
+        ensemble = fonctionnel + technique
+        inventaire = surface_mod.inventaire(rouge)
+        absents = [
+            element["id"]
+            for elements in inventaire.values()
+            for element in elements
+            if element["id"] not in ensemble
+        ]
+        cas.append(
+            (f"chaque element inventorie figure au cahier ({len(absents)} absent(s))", not absents)
+        )
+        if absents:
+            print(f"             absents : {', '.join(absents[:5])}")
+
+        # 4. Chapitres DERIVES : autant de chapitres que le registre en declare, pas un de moins.
+        attendus = {c["code"] for c in surface_mod.chapitres(ADAPTATEURS)}
+        vus = {code for code in attendus if f"## {code} — " in ensemble}
+        cas.append((f"les {len(attendus)} chapitres derives du registre sont tous presents",
+                    vus == attendus))
+
+    # 5. ROUGE — un element NON COUVERT doit etre NOMME, avec sa raison. Sur un rapport ou tout
+    #    est mesurable, le mecanisme ne se declenche pas : on l exerce sur pieces.
+    labo = _rapport_sur_pieces()
+    with tempfile.TemporaryDirectory() as t3:
+        chemins = produire(labo, ROUGE, Path(t3), jour=JOUR_RECETTE, rapport_nom="labo.json")
+        texte = chemins["fonctionnel"].read_text(encoding="utf-8")
+        cas.append(("un element non testable est NOMME en « non couvert »",
+                    "pan:qualif" in texte and "NON COUVERTS" in texte))
+        cas.append(("sa raison cite le champ a fournir",
+                    "FORGE_TESTS_QUALIF_URL" in texte))
+        cas.append(("un pan sans adaptateur sort GRISE avec son chemin de couverture",
+                    "ecrire l adaptateur" in texte or "ecrire l adaptateur" in
+                    chemins["technique"].read_text(encoding="utf-8")))
+
+    # 6. G-1 — deposer les livrables DANS le projet audite est refuse avant toute ecriture.
+    from forge_tests.livrables import DepotInterdit
+
+    refuse = False
+    try:
+        produire(labo, ROUGE, ROUGE / "propositions", jour=JOUR_RECETTE)
+    except DepotInterdit:
+        refuse = True
+    cas.append(("G-1 : un depot DANS le projet audite est refuse", refuse))
+    cas.append(("G-1 : rien n a ete ecrit dans le projet",
+                not (ROUGE / "propositions").exists()))
+
+    for libelle, ok in cas:
+        echecs += not ok
+        print(f"  [{'OK     ' if ok else 'ECHEC  '}] {libelle}")
+    return echecs
+
+
+def verifier_dashboard(rouge: dict) -> int:
+    """Mandat 2 — totaux strictement egaux au rapport, zero secret, charte PASS."""
+    import subprocess
+    import tempfile
+
+    from forge_tests.livrables import dashboard as dash
+    from forge_tests.livrables import produire
+
+    echecs = 0
+    print("-" * 78)
+    print("  M2 — dashboard : totaux exacts, zero reseau, zero secret, charte PASS")
+
+    cas: list[tuple[str, bool]] = []
+    with tempfile.TemporaryDirectory() as temporaire:
+        chemins = produire(rouge, ROUGE, Path(temporaire), jour=JOUR_RECETTE, rapport_nom="r.json")
+        page = chemins["dashboard"].read_text(encoding="utf-8")
+
+        cas.append(("les totaux affiches sont EGAUX au rapport", not dash.controler(page, rouge)))
+
+        # Le controle doit DISCRIMINER : on fausse un total, il doit le voir.
+        attendus = dash.totaux(rouge)
+        faux = page.replace(
+            f'data-total="echecs">{attendus["echecs"]}<',
+            f'data-total="echecs">{attendus["echecs"] - 1}<',
+            1,
+        )
+        ecarts = dash.controler(faux, rouge)
+        cas.append((f"un total VOLONTAIREMENT faux est detecte ({(ecarts or ['—'])[0][:52]}…)",
+                    bool(ecarts)))
+        manque = page.replace('data-total="non_joues"', 'data-total="autrechose"', 1)
+        cas.append(("un total RETIRE de la page est detecte", bool(dash.controler(manque, rouge))))
+
+        # Zero reseau : aucune ressource DISTANTE. Le controle porte sur ce qui declenche une
+        # requete (href, src, @import, url()), pas sur la presence du texte « http » — l URL de
+        # l instance auditee figure legitimement dans les constats du pan qualif, et l interdire
+        # reviendrait a censurer le sujet meme de l audit.
+        for interdit in ('href="http', "href='http", 'src="', "src='", "@import", "url(http",
+                         "<link", "<script src", "fetch(", "XMLHttpRequest"):
+            cas.append((f"aucune ressource distante — « {interdit} » absent",
+                        interdit not in page))
+        cas.append(("un repli systeme est declare pour chaque police",
+                    "system-ui" in page and "Syne" not in page))
+        cas.append(("les deux themes sont portes (clair et sombre)",
+                    "prefers-color-scheme: dark" in page and 'data-theme="sombre"' in page))
+        cas.append(("les six onglets sont presents",
+                    all(f'data-cible="{o}"' in page for o in
+                        ("synthese", "fonctionnels", "techniques", "echecs", "non-joues",
+                         "actions"))))
+
+        # Charte et rendu Digit-AI, par les DEUX oracles du skill s ils sont installes. Le
+        # premier lit le source (charte, a11y, print) ; le second RESSORT la page dans un vrai
+        # navigateur a trois largeurs et mesure debordements, contrastes et chevauchements.
+        # Aucun des deux ne remplace l autre : `check_html` a longtemps sorti PASS sur une page
+        # dont les pastilles etaient a 3,07:1 de contraste — un statut illisible, donc un statut
+        # qu on ne lit pas. Absent l oracle, la non-mesure est DECLAREE, pas contournee.
+        scripts = Path.home() / ".claude" / "skills" / "digit-ai-page-html" / "scripts"
+        for nom, arguments in (
+            ("check_html.py", []),
+            ("render_page.py", ["--widths", "1280,768,390"]),
+        ):
+            oracle = scripts / nom
+            if not oracle.exists():
+                print(f"             [DECLARE] oracle absent ({oracle}) — non joue")
+                continue
+            issue = subprocess.run(
+                [sys.executable, str(oracle), str(chemins["dashboard"]), *arguments],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+            )
+            cas.append((f"{nom} : PASS (code {issue.returncode})", issue.returncode == 0))
+            if issue.returncode != 0:
+                print((issue.stdout or "")[-1200:])
+
+    # Zero secret : une valeur d environnement sensible qui se retrouverait dans la page.
+    os.environ["ZZ_JETON_DASHBOARD"] = "jeton-tres-secret-1234"
+    try:
+        pollue = {
+            **rouge,
+            "findings": [
+                {
+                    "id": "x", "classe": "securite", "pan": "securite", "localisation": "l",
+                    "message": "fuite : jeton-tres-secret-1234", "severite": "bloquant",
+                    "risque": 1,
+                }
+            ],
+        }
+        contexte = {
+            "produit": "P", "date": "2026-08-07", "verdict": "FAIL", "rapport_nom": "r.json",
+            "rapport_sha": "0" * 64,
+        }
+        vue = dash.construire(pollue, contexte, [])
+        leve = False
+        try:
+            dash.verifier_absence_de_secrets(vue, None)
+        except dash.SecretDansLeDashboard:
+            leve = True
+        cas.append(("une valeur d environnement dans la page est REFUSEE avant ecriture", leve))
+    finally:
+        del os.environ["ZZ_JETON_DASHBOARD"]
+
+    for libelle, ok in cas:
+        echecs += not ok
+        print(f"  [{'OK     ' if ok else 'ECHEC  '}] {libelle}")
+    return echecs
+
+
 def main() -> int:
     # G-1 : l empreinte des sources des bancs AVANT tout audit. La mutation les altere le temps
     # d un mutant ; si un seul octet survit a la restauration, la recette le dit ici.
@@ -539,6 +939,10 @@ def main() -> int:
     echecs_chemins = verifier_chemins_de_couverture()
     echecs_chemins += verifier_reprise_apres_enrichissement()
     echecs_g1 = verifier_lecture_seule() + len(alteres)
+    echecs_actions = verifier_actions()
+    echecs_jeux = verifier_jeux_de_donnees()
+    echecs_cahiers = verifier_cahiers(rouge)
+    echecs_dashboard = verifier_dashboard(rouge)
 
     succes = (
         detectes == len(CORPUS)
@@ -548,6 +952,10 @@ def main() -> int:
         and not echecs_divergences
         and not echecs_chemins
         and not echecs_g1
+        and not echecs_actions
+        and not echecs_jeux
+        and not echecs_cahiers
+        and not echecs_dashboard
     )
     print("=" * 78)
     print("  S-01 TENU" if succes else "  S-01 NON TENU")
