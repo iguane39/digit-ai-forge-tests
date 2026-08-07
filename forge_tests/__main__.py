@@ -177,6 +177,17 @@ def main(argv: list[str] | None = None) -> int:
         help="persister le rapport dans ce fichier, a l identique de stdout",
     )
     parser.add_argument(
+        "--livrables",
+        type=Path,
+        default=None,
+        metavar="DOSSIER",
+        help=(
+            "produire les livrables derives dans ce dossier de PROPOSITION, HORS du projet "
+            "audite (G-1) : cahier de tests fonctionnels, cahier de tests techniques et jeu de "
+            "donnees synthetique. Regeneres a chaque audit, y compris sous `--reprendre`"
+        ),
+    )
+    parser.add_argument(
         "--reprendre",
         type=Path,
         default=None,
@@ -249,8 +260,37 @@ def main(argv: list[str] | None = None) -> int:
         )
         return SORTIE_ERREUR
 
+    # Le rapport est publié AVANT les livrables, et ce n est pas un détail d ordre : un audit
+    # complet coûte des dizaines de minutes de mutation, et une production de livrables qui
+    # échouerait (référentiel d exigences introuvable, dossier interdit par G-1) emporterait
+    # avec elle la mesure entière. La mesure est le fait ; les livrables en sont une vue.
     texte = json.dumps(rap, ensure_ascii=False, indent=2) if args.json else _resume(rap)
     _publier(texte, args.sortie)
+
+    if args.livrables is not None:
+        # Mandat 4 : le point d application est ICI, apres la fusion de `--reprendre` comme
+        # apres un audit complet. Les livrables suivent donc TOUJOURS le rapport publie — une
+        # reprise qui laisserait un dashboard perime serait pire qu aucun dashboard : on y
+        # lirait des chiffres d avant en croyant lire ceux d apres.
+        from forge_tests.livrables import produire, resume
+
+        try:
+            chemins = produire(
+                rap,
+                args.cible.resolve(),
+                args.livrables.resolve(),
+                rapport_nom=(args.sortie.name if args.sortie else None),
+            )
+        except Exception as erreur:  # noqa: BLE001 — l echec se DECLARE, le rapport reste publie
+            print(
+                f"livrables NON PRODUITS — {type(erreur).__name__}: {erreur}\n"
+                "le rapport, lui, est publie : la mesure n est pas perdue",
+                file=sys.stderr,
+            )
+            return SORTIE_ERREUR
+        # Sur stderr : `--livrables --json` doit laisser un stdout JSON PUR.
+        print(resume(chemins), file=sys.stderr)
+
     if rap["verdict"] == "PARTIEL":
         return SORTIE_PARTIEL
     return SORTIE_FAIL if rap["verdict"] == "FAIL" else SORTIE_OK

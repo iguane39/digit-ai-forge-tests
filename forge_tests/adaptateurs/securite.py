@@ -27,6 +27,16 @@ POUR_COUVRIR = (
     "fournir des sources Python lisibles sous `backend/` : le pan est un controle statique, "
     "il n a besoin d aucune execution mais il lui faut du code a lire"
 )
+
+# Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
+# DERIVENT du registre : une liste ecrite ailleurs aurait laisse un pan futur invisible.
+# `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
+# repli est DECLARE au cahier plutot que silencieux.
+CHAPITRES = (
+    {"code": "T7", "famille": "technique", "titre": "Sécurité",
+     "decoupe": "module", "axe_cas": "unitaire"},
+)
+
 ORACLES = ("sast", "secrets", "sca")
 
 _DEFAUT = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts"

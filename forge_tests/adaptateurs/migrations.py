@@ -24,6 +24,16 @@ POUR_COUVRIR = (
     "Up` / `-- +migrate Down`, et laisser le projet rejouable sur base neuve — le pan "
     "applique REELLEMENT le DDL, il ne le lit pas"
 )
+
+# Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
+# DERIVENT du registre : une liste ecrite ailleurs aurait laisse un pan futur invisible.
+# `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
+# repli est DECLARE au cahier plutot que silencieux.
+CHAPITRES = (
+    {"code": "T3", "famille": "technique", "titre": "Migrations",
+     "decoupe": "fichier", "axe_cas": "migration"},
+)
+
 SENS = ("aller", "retour", "rejeu")
 _MOTS = {
     "aller": ("aller", "up", "upgrade"),

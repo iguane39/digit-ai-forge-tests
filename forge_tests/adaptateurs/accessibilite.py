@@ -31,6 +31,16 @@ POUR_COUVRIR = (
     "SERVIE dans FORGE_TESTS_BASE_URL : le pan juge le DOM RENDU de chaque route, il n a rien "
     "a lire tant qu aucune page n est rendue"
 )
+
+# Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
+# DERIVENT du registre : une liste ecrite ailleurs aurait laisse un pan futur invisible.
+# `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
+# repli est DECLARE au cahier plutot que silencieux.
+CHAPITRES = (
+    {"code": "F4", "famille": "fonctionnel", "titre": "Accessibilité",
+     "decoupe": "ecran", "axe_cas": "etats"},
+)
+
 _ORACLE = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts" / "oracle-a11y.py"
 
 NON_JUGE = [

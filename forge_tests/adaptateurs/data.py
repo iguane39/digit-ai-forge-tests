@@ -24,6 +24,16 @@ POUR_COUVRIR = (
     "exercer chaque contrainte PAR VIOLATION dans la suite — la sonde data releve les "
     "violations reellement levees par le moteur (SQLAlchemy ou sqlite3)"
 )
+
+# Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
+# DERIVENT du registre : une liste ecrite ailleurs aurait laisse un pan futur invisible.
+# `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
+# repli est DECLARE au cahier plutot que silencieux.
+CHAPITRES = (
+    {"code": "T2", "famille": "technique", "titre": "Données",
+     "decoupe": "table", "axe_cas": "unitaire"},
+)
+
 _TABLE = re.compile(r"CREATE TABLE (\w+)\s*\(", re.IGNORECASE)
 _CONTRAINTE = re.compile(r"CONSTRAINT (\w+)", re.IGNORECASE)
 _NOT_NULL = re.compile(r"^\s*(\w+)\s+\w+\s+NOT NULL", re.IGNORECASE | re.MULTILINE)

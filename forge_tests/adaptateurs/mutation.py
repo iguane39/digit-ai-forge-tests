@@ -49,6 +49,16 @@ POUR_COUVRIR = (
     "rejoue la suite, elle ne peut rien mesurer sans l une ni l autre"
 )
 
+# Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
+# DERIVENT du registre : une liste ecrite ailleurs aurait laisse un pan futur invisible.
+# `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
+# repli est DECLARE au cahier plutot que silencieux.
+CHAPITRES = (
+    {"code": "T6", "famille": "technique", "titre": "Robustesse de la suite",
+     "decoupe": "module", "axe_cas": "unitaire"},
+)
+
+
 # Dossiers qui ne sont pas du code du projet : les muter mesurerait la suite d un tiers.
 _DOSSIERS_EXCLUS = {
     "__pycache__", ".venv", "venv", "site-packages", "node_modules", ".git", "migrations",

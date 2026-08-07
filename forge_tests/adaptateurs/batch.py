@@ -23,6 +23,16 @@ POUR_COUVRIR = (
     "porte `batch`/`traitement`) avec ses branches de rejet et de reprise, et l exercer par "
     "la suite"
 )
+
+# Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
+# DERIVENT du registre : une liste ecrite ailleurs aurait laisse un pan futur invisible.
+# `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
+# repli est DECLARE au cahier plutot que silencieux.
+CHAPITRES = (
+    {"code": "T4", "famille": "technique", "titre": "Batch",
+     "decoupe": "job", "axe_cas": "unitaire"},
+)
+
 FICHIER = "batch.py"
 _CODE_REJET = re.compile(r"^[A-Z]{2,}-[A-Z]{2,}$")
 

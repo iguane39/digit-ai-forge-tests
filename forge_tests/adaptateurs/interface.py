@@ -36,6 +36,16 @@ POUR_COUVRIR = (
     "(.jsx/.vue) relevent du pan front"
 )
 
+# Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
+# DERIVENT du registre : une liste ecrite ailleurs aurait laisse un pan futur invisible.
+# `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
+# repli est DECLARE au cahier plutot que silencieux.
+CHAPITRES = (
+    {"code": "F3", "famille": "fonctionnel", "titre": "Affordances",
+     "decoupe": "fichier", "axe_cas": "unitaire"},
+)
+
+
 # Gabarits rendus tels quels par un serveur ou servis en statique. Les composants de framework
 # (.jsx, .tsx, .vue, .svelte) sont volontairement HORS périmètre : leur câblage est une
 # expression du langage, pas un attribut du gabarit — les juger ici produirait du faux positif.

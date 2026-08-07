@@ -20,6 +20,16 @@ POUR_COUVRIR = (
     "voir la section « Contrat du projet audite » du README"
 )
 
+# Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
+# DERIVENT du registre : une liste ecrite ailleurs aurait laisse un pan futur invisible.
+# `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
+# repli est DECLARE au cahier plutot que silencieux.
+CHAPITRES = (
+    {"code": "T1", "famille": "technique", "titre": "API",
+     "decoupe": "routeur", "axe_cas": "unitaire"},
+)
+
+
 _ROUTE = re.compile(r'@app\.(get|post|patch|put|delete)\(\s*"([^"]+)"(.*?)\)\s*\n', re.DOTALL)
 _CODE = re.compile(r"(\d{3})\s*:")
 _APPEL = re.compile(r'client\.(get|post|patch|put|delete)\(\s*f?"([^"]+)"')

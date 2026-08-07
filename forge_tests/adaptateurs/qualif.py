@@ -54,6 +54,18 @@ POUR_COUVRIR = (
     "FORGE_TESTS_QUALIF_CONNEXION (route de la mire), FORGE_TESTS_QUALIF_PLAFOND (routes max)"
 )
 
+# Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
+# DERIVENT du registre : une liste ecrite ailleurs aurait laisse un pan futur invisible.
+# `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
+# repli est DECLARE au cahier plutot que silencieux.
+CHAPITRES = (
+    {"code": "F1", "famille": "fonctionnel", "titre": "Parcours bout en bout",
+     "decoupe": "parcours", "axe_cas": "etats"},
+    {"code": "F2", "famille": "fonctionnel", "titre": "Écrans × états",
+     "decoupe": "ecran", "axe_cas": "etats"},
+)
+
+
 CHAMPS_REQUIS = ("FORGE_TESTS_QUALIF_URL",)
 
 NON_JUGE = [

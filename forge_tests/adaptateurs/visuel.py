@@ -32,6 +32,19 @@ POUR_COUVRIR = (
     "boucle (`--accepter`) : aucun golden n est cree pendant un run, un rendu qui vient d "
     "echouer ne s enterine pas tout seul"
 )
+
+# Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
+# DERIVENT du registre : une liste ecrite ailleurs aurait laisse un pan futur invisible.
+# `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
+# repli est DECLARE au cahier plutot que silencieux.
+CHAPITRES = (
+    {"code": "F5", "famille": "fonctionnel", "titre": "Rendu visuel",
+     "decoupe": "ecran", "axe_cas": "rendu",
+     # Combinaisons qu un cas de golden doit couvrir. Declarees ICI : c est le pan qui sait ce
+     # que son oracle capture — le cahier ne les devine pas et ne les recopie pas.
+     "rendu": {"themes": ("clair", "sombre"), "largeurs_px": (380, 1280)}},
+)
+
 DOSSIER = ".visuel"
 _ORACLE = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts" / "oracle-visual-diff.py"
 

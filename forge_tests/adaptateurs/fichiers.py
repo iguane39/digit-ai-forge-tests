@@ -20,6 +20,16 @@ POUR_COUVRIR = (
     "exposer le module d import/parsing sous `backend/app/importer.py` (ou un nom portant "
     "`import`/`parse`/`fichier`) et exercer chacun de ses chemins d erreur"
 )
+
+# Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
+# DERIVENT du registre : une liste ecrite ailleurs aurait laisse un pan futur invisible.
+# `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
+# repli est DECLARE au cahier plutot que silencieux.
+CHAPITRES = (
+    {"code": "T5", "famille": "technique", "titre": "Fichiers",
+     "decoupe": "format", "axe_cas": "unitaire"},
+)
+
 FICHIER = "importer.py"
 
 NON_JUGE = [
