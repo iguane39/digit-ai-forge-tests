@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from forge_tests.actions import classifier
 from forge_tests.noyau import POUR_COUVRIR_DEFAUT, bande
 
 NON_JUGE = [
@@ -224,6 +225,10 @@ def fusionner(
         "bandes_de_risque": bandes,
         "findings": findings,
         "non_testables": non_testables,
+        # Les actions sont RECALCULEES sur le rapport fusionne, jamais reprises telles quelles :
+        # une action heritee d un finding resorbe par la reprise reclamerait un travail deja
+        # fait — le genre de faux positif qui fait fermer la liste.
+        "actions": classifier(findings, non_testables, non_couverts),
         "non_juge": sorted(non_juge),
         "reprise": {
             "rapport_repris": origine,

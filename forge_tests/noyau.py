@@ -197,6 +197,7 @@ def rapport(
     A-5 : un pan non couvert ne sort plus un simple motif — il sort ce qu il FAUDRAIT pour le
     couvrir. Un motif seul est un constat ; le couple motif + chemin est une action.
     """
+    from forge_tests.actions import classifier
     from forge_tests.risque import NON_JUGE as NON_JUGE_RISQUE
     from forge_tests.seuils import au_rapport as seuils_au_rapport
 
@@ -227,6 +228,14 @@ def rapport(
     bandes = {"critique": 0, "standard": 0, "differe": 0, "non_cote": 0}
     for f, _ in tous:
         bandes["non_cote" if f.risque is None else bande(f.risque)] += 1
+    findings_json = [{**asdict(f), "pan": pan} for f, pan in tous]
+    non_testables_json = [
+        asdict(n)
+        for n in sorted(
+            (n for s in sorties for n in s.non_testables),
+            key=lambda n: (n.pan, n.element),
+        )
+    ]
     return {
         "adaptateurs": [
             {"nom": s.adaptateur, "pan": s.pan, "verdict": s.verdict} for s in sorties
@@ -244,16 +253,14 @@ def rapport(
         "pans_non_couverts": non_couverts,
         "motifs_non_couverture": motifs_skip,
         "bandes_de_risque": bandes,
-        "findings": [{**asdict(f), "pan": pan} for f, pan in tous],
+        "findings": findings_json,
         # RT-6a : ce qu aucune execution ne POUVAIT atteindre ici, et ce qu il faut fournir
         # pour que la prochaine passe le puisse. Section toujours presente, meme vide.
-        "non_testables": [
-            asdict(n)
-            for n in sorted(
-                (n for s in sorties for n in s.non_testables),
-                key=lambda n: (n.pan, n.element),
-            )
-        ],
+        "non_testables": non_testables_json,
+        # Mandat 2 : la suite a donner, CLASSEE, portee par le rapport lui-meme. Le dashboard
+        # ne fait que la rendre — s il la calculait, deux lecteurs du meme audit auraient deux
+        # verites. Filtre MEP : `jq '.actions[] | select(.categorie=="manuelle_utilisateur")'`.
+        "actions": classifier(findings_json, non_testables_json, non_couverts),
         "non_juge": sorted({n for s in sorties for n in s.non_juge} | set(NON_JUGE_RISQUE)),
         "verdict": (
             "PARTIEL"

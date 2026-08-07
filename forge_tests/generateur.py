@@ -20,6 +20,12 @@ import json
 import re
 from pathlib import Path
 
+# Pan que ce générateur sait produire. Lu par `forge_tests.actions` pour décider qu un élément
+# non exercé de ce pan relève d `auto_ia` : la source qui fait foi dit comment l atteindre.
+# Déclaré ICI plutôt que recopié là-bas — une liste de pans générables tenue à la main aurait
+# divergé au premier générateur ajouté.
+PAN = "api"
+
 NON_JUGE = [
     "generateur : les codes exigeant une valeur METIER invalide (400), un etat conflictuel "
     "(409) ou un type de media particulier (415) ne sont pas generables depuis le seul schema "

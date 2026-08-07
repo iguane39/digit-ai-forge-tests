@@ -13,6 +13,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+# Pan généré — voir `forge_tests.generateur.PAN`.
+PAN = "data"
+
 NON_JUGE = [
     "generateur data : la valeur violante est derivee du TYPE de contrainte (unicite, non-nullite, "
     "cle etrangere, verification) ; une contrainte de verification a expression complexe n est pas "
