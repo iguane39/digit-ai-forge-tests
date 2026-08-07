@@ -1,8 +1,8 @@
-"""Livrables d audit — cahiers de tests dérivés et jeux de données synthétiques.
+"""Livrables d audit — cahiers dérivés, jeux de données synthétiques, dashboard autonome.
 
 Un audit produisait jusqu ici un rapport : une liste de constats, lisible par qui connaît le
-framework. Ce paquet en tire les documents qu une équipe utilise réellement — deux cahiers de
-tests et leur jeu de données — sans qu aucun ne soit écrit à la main.
+framework. Ce paquet en tire les trois documents qu une équipe utilise réellement — deux
+cahiers de tests et un tableau de bord — sans qu aucun ne soit écrit à la main.
 
 Garde-fou G-1, appliqué ici comme au générateur de cas : **rien n est écrit dans le projet
 audité.** Le dossier de dépôt est une PROPOSITION désignée par l opérateur, et la vérification
@@ -19,6 +19,7 @@ from pathlib import Path
 
 from forge_tests.adaptateurs import REGISTRE
 from forge_tests.livrables import cahiers as _cahiers
+from forge_tests.livrables import dashboard as _dashboard
 from forge_tests.livrables import exigences as _exigences
 from forge_tests.livrables import jeux as _jeux
 from forge_tests.livrables import surface as _surface
@@ -67,7 +68,7 @@ def produire(
     jour: _dt.date | None = None,
     rapport_nom: str | None = None,
 ) -> dict[str, Path]:
-    """Écrit les livrables et renvoie leurs chemins, par nature.
+    """Écrit les quatre livrables et renvoie leurs chemins, par nature.
 
     L ordre n est pas arbitraire : le jeu de données est écrit AVANT les cahiers, parce que
     ceux-ci scellent son empreinte. Un cahier qui citerait un jeu non encore produit
@@ -118,15 +119,25 @@ def produire(
         chemin = nommer(produit, nature, ".md", dossier, jour)
         chemins[famille] = _cahiers.ecrire(chemin, corps, contexte)
 
+    # 3. Dashboard — dérivé du SEUL rapport, contrôlé sur ses propres totaux avant d être rendu.
+    page = _dashboard.construire(rapport, contexte, chapitres_bruts, precedent)
+    ecarts = _dashboard.controler(page, rapport)
+    if ecarts:
+        raise RuntimeError(
+            "dashboard : les totaux affichés divergent du rapport — " + " · ".join(ecarts)
+        )
+    chemin_html = nommer(produit, "Dashboard tests", ".html", dossier, jour)
+    chemins["dashboard"] = _dashboard.ecrire(chemin_html, page, cible)
     return chemins
 
 
 def resume(chemins: dict[str, Path]) -> str:
-    ordre = ("fonctionnel", "technique", "jeu")
+    ordre = ("fonctionnel", "technique", "jeu", "dashboard")
     etiquettes = {
         "fonctionnel": "cahier fonctionnel",
         "technique": "cahier technique",
         "jeu": "jeu de donnees",
+        "dashboard": "dashboard",
     }
     return "\n".join(
         f"livrable {etiquettes[cle]:<20} -> {chemins[cle]}" for cle in ordre if cle in chemins

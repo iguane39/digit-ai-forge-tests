@@ -183,8 +183,19 @@ def main(argv: list[str] | None = None) -> int:
         metavar="DOSSIER",
         help=(
             "produire les livrables derives dans ce dossier de PROPOSITION, HORS du projet "
-            "audite (G-1) : cahier de tests fonctionnels, cahier de tests techniques et jeu de "
-            "donnees synthetique. Regeneres a chaque audit, y compris sous `--reprendre`"
+            "audite (G-1) : cahier de tests fonctionnels, cahier de tests techniques, jeu de "
+            "donnees synthetique et dashboard HTML autonome. Regeneres a chaque audit, y "
+            "compris sous `--reprendre`"
+        ),
+    )
+    parser.add_argument(
+        "--precedent",
+        type=Path,
+        default=None,
+        metavar="RAPPORT.json",
+        help=(
+            "rapport anterieur servant de point de comparaison : le dashboard affiche alors la "
+            "TENDANCE de chaque compteur. Sans lui, l onglet Synthese le declare"
         ),
     )
     parser.add_argument(
@@ -274,11 +285,17 @@ def main(argv: list[str] | None = None) -> int:
         # lirait des chiffres d avant en croyant lire ceux d apres.
         from forge_tests.livrables import produire, resume
 
+        precedent = None
+        if args.precedent is not None:
+            from forge_tests.reprise import charger as charger_rapport
+
+            precedent = charger_rapport(args.precedent)
         try:
             chemins = produire(
                 rap,
                 args.cible.resolve(),
                 args.livrables.resolve(),
+                precedent=precedent,
                 rapport_nom=(args.sortie.name if args.sortie else None),
             )
         except Exception as erreur:  # noqa: BLE001 — l echec se DECLARE, le rapport reste publie
