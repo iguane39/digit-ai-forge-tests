@@ -52,6 +52,8 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 | `--generer <dossier>` | dépose les cas de test générés dans ce dossier de **proposition** — jamais dans le projet analysé. Les messages partent sur stderr : `--generer --json` produit un stdout JSON pur |
 | `--sortie <fichier>` | persiste le rapport dans ce fichier, **à l'identique** de stdout (le dossier parent est créé au besoin) |
 | `--reprendre <rapport.json>` | relit un rapport antérieur et **ne rejoue que ce qui n'était pas vert** ; le rapport produit fusionne l'ancien et le neuf avec la provenance de chaque élément — voir « Audit de qualification avec reprise » |
+| `--livrables <dossier>` | produit les **livrables dérivés** dans ce dossier de proposition, **hors du projet audité** : deux cahiers de tests, un jeu de données synthétique, un dashboard HTML autonome. Régénérés à chaque audit, `--reprendre` compris. Messages sur stderr — voir « Cahiers de tests dérivés et dashboard d'exécution » |
+| `--precedent <rapport.json>` | rapport antérieur servant de **point de comparaison** : le dashboard affiche alors la tendance de chaque compteur. Sans lui, l'onglet Synthèse le déclare |
 
 ### Codes de sortie
 
@@ -79,6 +81,178 @@ pour qu'elle ait lieu** — adaptateur à écrire, configuration à fournir, con
 La sortie d'un audit partiel devient ainsi une liste de travaux, pas un relevé de manques. Le
 chemin est déclaré par l'adaptateur lui-même (constante `POUR_COUVRIR`), jamais par le noyau :
 lui ne connaît aucune technologie et ne saurait pas quoi dire.
+
+### `actions[]` — qui répare, et où
+
+Un rapport nommait des défauts sans jamais dire **qui** les répare. Trois destinataires
+existent réellement, et les confondre adresse le travail au mauvais interlocuteur :
+
+| catégorie | ce qu'elle signifie |
+|---|---|
+| `auto_ia` | un agent de code sait le faire seul : la source qui fait foi (schéma OpenAPI, contrainte SQL, mutant survivant) dit exactement ce qu'il faut écrire. Reste une **proposition à relire** — la loi du générateur ne bouge pas |
+| `manuelle_dev` | un développeur doit **trancher** : câbler ou retirer une affordance, aligner une déclaration sur un comportement, décider ce que le test doit affirmer |
+| `manuelle_utilisateur` | personne d'autre que l'humain qui exploite le produit ne peut le faire : fournir un identifiant, servir une instance peuplée, **arbitrer** qu'un rendu modifié est bien le rendu voulu |
+
+Et cinq **étapes cibles** qui disent où la correction atterrit : `development`, `tests-suite`,
+`design`, `mep-config`, et `forge` — cette dernière réservée au **défaut d'auditeur** : la forge
+ne sait pas classer la classe de finding, ou n'a pas d'adaptateur pour le pan. Un défaut de la
+forge se nomme comme les autres, il ne se tait pas.
+
+```json
+{
+  "finding_ref": "visuel/visuel:/accueil",
+  "categorie": "manuelle_utilisateur",
+  "etape_cible": "design",
+  "attendu": "ARBITRER le rendu de « visuel:/accueil » : valider le nouveau golden si le changement est voulu, sinon corriger le rendu…"
+}
+```
+
+Deux règles dures :
+
+- **le champ vit au rapport JSON, pas au dashboard.** Si le HTML calculait la classification,
+  deux lecteurs du même audit — l'un par la page, l'autre par `jq` — auraient deux vérités ;
+- **tout finding a exactement une action.** Un constat sans destinataire est un constat qui ne
+  sera pas traité. La recette le vérifie, classe par classe.
+
+Les entrées qui ne viennent pas d'un finding portent un préfixe explicite : `non-testable:<pan>`
+(configuration absente, regroupée par champs requis) et `pan-non-couvert:<pan>`.
+
+Filtre attendu par le **DOSSIER-MEP** du steering — une seule expression, sans traitement :
+
+```bash
+jq '.actions[] | select(.categorie=="manuelle_utilisateur")' rapport.json
+```
+
+## Cahiers de tests dérivés et dashboard d'exécution
+
+`--livrables <dossier>` produit quatre fichiers datés, nommés à la convention Digit-AI
+(`<Produit> - <Nature> - AAAAMMJJ<i>.<ext>`), dans un dossier de **proposition extérieur au
+projet audité**. Le garde-fou G-1 n'est pas une convention de nommage : le chemin est résolu, et
+s'il tombe sous la racine auditée la production est **refusée avant d'écrire quoi que ce soit**.
+
+| Livrable | Contenu |
+|---|---|
+| `… - Cahier de tests fonctionnels - …md` | chapitré par écran/parcours, sous-chapitré par état (nominal, vide, erreur, chargement). Chaque cas : préconditions, jeu de données associé, exigence(s) rattachée(s), étapes, résultat attendu |
+| `… - Cahier de tests techniques - …md` | chapitré par pan puis module / table / fichier / job |
+| `… - Jeu de donnees de tests - …json` | valeurs **synthétiques uniquement**, vérifiées avant écriture |
+| `… - Dashboard tests - …html` | page autonome à six onglets, dérivée du **seul** rapport JSON |
+
+### « Exhaustif » — une définition opposable, pas une intention
+
+> Chaque élément de surface inventorié porte **au moins un cas**, ou figure en **« non couvert »
+> avec sa raison**. Zéro absence silencieuse.
+
+C'est la seule définition qui se contrôle : « tous les cas importants » ne se contrôle pas. Le
+tableau d'exhaustivité est en tête de chaque cahier, et la recette vérifie que **chaque élément
+du rapport** figure bien dans l'un des deux paniers.
+
+Un élément qu'aucune exécution ne pouvait atteindre ici (configuration absente) ne reçoit **pas**
+un cas de complaisance : il est déclaré non couvert, avec les champs à fournir. La loi du
+générateur ne change pas d'un étage à l'autre — un cas qu'on sait injouable invite à assouplir
+son assertion pour le faire passer, c'est-à-dire le test-fitting que G-2 interdit.
+
+### Chapitres dérivés — un pan futur apparaît seul
+
+Les chapitres ne sont écrits nulle part en dur. Chaque adaptateur déclare les siens :
+
+```python
+CHAPITRES = (
+    {"code": "T2", "famille": "technique", "titre": "Données",
+     "decoupe": "table", "axe_cas": "unitaire"},
+)
+```
+
+Le cahier et le dashboard les **dérivent du registre**. Un pan ajouté demain apparaît avec son
+chapitre sans qu'une ligne soit touchée ; un pan qui n'en déclare aucun reçoit quand même un
+chapitre, nommé « pan sans chapitre déclaré » — visible, jamais absent. Un axe de découpe ou de
+génération de cas inconnu ne casse rien : il retombe sur un repli, **déclaré dans le cahier**.
+
+Les douze pans donnent aujourd'hui : `F1` parcours bout en bout, `F2` écrans × états, `F3`
+affordances, `F4` accessibilité, `F5` rendu visuel (goldens × thèmes × largeurs, déclarés par le
+pan `visuel` lui-même) ; `T1` API par routeur, `T2` données par table, `T3` migrations par
+fichier (aller / retour / rejeu), `T4` batch par job, `T5` fichiers par format, `T6` robustesse
+de la suite par module, `T7` sécurité.
+
+### Sceau — une édition manuelle est un défaut, et ça se voit
+
+Chaque cahier s'ouvre sur un bloc de sceau : empreintes SHA-256 des **sources** (rapport,
+référentiel d'exigences, jeu de données) et du **corps** du document.
+
+```
+<!-- SCEAU FORGE-TESTS
+  produit: ASD Mail Manager 2
+  rapport_sha256: 96921e2aaa6ea9e4165acfa4bef54c8d…
+  sceau_corps: 213f43122dd9bfe29ff8fdee5987296066c…
+-->
+```
+
+Le cahier est **régénéré à chaque audit** : une correction faite dans le fichier serait écrasée
+sans bruit à la passe suivante. Le sceau la trahit avant — `nommage.verifier_sceau()` recompare
+l'empreinte du corps. Corollaire : deux productions du même rapport donnent le **même octet**
+(vérifié par la recette, sha256 à l'appui), ce qui suppose qu'aucune valeur non déterministe
+n'entre dans le document.
+
+### Exigences — un rattachement déclaré, jamais deviné
+
+`FORGE_TESTS_EXIGENCES=<chemin EXIGENCES.json>` (variable d'environnement ou
+`<projet>/.env.forge-tests`). Deux provenances, et elles ne se valent pas :
+
+- `declare` — le référentiel porte lui-même la clé technique (`"elements": ["code:GET /x=200"]`).
+  C'est un **fait** ;
+- `lexical` — le référentiel ne porte que du français et la surface que de la technique. Le
+  rapprochement se fait sur les racines de mots (≥ 2 racines communes de 5 caractères), il est
+  publié **avec sa provenance et la mention « À VALIDER »**.
+
+Affirmer « ce cas vérifie E-014 » sans que rien ne l'établisse fabriquerait une traçabilité
+fausse — pire que pas de traçabilité, parce qu'on cesse de la vérifier. Le référentiel absent
+est **déclaré en tête du cahier** : les cas sont alors dérivés de la seule surface.
+
+La réciproque, que personne ne regarde jamais, est en annexe : **les exigences qu'aucun cas ne
+touche**, nommément. C'est le seul moyen de voir qu'un pan entier du besoin n'a pas de test
+quand la couverture de surface, elle, est au vert.
+
+### Jeux de données — synthétiques, et prouvés tels avant écriture
+
+Un jeu de données déposé à côté d'un cahier est un fichier qui circule. Les valeurs sont
+fabriquées à partir de listes fermées écrites dans le code, les courriels vivent sous `.test`
+(TLD réservé RFC 6761 : aucune adresse n'est joignable), et un garde-fou **codé** relit la
+production **avant** de l'écrire. Il lève — il ne signale pas : une fois le fichier posé, il est
+trop tard.
+
+Trois motifs de refus : un courriel hors domaine réservé ; une valeur qui ressemble à un secret
+(clé `sk-…`, jeton GitHub, JWT, bloc PEM, empreinte hexadécimale longue, identifiants dans une
+URL) ; une valeur qui figure dans la configuration du projet audité (`.env*`) ou dans une
+variable d'environnement sensible.
+
+### Dashboard — six onglets, une seule source
+
+| Onglet | Contenu |
+|---|---|
+| 1 · Synthèse | verdict, compteurs (éléments, passés, échecs, dont bloquants, non joués, actions), seuils opposables avec leur état constaté, tendance vs `--precedent` |
+| 2 · Fonctionnels | chapitres `F*` dérivés, sous-chapitres, éléments et constats |
+| 3 · Techniques | chapitres `T*` dérivés, idem |
+| 4 · Échecs | chaque finding avec sa **raison mesurée**, trié par risque |
+| 5 · Non joués | `non_testables[]` (champs requis, motif) et `pans_non_couverts[]` (motif, `pour_couvrir`) |
+| 6 · Actions | `actions[]` du rapport, filtrable par catégorie et par étape — la page **rend**, elle ne classe pas |
+
+Trois contraintes dures, toutes vérifiées par la recette :
+
+- **autonome** — double-cliquable, zéro requête réseau. Les liens Google Fonts du boilerplate
+  `digit-ai-page-html` sont retirés (incompatibles avec la contrainte) ; le repli système est
+  explicite dans chaque `font-family`, ce que le contrôle de charte exige. `check_html.py` du
+  skill est joué en recette et doit sortir **PASS** ;
+- **zéro secret** — aucune valeur de jeton, clé ou mot de passe n'entre dans la page ; les
+  **noms** des champs manquants, oui, c'est l'information utile. La frontière est déclarée : le
+  jeu de données interdit *toute* valeur de configuration (il doit être intégralement fabriqué),
+  le dashboard interdit les **secrets** — l'URL de l'instance auditée figure au rapport, elle est
+  le sujet de l'audit et la masquer rendrait les constats du pan `qualif` inintelligibles ;
+- **totaux exacts** — chaque compteur affiché porte un `data-total="<clé>"`. La recette relit ce
+  qui est **affiché**, le recompare au rapport, et vérifie que le contrôle **discrimine** en lui
+  soumettant une page dont un total a été volontairement faussé.
+
+Un pan non couvert n'est jamais absent : son chapitre sort **grisé**, avec son motif et son
+chemin de couverture. Un chapitre absent laisserait croire que le sujet n'existe pas dans le
+produit.
 
 ## Audit de qualification avec reprise
 
@@ -143,6 +317,19 @@ Le rapport fusionné porte une section `reprise` :
 Chaque finding porte aussi sa `provenance` (`exerce_le_run` ou `repris_de:<chemin>`). Un
 élément exercé au run précédent et non atteint par le nouveau reste **couvert**, et le finding
 « jamais exercé » correspondant disparaît — c'est tout l'objet de la reprise.
+
+`actions[]` est **recalculé** sur le rapport fusionné, jamais repris tel quel : une action
+héritée d'un finding résorbé par la reprise réclamerait un travail déjà fait, et c'est le genre
+de faux positif qui fait fermer la liste.
+
+Si `--livrables` est passé, les livrables sont **régénérés après la fusion**, exactement comme
+après un audit complet. Une reprise qui laisserait un dashboard périmé serait pire qu'aucun
+dashboard : on lirait des chiffres d'avant en croyant lire ceux d'après.
+
+```bash
+uv run python -m forge_tests <projet> --reprendre rapport-1.json \
+    --json --sortie rapport-2.json --livrables ../propositions --precedent rapport-1.json
+```
 
 **Limites déclarées.** La ré-exécution a la granularité du **pan** : un pan à rejouer l'est en
 entier, c'est l'unité qu'un adaptateur sait lancer. La provenance, elle, est donnée élément par
@@ -558,6 +745,8 @@ journalisé). Modèle : `.env.exemple`.
 | `FORGE_TESTS_QUALIF_ROUTES` | routes d'amorce du parcours (virgule) — celles qu'aucun lien n'atteint |
 | `FORGE_TESTS_QUALIF_MARQUEURS` | JSON `{"/route": "marqueur métier"}` ; à défaut le titre de la page |
 | `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
+| `FORGE_TESTS_EXIGENCES` | chemin d'un `EXIGENCES.json` : les cas des cahiers y sont rattachés, **avec leur provenance** (`declare` ou `lexical`). Absent, le cahier le déclare en tête et dérive de la seule surface. Un chemin qui n'existe pas est un **refus**, pas un silence |
+| `FORGE_TESTS_PRODUIT` | nom du produit dans les noms de fichiers des livrables. À défaut : le champ `projet` du référentiel d'exigences, puis le nom du dossier audité |
 
 ## Recette et dette
 
@@ -589,6 +778,19 @@ pans y sont couverts ; la relecture des rapports **antérieurs** à A-5 par `--r
 restauration byte-exacte après mutation (G-1, fichier en LF et en CRLF). Sans elles, ces
 mécanismes pourraient pourrir sans que rien ne le dise. La recette empreinte en outre les
 sources des deux bancs en SHA-256 **avant et après** l'audit : aucun octet ne doit bouger.
+
+Quatre vérifications portent sur les **livrables**, et chacune a sa contrepartie rouge — un
+contrôle qu'on ne voit jamais échouer ne contrôle rien :
+
+| Vérification | Le vert | Le rouge qui prouve qu'elle discrimine |
+|---|---|---|
+| `actions[]` | ≥ 1 action par catégorie **et** par étape cible ; tout finding en porte exactement une | une classe de finding **inventée** sort un défaut d'auditeur (`etape_cible: forge`), jamais un finding sans suite |
+| jeux de données | un jeu produit par la forge passe le garde-fou ; un courriel du domaine réservé aussi | courriel de domaine réel, clé `sk-…`, jeton GitHub, JWT, empreinte hexadécimale, URL à identifiants, valeur du `.env` du projet — **six refus** |
+| cahiers | sceau valide, deux runs identiques au sha256, chaque élément inventorié présent, douze chapitres dérivés | une édition manuelle d'un caractère est trahie par le sceau ; un élément non testable sort **nommé** en « non couvert » avec le champ à fournir ; un dépôt dans le projet audité est refusé (G-1) |
+| dashboard | totaux égaux au rapport, aucune ressource distante, deux thèmes, six onglets, `check_html.py` **PASS** | un total volontairement faussé et un total retiré sont tous deux détectés ; une valeur de jeton dans la page lève avant écriture |
+
+Le contrôle des totaux relit ce qui est **affiché** (`data-total="<clé>"`), pas une variable
+interne : un dashboard peut mentir sans que le code qui l'a produit ait tort.
 
 Elle exige un venv sous `fixtures/banc-*/backend` (`uv sync --directory
 fixtures/banc-rouge/backend`), les dépendances des fronts (`npm ci` puis `npm run build` dans
