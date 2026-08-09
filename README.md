@@ -763,6 +763,7 @@ journalisé). Modèle : `.env.exemple`.
 ```bash
 uv run python recette/verifier_corpus.py   # critère de sortie S-01 — exit 0 attendu
 uv run python recette/verifier_corpus.py --section sql qualification   # une poignée de secondes
+uv run pytest                              # suite unitaire du dépôt (jouée aussi par la recette)
 uv run python recette/precision_generateur.py
 uv run python -m forge_tests.dette             # régénère registre-dette.json depuis le code
 uv run python -m forge_tests.dette --verifier  # exit 1 si le registre committé a divergé
@@ -821,7 +822,7 @@ elles ont besoin** :
 | `cahiers` ou `dashboard` | rouge seul | **100 s** |
 | `corpus` | rouge + vert | ~180 s |
 
-Sections : `corpus`, `sql`, `qualification`, `dette`, `divergences`, `chemins`,
+Sections : `corpus`, `unitaire`, `sql`, `qualification`, `dette`, `divergences`, `chemins`,
 `lecture-seule`, `actions`, `jeux`, `cahiers`, `dashboard` (`--help` les liste avec leur coût).
 
 **Une recette partielle ne prononce jamais S-01.** Elle sort `RECETTE PARTIELLE — S-01 NON
@@ -895,9 +896,22 @@ qu'elle produit — et Forge Tests est la réponse à cette exposition.
 
 ## État du harnais
 
-Forge Tests n'a **pas encore de suite unitaire à lui** : son harnais est la recette du corpus,
-qui l'éprouve par exécution sur une paire de bancs. Un `pytest` à la racine ne collecte rien
-aujourd'hui — c'est un écart connu, pas un vert.
+Deux filets, et ils ne mesurent pas la même chose :
+
+- **la recette du corpus** éprouve le framework *par exécution*, sur une paire de bancs. C'est
+  elle qui prononce le critère de sortie S-01 ;
+- **la suite unitaire** (`tests/`, `uv run pytest`) porte sur les **bords** que les bancs
+  n'exercent pas : littéral SQL non fermé, variable de configuration citée mais fournie, action
+  d'une classe de finding inconnue. Elle couvre aujourd'hui les trois modules dont dépend tout
+  le reste — `sql.py` (les quatre lecteurs SQL du dépôt en dépendent), `qualification.py` (ce
+  qu'on demande à un humain de fournir) et `actions.py` (à qui l'audit adresse son travail).
+
+**Ce qui reste sans suite unitaire est nommé, jamais tu** : `noyau.py`, `reprise.py`,
+`execution.py`, `invariants.py`, les douze adaptateurs et les livrables n'ont pour filet que la
+recette. C'est un écart connu, pas un vert.
+
+La suite est jouée **par la recette** (section `unitaire`) : une suite unitaire qu'aucune
+vérification ne lance serait exactement l'écart qu'elle est censée combler.
 
 ## Garde-fous
 

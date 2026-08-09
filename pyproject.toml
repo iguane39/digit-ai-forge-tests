@@ -35,3 +35,7 @@ strict = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# Le paquet n est pas installe dans l environnement (pas de build-system : Forge Tests se lance
+# par `uv run python -m forge_tests`). Sans cette ligne, `pytest` ne collectait rien et l absence
+# de suite unitaire passait pour un choix — c etait un chemin d import manquant.
+pythonpath = ["."]

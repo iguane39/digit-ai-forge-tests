@@ -609,6 +609,44 @@ def verifier_registre_dette() -> int:
     return echecs
 
 
+def verifier_suite_unitaire() -> int:
+    """La suite unitaire du dépôt, jouée PAR la recette — sinon rien ne la lance.
+
+    Forge Tests n avait pour harnais que cette recette : « un `pytest` à la racine ne collecte
+    rien » était l écart déclaré au README. Une suite unitaire qu aucune vérification ne joue
+    serait le même écart sous un autre nom — la loi du dépôt vaut d abord pour lui-même. Elle
+    est donc une section comme les autres, et son échec fait tomber S-01.
+    """
+    import subprocess
+
+    print("-" * 78)
+    print("  TF-0006 — suite unitaire du depot (pytest)")
+    try:
+        resultat = subprocess.run(
+            # Pas de `-q` ici : `addopts` le porte deja, et un second `-q` supprimerait
+            # justement la ligne de bilan (« N passed ») que la recette affiche.
+            [sys.executable, "-m", "pytest"],
+            cwd=RACINE,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=600,
+        )
+    except (OSError, subprocess.SubprocessError) as erreur:
+        print(f"  [ECHEC  ] pytest non lancable : {type(erreur).__name__}: {erreur}")
+        return 1
+    lignes = [ligne.strip() for ligne in resultat.stdout.splitlines() if ligne.strip()]
+    bilans = [ligne for ligne in lignes if "passed" in ligne or "failed" in ligne]
+    resume = bilans[-1] if bilans else (lignes[-1] if lignes else "aucune sortie")
+    ok = resultat.returncode == 0
+    print(f"  [{'OK     ' if ok else 'ECHEC  '}] pytest : {resume[:80]}")
+    if not ok:
+        for ligne in lignes[-15:]:
+            print(f"             {ligne}")
+    return 0 if ok else 1
+
+
 def verifier_lecture_sql() -> int:
     """Nombre de cas de lecture SQL en echec. Zero attendu."""
     from forge_tests.sql import decouper
@@ -1107,6 +1145,7 @@ SECTIONS: dict[str, dict] = {
         "bancs": ("rouge", "vert"),
         "titre": "16 défauts du banc rouge, banc vert sans bloquant, empreintes G-1",
     },
+    "unitaire": {"bancs": (), "titre": "TF-0006 — suite unitaire du dépôt (pytest)"},
     "sql": {"bancs": (), "titre": "RT-8 — lecture SQL"},
     "qualification": {"bancs": (), "titre": "RT-6a / RT-13 — configuration absente"},
     "dette": {"bancs": (), "titre": "TF-0002 / TF-0004 — registre de dette"},
@@ -1125,6 +1164,8 @@ def _jouer(nom: str, rouge: dict | None, vert: dict | None, contexte: dict) -> i
         return verifier_corpus_des_bancs(
             rouge, vert, contexte["alteres"], contexte["empreintes_avant"]
         )
+    if nom == "unitaire":
+        return verifier_suite_unitaire()
     if nom == "sql":
         return verifier_lecture_sql()
     if nom == "qualification":
