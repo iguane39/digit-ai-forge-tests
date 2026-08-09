@@ -117,7 +117,7 @@ Deux règles dures :
 Les entrées qui ne viennent pas d'un finding portent un préfixe explicite : `non-testable:<pan>`
 (configuration absente, regroupée par champs requis) et `pan-non-couvert:<pan>`.
 
-Filtre attendu par le **DOSSIER-MEP** du steering — une seule expression, sans traitement :
+Filtre attendu par le **DOSSIER-MEP** du pilot — une seule expression, sans traitement :
 
 ```bash
 jq '.actions[] | select(.categorie=="manuelle_utilisateur")' rapport.json
