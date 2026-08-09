@@ -503,6 +503,111 @@ def verifier_champs_par_pan() -> int:
     return echecs
 
 
+def verifier_registre_dette() -> int:
+    """Le registre de dette COMMITTÉ dit-il encore la dette du code d aujourd hui ?
+
+    Le registre était régénéré à la main. Régénéré à la main, il n est pas régénéré : la dette
+    du jour se lit alors dans un fichier qui décrit le code d avant-hier, et personne ne le
+    sait. Le contrôle est donc joué ici, et il ÉCHOUE — il ne signale pas.
+
+    Deux règles de sémantique sont vérifiées avec lui (TF-0004) : l identité d une entrée
+    survit à la REFORMULATION de son énoncé, et le statut `ok` — le seul qui prétende à une
+    fermeture — exige une `preuve` nommée. Chaque règle porte sa contrepartie rouge : un
+    contrôle qu on ne voit jamais échouer ne contrôle rien.
+    """
+    import json
+    import tempfile
+
+    from forge_tests import dette
+
+    echecs = 0
+    print("-" * 78)
+    print("  TF-0002/TF-0004 — registre de dette : synchronise, et fermetures prouvees")
+
+    ecarts_reels = dette.verifier()
+    cas = [(f"le registre committe est SYNCHRONISE avec le code ({len(ecarts_reels)} ecart(s))",
+            not ecarts_reels)]
+    for ecart in ecarts_reels[:5]:
+        print(f"             -> {ecart}")
+
+    with tempfile.TemporaryDirectory() as temporaire:
+        copie = Path(temporaire) / "registre.json"
+        contenu = json.loads(dette.REGISTRE.read_text(encoding="utf-8"))
+
+        # ROUGE 1 — une entree du code absente du registre doit etre DENONCEE.
+        ampute = {**contenu, "dette": contenu["dette"][1:]}
+        copie.write_text(
+            json.dumps(ampute, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        cas.append(("un registre ampute d une entree est DENONCE", bool(dette.verifier(copie))))
+
+        # ROUGE 2 — `ok` sans preuve : une dette ne se ferme pas parce qu on l a decretee close.
+        sans_preuve = json.loads(json.dumps(contenu))
+        sans_preuve["dette"][0]["statut"] = "ok"
+        sans_preuve["dette"][0].pop("preuve", None)
+        copie.write_text(
+            json.dumps(sans_preuve, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        motifs = dette.verifier(copie)
+        cas.append(("un statut `ok` SANS preuve est refuse",
+                    any("SANS preuve" in motif for motif in motifs)))
+
+    # VERT — la meme entree, fermee SUR PREUVE, passe : le controle DISCRIMINE.
+    courant = dette.collecter()
+    premier = courant[0]
+    identite = f"{premier['domaine']}-042"
+    ferme = {
+        identite: {
+            "id": identite, "domaine": premier["domaine"], "enonce": premier["enonce"],
+            "statut": "ok", "preuve": "recette : verifier_registre_dette",
+        }
+    }
+    projete = {e["id"]: e for e in dette.projeter(ferme)["dette"]}
+    cas.append(("une entree fermee SUR PREUVE garde son `ok` et sa preuve",
+                projete.get(identite, {}).get("statut") == "ok"
+                and bool(projete.get(identite, {}).get("preuve"))))
+
+    # IDENTITE — l enonce est REFORMULE dans le code : l entree ne doit pas etre remplacee par
+    # un couple « resolue + todo neuf ». C est ce couple qui produisait 27 fausses resolutions.
+    reformule = {
+        identite: {
+            "id": identite, "domaine": premier["domaine"],
+            "enonce": premier["enonce"] + " (ancienne formulation, mot en plus)",
+            "statut": "assume", "note": "note a preserver",
+        }
+    }
+    declarees: list[str] = []
+    projete = {e["id"]: e for e in dette.projeter(reformule, declarees)["dette"]}
+    garde = projete.get(identite, {})
+    cas.append(("un enonce REFORMULE conserve son identifiant, son statut et sa note",
+                garde.get("statut") == "assume" and garde.get("note") == "note a preserver"
+                and garde.get("enonce") == premier["enonce"]))
+    cas.append(("le rapprochement par ressemblance est DECLARE, jamais silencieux",
+                bool(declarees)))
+
+    # RETRAIT — un enonce disparu du code SANS preuve n est pas une fermeture.
+    orphelin = {
+        "labo-001": {
+            "id": "labo-001", "domaine": "labo",
+            "enonce": "labo : enonce sans aucun equivalent dans le code du depot",
+            "statut": "todo",
+        }
+    }
+    projete = {e["id"]: e for e in dette.projeter(orphelin)["dette"]}
+    cas.append(("un enonce disparu du code sort `retiree`, jamais `ok`",
+                projete.get("labo-001", {}).get("statut") == dette.STATUT_RETIRE))
+
+    for libelle, ok in cas:
+        echecs += not ok
+        print(f"  [{'OK     ' if ok else 'ECHEC  '}] {libelle}")
+    compte = dette.resume()
+    print("             registre : " + " · ".join(f"{s}={n}" for s, n in sorted(compte.items())))
+    if declarees:
+        for ligne in declarees[:3]:
+            print(f"             -> {ligne}")
+    return echecs
+
+
 def verifier_lecture_sql() -> int:
     """Nombre de cas de lecture SQL en echec. Zero attendu."""
     from forge_tests.sql import decouper
@@ -1004,6 +1109,7 @@ def main() -> int:
 
     echecs_sql = verifier_lecture_sql()
     echecs_qualification = verifier_qualification() + verifier_champs_par_pan()
+    echecs_dette = verifier_registre_dette()
     echecs_divergences = verifier_divergences()
     echecs_chemins = verifier_chemins_de_couverture()
     echecs_chemins += verifier_reprise_apres_enrichissement()
@@ -1018,6 +1124,7 @@ def main() -> int:
         and not bloquants_vert
         and not echecs_sql
         and not echecs_qualification
+        and not echecs_dette
         and not echecs_divergences
         and not echecs_chemins
         and not echecs_g1

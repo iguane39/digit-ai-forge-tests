@@ -1,563 +1,563 @@
 {
-  "version": 1,
-  "note": "Dette de jugement du framework. `todo` = à outiller · `assume` = limite acceptée et déclarée pour toujours · `ok` = comblée. Régénéré depuis le code : ne pas éditer les énoncés à la main, seulement les statuts et les notes.",
+  "version": 2,
+  "note": "Dette de jugement du framework. `todo` = à outiller · `assume` = limite acceptée et déclarée pour toujours · `ok` = comblée, et le champ `preuve` NOMME le test ou le contrôle de recette qui la tient · `retiree` = énoncé disparu du code sans preuve, ce qui n est PAS une fermeture. L identifiant est stable et découplé de l énoncé : reformuler une phrase conserve l entrée. Régénéré depuis le code (`python -m forge_tests.dette`) et vérifié en recette (`--verifier`) : ne pas éditer les énoncés à la main, seulement les statuts, les preuves et les notes.",
   "dette": [
     {
-      "id": "accessibilite-a11y-076c4976",
+      "id": "accessibilite-a11y-003",
       "domaine": "accessibilite-a11y",
       "enonce": "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
       "statut": "assume",
       "note": "limite propre de oracle-a11y, reprise telle quelle : audit axe-core complet, contraste et navigation clavier sortent de son contrat."
     },
     {
-      "id": "api-fastapi-28e9b332",
+      "id": "api-fastapi-001",
       "domaine": "api-fastapi",
       "enonce": "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une ASSERTION porte sur lui — c est le role du second contre-oracle",
       "statut": "assume",
       "note": "par conception : la faiblesse d assertion est mesuree par la mutation, pas par la couverture. Architecture, pas dette."
     },
     {
-      "id": "batch-python-b6a8e2ea",
+      "id": "batch-python-001",
       "domaine": "batch-python",
       "enonce": "batch : les branches sont dérivées de l AST du module ; une branche implicite (opérateur ternaire, court-circuit booléen) n est pas inventoriée séparément",
       "statut": "assume",
       "note": "non levable par les arcs de couverture : un ternaire tient sur une seule ligne, il n existe aucun arc entre ses deux issues. Exigerait une instrumentation AST du code teste."
     },
     {
-      "id": "batch-python-dc664872",
+      "id": "batch-python-002",
       "domaine": "batch-python",
       "enonce": "batch : une branche dont le corps tient sur la MEME ligne que son test (`if x: y`) n est pas distinguable — les arcs de coverage.py vont de ligne a ligne, il n en existe aucun entre une ligne et elle-meme. Repli sur la couverture de ligne, moins precis",
       "statut": "assume",
       "note": "non levable par les arcs : coverage.py les emet de ligne a ligne, il n en existe aucun entre une ligne et elle-meme. Exigerait une instrumentation AST du code teste."
     },
     {
-      "id": "data-sql-6f7294ed",
+      "id": "data-sql-001",
       "domaine": "data-sql",
       "enonce": "data : sur SQLite les clés étrangères restent non attribuables (le moteur ne nomme pas la contrainte violée) ; l attribution complète exige un moteur qui les nomme, comme PostgreSQL",
       "statut": "assume",
       "note": "limite du MOTEUR, pas de l outil : le banc tourne sur PostgreSQL, qui nomme tout. Note de portabilite pour un projet reste sur SQLite."
     },
     {
-      "id": "data-sql-8c45c77b",
+      "id": "data-sql-002",
       "domaine": "data-sql",
       "enonce": "data : un index ou un trigger est réputé exercé si son instruction de création a été envoyée au moteur ; son EFFET (unicité réellement testée, trigger réellement déclenché) n est pas vérifié",
       "statut": "assume",
       "note": "l effet d un index (performance) ou d un trigger sort du contrat d un oracle de couverture ; son existence et son application sont, elles, verifiees."
     },
     {
-      "id": "execution-edbe4456",
+      "id": "execution-002",
       "domaine": "execution",
       "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
       "statut": "assume",
       "note": "par conception : la faiblesse d assertion est mesuree par la mutation, jamais par la couverture. Deux contre-oracles, deux roles."
     },
     {
-      "id": "fichiers-python-b1c45a6d",
+      "id": "fichiers-python-001",
       "domaine": "fichiers-python",
       "enonce": "fichiers : les chemins sont les branches du module de parsing ; une variante de format qui ne produit aucune branche dédiée (encodage géré par la bibliothèque) reste invisible",
       "statut": "assume",
       "note": "une variante sans branche dediee est indistinguable du chemin nominal par analyse de flot."
     },
     {
-      "id": "front-react-60be323d",
+      "id": "front-react-001",
       "domaine": "front-react",
       "enonce": "front : un element manipule pendant la suite est repute exerce ; la trace dit qu il a ete atteint, pas qu une ASSERTION porte sur son effet",
       "statut": "assume",
       "note": "par conception : la faiblesse d assertion est mesuree par la mutation, jamais par la couverture. Deux contre-oracles, deux roles."
     },
     {
-      "id": "front-react-48d7dbe0",
+      "id": "front-react-002",
       "domaine": "front-react",
       "enonce": "front : elements rendus dynamiquement sans data-testid statique (non inventoriables ici)",
       "statut": "assume",
       "note": "limite de l inventaire statique ; leve seulement par un crawl navigateur (pan front, dette ouverte)."
     },
     {
-      "id": "generateur-59ffb57d",
+      "id": "generateur-001",
       "domaine": "generateur",
       "enonce": "generateur : les codes exigeant une valeur METIER invalide (400), un etat conflictuel (409) ou un type de media particulier (415) ne sont pas generables depuis le seul schema — ils sont declares NON GENERABLES, jamais emis a l aveugle",
       "statut": "assume",
       "note": "non derivable du schema : exige des invariants metier declares (enum, bornes) que OpenAPI ne porte pas."
     },
     {
-      "id": "generateur-7a394666",
+      "id": "generateur-003",
       "domaine": "generateur",
       "enonce": "generateur : le corps synthetise ne porte que les champs REQUIS ; un endpoint dont le comportement depend d un champ optionnel ne sera pas exerce sur ce chemin",
       "statut": "assume",
       "note": "arbitrage precision/rappel assume : remplir un optionnel au hasard produit des faux positifs."
     },
     {
-      "id": "generateur-data-1c4024e3",
+      "id": "generateur-data-001",
       "domaine": "generateur-data",
       "enonce": "generateur data : la valeur violante est derivee du TYPE de contrainte (unicite, non-nullite, cle etrangere, verification) ; une contrainte de verification a expression complexe n est pas resolue et n est pas generee",
       "statut": "assume",
       "note": "une contrainte CHECK a expression arbitraire demande un solveur ; hors contrat, la contrainte est signalee non generable plutot que generee a tort."
     },
     {
-      "id": "mutation-python-f496a011",
+      "id": "mutation-python-001",
       "domaine": "mutation-python",
       "enonce": "mutation : les mutants équivalents ne sont pas détectés — un survivant peut être un mutant sémantiquement identique à l original",
       "statut": "assume",
       "note": "indécidable en général : aucune version future ne les éliminera. Triage humain des survivants."
     },
     {
-      "id": "risque-d7aeecaa",
+      "id": "risque-001",
       "domaine": "risque",
       "enonce": "risque : la criticité et le coût de détection tardive sont DÉCLARÉS par pan, pas mesurés — un projet dont les enjeux diffèrent doit redéclarer la table COTATION_PAN",
       "statut": "assume",
       "note": "choix de conception assumé et versionné dans COTATION_PAN ; à redéclarer par projet."
     },
     {
-      "id": "risque-e5a9984f",
+      "id": "risque-002",
       "domaine": "risque",
       "enonce": "risque : la probabilité de défaillance est approchée par le nombre de commits touchant le fichier ; hors dépôt git, elle retombe sur une valeur neutre",
       "statut": "assume",
       "note": "proxy assume : sans historique il n existe pas de meilleur signal que la valeur neutre declaree."
     },
     {
-      "id": "securite-oracles-a0a08e45",
+      "id": "securite-oracles-001",
       "domaine": "securite-oracles",
       "enonce": "securite : le perimetre scanne est le dossier du projet analyse ; ni l historique git, ni l infrastructure declaree ailleurs (conteneurs, pipelines, secrets d execution)",
       "statut": "assume",
       "note": "l historique git et l infrastructure relevent d autres oracles du registre, pas de celui-ci — perimetre assume, pas oubli."
     },
     {
-      "id": "securite-oracles-d85fe366",
+      "id": "securite-oracles-002",
       "domaine": "securite-oracles",
       "enonce": "securite : aucun test d intrusion ni d authentification/autorisation au niveau metier",
       "statut": "assume",
       "note": "hors du contrat d un oracle statique : un test d intrusion releve d une demarche offensive, pas d une mesure de couverture."
     },
     {
-      "id": "visuel-golden-195c578f",
+      "id": "visuel-golden-001",
       "domaine": "visuel-golden",
       "enonce": "visuel : un diff dit qu il y a changement, pas si le changement est VOULU — la decision reste humaine (limite propre de l oracle, reprise telle quelle)",
       "statut": "assume",
       "note": "indecidable par construction : seul un humain sait si un changement de rendu est voulu. C est la raison d etre du feu vert sur les goldens."
     },
     {
-      "id": "visuel-golden-f02d7e5b",
+      "id": "visuel-golden-002",
       "domaine": "visuel-golden",
       "enonce": "visuel : le rendu compare est le DOM capture a l etat initial de chaque route, sans style externe charge depuis le serveur",
       "statut": "assume",
       "note": "le DOM capture est autoportant par choix : dependre du serveur au moment du jugement rendrait le verdict non reproductible."
     },
     {
-      "id": "api-fastapi-36917142",
+      "id": "api-fastapi-002",
       "domaine": "api-fastapi",
       "enonce": "api : un code asserte dans une fonction de test est rattache a TOUS les appels de cette fonction ; l oracle ne relie pas l assertion a un appel precis",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "api-fastapi-e6621c0d",
-      "domaine": "api-fastapi",
-      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
-      "statut": "resolue"
-    },
-    {
-      "id": "api-fastapi-edbe4456",
-      "domaine": "api-fastapi",
-      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
-      "statut": "resolue"
-    },
-    {
-      "id": "api-fastapi-e3cc430e",
+      "id": "api-fastapi-003",
       "domaine": "api-fastapi",
       "enonce": "api : codes produits par le framework sans declaration explicite dans responses=",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "batch-python-e6621c0d",
+      "id": "api-fastapi-004",
+      "domaine": "api-fastapi",
+      "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
+      "statut": "retiree"
+    },
+    {
+      "id": "api-fastapi-005",
+      "domaine": "api-fastapi",
+      "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
+      "statut": "retiree"
+    },
+    {
+      "id": "batch-python-003",
       "domaine": "batch-python",
       "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "batch-python-edbe4456",
+      "id": "batch-python-004",
       "domaine": "batch-python",
       "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "data-sql-b61e6dfa",
-      "domaine": "data-sql",
-      "enonce": "data : contraintes créées hors migrations (ORM seul, triggers, index partiels)",
-      "statut": "resolue"
-    },
-    {
-      "id": "data-sql-6376a933",
+      "id": "data-sql-004",
       "domaine": "data-sql",
       "enonce": "data : une contrainte est réputée exercée si son nom ou sa colonne apparaît dans un test attendant un rejet ; l oracle ne vérifie pas que le rejet porte bien sur cette contrainte",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "data-sql-b06b45c0",
+      "id": "data-sql-005",
       "domaine": "data-sql",
       "enonce": "data : les clés étrangères ne sont PAS attribuables par exécution — SQLite ne nomme pas la contrainte dans « FOREIGN KEY constraint failed ». Elles restent sur le recoupement textuel, moins sûr, jusqu à confrontation à un moteur qui nomme ses contraintes",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "data-sql-bd3bc805",
+      "id": "data-sql-006",
+      "domaine": "data-sql",
+      "enonce": "data : contraintes créées hors migrations (ORM seul, triggers, index partiels)",
+      "statut": "retiree"
+    },
+    {
+      "id": "data-sql-007",
       "domaine": "data-sql",
       "enonce": "data : la présence d une table est déduite du texte des tests, pas de son usage réel",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "data-sql-da2e6595",
+      "id": "data-sql-008",
       "domaine": "data-sql",
       "enonce": "data : triggers et index partiels ne sont pas inventoriés",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "execution-e6621c0d",
+      "id": "execution-004",
       "domaine": "execution",
       "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "fichiers-python-e6621c0d",
+      "id": "fichiers-python-002",
       "domaine": "fichiers-python",
       "enonce": "exécution : la couverture est mesurée au niveau LIGNE ; deux branches sur une même ligne ne sont pas distinguées",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "fichiers-python-edbe4456",
+      "id": "fichiers-python-003",
       "domaine": "fichiers-python",
       "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "front-react-fe504d65",
+      "id": "front-react-003",
       "domaine": "front-react",
       "enonce": "front : un element mentionne par la suite est repute exerce ; l oracle ne verifie pas que l interaction a lieu ni qu elle assert quelque chose",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "generateur-a4b9e9ea",
-      "domaine": "generateur",
-      "enonce": "generateur : precision MESUREE a 0 % sur le banc (recette/precision_generateur.py) — les cas produits echouent aussi sur du code correct. NON UTILISABLE en l etat",
-      "statut": "resolue"
-    },
-    {
-      "id": "generateur-4dc97f21",
+      "id": "generateur-004",
       "domaine": "generateur",
       "enonce": "generateur : ne synthetise pas les preconditions (ressource existante, corps valide, en-tete de type de media) ni les parametres qui declenchent un code d erreur",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "generateur-bf878b82",
+      "id": "generateur-005",
+      "domaine": "generateur",
+      "enonce": "generateur : precision MESUREE a 0 % sur le banc (recette/precision_generateur.py) — les cas produits echouent aussi sur du code correct. NON UTILISABLE en l etat",
+      "statut": "retiree"
+    },
+    {
+      "id": "generateur-006",
       "domaine": "generateur",
       "enonce": "generateur : couvre le seul pan API ; les autres pans ne sont pas generes",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "migrations-sql-a4b8f19a",
-      "domaine": "migrations-sql",
-      "enonce": "migrations : un sens est réputé exercé si un test le nomme ; l oracle ne vérifie pas que la migration a réellement été appliquée dans ce sens",
-      "statut": "resolue"
-    },
-    {
-      "id": "migrations-sql-33be9de9",
+      "id": "migrations-sql-003",
       "domaine": "migrations-sql",
       "enonce": "migrations : un sens est exercé si une ligne de test RÉELLEMENT EXÉCUTÉE le nomme ; l oracle ne vérifie pas que la migration a été appliquée dans ce sens, seulement que le code qui la nomme a tourné",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "migrations-sql-9b7eabfc",
+      "id": "migrations-sql-004",
       "domaine": "migrations-sql",
       "enonce": "migrations : le rejeu est déduit d une seconde exécution des mêmes instructions — deux migrations aux instructions identiques seraient confondues",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "migrations-sql-d2d9e0bb",
+      "id": "migrations-sql-005",
+      "domaine": "migrations-sql",
+      "enonce": "migrations : un sens est réputé exercé si un test le nomme ; l oracle ne vérifie pas que la migration a réellement été appliquée dans ce sens",
+      "statut": "retiree"
+    },
+    {
+      "id": "migrations-sql-006",
       "domaine": "migrations-sql",
       "enonce": "migrations : un sens est exercé si les instructions de sa section ont été RÉELLEMENT envoyées au moteur ; l oracle ne vérifie pas que leur effet sur le schéma est correct",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "mutation-python-0a4363f6",
+      "id": "mutation-python-005",
       "domaine": "mutation-python",
       "enonce": "mutation : périmètre limité au module de calcul ; le reste du back n est pas muté",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "mutation-python-f5a0e6e6",
-      "domaine": "mutation-python",
-      "enonce": "mutation : opérateurs arithmétiques et constantes numériques seulement",
-      "statut": "resolue"
-    },
-    {
-      "id": "mutation-python-fecac842",
-      "domaine": "mutation-python",
-      "enonce": "mutation : opérateurs arithmétiques et de comparaison ; ni suppression d instruction, ni permutation d arguments, ni mutation de littéraux non numériques",
-      "statut": "resolue"
-    },
-    {
-      "id": "mutation-python-3c7ef86c",
+      "id": "mutation-python-006",
       "domaine": "mutation-python",
       "enonce": "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance et bornes numériques ; ni suppression d instruction, ni permutation d arguments, ni littéraux non numériques",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "securite-oracles-507f7f68",
+      "id": "mutation-python-007",
+      "domaine": "mutation-python",
+      "enonce": "mutation : opérateurs arithmétiques et constantes numériques seulement",
+      "statut": "retiree"
+    },
+    {
+      "id": "mutation-python-008",
+      "domaine": "mutation-python",
+      "enonce": "mutation : opérateurs arithmétiques et de comparaison ; ni suppression d instruction, ni permutation d arguments, ni mutation de littéraux non numériques",
+      "statut": "retiree"
+    },
+    {
+      "id": "securite-oracles-003",
       "domaine": "securite-oracles",
       "enonce": "securite : le perimetre scanne est le dossier applicatif ; ni l historique git, ni l infrastructure, ni la configuration de deploiement",
-      "statut": "resolue"
+      "statut": "retiree"
     },
     {
-      "id": "accessibilite-a11y-6343ef4f",
+      "id": "accessibilite-a11y-001",
       "domaine": "accessibilite-a11y",
       "enonce": "accessibilite : le DOM est capture a l etat INITIAL de chaque route ; les etats atteints apres interaction (menu ouvert, modale, message d erreur) ne sont pas audites",
       "statut": "todo"
     },
     {
-      "id": "accessibilite-a11y-eb28ef09",
+      "id": "accessibilite-a11y-002",
       "domaine": "accessibilite-a11y",
       "enonce": "accessibilite : sans compte configure (.env), les routes protegees redirigent vers la page publique — le nombre de PAGES DISTINCTES rendues le dit au rapport",
       "statut": "todo"
     },
     {
-      "id": "actions-837bfa6d",
+      "id": "actions-001",
       "domaine": "actions",
       "enonce": "actions : la categorie et l etape sont derivees de la CLASSE du finding, pas de son contenu — deux findings de meme classe recoivent la meme suite, meme si l un est trivial et l autre profond ; l attendu, lui, cite l element",
       "statut": "todo"
     },
     {
-      "id": "actions-f0ca1e13",
+      "id": "actions-002",
       "domaine": "actions",
       "enonce": "actions : `auto_ia` signifie « derivable d une source qui fait foi », pas « sans relecture » — un cas genere reste une PROPOSITION soumise a relecture (loi du generateur)",
       "statut": "todo"
     },
     {
-      "id": "cahiers-5a7607a8",
+      "id": "cahiers-001",
       "domaine": "cahiers",
       "enonce": "cahiers : un cas derive dit ce qu il faut VERIFIER, pas comment le produit l implemente — les etapes sont exprimees sur la surface (route, endpoint, contrainte), un scenario metier reste a ecrire par qui connait le metier",
       "statut": "todo"
     },
     {
-      "id": "cahiers-f6291fa2",
+      "id": "cahiers-002",
       "domaine": "cahiers",
       "enonce": "cahiers : les etats vide, erreur et chargement sont des DEGRADATIONS generiques ; un ecran dont l etat vide a une semantique propre (premiere utilisation, filtre trop restrictif) reclame un cas supplementaire que la seule surface ne permet pas de deriver",
       "statut": "todo"
     },
     {
-      "id": "cahiers-662381be",
+      "id": "cahiers-003",
       "domaine": "cahiers",
       "enonce": "cahiers : l exhaustivite est verifiee sur les elements que le RAPPORT porte — un element qu aucun adaptateur n a su enumerer n est ni couvert ni declare non couvert, il est absent des deux, et c est la limite de l inventaire, pas celle du cahier",
       "statut": "todo"
     },
     {
-      "id": "cahiers-326778ed",
+      "id": "cahiers-004",
       "domaine": "cahiers",
       "enonce": "cahiers : les gestes d un cas unitaire sont derives de la FORME de l identifiant (`code:METHODE /chemin=NNN`, `contrainte:x`, `mutant:...`) ; un identifiant de forme inconnue recoit un geste GENERIQUE, nomme comme tel dans le cas, a preciser par qui connait le pan",
       "statut": "todo"
     },
     {
-      "id": "dashboard-fb7b7071",
+      "id": "dashboard-001",
       "domaine": "dashboard",
       "enonce": "dashboard : la page rend le rapport, elle ne le juge pas — un chiffre surprenant se conteste sur le rapport JSON, jamais sur le HTML",
       "statut": "todo"
     },
     {
-      "id": "dashboard-6f5bcbad",
+      "id": "dashboard-002",
       "domaine": "dashboard",
       "enonce": "dashboard : l etat d un seuil est derive du RAPPROCHEMENT entre sa valeur et les findings `seuil-non-tenu` qui la citent ; deux seuils de meme valeur ne sont pas discernables par ce rapprochement et sont alors tous deux marques « non tenu »",
       "statut": "todo"
     },
     {
-      "id": "dashboard-c81b018e",
+      "id": "dashboard-003",
       "domaine": "dashboard",
       "enonce": "dashboard : la tendance compare deux rapports par leurs TOTAUX — elle ne dit pas si ce sont les memes elements qui ont bouge",
       "statut": "todo"
     },
     {
-      "id": "data-sql-ba7a03f9",
+      "id": "data-sql-003",
       "domaine": "data-sql",
       "enonce": "data : le repli `sqlite3` relève les INSTRUCTIONS envoyées au pilote, pas les violations de contrainte ; sur un projet sans SQLAlchemy les contraintes restent donc non attribuables — tables, index et triggers, eux, sont mesurés",
       "statut": "todo"
     },
     {
-      "id": "execution-1dfcb298",
+      "id": "execution-001",
       "domaine": "execution",
       "enonce": "exécution : la couverture combine lignes et ARCS de branchement ; une branche implicite (ternaire, court-circuit booléen) reste hors de portée de coverage.py",
       "statut": "todo"
     },
     {
-      "id": "execution-35815eb3",
+      "id": "execution-003",
       "domaine": "execution",
       "enonce": "exécution : la configuration Playwright du projet peut démarrer son propre webServer, qui ÉCRIT dans l arbre analysé (build, code généré) — hors de portée du garde-fou lecture seule ; seuls les artefacts produits par Forge Tests sont routés hors du projet",
       "statut": "todo"
     },
     {
-      "id": "exigences-21092f13",
+      "id": "exigences-001",
       "domaine": "exigences",
       "enonce": "exigences : sans cle technique au referentiel, le rattachement d un cas a une exigence est LEXICAL (deux racines de 5 caracteres communes au minimum) — il est publie avec sa provenance et doit etre valide par un humain, jamais lu comme un fait",
       "statut": "todo"
     },
     {
-      "id": "exigences-26f597e0",
+      "id": "exigences-002",
       "domaine": "exigences",
       "enonce": "exigences : la reciproque (exigence sans aucun cas rattache) est calculee sur le meme rattachement lexical — une exigence declaree « sans cas » peut en avoir un que le vocabulaire n a pas rapproche",
       "statut": "todo"
     },
     {
-      "id": "generateur-543141fc",
+      "id": "generateur-002",
       "domaine": "generateur",
       "enonce": "generateur : pans API et Data generes ; Front, Batch et Fichiers ne le sont pas — leurs cas exigent un scenario, pas une seule requete",
       "statut": "todo"
     },
     {
-      "id": "interface-statique-492d8622",
+      "id": "interface-statique-001",
       "domaine": "interface-statique",
       "enonce": "interface : controle STATIQUE — un gestionnaire pose a l execution par un framework (React, Vue, delegation d evenement sur un ancetre, composant compile) est INVISIBLE ici ; un element declare inerte doit etre lu comme « aucun cablage lisible dans les sources »",
       "statut": "todo"
     },
     {
-      "id": "interface-statique-3805c1f5",
+      "id": "interface-statique-002",
       "domaine": "interface-statique",
       "enonce": "interface : un element juge cable ne l est que par PRESUMPTION — son identifiant, sa classe ou son attribut de donnees est cite dans le JS du projet. La coincidence de chaine suffit a le blanchir : le pan attrape l inerte flagrant, il ne certifie pas le cable",
       "statut": "todo"
     },
     {
-      "id": "interface-statique-949e5f47",
+      "id": "interface-statique-003",
       "domaine": "interface-statique",
       "enonce": "interface : le cablage prouve l existence d un gestionnaire, jamais que son effet soit OBSERVABLE par l utilisateur — un handler vide passerait pour cable",
       "statut": "todo"
     },
     {
-      "id": "interface-statique-ae53f8c3",
+      "id": "interface-statique-004",
       "domaine": "interface-statique",
       "enonce": "interface : les composants de framework (.jsx, .tsx, .vue, .svelte) ne sont pas analyses comme gabarits ; leur surface est inventoriee par le pan front via `data-testid`",
       "statut": "todo"
     },
     {
-      "id": "interface-statique-aecd7c09",
+      "id": "interface-statique-005",
       "domaine": "interface-statique",
       "enonce": "interface : une ancre `#nom` dont la cible n existe pas dans le document n est pas jugee morte — la cible peut etre injectee au rendu",
       "statut": "todo"
     },
     {
-      "id": "invariants-1ac7985d",
+      "id": "invariants-001",
       "domaine": "invariants",
       "enonce": "invariants : extraits des gardes du code — donc l invariant TEL QU IMPLEMENTE, pas tel que voulu. Une garde fausse produit un cas qui confirme le bug au lieu de le reveler",
       "statut": "todo"
     },
     {
-      "id": "invariants-caf00f8f",
+      "id": "invariants-002",
       "domaine": "invariants",
       "enonce": "invariants : seules les gardes de forme simple sont lues (comparaison, appartenance, negation) ; une garde composee ou deportee dans une fonction n est pas extraite",
       "statut": "todo"
     },
     {
-      "id": "invariants-d51221de",
+      "id": "invariants-003",
       "domaine": "invariants",
       "enonce": "invariants : la resolution des gardes deportees s arrete a UN niveau d appel, par nom simple et dans le meme module (RT-9). Un helper qui en appelle un autre, un helper importe, un appel par attribut (`service.refuser()`) ou un status_code calcule restent invisibles — le code declare paraitra alors « jamais leve »",
       "statut": "todo"
     },
     {
-      "id": "jeux-de-donnees-0709a9b1",
+      "id": "jeux-de-donnees-001",
       "domaine": "jeux-de-donnees",
       "enonce": "jeux de donnees : le garde-fou compare aux valeurs de configuration LISIBLES (env sensibles, `.env*` du projet) — une donnee reelle recopiee a la main qui ne figure dans aucune de ces sources ne serait pas reconnue ; la synthese, elle, est integrale",
       "statut": "todo"
     },
     {
-      "id": "jeux-de-donnees-d6e0e289",
+      "id": "jeux-de-donnees-002",
       "domaine": "jeux-de-donnees",
       "enonce": "jeux de donnees : les valeurs sont derivees de l IDENTIFIANT de l element, pas de son type metier — un jeu couvre la FORME du cas (nominal, vide, erreur), pas la semantique d un domaine que le rapport ne connait pas",
       "statut": "todo"
     },
     {
-      "id": "migrations-sql-2fdea760",
+      "id": "migrations-sql-001",
       "domaine": "migrations-sql",
       "enonce": "migrations : l effet verifie est l EXISTENCE des objets nommes (tables, contraintes, index) apres application ; ni leur definition exacte, ni les donnees migrees",
       "statut": "todo"
     },
     {
-      "id": "migrations-sql-74e7319c",
+      "id": "migrations-sql-002",
       "domaine": "migrations-sql",
       "enonce": "migrations : le rejeu est déduit d une seconde exécution de TOUTES les instructions de la section ; deux migrations rigoureusement identiques resteraient indiscernables",
       "statut": "todo"
     },
     {
-      "id": "mutation-python-d8fe9aa8",
+      "id": "mutation-python-002",
       "domaine": "mutation-python",
       "enonce": "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance, bornes numériques et suppression d instruction ; ni permutation d arguments, ni littéraux non numériques",
       "statut": "todo"
     },
     {
-      "id": "mutation-python-5ae36d32",
+      "id": "mutation-python-003",
       "domaine": "mutation-python",
       "enonce": "mutation : la profondeur est ECHANTILLONNEE par module (voir `mutation.taux_echantillon` au rapport) — un score de module porte sur les mutants JOUES, pas sur tous les mutants possibles ; le perimetre, lui, est total et ses exclusions sont nommees",
       "statut": "todo"
     },
     {
-      "id": "mutation-python-2e5cde79",
+      "id": "mutation-python-004",
       "domaine": "mutation-python",
       "enonce": "modules : un module est dit « exerce » des qu une ligne en est couverte — l etre ne dit pas qu il soit VERIFIE, c est le role du score de mutation qui l accompagne",
       "statut": "todo"
     },
     {
-      "id": "qualif-navigateur-acab00ef",
+      "id": "qualif-navigateur-001",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : le pan LIT les ecouteurs attaches a chaque affordance, il ne CLIQUE jamais — sur une instance peuplee un clic ecrit vraiment (suppression, envoi, appel tiers facture). Un gestionnaire attache mais dont le corps ne fait rien passerait donc pour un effet",
       "statut": "todo"
     },
     {
-      "id": "qualif-navigateur-3b3b73fc",
+      "id": "qualif-navigateur-002",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",
       "statut": "todo"
     },
     {
-      "id": "qualif-navigateur-41ca0667",
+      "id": "qualif-navigateur-003",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : le marqueur de contenu par defaut est le titre de la page (premier `h1` non vide, sinon `title`) ; il atteste qu une page a RENDU quelque chose, pas qu elle ait rendu les BONNES donnees — un marqueur metier se declare par FORGE_TESTS_QUALIF_MARQUEURS",
       "statut": "todo"
     },
     {
-      "id": "qualif-navigateur-31a319bb",
+      "id": "qualif-navigateur-004",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : quand une delegation d evenement est posee sur `document` ou `body`, aucun element ne peut plus etre declare inerte avec certitude — les elements concernes sont NOMMES en non_juge au lieu d etre accuses",
       "statut": "todo"
     },
     {
-      "id": "qualification-3287f6c1",
+      "id": "qualification-001",
       "domaine": "qualification",
       "enonce": "qualification : un manque de configuration n est reconnu que s il se DIT — variable citee par une trace d execution, declaration d adaptateur, ou cle d un `.env.example` du projet. Un service tiers injoignable sans jamais nommer sa cle reste un pan non mesure ordinaire",
       "statut": "todo"
     },
     {
-      "id": "qualification-8d8a3b4d",
+      "id": "qualification-002",
       "domaine": "qualification",
       "enonce": "qualification : les champs tires d un `.env.example` sont PRESUMES requis (le fichier ne dit pas quel pan depend de quelle cle) — la provenance de chaque entree le declare",
       "statut": "todo"
     },
     {
-      "id": "qualification-99f4d799",
+      "id": "qualification-003",
       "domaine": "qualification",
       "enonce": "qualification : un champ qu AUCUN adaptateur ne revendique dans son `CHAMPS_REQUIS` reste partage par les pans de son domaine (cas des variables PROPRES AU PROJET citees par une trace) — l attribution par pan ne vaut que pour les champs de la forge elle-meme",
       "statut": "todo"
     },
     {
-      "id": "reprise-efecb346",
+      "id": "reprise-001",
       "domaine": "reprise",
       "enonce": "reprise : la re-execution a la granularite du PAN — un pan qui doit etre rejoue l est en entier. La provenance, elle, est donnee element par element",
       "statut": "todo"
     },
     {
-      "id": "reprise-6e5aeb9a",
+      "id": "reprise-002",
       "domaine": "reprise",
       "enonce": "reprise : un element repris d un rapport anterieur atteste d une mesure PASSEE, pas de l etat courant du projet — si le code a change entre les deux passes, seule une passe complete fait foi",
       "statut": "todo"
     },
     {
-      "id": "sql-a452ff3c",
+      "id": "sql-001",
       "domaine": "sql",
       "enonce": "sql : le decoupage reconnait les litteraux `'...'` (echappement `''`) et les identifiants entre guillemets ; un `;` ou un `--` place dans un litteral DOLLAR-QUOTE (`$$...$$`, corps de fonction PL/pgSQL) ou dans une chaine a echappement backslash (`E'...\\'...'`) reste hors de portee — l instruction serait coupee au mauvais endroit",
       "statut": "todo"
     },
     {
-      "id": "sql-f1c916a7",
+      "id": "sql-002",
       "domaine": "sql",
       "enonce": "sql : ce module lit le TEXTE des migrations, il ne l analyse pas grammaticalement — une instruction syntaxiquement invalide est rendue telle quelle, sans jugement",
       "statut": "todo"

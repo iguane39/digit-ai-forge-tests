@@ -763,7 +763,8 @@ journalisé). Modèle : `.env.exemple`.
 ```bash
 uv run python recette/verifier_corpus.py   # critère de sortie S-01 — exit 0 attendu
 uv run python recette/precision_generateur.py
-uv run python -m forge_tests.dette         # régénère registre-dette.json depuis le code
+uv run python -m forge_tests.dette             # régénère registre-dette.json depuis le code
+uv run python -m forge_tests.dette --verifier  # exit 1 si le registre committé a divergé
 ```
 
 La recette rejoue le framework sur la paire de bancs de `fixtures/` : chacun des **16** défauts
@@ -808,8 +809,29 @@ fixtures/banc-rouge/backend`), les dépendances des fronts (`npm ci` puis `npm r
 `FORGE_TESTS_BASE_URL` : elle porte sur les bancs locaux, jamais sur l'instance de l'opérateur.
 
 `registre-dette.json` est **régénéré depuis le code** : les `non_juge` déclarés par le noyau,
-le risque, l'exécution et les adaptateurs y deviennent des entrées à statut (`todo`, `assume`,
-`ok`, `resolue`). Ne pas éditer les énoncés à la main, seulement les statuts et les notes.
+le risque, l'exécution et les adaptateurs y deviennent des entrées à statut. Ne pas éditer les
+énoncés à la main, seulement les statuts, les preuves et les notes.
+
+| Statut | Ce qu'il affirme |
+|---|---|
+| `todo` | à outiller |
+| `assume` | limite acceptée et déclarée pour toujours |
+| `ok` | **comblée** — le champ `preuve` nomme le test ou le contrôle de recette qui la tient. Sans `preuve`, le statut est **refusé** |
+| `retiree` | l'énoncé a disparu du code, sans preuve. Posé par la machine, et **ce n'est pas une fermeture** |
+
+Deux règles de sémantique, posées après le constat du 08/08 — 89 entrées, **zéro** fermeture,
+27 « résolues » qui n'étaient que des phrases réécrites :
+
+- **l'identifiant est stable et découplé de l'énoncé.** Il valait `<domaine>-<sha8(énoncé)>` :
+  reformuler une phrase fabriquait une entrée neuve en `todo` et faisait passer l'ancienne pour
+  comblée. Il vaut désormais `<domaine>-<rang>`, attribué une fois et conservé. Un énoncé
+  reformulé garde son identité, son statut et sa note — le rapprochement se fait sur la
+  ressemblance (≥ 70 % dans le même domaine) et il est **déclaré** à la régénération ;
+- **la synchronisation est vérifiée en recette.** Régénéré à la main, le registre n'est pas
+  régénéré : la dette du jour se lirait dans un fichier qui décrit le code d'avant-hier.
+  `--verifier` compare le fichier committé à la projection du code et **échoue** — il ne
+  signale pas. Ses deux contreparties rouges (registre amputé, `ok` sans preuve) sont jouées
+  par la recette.
 
 ## Architecture
 
