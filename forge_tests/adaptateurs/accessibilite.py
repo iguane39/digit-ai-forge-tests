@@ -41,6 +41,16 @@ CHAPITRES = (
      "decoupe": "ecran", "axe_cas": "etats"},
 )
 
+# RT-13 : les champs de configuration qui debloquent CE pan, et eux seuls. Sans revendication,
+# ils restaient dans le sac partage du domaine « acces » et etaient reclames a tous les pans en
+# SKIP — y compris ceux qu aucun compte n aurait rendus mesurables.
+CHAMPS_REQUIS = (
+    "FORGE_TESTS_BASE_URL",
+    "FORGE_TESTS_API_URL",
+    "FORGE_TESTS_LOGIN",
+    "FORGE_TESTS_PASSWORD",
+)
+
 _ORACLE = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts" / "oracle-a11y.py"
 
 NON_JUGE = [

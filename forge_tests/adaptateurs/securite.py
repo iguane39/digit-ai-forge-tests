@@ -37,6 +37,10 @@ CHAPITRES = (
      "decoupe": "module", "axe_cas": "unitaire"},
 )
 
+# RT-13 : le seul champ qui debloque CE pan — la racine des scripts d oracles a jouer. Un
+# compte ou une instance servie ne l auraient jamais rendu mesurable.
+CHAMPS_REQUIS = ("FORGE_TESTS_ORACLES",)
+
 ORACLES = ("sast", "secrets", "sca")
 
 _DEFAUT = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts"

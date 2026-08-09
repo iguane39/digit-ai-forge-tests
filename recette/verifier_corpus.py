@@ -434,6 +434,75 @@ def verifier_qualification() -> int:
     return echecs
 
 
+def verifier_champs_par_pan() -> int:
+    """RT-13 — les champs d un pan SKIP sont les SIENS, jamais empruntes a un autre pan.
+
+    Le domaine « acces » est un sac partage : l authentification y depose le compte, le pan
+    `qualif` son URL d instance peuplee. Tout pan en SKIP repartait avec le sac entier — le pan
+    `data` reclamait `FORGE_TESTS_QUALIF_URL`, qui ne l aurait jamais debloque. Cout mesure :
+    16 actions `manuelle_utilisateur` fausses au rapport ASD du 07/08.
+
+    Aucun banc ne peut l exercer : aux bancs, les douze pans sont couverts. Le cas est donc
+    verifie sur pieces, avec sa contrepartie ROUGE — le champ EST bien dans le sac partage,
+    faute de quoi le controle serait vide et ne prouverait rien.
+    """
+    from forge_tests import qualification
+    from forge_tests.adaptateurs import REGISTRE as ADAPTATEURS
+    from forge_tests.noyau import SortieAdaptateur
+
+    echecs = 0
+    print("-" * 78)
+    print("  RT-13 — champs requis : chaque pan publie les SIENS, jamais ceux d un autre")
+
+    cible = "/projet-fictif-rt13"
+    qualification.oublier(cible)
+    # Ce que les adaptateurs declarent vraiment quand ils ne peuvent pas mesurer : l URL de
+    # l instance peuplee (pan `qualif`) et le compte de lecture (authentification).
+    qualification.declarer(cible, "acces", ("FORGE_TESTS_QUALIF_URL",))
+    qualification.declarer(cible, "acces", ("FORGE_TESTS_LOGIN", "FORGE_TESTS_PASSWORD"))
+    # Une variable PROPRE AU PROJET, citee par une trace : aucun adaptateur ne la revendique.
+    qualification.detecter(cible, "backend", "KeyError: 'ZZ_JETON_CLIENT'")
+
+    partage = qualification.requis(cible, "backend", "acces")
+    sorties = [
+        SortieAdaptateur("data-sql", "data", cible, "SKIP"),
+        SortieAdaptateur("qualif-navigateur", "qualif", cible, "SKIP"),
+    ]
+    qualification.qualifier(sorties, Path(cible), ADAPTATEURS)
+    champs = {
+        sortie.pan: set(sortie.non_testables[0].champs_requis) if sortie.non_testables else set()
+        for sortie in sorties
+    }
+    revendiques = qualification.proprietaires(ADAPTATEURS)
+    qualification.oublier(cible)
+
+    cas = [
+        # ROUGE : sans ce temoin, le controle passerait sur un sac vide et ne prouverait rien.
+        ("temoin : le domaine partage porte bien FORGE_TESTS_QUALIF_URL",
+         "FORGE_TESTS_QUALIF_URL" in partage),
+        ("le pan qui la REVENDIQUE la recoit (qualif)",
+         "FORGE_TESTS_QUALIF_URL" in champs["qualif"]),
+        ("un pan qui ne la revendique pas ne l EMPRUNTE plus (data)",
+         "FORGE_TESTS_QUALIF_URL" not in champs["data"]),
+        ("le compte de lecture ne fuit pas non plus vers un pan de fichiers (data)",
+         not {"FORGE_TESTS_LOGIN", "FORGE_TESTS_PASSWORD"} & champs["data"]),
+        # Le filtre ne doit pas SUR-filtrer : une variable du projet audite n a pas de
+        # proprietaire declare et doit continuer d atteindre les pans de son domaine.
+        ("un champ que nul adaptateur ne revendique atteint toujours le pan (ZZ_JETON_CLIENT)",
+         "ZZ_JETON_CLIENT" in champs["data"]),
+        ("chaque champ revendique l est par au moins un pan du registre",
+         all(pans for pans in revendiques.values())),
+    ]
+    for libelle, ok in cas:
+        echecs += not ok
+        print(f"  [{'OK     ' if ok else 'ECHEC  '}] {libelle}")
+    detail = " · ".join(
+        f"{champ} -> {', '.join(sorted(pans))}" for champ, pans in sorted(revendiques.items())
+    )
+    print(f"             revendications : {detail}")
+    return echecs
+
+
 def verifier_lecture_sql() -> int:
     """Nombre de cas de lecture SQL en echec. Zero attendu."""
     from forge_tests.sql import decouper
@@ -934,7 +1003,7 @@ def main() -> int:
     )
 
     echecs_sql = verifier_lecture_sql()
-    echecs_qualification = verifier_qualification()
+    echecs_qualification = verifier_qualification() + verifier_champs_par_pan()
     echecs_divergences = verifier_divergences()
     echecs_chemins = verifier_chemins_de_couverture()
     echecs_chemins += verifier_reprise_apres_enrichissement()

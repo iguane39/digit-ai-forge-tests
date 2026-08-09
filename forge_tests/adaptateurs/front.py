@@ -30,6 +30,10 @@ CHAPITRES = (
      "decoupe": "ecran", "axe_cas": "etats"},
 )
 
+# RT-13 : le seul champ qui debloque CE pan — l instance servie exportee en BASE_URL vers la
+# suite e2e du projet. Sans revendication, le pan reclamait aussi le compte et l URL de qualif.
+CHAMPS_REQUIS = ("FORGE_TESTS_BASE_URL",)
+
 _ROUTE = re.compile(r'path:\s*"([^"]+)"')
 _TESTID = re.compile(r'data-testid="([^"]+)"')
 _GOTO = re.compile(r'goto\(\s*"([^"]+)"')

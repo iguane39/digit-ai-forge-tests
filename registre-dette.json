@@ -533,6 +533,12 @@
       "statut": "todo"
     },
     {
+      "id": "qualification-99f4d799",
+      "domaine": "qualification",
+      "enonce": "qualification : un champ qu AUCUN adaptateur ne revendique dans son `CHAMPS_REQUIS` reste partage par les pans de son domaine (cas des variables PROPRES AU PROJET citees par une trace) — l attribution par pan ne vaut que pour les champs de la forge elle-meme",
+      "statut": "todo"
+    },
+    {
       "id": "reprise-efecb346",
       "domaine": "reprise",
       "enonce": "reprise : la re-execution a la granularite du PAN — un pan qui doit etre rejoue l est en entier. La provenance, elle, est donnee element par element",

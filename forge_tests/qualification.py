@@ -35,6 +35,9 @@ NON_JUGE = [
     "Un service tiers injoignable sans jamais nommer sa cle reste un pan non mesure ordinaire",
     "qualification : les champs tires d un `.env.example` sont PRESUMES requis (le fichier ne "
     "dit pas quel pan depend de quelle cle) — la provenance de chaque entree le declare",
+    "qualification : un champ qu AUCUN adaptateur ne revendique dans son `CHAMPS_REQUIS` reste "
+    "partage par les pans de son domaine (cas des variables PROPRES AU PROJET citees par une "
+    "trace) — l attribution par pan ne vaut que pour les champs de la forge elle-meme",
 ]
 
 # Domaines de configuration consultés par pan. « acces » porte ce qui ouvre une instance
@@ -143,6 +146,30 @@ def requis(cible: Path | str, *domaines: str) -> dict[str, str]:
     return fusion
 
 
+def proprietaires(registre: dict[str, object]) -> dict[str, set[str]]:
+    """Champ de configuration -> pans qui le REVENDIQUENT dans leur `CHAMPS_REQUIS` (RT-13).
+
+    Un domaine (« acces », « backend », « front ») est un SAC PARTAGÉ : l authentification y
+    dépose son compte, le pan `qualif` son URL d instance peuplée. Sans propriétaire déclaré,
+    tout pan en SKIP repartait avec le sac entier — le pan `data` réclamait
+    `FORGE_TESTS_QUALIF_URL`, qui ne l aurait jamais débloqué. Seize actions
+    `manuelle_utilisateur` fausses au rapport ASD du 07/08 : de la configuration réclamée à un
+    exploitant pour une mesure qu elle n aurait pas rendue possible.
+
+    L attribution est déclarée PAR L ADAPTATEUR, jamais devinée ici : lui seul sait ce qui le
+    débloque. Un champ que personne ne revendique reste partagé — c est le cas des variables
+    propres au projet audité, citées par une trace, dont aucun adaptateur ne connaît le nom.
+    """
+    carte: dict[str, set[str]] = {}
+    for module in registre.values():
+        pan = getattr(module, "PAN", None)
+        if not pan:
+            continue
+        for champ in getattr(module, "CHAMPS_REQUIS", ()):
+            carte.setdefault(champ, set()).add(pan)
+    return carte
+
+
 def oublier(cible: Path | str) -> None:
     """Vide le registre d un projet — utile entre deux analyses dans un même processus."""
     for cle in [c for c in _REQUIS if c[0] == _cle(cible)]:
@@ -160,13 +187,20 @@ def qualifier(
     """
     modules = {module.PAN: module for module in registre.values() if hasattr(module, "PAN")}
     presumes = champs_presumes(cible)
+    revendiques = proprietaires(registre)
     for sortie in sorties:
         if sortie.non_testables or sortie.verdict != "SKIP":
             continue
         domaines = _DOMAINES_PAR_PAN.get(sortie.pan, _DOMAINES_DEFAUT)
         if not domaines:
             continue
-        champs = requis(cible, *domaines)
+        # RT-13 : un champ revendique par des adaptateurs n est publie QUE pour ceux-la. Un
+        # champ sans proprietaire declare reste partage — voir `proprietaires`.
+        champs = {
+            nom: provenance
+            for nom, provenance in requis(cible, *domaines).items()
+            if sortie.pan in revendiques.get(nom, {sortie.pan})
+        }
         provenance = "constate"
         if not champs and presumes:
             champs = dict.fromkeys(presumes, "presume")

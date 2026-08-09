@@ -30,6 +30,9 @@ CHAPITRES = (
 )
 
 
+# RT-13 : le seul champ qui debloque CE pan — la designation de l application ASGI a sonder.
+CHAMPS_REQUIS = ("FORGE_TESTS_APP",)
+
 _ROUTE = re.compile(r'@app\.(get|post|patch|put|delete)\(\s*"([^"]+)"(.*?)\)\s*\n', re.DOTALL)
 _CODE = re.compile(r"(\d{3})\s*:")
 _APPEL = re.compile(r'client\.(get|post|patch|put|delete)\(\s*f?"([^"]+)"')

@@ -45,6 +45,9 @@ CHAPITRES = (
      "rendu": {"themes": ("clair", "sombre"), "largeurs_px": (380, 1280)}},
 )
 
+# RT-13 : le seul champ qui debloque CE pan — il capture le rendu d une instance servie.
+CHAMPS_REQUIS = ("FORGE_TESTS_BASE_URL",)
+
 DOSSIER = ".visuel"
 _ORACLE = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts" / "oracle-visual-diff.py"
 

@@ -289,6 +289,16 @@ et le noyau les agrège comme il agrège les `non_juge`. Le remplissage automati
 **point unique** au-dessus de tous les adaptateurs : un adaptateur futur en hérite sans une
 ligne de code.
 
+**Chaque champ appartient au pan qui le réclame.** Un domaine de configuration (`acces`,
+`backend`, `front`) est un sac partagé : l'authentification y dépose le compte, le pan `qualif`
+son URL d'instance peuplée. Tout pan en `SKIP` repartait avec le sac entier — le pan `data`
+réclamait `FORGE_TESTS_QUALIF_URL`, qui ne l'aurait jamais débloqué (16 actions
+`manuelle_utilisateur` fausses au rapport ASD du 07/08). Chaque adaptateur déclare donc sa
+constante `CHAMPS_REQUIS` — les variables qui débloquent **ce** pan — et un champ revendiqué
+n'est plus publié que pour ses revendicateurs. Un champ que **personne** ne revendique reste
+partagé : c'est le cas des variables propres au projet audité, citées par une trace, dont aucun
+adaptateur ne connaît le nom.
+
 **Limites déclarées.** Un service tiers injoignable qui ne nomme jamais sa clé reste un pan non
 mesuré ordinaire, pas un non-testable. Les champs tirés d'un `.env.example` sont présumés
 requis : le fichier ne dit pas quel pan dépend de quelle clé.
