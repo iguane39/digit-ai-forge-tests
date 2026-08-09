@@ -762,6 +762,7 @@ journalisé). Modèle : `.env.exemple`.
 
 ```bash
 uv run python recette/verifier_corpus.py   # critère de sortie S-01 — exit 0 attendu
+uv run python recette/verifier_corpus.py --section sql qualification   # une poignée de secondes
 uv run python recette/precision_generateur.py
 uv run python -m forge_tests.dette             # régénère registre-dette.json depuis le code
 uv run python -m forge_tests.dette --verifier  # exit 1 si le registre committé a divergé
@@ -802,6 +803,31 @@ contrôle qu'on ne voit jamais échouer ne contrôle rien :
 
 Le contrôle des totaux relit ce qui est **affiché** (`data-total="<clé>"`), pas une variable
 interne : un dashboard peut mentir sans que le code qui l'a produit ait tort.
+
+### `--section` — payer le prix de ce qu'on vérifie
+
+La recette entière coûte **3 minutes** sur une machine de développement, et ce prix est celui
+des **audits des bancs** (mutation, navigateur, conteneur) — les contrôles sur pièces, eux,
+coûtent quelques centièmes. Un correctif d'une ligne au lecteur SQL payait donc trois minutes
+pour vérifier une seconde de code, ce qui a un effet mesurable : on rejoue moins souvent.
+
+`--section <nom> [...]` ne joue que les sections demandées, et **n'audite que les bancs dont
+elles ont besoin** :
+
+| Sélection | Bancs audités | Durée mesurée (09/08) |
+|---|---|---|
+| aucune (recette entière) | rouge + vert | **181 s** |
+| les 8 sections sur pièces (`sql qualification dette divergences chemins lecture-seule actions jeux`) | aucun | **1 s** |
+| `cahiers` ou `dashboard` | rouge seul | **100 s** |
+| `corpus` | rouge + vert | ~180 s |
+
+Sections : `corpus`, `sql`, `qualification`, `dette`, `divergences`, `chemins`,
+`lecture-seule`, `actions`, `jeux`, `cahiers`, `dashboard` (`--help` les liste avec leur coût).
+
+**Une recette partielle ne prononce jamais S-01.** Elle sort `RECETTE PARTIELLE — S-01 NON
+PRONONCÉ` en nommant les sections non jouées : un « vert » sur trois sections et un silence sur
+les huit autres serait exactement le mensonge que le sélecteur rendrait facile. Le critère de
+sortie reste la recette entière ; le sélecteur sert la boucle de correction, pas le verdict.
 
 Elle exige un venv sous `fixtures/banc-*/backend` (`uv sync --directory
 fixtures/banc-rouge/backend`), les dépendances des fronts (`npm ci` puis `npm run build` dans

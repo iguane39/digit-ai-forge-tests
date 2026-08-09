@@ -16,6 +16,7 @@ identifiés, sinon on retombe sur l absence silencieuse que le framework existe 
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import datetime
 import functools
@@ -1029,25 +1030,10 @@ def verifier_dashboard(rouge: dict) -> int:
     return echecs
 
 
-def main() -> int:
-    # G-1 : l empreinte des sources des bancs AVANT tout audit. La mutation les altere le temps
-    # d un mutant ; si un seul octet survit a la restauration, la recette le dit ici.
-    empreintes_avant = {banc: _empreintes(banc) for banc in (ROUGE, VERT)}
-
-    rouge = analyser_servi(ROUGE)
-    vert = analyser_servi(VERT)
-
-    alteres = [
-        f"{banc.name}/{chemin}"
-        for banc, avant in empreintes_avant.items()
-        for chemin, empreinte in avant.items()
-        if _empreintes(banc).get(chemin) != empreinte
-    ]
-
-    print("=" * 78)
-    print("RECETTE PHASE 1 — critère de sortie S-01")
-    print("=" * 78)
-
+def verifier_corpus_des_bancs(
+    rouge: dict, vert: dict, alteres: list[str], empreintes_avant: dict
+) -> int:
+    """Le cœur historique : les 16 défauts plantés au banc rouge, le banc vert sans bloquant."""
     detectes = 0
     for code, pan, libelle, prefixes in CORPUS:
         trouves = _findings(rouge, prefixes)
@@ -1106,35 +1092,129 @@ def main() -> int:
         f"  G-1 sources   : {empreintes} fichier(s) empreinte(s) "
         + ("— AUCUN altere par l audit" if not alteres else f"— ALTERES : {', '.join(alteres)}")
     )
+    return (len(CORPUS) - detectes) + len(bloquants_vert) + len(alteres)
 
-    echecs_sql = verifier_lecture_sql()
-    echecs_qualification = verifier_qualification() + verifier_champs_par_pan()
-    echecs_dette = verifier_registre_dette()
-    echecs_divergences = verifier_divergences()
-    echecs_chemins = verifier_chemins_de_couverture()
-    echecs_chemins += verifier_reprise_apres_enrichissement()
-    echecs_g1 = verifier_lecture_seule() + len(alteres)
-    echecs_actions = verifier_actions()
-    echecs_jeux = verifier_jeux_de_donnees()
-    echecs_cahiers = verifier_cahiers(rouge)
-    echecs_dashboard = verifier_dashboard(rouge)
 
-    succes = (
-        detectes == len(CORPUS)
-        and not bloquants_vert
-        and not echecs_sql
-        and not echecs_qualification
-        and not echecs_dette
-        and not echecs_divergences
-        and not echecs_chemins
-        and not echecs_g1
-        and not echecs_actions
-        and not echecs_jeux
-        and not echecs_cahiers
-        and not echecs_dashboard
+# --- Sections de la recette --------------------------------------------------------------------
+# Le prix de la recette est celui des audits complets des bancs : mutation, navigateur,
+# conteneur. Les contrôles sur pièces, eux, coûtent quelques centièmes. Les séparer permet de
+# rejouer en quelques secondes le seul mécanisme qu un correctif touche, au lieu de payer trois
+# minutes pour vérifier une ligne. `bancs` dit CE QU IL FAUT AUDITER pour la section — et rien
+# de plus : les cahiers et le dashboard se dérivent du seul rapport rouge, auditer le banc vert
+# pour eux serait une minute et demie payée pour un rapport que personne ne lit.
+SECTIONS: dict[str, dict] = {
+    "corpus": {
+        "bancs": ("rouge", "vert"),
+        "titre": "16 défauts du banc rouge, banc vert sans bloquant, empreintes G-1",
+    },
+    "sql": {"bancs": (), "titre": "RT-8 — lecture SQL"},
+    "qualification": {"bancs": (), "titre": "RT-6a / RT-13 — configuration absente"},
+    "dette": {"bancs": (), "titre": "TF-0002 / TF-0004 — registre de dette"},
+    "divergences": {"bancs": (), "titre": "RT-9 / RT-10 — gardes et montages"},
+    "chemins": {"bancs": (), "titre": "A-5 / A-7 — chemins de couverture et reprise"},
+    "lecture-seule": {"bancs": (), "titre": "G-1 — restauration après mutation"},
+    "actions": {"bancs": (), "titre": "M2 — actions[]"},
+    "jeux": {"bancs": (), "titre": "M1 — jeux de données synthétiques"},
+    "cahiers": {"bancs": ("rouge",), "titre": "M1 — cahiers dérivés"},
+    "dashboard": {"bancs": ("rouge",), "titre": "M2 — dashboard"},
+}
+
+
+def _jouer(nom: str, rouge: dict | None, vert: dict | None, contexte: dict) -> int:
+    if nom == "corpus":
+        return verifier_corpus_des_bancs(
+            rouge, vert, contexte["alteres"], contexte["empreintes_avant"]
+        )
+    if nom == "sql":
+        return verifier_lecture_sql()
+    if nom == "qualification":
+        return verifier_qualification() + verifier_champs_par_pan()
+    if nom == "dette":
+        return verifier_registre_dette()
+    if nom == "divergences":
+        return verifier_divergences()
+    if nom == "chemins":
+        return verifier_chemins_de_couverture() + verifier_reprise_apres_enrichissement()
+    if nom == "lecture-seule":
+        return verifier_lecture_seule()
+    if nom == "actions":
+        return verifier_actions()
+    if nom == "jeux":
+        return verifier_jeux_de_donnees()
+    if nom == "cahiers":
+        return verifier_cahiers(rouge)
+    return verifier_dashboard(rouge)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="verifier_corpus",
+        description=(
+            "Recette du corpus — critère de sortie S-01. Sans option, la recette ENTIÈRE est "
+            "jouée et seule celle-là peut prononcer S-01."
+        ),
     )
+    parser.add_argument(
+        "--section",
+        nargs="+",
+        choices=sorted(SECTIONS),
+        default=None,
+        metavar="SECTION",
+        help=(
+            "ne jouer que ces sections : "
+            + " · ".join(
+                f"{nom} ({'+'.join(d['bancs']) if d['bancs'] else 'sur pièces'})"
+                for nom, d in SECTIONS.items()
+            )
+        ),
+    )
+    args = parser.parse_args(argv)
+
+    choisies = list(args.section) if args.section else list(SECTIONS)
+    partielle = len(choisies) < len(SECTIONS)
+    a_auditer = {banc for nom in choisies for banc in SECTIONS[nom]["bancs"]}
+
     print("=" * 78)
-    print("  S-01 TENU" if succes else "  S-01 NON TENU")
+    print("RECETTE PHASE 1 — critère de sortie S-01")
+    if partielle:
+        print(f"  SÉLECTION : {', '.join(choisies)}")
+        print(f"  BANCS AUDITÉS : {', '.join(sorted(a_auditer)) or 'aucun (contrôles sur pièces)'}")
+    print("=" * 78)
+
+    rouge = vert = None
+    contexte: dict = {"alteres": [], "empreintes_avant": {}}
+    if a_auditer:
+        # G-1 : l empreinte des sources des bancs AVANT tout audit. La mutation les altere le
+        # temps d un mutant ; si un seul octet survit a la restauration, la recette le dit.
+        bancs = [b for b in (ROUGE, VERT) if b.name.endswith(tuple(a_auditer))]
+        contexte["empreintes_avant"] = {banc: _empreintes(banc) for banc in bancs}
+        if "rouge" in a_auditer:
+            rouge = analyser_servi(ROUGE)
+        if "vert" in a_auditer:
+            vert = analyser_servi(VERT)
+        contexte["alteres"] = [
+            f"{banc.name}/{chemin}"
+            for banc, avant in contexte["empreintes_avant"].items()
+            for chemin, empreinte in avant.items()
+            if _empreintes(banc).get(chemin) != empreinte
+        ]
+
+    echecs = {nom: _jouer(nom, rouge, vert, contexte) for nom in choisies}
+
+    print("=" * 78)
+    for nom, compte in echecs.items():
+        print(f"  {'OK   ' if not compte else 'ECHEC'}  {nom:<14} {SECTIONS[nom]['titre']}")
+    succes = not any(echecs.values())
+    if partielle:
+        # Une recette partielle ne PRONONCE PAS S-01. Le dire serait le mensonge que le
+        # selecteur rendrait facile : « vert » sur trois sections, silence sur les huit autres.
+        non_jouees = [nom for nom in SECTIONS if nom not in choisies]
+        print(
+            f"  RECETTE PARTIELLE — S-01 NON PRONONCÉ ({len(non_jouees)} section(s) non "
+            f"jouée(s) : {', '.join(non_jouees)})"
+        )
+    else:
+        print("  S-01 TENU" if succes else "  S-01 NON TENU")
     return 0 if succes else 1
 
 
