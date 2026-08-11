@@ -28,7 +28,7 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     av = Avancement(dossier_run, unite="pan", raf=[m.PAN for _, m in retenus],
                     libelle=f"audit forge-tests de {cible.name}")
     sorties = []
-    for nom, module in retenus:
+    for _nom, module in retenus:
         av.en_cours(module.PAN)
         sorties.append(module.analyser(cible))
         av.unite_finie(module.PAN)
