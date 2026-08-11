@@ -592,16 +592,38 @@ def analyser(cible: Path) -> SortieAdaptateur:
     survivants_par_fichier: dict[Path, list[Mutant]] = {}
     viables = 0
     interrompu: str | None = None
+    # TF-0096 : la mutation était LE process silencieux d origine (~45 min sans un signal,
+    # run Approval2 du 11/08). Unité = module ; sous-découpe = mutant k/n dans le module —
+    # une unité qui occupe plus d une fenêtre montre son avancement INTERNE.
+    from forge_tests.avancement import Avancement
+
+    ordre_fichiers = list(dict.fromkeys(f for f, _ in plan))
+    dossier_run = str(cible / "forge") if (cible / "forge").is_dir() else None
+    av = Avancement(
+        dossier_run, unite="module",
+        raf=[f.relative_to(racine).as_posix() for f in ordre_fichiers],
+        libelle=f"mutation de {cible.name} ({len(plan)} mutants)",
+    )
     try:
         if not _suite_verte(racine, python):
             inventaire = _inventaire_modules(racine, retenus, exclus, couverture, {})
+            av.final()
             return SortieAdaptateur(
                 NOM, PAN, str(cible), "SKIP",
                 findings=_findings_modules(dossier, inventaire),
                 non_juge=[*non_juge, "suite rouge avant mutation : score non calculable"],
                 modules=inventaire,
             )
+        fichier_courant: Path | None = None
+        joues_module = 0
         for fichier, mutant in plan:
+            if fichier != fichier_courant:
+                if fichier_courant is not None:
+                    av.unite_finie(fichier_courant.relative_to(racine).as_posix())
+                fichier_courant = fichier
+                joues_module = 0
+                av.en_cours(fichier.relative_to(racine).as_posix(),
+                            interne=f"mutants 0/{len(par_fichier[fichier])}")
             mute = appliquer(originaux[fichier], mutant)
             # Garde-fou : le plan ne contient que des mutants deja compiles par `compilables`.
             # Le revalider coute quelques millisecondes et interdit qu une regression du filtre
@@ -617,6 +639,10 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 survivants.append(mutant)
                 survivants_par_fichier.setdefault(fichier, []).append(mutant)
             restaurer({fichier: octets[fichier]})
+            joues_module += 1
+            av.sous_etape(f"mutants {joues_module}/{len(par_fichier[fichier])}")
+        if fichier_courant is not None:
+            av.unite_finie(fichier_courant.relative_to(racine).as_posix())
     except subprocess.TimeoutExpired:
         # Un délai dépassé ne doit jamais emporter l audit entier : le pan se DÉCLARE non
         # mesuré (le `finally` restaure les sources avant toute chose).
@@ -628,6 +654,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
         # Restauration a l OCTET PRES, inconditionnelle : c est le garde-fou G-1 lui-meme.
         restaurer(octets)
         _purger_bytecode(racine)
+        av.final()  # TF-0096 : l émission finale part même sur interruption
     if interrompu:
         non_juge.append(interrompu)
 

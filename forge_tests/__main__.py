@@ -16,13 +16,23 @@ SORTIE_OK, SORTIE_FAIL, SORTIE_ERREUR, SORTIE_PARTIEL = 0, 1, 2, 3
 
 
 def analyser(cible: Path, pans: list[str] | None = None) -> dict:
+    from forge_tests.avancement import Avancement
     from forge_tests.qualification import qualifier
 
-    sorties = [
-        module.analyser(cible)
-        for nom, module in REGISTRE.items()
-        if pans is None or module.PAN in pans
-    ]
+    # TF-0096 (contrat TF-0094 du pilot) : un audit n'est plus silencieux — chaque pan est
+    # une unité nommée, émise toutes les 3 min (stderr + <cible>/forge/avancement.jsonl si
+    # le dossier de run existe ; jamais de création dans un projet audité sans forge/).
+    retenus = [(nom, module) for nom, module in REGISTRE.items()
+               if pans is None or module.PAN in pans]
+    dossier_run = str(cible / "forge") if (cible / "forge").is_dir() else None
+    av = Avancement(dossier_run, unite="pan", raf=[m.PAN for _, m in retenus],
+                    libelle=f"audit forge-tests de {cible.name}")
+    sorties = []
+    for nom, module in retenus:
+        av.en_cours(module.PAN)
+        sorties.append(module.analyser(cible))
+        av.unite_finie(module.PAN)
+    av.final()
     # RT-6a — point d application UNIQUE : ce qu aucune execution ne pouvait atteindre FAUTE DE
     # CONFIGURATION est nomme ici, pour tous les adaptateurs, avec les champs a fournir.
     qualifier(sorties, cible, REGISTRE)
