@@ -31,6 +31,27 @@
       "note": "non levable par les arcs : coverage.py les emet de ligne a ligne, il n en existe aucun entre une ligne et elle-meme. Exigerait une instrumentation AST du code teste."
     },
     {
+      "id": "dashboard-001",
+      "domaine": "dashboard",
+      "enonce": "dashboard : la page rend le rapport, elle ne le juge pas — un chiffre surprenant se conteste sur le rapport JSON, jamais sur le HTML",
+      "statut": "assume",
+      "note": "limite par CONCEPTION, declaree au contrat NON_JUGE de forge_tests/livrables/dashboard.py (la page rend, ne juge pas) — requalifiee todo->assume le 2026-08-11 (TF-0078) : un enonce du contrat permanent n est pas un travail en attente"
+    },
+    {
+      "id": "dashboard-002",
+      "domaine": "dashboard",
+      "enonce": "dashboard : l etat d un seuil est derive du RAPPROCHEMENT entre sa valeur et les findings `seuil-non-tenu` qui la citent ; deux seuils de meme valeur ne sont pas discernables par ce rapprochement et sont alors tous deux marques « non tenu »",
+      "statut": "assume",
+      "note": "limite par CONCEPTION, declaree au contrat NON_JUGE de forge_tests/livrables/dashboard.py (la page rend, ne juge pas) — requalifiee todo->assume le 2026-08-11 (TF-0078) : un enonce du contrat permanent n est pas un travail en attente"
+    },
+    {
+      "id": "dashboard-003",
+      "domaine": "dashboard",
+      "enonce": "dashboard : la tendance compare deux rapports par leurs TOTAUX — elle ne dit pas si ce sont les memes elements qui ont bouge",
+      "statut": "assume",
+      "note": "limite par CONCEPTION, declaree au contrat NON_JUGE de forge_tests/livrables/dashboard.py (la page rend, ne juge pas) — requalifiee todo->assume le 2026-08-11 (TF-0078) : un enonce du contrat permanent n est pas un travail en attente"
+    },
+    {
       "id": "data-sql-001",
       "domaine": "data-sql",
       "enonce": "data : sur SQLite les clés étrangères restent non attribuables (le moteur ne nomme pas la contrainte violée) ; l attribution complète exige un moteur qui les nomme, comme PostgreSQL",
@@ -350,24 +371,6 @@
       "id": "cahiers-004",
       "domaine": "cahiers",
       "enonce": "cahiers : les gestes d un cas unitaire sont derives de la FORME de l identifiant (`code:METHODE /chemin=NNN`, `contrainte:x`, `mutant:...`) ; un identifiant de forme inconnue recoit un geste GENERIQUE, nomme comme tel dans le cas, a preciser par qui connait le pan",
-      "statut": "todo"
-    },
-    {
-      "id": "dashboard-001",
-      "domaine": "dashboard",
-      "enonce": "dashboard : la page rend le rapport, elle ne le juge pas — un chiffre surprenant se conteste sur le rapport JSON, jamais sur le HTML",
-      "statut": "todo"
-    },
-    {
-      "id": "dashboard-002",
-      "domaine": "dashboard",
-      "enonce": "dashboard : l etat d un seuil est derive du RAPPROCHEMENT entre sa valeur et les findings `seuil-non-tenu` qui la citent ; deux seuils de meme valeur ne sont pas discernables par ce rapprochement et sont alors tous deux marques « non tenu »",
-      "statut": "todo"
-    },
-    {
-      "id": "dashboard-003",
-      "domaine": "dashboard",
-      "enonce": "dashboard : la tendance compare deux rapports par leurs TOTAUX — elle ne dit pas si ce sont les memes elements qui ont bouge",
       "statut": "todo"
     },
     {

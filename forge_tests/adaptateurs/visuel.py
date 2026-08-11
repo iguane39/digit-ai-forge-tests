@@ -49,7 +49,9 @@ CHAPITRES = (
 CHAMPS_REQUIS = ("FORGE_TESTS_BASE_URL",)
 
 DOSSIER = ".visuel"
-_ORACLE = Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts" / "oracle-visual-diff.py"
+_ORACLE = (
+    Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts" / "oracle-visual-diff.py"
+)
 
 NON_JUGE = [
     "visuel : un diff dit qu il y a changement, pas si le changement est VOULU — la decision "
@@ -109,13 +111,16 @@ def _juger(page: Path, accepter: bool = False) -> dict | None:
 
 
 def semer_goldens(reference: Path, cibles: list[Path]) -> int:
-    """Fait du rendu de `reference` le golden de chaque cible. Hors boucle, jamais pendant un run."""
+    """Fait du rendu de `reference` le golden de chaque cible.
+
+    Hors boucle, jamais pendant un run.
+    """
     captures = capturer(reference)
     poses = 0
     for cible in cibles:
         dossier = cible / DOSSIER
         dossier.mkdir(parents=True, exist_ok=True)
-        for route, page in captures.items():
+        for page in captures.values():
             copie = dossier / page.name
             if copie.resolve() != page.resolve():
                 shutil.copy(page, copie)

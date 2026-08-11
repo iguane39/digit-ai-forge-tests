@@ -80,7 +80,8 @@ BANDE_STANDARD = 12
 
 
 def score_risque(criticite: int, probabilite: int, cout_tardif: int) -> int:
-    for nom, valeur in (("criticite", criticite), ("probabilite", probabilite), ("cout", cout_tardif)):
+    notes = (("criticite", criticite), ("probabilite", probabilite), ("cout", cout_tardif))
+    for nom, valeur in notes:
         if not 1 <= valeur <= 5:
             raise ValueError(f"{nom} doit etre note de 1 a 5 (recu {valeur})")
     return criticite * probabilite * cout_tardif

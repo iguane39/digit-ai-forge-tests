@@ -165,7 +165,8 @@ def mesurer(banc_str: str) -> dict | None:
             [
                 str(python), "-m", "coverage", "run", "--branch", "--source=app,tests",
                 "-m", "pytest", "-q", "--no-header",
-                "-p", "no:cacheprovider", "-p", "no:warnings", "-p", "sonde_api", "-p", "sonde_data",
+                "-p", "no:cacheprovider", "-p", "no:warnings",
+                "-p", "sonde_api", "-p", "sonde_data",
             ],
             banc=banc, domaine="backend", quoi="suite backend sous coverage",
             cwd=racine, timeout=900, env=env,

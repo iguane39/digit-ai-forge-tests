@@ -104,7 +104,10 @@ def exerces(cible: Path) -> set[str] | None:
     if mesure is None:
         return None
     couvert = {f"element:{tid}" for tid in mesure["testids"]}
-    couvert |= {f"route:{re.sub(r'/\d+', '/:id', url)}" for url in mesure["routes"]}
+    # motif hors f-string : un backslash dans une f-string est invalide en 3.11
+    # (requires-python >= 3.11) — la syntaxe n'arrive qu'en 3.12
+    motif_id = r"/\d+"
+    couvert |= {f"route:{re.sub(motif_id, '/:id', url)}" for url in mesure["routes"]}
     return couvert
 
 

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import re
+from pathlib import Path
 
 from forge_tests.execution import (
     instructions_sql,
@@ -186,7 +185,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
             NOM, PAN, str(cible), "SKIP",
             non_juge=[
                 *NON_JUGE,
-                f"migrations : {len(inv)} elements inventories ({len(inv) // 3} migrations x 3 sens) "
+                f"migrations : {len(inv)} elements inventories "
+                f"({len(inv) // 3} migrations x 3 sens) "
                 "mais couverture non mesurable — "
                 + motif_indisponibilite(cible, "backend", "suite non executable sous sonde"),
             ],

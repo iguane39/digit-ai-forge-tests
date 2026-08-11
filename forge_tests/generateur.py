@@ -30,8 +30,10 @@ NON_JUGE = [
     "generateur : les codes exigeant une valeur METIER invalide (400), un etat conflictuel "
     "(409) ou un type de media particulier (415) ne sont pas generables depuis le seul schema "
     "— ils sont declares NON GENERABLES, jamais emis a l aveugle",
-    "generateur : pans API et Data generes ; Front, Batch et Fichiers ne le sont pas — leurs cas exigent un scenario, pas une seule requete",
-    "generateur : le corps synthetise ne porte que les champs REQUIS ; un endpoint dont le comportement depend d un champ optionnel ne sera pas exerce sur ce chemin",
+    "generateur : pans API et Data generes ; Front, Batch et Fichiers ne le sont pas — "
+    "leurs cas exigent un scenario, pas une seule requete",
+    "generateur : le corps synthetise ne porte que les champs REQUIS ; un endpoint dont le "
+    "comportement depend d un champ optionnel ne sera pas exerce sur ce chemin",
 ]
 
 _CODE = re.compile(r"^code:(?P<methode>[A-Z]+) (?P<chemin>\S+)=(?P<code>\d{3})$")
@@ -188,7 +190,8 @@ def construire(rapport: dict, schema: dict, limite: int = 30) -> tuple[str, list
         contenu = (operation.get("requestBody") or {}).get("content") or {}
         if contenu and "application/json" not in contenu:
             refuses.append(
-                {"id": finding["id"], "motif": "corps non JSON : type de media a fournir, non derivable"}
+                {"id": finding["id"],
+                 "motif": "corps non JSON : type de media a fournir, non derivable"}
             )
             continue
         corps, requis = _corps_json(operation, composants), _champs_requis(operation, composants)
@@ -199,7 +202,8 @@ def construire(rapport: dict, schema: dict, limite: int = 30) -> tuple[str, list
             continue
         if code == 401 and not _exige_authentification(operation, schema):
             refuses.append(
-                {"id": finding["id"], "motif": "401 non derivable : aucune exigence de securite declaree"}
+                {"id": finding["id"],
+                 "motif": "401 non derivable : aucune exigence de securite declaree"}
             )
             continue
         auth = code != 401
@@ -216,7 +220,8 @@ def construire(rapport: dict, schema: dict, limite: int = 30) -> tuple[str, list
             operation_parent = (chemins.get(parent) or {}).get("post") if parent else None
             if operation_parent is None:
                 refuses.append(
-                    {"id": finding["id"], "motif": "ressource prealable non creable (pas de POST parent)"}
+                    {"id": finding["id"],
+                     "motif": "ressource prealable non creable (pas de POST parent)"}
                 )
                 vus.discard(nom)
                 continue

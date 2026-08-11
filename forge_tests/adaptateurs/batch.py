@@ -106,13 +106,16 @@ def _inventaire_module(src: Path) -> list[Element]:
                 )
             )
         # Codes de rejet : littéraux de la forme XXX-YYY, quel que soit leur nom de variable.
-        if isinstance(noeud, ast.Constant) and isinstance(noeud.value, str):
-            if _CODE_REJET.match(noeud.value):
-                cle = f"rejet:{noeud.value}"
-                if cle not in {e.id for e in elements}:
-                    elements.append(
-                        Element(cle, PAN, f"code de rejet {noeud.value}", str(src))
-                    )
+        if (
+            isinstance(noeud, ast.Constant)
+            and isinstance(noeud.value, str)
+            and _CODE_REJET.match(noeud.value)
+        ):
+            cle = f"rejet:{noeud.value}"
+            if cle not in {e.id for e in elements}:
+                elements.append(
+                    Element(cle, PAN, f"code de rejet {noeud.value}", str(src))
+                )
     return elements
 
 
@@ -141,9 +144,13 @@ def exerces(cible: Path) -> set[str] | None:
     src = _src(cible)
     arbre = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))
     for noeud in ast.walk(arbre):
-        if isinstance(noeud, ast.Constant) and isinstance(noeud.value, str):
-            if _CODE_REJET.match(noeud.value) and noeud.lineno in lignes:
-                couvert.add(f"rejet:{noeud.value}")
+        if (
+            isinstance(noeud, ast.Constant)
+            and isinstance(noeud.value, str)
+            and _CODE_REJET.match(noeud.value)
+            and noeud.lineno in lignes
+        ):
+            couvert.add(f"rejet:{noeud.value}")
     return couvert
 
 

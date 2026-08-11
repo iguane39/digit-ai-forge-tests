@@ -189,6 +189,10 @@ _STYLE = """
               color:var(--amber-ink); }
     .b-info { background:var(--teal-fill); border-color:var(--teal-line);
               color:var(--teal-ink); }
+    nav.toc { display:flex; flex-wrap:wrap; gap:4px 18px; margin:0 0 12px; font-size:.85rem; }
+    nav.toc a { color:var(--blue); text-decoration:none; }
+    nav.toc a:hover { text-decoration:underline; }
+    nav.toc .toc-d { color:var(--muted); }
     nav.onglets { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 20px;
                   border-bottom:1px solid var(--line); }
     nav.onglets button { font-family:var(--sans); font-size:.95rem; font-weight:600;
@@ -210,7 +214,7 @@ _STYLE = """
       cursor:pointer; }
     .filtres button[aria-pressed="true"] { background:var(--blue); color:#fff;
       border-color:var(--blue); }
-    .note { color:var(--muted); font-size:.86rem; }
+    .discret { color:var(--muted); font-size:.86rem; }
     footer.doc { margin-top:44px; padding-top:14px; border-top:1px solid var(--line);
                  color:var(--muted); font-size:.85rem; }
     /* Sur mobile, un tableau à sept colonnes ne « défile » pas : il sort de l écran et le
@@ -276,6 +280,11 @@ _SCRIPT = """
     });
   });
 
+  // Sommaire → onglets : une ancre vers un panneau masqué serait morte ; le clic bascule.
+  document.querySelectorAll('nav.toc a').forEach(function (a) {
+    a.addEventListener('click', function () { montrer(a.getAttribute('href').slice(1)); });
+  });
+
   var bascule = document.getElementById('bascule-theme');
   if (bascule) {
     bascule.addEventListener('click', function () {
@@ -298,7 +307,21 @@ def _tuile(cle: str, valeur: int, quoi: str) -> str:
 
 def _badge_verdict(verdict: str) -> str:
     classe = {"PASS": "b-pass", "FAIL": "b-fail", "PARTIEL": "b-part"}.get(verdict, "b-info")
-    return f'<span class="badge {classe}">{_e(verdict)}</span>'
+    sens = {
+        "PASS": "tous les seuils opposables sont tenus",
+        "FAIL": "au moins un constat bloquant ou un seuil non tenu",
+        "PARTIEL": "des pans n ont pas pu être joués dans cet environnement",
+    }.get(verdict, "verdict global porté par le rapport JSON")
+    return f'<span class="badge {classe}" title="{_e(sens)}">{_e(verdict)}</span>'
+
+
+# L3 du socle : un en-tête qui annonce une valeur classante (« sévérité ») renvoie à son
+# barème par aria-describedby — la note existe une fois dans la page (voir construire()).
+_DESCRIBEDBY = {"sévérité": "note-severite", "risque": "note-risque"}
+
+# L4 du socle : au-delà de ce nombre de lignes, une table sans filtre ne se parcourt plus —
+# le composant maison (data-filterable) est inliné une fois par page (D-12, provenance).
+_SEUIL_FILTRE = 8
 
 
 def _tableau(
@@ -313,8 +336,11 @@ def _tableau(
     valeurs sans nom : lisible sur grand écran, indéchiffrable sur téléphone.
     """
     if not lignes:
-        return '<p class="note">Aucune entrée.</p>'
-    tete = "".join(f"<th>{_e(t)}</th>" for t in entetes)
+        return '<p class="discret">Aucune entrée.</p>'
+    tete = ""
+    for t in entetes:
+        attribut = f' aria-describedby="{_DESCRIBEDBY[t]}"' if t in _DESCRIBEDBY else ""
+        tete += f"<th{attribut}>{_e(t)}</th>"
     corps = ""
     for rang, ligne in enumerate(lignes):
         ouverture = f"<tr{(attributs or [''] * len(lignes))[rang]}>"
@@ -324,8 +350,9 @@ def _tableau(
         )
         corps += ouverture + cellules + "</tr>"
     marque = f' id="{identifiant}"' if identifiant else ""
+    filtrable = " data-filterable" if len(lignes) >= _SEUIL_FILTRE else ""
     return (
-        f'<div class="zone-tableau"><table{marque}><thead><tr>{tete}</tr></thead>'
+        f'<div class="zone-tableau"><table{marque}{filtrable}><thead><tr>{tete}</tr></thead>'
         f"<tbody>{corps}</tbody></table></div>"
     )
 
@@ -340,16 +367,22 @@ def _etat_des_seuils(rapport: dict) -> list[list[str]]:
         valeur = float(detail.get("valeur") or 0)
         cite = [f for f in constats if f"seuil {valeur:.0%}" in str(f.get("message") or "")]
         if cite:
-            etat = f'<span class="badge b-fail">non tenu — {len(cite)} constat(s)</span>'
+            etat = (
+                f'<span class="badge b-fail" title="{len(cite)} finding(s) seuil-non-tenu '
+                f'citent la valeur de ce seuil">non tenu — {len(cite)} constat(s)</span>'
+            )
         else:
-            etat = '<span class="badge b-pass">aucun constat contraire</span>'
+            etat = (
+                '<span class="badge b-pass" title="aucun finding seuil-non-tenu ne cite '
+                'la valeur de ce seuil">aucun constat contraire</span>'
+            )
         lignes.append(
             [
                 f"<code>{_e(nom)}</code>",
                 f"{valeur:.0%}",
                 _e(detail.get("severite")),
                 etat,
-                f'<span class="note">{_e(detail.get("porte_sur"))}</span>',
+                f'<span class="discret">{_e(detail.get("porte_sur"))}</span>',
             ]
         )
     return lignes
@@ -358,7 +391,7 @@ def _etat_des_seuils(rapport: dict) -> list[list[str]]:
 def _tendance(rapport: dict, precedent: dict | None) -> str:
     if precedent is None:
         return (
-            '<p class="note">Aucun rapport précédent fourni — pas de tendance. '
+            '<p class="discret">Aucun rapport précédent fourni — pas de tendance. '
             "Passer <code>--precedent &lt;rapport.json&gt;</code> pour l obtenir.</p>"
         )
     avant, apres = totaux(precedent), totaux(rapport)
@@ -388,7 +421,7 @@ def _panneau_chapitres(chapitres: list[dict], famille: str) -> str:
         morceaux.append(f'<section class="{classe}">')
         morceaux.append(f"<h3>{_e(chapitre['code'])} — {_e(chapitre['titre'])}</h3>")
         morceaux.append(
-            f'<p class="note">pan(s) <code>{_e(", ".join(chapitre["pans"]))}</code> · '
+            f'<p class="discret">pan(s) <code>{_e(", ".join(chapitre["pans"]))}</code> · '
             f"découpe par {_e(chapitre['decoupe'])} · {chapitre['elements']} élément(s) "
             f"inventorié(s), dont {chapitre['rattaches']} rattaché(s) par dérivation.</p>"
         )
@@ -400,9 +433,9 @@ def _panneau_chapitres(chapitres: list[dict], famille: str) -> str:
             )
         if chapitre["grise"]:
             morceaux.append(
-                '<p class="note">Chapitre <strong>non mesuré</strong> : aucun élément inventorié. '
-                "Il reste affiché — un chapitre absent laisserait croire que le sujet n existe "
-                "pas dans le produit.</p>"
+                '<p class="discret">Chapitre <strong>non mesuré</strong> : aucun élément '
+                "inventorié. Il reste affiché — un chapitre absent laisserait croire que "
+                "le sujet n existe pas dans le produit.</p>"
             )
         for sous in chapitre["sous_chapitres"]:
             morceaux.append(f"<h4>{_e(sous['libelle'])} — {len(sous['elements'])} élément(s)</h4>")
@@ -419,7 +452,16 @@ def _panneau_chapitres(chapitres: list[dict], famille: str) -> str:
             colonnes = ["élément", "état", "classe", "constat mesuré", "risque"]
             morceaux.append(_tableau(colonnes, lignes))
         morceaux.append("</section>")
-    return "\n".join(morceaux) or '<p class="note">Aucun chapitre de cette famille.</p>'
+    return "\n".join(morceaux) or '<p class="discret">Aucun chapitre de cette famille.</p>'
+
+
+def _composant_filtres() -> str:
+    """Composant filtres du socle : asset du skill installé, sinon la copie D-12 du dépôt."""
+    skill = (
+        Path.home() / ".claude" / "skills" / "digit-ai-page-html" / "assets" / "table-filters.js"
+    )
+    source = skill if skill.exists() else Path(__file__).with_name("table-filters.js")
+    return source.read_text(encoding="utf-8")
 
 
 def construire(
@@ -431,9 +473,15 @@ def construire(
 
     synthese = [
         "<h2>1 · Synthèse</h2>",
+        '<p id="note-severite" class="discret">« sévérité » = classe déclarée par la règle qui a '
+        "produit le constat (bloquant · majeur · mineur) — barème porté par le rapport, "
+        "jamais recalculé par la page.</p>",
+        '<p id="note-risque" class="discret">« risque » = score du rapport '
+        "(criticité × probabilité × coût tardif, notes 1-5) — calcul de "
+        "<code>forge_tests.noyau.score_risque</code>, la page ne fait que le rendre.</p>",
         f"<p>Verdict du rapport : {_badge_verdict(str(rapport.get('verdict')))} · "
         f"rapport source <code>{_e(contexte['rapport_nom'])}</code> "
-        f"(sha256 <code>{_e(contexte['rapport_sha'][:16])}…</code>).</p>",
+        f"(sha256, 16 premiers hex : <code>{_e(contexte['rapport_sha'][:16])}</code>).</p>",
         '<div class="grille">',
         _tuile("elements", valeurs["elements"], "éléments inventoriés"),
         _tuile("passes", valeurs["passes"], "passés (exercés)"),
@@ -451,8 +499,8 @@ def construire(
             ["seuil", "valeur", "sévérité", "état constaté", "porte sur"],
             _etat_des_seuils(rapport),
         ),
-        '<p class="note">L état est dérivé des findings <code>seuil-non-tenu</code> qui citent la '
-        "valeur du seuil. Deux seuils de même valeur ne sont pas discernables par ce "
+        '<p class="discret">L état est dérivé des findings <code>seuil-non-tenu</code> qui '
+        "citent la valeur du seuil. Deux seuils de même valeur ne sont pas discernables par ce "
         "rapprochement : ils seraient alors marqués « non tenu » tous les deux.</p>",
         "<h3>Tendance</h3>",
         _tendance(rapport, precedent),
@@ -460,8 +508,8 @@ def construire(
 
     echecs = [
         "<h2>4 · Échecs — raisons mesurées</h2>",
-        '<p class="note">Chaque ligne est un constat RATTACHÉ à un élément nommé, trié par risque '
-        "décroissant. Un défaut sans élément n existe pas dans ce framework.</p>",
+        '<p class="discret">Chaque ligne est un constat RATTACHÉ à un élément nommé, trié '
+        "par risque décroissant. Un défaut sans élément n existe pas dans ce framework.</p>",
         _tableau(
             ["risque", "sévérité", "pan", "élément", "classe", "raison mesurée", "localisation"],
             [
@@ -472,7 +520,7 @@ def construire(
                     f"<code>{_e(f.get('id'))}</code>",
                     _e(f.get("classe")),
                     _e(f.get("message")),
-                    f'<span class="note">{_e(f.get("localisation"))}</span>',
+                    f'<span class="discret">{_e(f.get("localisation"))}</span>',
                 ]
                 for f in (rapport.get("findings") or [])
             ],
@@ -482,7 +530,7 @@ def construire(
     non_joues = [
         "<h2>5 · Non joués</h2>",
         "<h3>Non testables ici — configuration absente</h3>",
-        '<p class="note">Ce n est pas un trou de couverture du projet : personne ne POUVAIT '
+        '<p class="discret">Ce n est pas un trou de couverture du projet : personne ne POUVAIT '
         "l exercer dans cet environnement. Fournir les champs, puis <code>--reprendre</code> le "
         "rapport. Seuls les NOMS des champs figurent ici : jamais leurs valeurs.</p>",
         _tableau(
@@ -515,12 +563,19 @@ def construire(
                 f'<button type="button" data-axe="{axe}" data-valeur="{_e(valeur)}" '
                 f'aria-pressed="false">{_e(valeur)}</button>'
             )
+    descriptions_categories = {
+        "ia": "corrigeable par l IA dans la boucle de fermeture",
+        "manuelle_dev": "geste manuel côté développement",
+        "manuelle_utilisateur": "décision ou geste attendu de l utilisateur",
+    }
     lignes_actions, attributs_actions = [], []
     for action in rapport.get("actions") or []:
+        categorie = str(action.get("categorie") or "")
+        legende = descriptions_categories.get(categorie, f"catégorie {categorie}")
         lignes_actions.append(
             [
                 f"<code>{_e(action.get('finding_ref'))}</code>",
-                f'<span class="badge b-info">{_e(action.get("categorie"))}</span>',
+                f'<span class="badge b-info" title="{_e(legende)}">{_e(categorie)}</span>',
                 _e(action.get("etape_cible")),
                 _e(action.get("attendu")),
             ]
@@ -531,8 +586,8 @@ def construire(
         )
     actions_html = [
         "<h2>6 · Actions</h2>",
-        '<p class="note">Classification TERNAIRE portée par le rapport JSON — la page ne fait que '
-        "la rendre. Filtre attendu par le dossier de MEP : "
+        '<p class="discret">Classification TERNAIRE portée par le rapport JSON — la page ne '
+        "fait que la rendre. Filtre attendu par le dossier de MEP : "
         "<code>jq &#39;.actions[] | "
         "select(.categorie==&quot;manuelle_utilisateur&quot;)&#39;</code>."
         "</p>",
@@ -577,15 +632,53 @@ def construire(
         ("non-joues", "Non joués", non_joues),
         ("actions", "Actions", actions_html),
     ]
+    # Sommaire réel (L6 du socle) : chaque entrée ANNONCE ce qu on va y trouver (.toc-d) et
+    # chaque panneau ouvre par un chapeau (.ch-apprend, L7). Le clic bascule l onglet — une
+    # ancre vers un panneau masqué serait une affordance morte.
+    annonces = {
+        "synthese": "verdict, totaux republiés, état des seuils opposables et tendance",
+        "fonctionnels": "chapitres fonctionnels dérivés de la surface, élément par élément",
+        "techniques": "chapitres techniques dérivés de la surface, élément par élément",
+        "echecs": "chaque constat rattaché à un élément nommé, trié par risque décroissant",
+        "non-joues": "non testables (configuration absente) et pans non couverts, motivés",
+        "actions": "classification ternaire des actions, filtrable par catégorie et étape",
+    }
+    toc = "".join(
+        f'<a href="#{identifiant}"><strong>{rang + 1} · {_e(libelle)}</strong> '
+        f'<span class="toc-d">{_e(annonces[identifiant])}</span></a>'
+        for rang, (identifiant, libelle, _) in enumerate(panneaux)
+    )
     nav = "".join(
         f'<button type="button" role="tab" data-cible="{identifiant}" '
         f'aria-selected="{"true" if rang == 0 else "false"}" '
         f'aria-controls="{identifiant}">{rang + 1} · {_e(libelle)}</button>'
         for rang, (identifiant, libelle, _) in enumerate(panneaux)
     )
+    # L10 du socle : un chapitre porteur d une table de ≥ 8 lignes publie un EXEMPLE DE
+    # LECTURE — la première ligne déchiffrée en français, pour amorcer le parcours.
+    exemples = {
+        "synthese": "un seuil opposable, sa valeur, sa sévérité déclarée et l état constaté "
+        "dérivé des findings qui le citent",
+        "fonctionnels": "un élément nommé de l inventaire, son état mesuré, la classe de son "
+        "constat éventuel et son risque",
+        "techniques": "un élément nommé de l inventaire, son état mesuré, la classe de son "
+        "constat éventuel et son risque",
+        "echecs": "le constat au risque le plus élevé d abord : sa sévérité, son pan, "
+        "l élément auquel il est rattaché, la raison mesurée et sa localisation",
+        "non-joues": "un élément injouable ICI, les noms des champs de configuration requis "
+        "(jamais leurs valeurs) et le motif",
+        "actions": "une action, sa catégorie ternaire, l étape cible où la jouer et le "
+        "résultat attendu",
+    }
     corps = "".join(
         f'<section class="panneau" id="{identifiant}" role="tabpanel"'
-        f'{"" if rang == 0 else " hidden"}>' + "\n".join(contenu) + "</section>"
+        f'{"" if rang == 0 else " hidden"}>'
+        + contenu[0]
+        + f'<p class="discret ch-apprend">Ce panneau présente : {_e(annonces[identifiant])}.</p>'
+        + f'<p class="discret exemple-lecture">Exemple de lecture — une ligne type : '
+        f"{_e(exemples[identifiant])}.</p>"
+        + "\n".join(contenu[1:])
+        + "</section>"
         for rang, (identifiant, _, contenu) in enumerate(panneaux)
     )
 
@@ -606,10 +699,11 @@ def construire(
 <header class="doc">
   <p class="eyebrow">Digit-AI · Forge Tests · Dashboard d exécution</p>
   <h1>{_e(contexte['produit'])} — Dashboard tests</h1>
-  <p class="note">Audit du {_e(contexte['date'])} · source unique : le rapport
+  <p class="discret">Audit du {_e(contexte['date'])} · source unique : le rapport
      <code>{_e(contexte['rapport_nom'])}</code> · page autonome, aucun appel réseau.
      <button type="button" id="bascule-theme">Thème sombre</button></p>
 </header>
+<nav class="toc" aria-label="Sommaire">{toc}</nav>
 <nav class="onglets" role="tablist">{nav}</nav>
 <main>{corps}</main>
 <footer class="doc">
@@ -619,6 +713,8 @@ def construire(
 </footer>
 </div>
 <script>{_SCRIPT}</script>
+<script>/* Composant filtres du socle — asset du skill installé ou copie D-12 du dépôt. */
+{_composant_filtres()}</script>
 </body>
 </html>
 """

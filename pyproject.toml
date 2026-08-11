@@ -24,6 +24,9 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# les bancs d'essai sont des DONNÉES d'acceptation (produits factices figés), pas le code
+# de la forge — les linter ajoute du bruit et les « corriger » risquerait leurs attendus
+extend-exclude = ["fixtures"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

@@ -1,8 +1,18 @@
 """Registre des adaptateurs — un adaptateur = un couple (pan x technologie)."""
 
 from forge_tests.adaptateurs import (
-    accessibilite, api, batch, data, fichiers, front, interface, migrations, mutation,
-    qualif, securite, visuel,
+    accessibilite,
+    api,
+    batch,
+    data,
+    fichiers,
+    front,
+    interface,
+    migrations,
+    mutation,
+    qualif,
+    securite,
+    visuel,
 )
 
 REGISTRE = {

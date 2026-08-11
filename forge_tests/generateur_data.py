@@ -46,7 +46,8 @@ def base(moteur):
     for migration in MIGRATIONS:
         haut = migration.read_text(encoding="utf-8").partition("-- +migrate Down")[0]
         with moteur.begin() as cx:
-            for instruction in [s.strip() for s in haut.replace("-- +migrate Up", "").split(";") if s.strip()]:
+            corps = haut.replace("-- +migrate Up", "")
+            for instruction in [s.strip() for s in corps.split(";") if s.strip()]:
                 cx.execute(text(instruction))
     return moteur
 

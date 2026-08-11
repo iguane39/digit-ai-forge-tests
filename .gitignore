@@ -17,3 +17,11 @@ resultat-playwright.json
 .visuel/*.html
 .visuel/*.jsonl
 .env
+
+# journaux du hook qualite (TF-0065) : sidecars d'oracles hors depot — les preuves
+# VOULUES vivent versionnees sous forge/ (decision C4), le reste ne se committe pas
+*.oracles.json
+*.oracles-cache.json
+*.oracles-historique.jsonl
+!forge/**/*.oracles.json
+!forge/**/*.oracles-historique.jsonl
