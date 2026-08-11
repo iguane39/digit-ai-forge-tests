@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Émetteur d'avancement des process longs — contrat gabarits/AVANCEMENT-PROCESS.md du pilot.
 
 Copie D-12 (provenance : digit-ai-forge-pilot/scripts/avancement.py, copiée le 2026-08-11,
@@ -10,7 +9,6 @@ ici par copie, jamais par divergence silencieuse.
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import sys
@@ -105,7 +103,7 @@ class Avancement:
         ]
         print("\n".join(lignes), file=sys.stderr, flush=True)
         if self.jsonl:
-            with io.open(self.jsonl, "a", encoding="utf-8", newline="\n") as f:
+            with open(self.jsonl, "a", encoding="utf-8", newline="\n") as f:
                 f.write(json.dumps({
                     "ts": datetime.now().isoformat(timespec="seconds"),
                     "heure_demarrage": self._heure(self.debut), "heure_reporting": self._heure(),
