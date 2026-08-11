@@ -75,7 +75,8 @@ class Avancement:
         ecoule = maintenant - self.debut
         cadence = (len(self.faits) / (ecoule / 60)) if ecoule > 0 and self.faits else None
         restant_min = (len(self.raf) + (1 if self.courant else 0)) / cadence if cadence else None
-        fin = self._heure(maintenant + restant_min * 60) if restant_min is not None else "non estimable (cadence à venir)"
+        fin = (self._heure(maintenant + restant_min * 60)
+               if restant_min is not None else "non estimable (cadence à venir)")
         total_min = (ecoule / 60 + restant_min) if restant_min is not None else None
 
         en_cours = "—"
@@ -84,22 +85,28 @@ class Avancement:
             en_cours = f"{self.courant} — {rang}e sur {self.total}"
             if self.interne:
                 en_cours += f" · interne : {self.interne}"
-        raf_txt = f"{len(self.raf)} {self.unite}(s)" + (
-            f" : {', '.join(self.raf[:10])}" + (" …" if len(self.raf) > 10 else "") if self.raf else "")
+        detail_raf = ""
+        if self.raf:
+            detail_raf = f" : {', '.join(self.raf[:10])}" + (" …" if len(self.raf) > 10 else "")
+        raf_txt = f"{len(self.raf)} {self.unite}(s)" + detail_raf
         glisse = (f" (glisse : {self.eta_precedente} à l'émission précédente)"
                   if (self.eta_precedente and self.eta_precedente != fin and not final) else "")
+        restant_txt = (f"~{restant_min:.0f} min (cadence mesurée : {cadence:.1f} {self.unite}/min)"
+                       if restant_min is not None else "non estimable (aucune unité finie)")
+        fin_txt = "terminé " + self._heure() if final else "~" + fin + glisse
 
         lignes = [
             f"## Avancement — {self.libelle}" + (" — TERMINÉ" if final else ""),
             "| Champ | Valeur |", "|---|---|",
             f"| Heure de démarrage | {self._heure(self.debut)} |",
-            f"| Heure du reporting | {self._heure()} — émis toutes les {max(1, self.intervalle // 60)} min |",
+            f"| Heure du reporting | {self._heure()} — "
+            f"émis toutes les {max(1, self.intervalle // 60)} min |",
             f"| Réalisé | {len(self.faits)} {self.unite}(s) |",
             f"| En cours | {en_cours} |",
             f"| RAF | {raf_txt} |",
-            f"| Temps restant estimé | {f'~{restant_min:.0f} min (cadence mesurée : {cadence:.1f} {self.unite}/min)' if restant_min is not None else 'non estimable (aucune unité finie)'} |",
+            f"| Temps restant estimé | {restant_txt} |",
             f"| Temps total prévu | {f'~{total_min:.0f} min' if total_min is not None else '—'} |",
-            f"| Heure de fin prévue | {'terminé ' + self._heure() if final else '~' + fin + glisse} |",
+            f"| Heure de fin prévue | {fin_txt} |",
         ]
         print("\n".join(lignes), file=sys.stderr, flush=True)
         if self.jsonl:
