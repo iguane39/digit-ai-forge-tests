@@ -235,6 +235,130 @@ app.mount("/static", StaticFiles(directory="ui/static"), name="static")
     return echecs
 
 
+def verifier_gardes_multi_modules() -> int:
+    """TF-0135 — les gardes d une route sont lues sur TOUS les modules, jamais le seul main.py.
+
+    Repro Approval2 : une app a routeurs (main.py qui ne fait qu `include_router`, les GET/POST
+    et leurs gardes vivant dans `app/api/routes_admin.py`) faisait ressortir la table des
+    handlers VIDE — `fonction` valait None pour toute route, et `code in (400, 409) and code
+    not in gardes` devenait vrai pour TOUT code declare. Trois findings BLOQUANTS faux sur un
+    code dont les trois handlers levent bien leur code dans leur PROPRE corps.
+
+    Fixture a double sens : le TEMOIN rejoue le comportement D AVANT (main.py seul) sur les
+    memes pieces et prouve qu il produit bien les findings faux — sans ce temoin, le controle
+    APRES ne prouverait rien. Le second cas (route enregistree par `add_api_route`, que l AST
+    ne reconnait pas comme decorateur) reste NON RESOLU meme apres correctif : il doit degrader
+    en NON_JUGE motive, jamais retomber en finding bloquant.
+    """
+    import tempfile
+
+    from forge_tests.adaptateurs.api import _divergences_gardes, _fichiers_sources
+    from forge_tests.invariants import codes_par_fonction, handlers
+    from forge_tests.noyau import Element
+
+    echecs = 0
+    print("-" * 78)
+    print("  TF-0135 — gardes d une route a routeurs : lues sur tous les modules, jamais main.py seul")
+
+    main_py = (
+        "from fastapi import FastAPI\n"
+        "from app.api import routes_admin\n"
+        "\n"
+        "app = FastAPI()\n"
+        "app.include_router(routes_admin.router)\n"
+    )
+    routes_admin_py = (
+        "from fastapi import APIRouter, HTTPException\n"
+        "\n"
+        "router = APIRouter()\n"
+        "\n"
+        "\n"
+        "def _refuser_deja_revoquee() -> None:\n"
+        "    raise HTTPException(status_code=409, detail=\"deja revoquee\")\n"
+        "\n"
+        "\n"
+        "@router.post(\"/admin/revoke\", responses={200: {}, 409: {}})\n"
+        "def revoke_endpoint(demande_id: int) -> dict:\n"
+        "    if demande_id < 0:\n"
+        "        _refuser_deja_revoquee()\n"
+        "    return {\"id\": demande_id}\n"
+        "\n"
+        "\n"
+        "def reassign_endpoint(demande_id: int) -> dict:\n"
+        "    if demande_id < 0:\n"
+        "        raise HTTPException(status_code=409, detail=\"deja reassignee\")\n"
+        "    return {\"id\": demande_id}\n"
+        "\n"
+        "\n"
+        "router.add_api_route(\n"
+        "    \"/admin/reassign\", reassign_endpoint, methods=[\"POST\"],"
+        " responses={200: {}, 409: {}}\n"
+        ")\n"
+    )
+
+    with tempfile.TemporaryDirectory() as temporaire:
+        racine = Path(temporaire)
+        (racine / "backend" / "app" / "api").mkdir(parents=True)
+        (racine / "backend" / "app" / "main.py").write_text(main_py, encoding="utf-8")
+        (racine / "backend" / "app" / "api" / "routes_admin.py").write_text(
+            routes_admin_py, encoding="utf-8"
+        )
+        source_main = racine / "backend" / "app" / "main.py"
+
+        inv = [
+            Element(
+                "code:POST /admin/revoke=409", "api", "POST /admin/revoke -> 409",
+                str(source_main),
+            ),
+            Element(
+                "code:POST /admin/reassign=409", "api", "POST /admin/reassign -> 409",
+                str(source_main),
+            ),
+        ]
+
+        # TEMOIN — comportement D AVANT TF-0135, rejoue LITTERALEMENT (main.py seul, et le
+        # `fonction or ""` qui degradait un handler non resolu en gardes VIDES au lieu de
+        # suspendre le jugement) : la table est VIDE, tout code 400/409 declare devient une
+        # divergence BLOQUANTE fausse. C est le bug REEL constate — `_divergences_gardes`
+        # inclut deja le correctif et ne peut donc pas servir de temoin du bug.
+        table_avant = handlers(source_main)
+        gardes_avant = codes_par_fonction(source_main)
+        findings_avant = []
+        for element in inv:
+            signature, code_txt = element.id[len("code:") :].rsplit("=", 1)
+            methode, chemin = signature.split(" ", 1)
+            code = int(code_txt)
+            fonction = table_avant.get((methode, chemin))
+            gardes = gardes_avant.get(fonction or "", set())
+            if code in (400, 409) and code not in gardes:
+                findings_avant.append(element.id)
+
+        # APRES — tous les modules source sont lus.
+        sources = _fichiers_sources(racine)
+        table = handlers(sources)
+        gardes = codes_par_fonction(sources)
+        findings, non_juge = _divergences_gardes(inv, table, gardes, source_main)
+
+        cas = [
+            ("TEMOIN rouge : main.py seul -> 2 findings BLOQUANTS faux (le bug reel constate)",
+             len(findings_avant) == 2),
+            ("_fichiers_sources decouvre le fichier de routeur, pas le seul main.py",
+             any(p.name == "routes_admin.py" for p in sources)),
+            ("APRES correctif : la route decoree et sa garde deportee sont resolues -> 0 finding",
+             not [f for f in findings if "admin/revoke" in f.id]),
+            ("APRES correctif : la route enregistree par add_api_route reste NON RESOLUE "
+             "(limite declaree de l AST) mais ne devient PAS bloquante",
+             not [f for f in findings if "admin/reassign" in f.id]),
+            ("le cas non resolu degrade en NON_JUGE, motive et nomme, jamais en silence",
+             any("admin/reassign" in m and "409" in m for m in non_juge)),
+            ("aucun finding bloquant residuel sur l ensemble du cas", not findings),
+        ]
+        for libelle, ok in cas:
+            echecs += not ok
+            print(f"  [{'OK     ' if ok else 'ECHEC  '}] {libelle}")
+    return echecs
+
+
 def _empreintes(banc: Path) -> dict[str, str]:
     """SHA-256 de chaque source du banc — la seule preuve recevable de « lecture seule ».
 
@@ -1196,7 +1320,7 @@ def _jouer(nom: str, rouge: dict | None, vert: dict | None, contexte: dict) -> i
     if nom == "dette":
         return verifier_registre_dette()
     if nom == "divergences":
-        return verifier_divergences()
+        return verifier_divergences() + verifier_gardes_multi_modules()
     if nom == "chemins":
         return verifier_chemins_de_couverture() + verifier_reprise_apres_enrichissement()
     if nom == "lecture-seule":

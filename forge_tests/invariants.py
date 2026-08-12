@@ -29,9 +29,12 @@ NON_JUGE = [
     "invariants : seules les gardes de forme simple sont lues (comparaison, appartenance, "
     "negation) ; une garde composee ou deportee dans une fonction n est pas extraite",
     "invariants : la resolution des gardes deportees s arrete a UN niveau d appel, par nom "
-    "simple et dans le meme module (RT-9). Un helper qui en appelle un autre, un helper importe, "
-    "un appel par attribut (`service.refuser()`) ou un status_code calcule restent invisibles — "
-    "le code declare paraitra alors « jamais leve »",
+    "simple, cherche dans TOUS les modules de l application (RT-9 / TF-0135). Un helper qui en "
+    "appelle un autre, un appel par attribut (`service.refuser()`) ou un status_code calcule "
+    "restent invisibles — le code declare paraitra alors « jamais leve »",
+    "invariants : la resolution par nom n est PAS qualifiee par module (TF-0135) — deux "
+    "fonctions de meme nom dans deux fichiers distincts de l application voient leurs codes "
+    "fusionnes, ce qui peut masquer ou inventer une garde",
 ]
 
 
@@ -148,28 +151,37 @@ def extraire(source: Path) -> list[Invariant]:
     return invariants
 
 
-def handlers(source: Path) -> dict[tuple[str, str], str]:
-    """(methode, chemin) -> nom de la fonction qui traite la route, lu depuis les decorateurs."""
-    if not source.exists():
-        return {}
+def handlers(source: Path | list[Path]) -> dict[tuple[str, str], str]:
+    """(methode, chemin) -> nom de la fonction qui traite la route, lu depuis les decorateurs.
+
+    TF-0135 — `source` accepte aussi une LISTE de fichiers. Une app FastAPI a routeurs monte
+    ses `include_router` depuis main.py, mais les decorateurs `@router.get/post/...` et leurs
+    gardes vivent dans les modules du routeur (`app/api/routes_*.py`) : bornee au seul main.py,
+    cette table ressortait VIDE sur un projet ainsi organise (Approval2), et toute divergence
+    verifiee plus loin (`codes_par_fonction`) devenait donc faussement injustifiable.
+    """
+    fichiers = [source] if isinstance(source, Path) else list(source)
     import re as _re
 
-    arbre = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
     table: dict[tuple[str, str], str] = {}
-    for noeud in ast.walk(arbre):
-        if not isinstance(noeud, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    for fichier in fichiers:
+        if not fichier.exists():
             continue
-        for deco in noeud.decorator_list:
-            if not isinstance(deco, ast.Call) or not isinstance(deco.func, ast.Attribute):
+        arbre = ast.parse(fichier.read_text(encoding="utf-8"), filename=str(fichier))
+        for noeud in ast.walk(arbre):
+            if not isinstance(noeud, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            methode = deco.func.attr.upper()
-            if methode not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
-                continue
-            if not deco.args:
-                continue
-            chemin = _litteral(deco.args[0])
-            if isinstance(chemin, str):
-                table[(methode, _re.sub(r"\{[^}]*\}", "{}", chemin))] = noeud.name
+            for deco in noeud.decorator_list:
+                if not isinstance(deco, ast.Call) or not isinstance(deco.func, ast.Attribute):
+                    continue
+                methode = deco.func.attr.upper()
+                if methode not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+                    continue
+                if not deco.args:
+                    continue
+                chemin = _litteral(deco.args[0])
+                if isinstance(chemin, str):
+                    table[(methode, _re.sub(r"\{[^}]*\}", "{}", chemin))] = noeud.name
     return table
 
 
@@ -187,7 +199,7 @@ def _appels_locaux(fonction: ast.AST) -> set[str]:
     return appeles
 
 
-def codes_par_fonction(source: Path) -> dict[str, set[int]]:
+def codes_par_fonction(source: Path | list[Path]) -> dict[str, set[int]]:
     """Codes HTTP levés par chaque fonction, QUEL QUE SOIT le contexte de la levée.
 
     Distinct de `extraire` : pour savoir si un code declare est produit quelque part, peu importe
@@ -203,29 +215,41 @@ def codes_par_fonction(source: Path) -> dict[str, set[int]]:
     lieu de lire le comportement. Une fonction qui appelle, par son nom simple, un helper du
     même module dont le corps lève avec un `status_code` constant hérite désormais de ce code.
 
-    Limite résiduelle, DÉCLARÉE (voir « Contrat du projet audité » au README) : un seul niveau.
-    Un helper qui en appelle un autre, un helper importé d un autre module, un helper atteint
-    par attribut (`self.refuser()`, `service.refuser()`) ou un code calculé restent invisibles.
+    **TF-0135 — `source` accepte aussi une LISTE de fichiers.** Un helper deporte dans un AUTRE
+    module du projet (un `routes_admin.py` distinct du `main.py` qui se contente d `include_
+    router`) n etait pas plus visible que main.py lui-même ne contenait pas la route : lire
+    tous les modules de l application rend visibles les gardes qui vivent a cote de leur route,
+    au prix d une precision en moins — deux fonctions de MEME NOM dans deux fichiers distincts
+    voient leurs codes fusionnes (declare ci-dessous, `NON_JUGE`).
+
+    Limite résiduelle, DÉCLARÉE (voir « Contrat du projet audité » au README) : un seul niveau
+    d appel, par nom simple, non qualifie par module. Un helper qui en appelle un autre, un
+    helper atteint par attribut (`self.refuser()`, `service.refuser()`) ou un code calculé
+    restent invisibles.
     """
-    if not source.exists():
-        return {}
-    arbre = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+    fichiers = [source] if isinstance(source, Path) else list(source)
     directs: dict[str, set[int]] = {}
     appels: dict[str, set[str]] = {}
-    for fonction in ast.walk(arbre):
-        if not isinstance(fonction, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    for fichier in fichiers:
+        if not fichier.exists():
             continue
-        codes: set[int] = set()
-        for noeud in ast.walk(fonction):
-            if not isinstance(noeud, ast.Raise) or not isinstance(noeud.exc, ast.Call):
+        arbre = ast.parse(fichier.read_text(encoding="utf-8"), filename=str(fichier))
+        for fonction in ast.walk(arbre):
+            if not isinstance(fonction, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            for mot in noeud.exc.keywords:
-                if mot.arg == "status_code":
-                    valeur = _litteral(mot.value)
-                    if isinstance(valeur, int):
-                        codes.add(valeur)
-        directs[fonction.name] = codes
-        appels[fonction.name] = _appels_locaux(fonction)
+            codes: set[int] = set()
+            for noeud in ast.walk(fonction):
+                if not isinstance(noeud, ast.Raise) or not isinstance(noeud.exc, ast.Call):
+                    continue
+                for mot in noeud.exc.keywords:
+                    if mot.arg == "status_code":
+                        valeur = _litteral(mot.value)
+                        if isinstance(valeur, int):
+                            codes.add(valeur)
+            # Fusion PAR NOM a travers les fichiers : deux fonctions homonymes de deux modules
+            # distincts partagent leur entree — limite assumee, voir NON_JUGE ci-dessus.
+            directs[fonction.name] = directs.get(fonction.name, set()) | codes
+            appels[fonction.name] = appels.get(fonction.name, set()) | _appels_locaux(fonction)
 
     table: dict[str, set[int]] = {}
     for nom, codes in directs.items():

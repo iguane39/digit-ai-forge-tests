@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from forge_tests.disposition import paquet_sources
 from forge_tests.execution import codes_emis, motif_indisponibilite, schema_openapi
 from forge_tests.invariants import NON_JUGE as NON_JUGE_INV
 from forge_tests.invariants import codes_par_fonction, handlers
@@ -174,6 +175,72 @@ def exerces(cible: Path) -> set[str] | None:
     return couvert
 
 
+def _fichiers_sources(cible: Path) -> list[Path]:
+    """Tous les modules Python de l application — pas le seul `main.py` (TF-0135).
+
+    Une app FastAPI a routeurs (`include_router`) declare son GET/POST et leurs gardes dans
+    `app/api/routes_*.py` : main.py n y porte que les montages et les inclusions. Une table de
+    handlers batie sur le seul main.py y ressortait donc VIDE, et `code in (400, 409) and code
+    not in gardes` devenait vrai pour TOUT code declare — trois findings BLOQUANTS faux
+    constates sur Approval2, pour un code dont les trois handlers levent bien leur code dans
+    leur PROPRE corps. Le paquet est DECOUVERT (`forge_tests.disposition.paquet_sources`),
+    avec le meme repli que les autres pans (TF-0116/TF-0117) : `backend/app`.
+    """
+    racine = paquet_sources(cible) or cible / "backend" / "app"
+    if not racine.is_dir():
+        return []
+    return sorted(p for p in racine.rglob("*.py") if "__pycache__" not in p.parts)
+
+
+def _divergences_gardes(
+    inv: list[Element],
+    table: dict[tuple[str, str], str],
+    par_fonction: dict[str, set[int]],
+    source: Path,
+) -> tuple[list[Finding], list[str]]:
+    """Un code 400/409 declare sans garde qui le leve est une divergence — SAUF si l analyse
+    statique n a pas pu resoudre le handler (TF-0135).
+
+    Le `?()` qui apparaissait au message quand `fonction` valait None ne disait PAS que le
+    projet avait tort : il etait la trace meme de l echec de resolution de l analyseur. Un
+    handler non resolu degrade donc desormais en avertissement NON_JUGE, motive et nomme,
+    jamais en finding BLOQUANT sur un code que personne n a pu verifier.
+    """
+    findings: list[Finding] = []
+    non_juge: list[str] = []
+    for element in inv:
+        if not element.id.startswith("code:"):
+            continue
+        signature, code_txt = element.id[len("code:") :].rsplit("=", 1)
+        methode, chemin = signature.split(" ", 1)
+        code = int(code_txt)
+        if code not in (400, 409):
+            continue
+        fonction = table.get((methode, chemin))
+        if fonction is None:
+            non_juge.append(
+                f"api : {signature} -> {code} declare, mais aucun handler n a pu etre resolu "
+                "par l analyse statique des gardes (RT-9) — divergence NON JUGEE, jamais "
+                "ecartee a tort contre le projet"
+            )
+            continue
+        gardes = par_fonction.get(fonction, set())
+        if code not in gardes:
+            findings.append(
+                Finding(
+                    id=f"divergence:{element.id}",
+                    classe="divergence",
+                    localisation=str(source),
+                    message=(
+                        f"code {code} declare pour {signature} mais aucune garde de "
+                        f"{fonction}() ne le leve"
+                    ),
+                    risque=coter(PAN, element.id, str(source)),
+                )
+            )
+    return findings, non_juge
+
+
 def analyser(cible: Path) -> SortieAdaptateur:
     inv = inventaire(cible)
     if exerces(cible) is None:
@@ -226,30 +293,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # Un code d invariant metier DECLARE mais qu aucune garde du code ne peut produire est une
     # divergence : la source promet une erreur que le comportement ne sait plus lever.
     source = cible / "backend" / "app" / "main.py"
-    par_fonction = codes_par_fonction(source)
-    table = handlers(source)
-    for element in inv:
-        if not element.id.startswith("code:"):
-            continue
-        signature, code = element.id[len("code:") :].rsplit("=", 1)
-        methode, chemin = signature.split(" ", 1)
-        code = int(code)
-        fonction = table.get((methode, chemin))
-        gardes = par_fonction.get(fonction or "", set())
-        if code in (400, 409) and code not in gardes:
-            sortie.findings.append(
-                Finding(
-                    id=f"divergence:{element.id}",
-                    classe="divergence",
-                    localisation=str(source),
-                    message=(
-                        f"code {code} declare pour {signature} mais aucune garde de "
-                        f"{fonction or '?'}() ne le leve"
-                    ),
-                    risque=coter(PAN, element.id, str(source)),
-                )
-            )
-            sortie.verdict = "FAIL"
+    sources = _fichiers_sources(cible)
+    par_fonction = codes_par_fonction(sources)
+    table = handlers(sources)
+    findings_gardes, non_juge_gardes = _divergences_gardes(inv, table, par_fonction, source)
+    sortie.findings.extend(findings_gardes)
+    sortie.non_juge.extend(non_juge_gardes)
+    if findings_gardes:
+        sortie.verdict = "FAIL"
 
     declares = {e.id for e in inv if e.id.startswith("code:")}
     prefixes = _montages(cible)
