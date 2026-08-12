@@ -775,6 +775,7 @@ journalisé). Modèle : `.env.exemple`.
 | `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
 | `FORGE_TESTS_EXIGENCES` | chemin d'un `EXIGENCES.json` : les cas des cahiers y sont rattachés, **avec leur provenance** (`declare` ou `lexical`). Absent, le cahier le déclare en tête et dérive de la seule surface. Un chemin qui n'existe pas est un **refus**, pas un silence |
 | `FORGE_TESTS_PRODUIT` | nom du produit dans les noms de fichiers des livrables. À défaut : le champ `projet` du référentiel d'exigences, puis le nom du dossier audité |
+| `FORGE_TESTS_PLAYWRIGHT_TRACE` | mode `--trace` imposé à la suite e2e (`on`, `off`, `retain-on-failure`…) — à défaut, le mode déjà réglé dans le `playwright.config` du projet est respecté (rien n'est passé en ligne de commande), sinon replié sur `on`. Utile pour désactiver la trace si son écriture bloque sur un poste (TF-0132) — la couverture front devient alors non mesurable, déclarée telle |
 
 ## Recette et dette
 

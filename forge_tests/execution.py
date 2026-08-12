@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -360,6 +361,44 @@ def _env_front(banc: Path) -> dict[str, str]:
     return env
 
 
+_TRACE_CONFIG = re.compile(r"trace\s*:\s*[\"']([\w-]+)[\"']")
+
+
+def _mode_trace_projet(front: Path) -> str | None:
+    """Le mode de trace DEJA choisi par le projet dans son `playwright.config`, s il y en a un.
+
+    Une recherche textuelle : parser un vrai config TypeScript demanderait un interprete JS que
+    la forge n a pas. Elle suffit a reconnaitre la forme usuelle `trace: "retain-on-failure"`.
+    """
+    for suffixe in (".ts", ".js", ".mjs", ".cts", ".mts"):
+        config = front / f"playwright.config{suffixe}"
+        if config.is_file():
+            trouve = _TRACE_CONFIG.search(config.read_text(encoding="utf-8", errors="replace"))
+            if trouve:
+                return trouve.group(1)
+    return None
+
+
+def _mode_trace(front: Path) -> tuple[str | None, str]:
+    """(argument CLI a passer ou None, mode EFFECTIF qui va s appliquer) — TF-0132.
+
+    `--trace on` etait impose en dur : un projet qui avait deja regle `trace` dans son
+    `playwright.config.ts` (par exemple `retain-on-failure`, precisement pour contourner un
+    blocage d ecriture) voyait son choix ECRASE. Ordre retenu : la variable d environnement
+    (dernier mot de l operateur, y compris pour DESACTIVER la trace sur un poste ou son
+    ecriture bloque), puis le choix DEJA fait par le projet (l ecraser jetterait son
+    intention — rien n est alors passe en CLI, la config du projet gouverne seule), puis le
+    defaut de CETTE forge (`on`) qui permet de mesurer la couverture front par defaut.
+    """
+    declare = (os.environ.get("FORGE_TESTS_PLAYWRIGHT_TRACE") or "").strip()
+    if declare:
+        return declare, declare
+    choisi = _mode_trace_projet(front)
+    if choisi:
+        return None, choisi
+    return "on", "on"
+
+
 @lru_cache(maxsize=16)
 def front_execute(banc_str: str) -> dict | None:
     """Routes visitees et elements reellement manipules pendant la suite front.
@@ -369,7 +408,6 @@ def front_execute(banc_str: str) -> dict | None:
     l instrumentation est un drapeau de ligne de commande.
     """
     import collections
-    import re
     import zipfile
 
     banc = Path(banc_str)
@@ -405,20 +443,43 @@ def front_execute(banc_str: str) -> dict | None:
     testids: set[str] = set()
     routes: set[str] = set()
     motif = re.compile(r'data-testid="([^"]+)"')
+    argument_cli, mode_effectif = _mode_trace(front)
+    commande = [npx, "playwright", "test"]
+    if argument_cli:
+        commande += ["--trace", argument_cli]
+    commande += ["--reporter=line"]
     # G-1 (lecture seule) : `--output` route traces et captures HORS de l arbre analysé. Sans
     # lui, `--trace on` déposait 34 Mo dans `frontend/test-results/` du projet du client.
     with tempfile.TemporaryDirectory(prefix="forge-tests-front-") as artefacts:
+        commande += ["--output", artefacts]
         resultat = _run(
-            [
-                npx, "playwright", "test", "--trace", "on", "--reporter=line",
-                "--output", artefacts,
-            ],
+            commande,
             banc=banc, domaine="front", quoi="suite e2e Playwright",
             cwd=front, timeout=900, env=_env_front(banc),
         )
         if resultat is None:
             return None
         if resultat.returncode != 0:
+            # TF-0132 — deux causes DISTINCTES derriere un code de sortie non nul. Sur un poste
+            # ou l ECRITURE de la trace bloque, chaque test se deroule en entier puis expire en
+            # « Test timeout exceeded » : la suite est repute rouge alors qu elle est verte de
+            # bout en bout (mesure : 10/10 en 7,2 s avec la trace desactivee, 100 % de timeouts
+            # avec elle). Le mode « on » ecrit TOUJOURS un trace.zip, succes ou echec — son
+            # absence apres un mode « on » designe donc la trace, jamais la suite.
+            aucune_trace = mode_effectif == "on" and not any(
+                Path(artefacts).rglob("trace.zip")
+            )
+            if aucune_trace:
+                _declarer(
+                    banc,
+                    "front",
+                    f"trace Playwright indisponible (code {resultat.returncode}, aucun "
+                    "trace.zip produit malgre --trace on) — couverture front NON MESURABLE "
+                    "sans trace, la suite elle-meme n est pas mise en cause. Definir "
+                    "FORGE_TESTS_PLAYWRIGHT_TRACE=off pour desactiver la trace si son "
+                    "ecriture bloque sur ce poste (mesure de couverture front alors perdue)",
+                )
+                return None
             from forge_tests.qualification import detecter
 
             manquants = detecter(
