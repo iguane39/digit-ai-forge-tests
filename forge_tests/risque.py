@@ -81,3 +81,25 @@ def coter(pan: str, identifiant: str, source: str) -> int:
     classe = identifiant.split(":", 1)[0]
     criticite = min(5, criticite + MAJORATION_CLASSE.get(classe, 0))
     return criticite * probabilite(source) * cout
+
+
+def repartir_mutants(fichiers: list[str], budget_total: int, minimum: int = 1) -> dict[str, int]:
+    """Répartit un budget de mutants ENTRE modules, proportionnellement à leur RISQUE mesuré.
+
+    TF-0104 (4/4) : l échantillonnage de mutation (`FORGE_TESTS_MUTANTS_PAR_MODULE`) est
+    RÉGULIER — le même nombre de mutants par module — alors que `probabilite()` mesure déjà,
+    par fichier, un signal de risque (fréquence de modification git) que rien n exploitait pour
+    orienter l échantillon. Un module qui change chaque semaine et un module stable depuis un an
+    recevaient jusqu ici le même budget de mutants.
+
+    Chaque module reçoit AU MOINS `minimum` mutant(s) : un module jamais modifié ne doit pas
+    tomber à zéro, ce qui le rendrait silencieusement non mesuré par la mutation.
+    """
+    if not fichiers or budget_total <= 0:
+        return {}
+    poids = {fichier: probabilite(fichier) for fichier in fichiers}
+    total_poids = sum(poids.values()) or len(fichiers)
+    return {
+        fichier: max(minimum, round(budget_total * poids[fichier] / total_poids))
+        for fichier in fichiers
+    }
