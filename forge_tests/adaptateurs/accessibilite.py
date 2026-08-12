@@ -116,6 +116,18 @@ def _concretiser(route: str) -> tuple[str | None, str | None]:
     return _PARAM.sub(_VALEUR_EXEMPLE, route), None
 
 
+# Caracteres qu un nom de fichier Windows refuse. Le `:` etait le cas constate (une route
+# `/login/reset-password/:token/:email` donnait un nom impossible et l OSError emportait
+# l AUDIT ENTIER, verdict ERREUR code 2). TF-0122 a supprime cette cause en substituant les
+# parametres ; ceci couvre les autres — `?` d une chaine de requete, `*`, `|`, guillemets.
+_INTERDITS = str.maketrans({c: "_" for c in ':?*<>|"\\'})
+
+
+def _nom_fichier(concret: str) -> str:
+    """Nom de fichier sur pour une route, quel que soit ce qu elle contient."""
+    return concret.strip("/").replace("/", "_").translate(_INTERDITS) or "racine"
+
+
 def _capturer_une_route(
     page, base: str, route: str, dossier: Path, timeout: int | None = None
 ) -> tuple[Path | None, str | None]:
@@ -142,9 +154,16 @@ def _capturer_une_route(
             f"accessibilite : route {route} non capturee — navigation impossible "
             f"({type(erreur).__name__})"
         )
-    fichier = dossier / (concret.strip("/").replace("/", "_") or "racine")
-    fichier = fichier.with_suffix(".html")
-    fichier.write_text(page.content(), encoding="utf-8")
+    fichier = (dossier / _nom_fichier(concret)).with_suffix(".html")
+    try:
+        fichier.write_text(page.content(), encoding="utf-8")
+    except OSError as erreur:
+        # Un pan ne fait pas tomber l audit. Avant ce garde-fou, une seule route au nom
+        # impossible emportait les onze autres pans avec elle (verdict ERREUR, code 2).
+        return None, (
+            f"accessibilite : route {route} capturee mais non ecrite sur disque "
+            f"({type(erreur).__name__}) — page non auditee"
+        )
     return fichier, None
 
 
