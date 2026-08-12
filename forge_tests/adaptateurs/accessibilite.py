@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -97,8 +98,62 @@ def _routes(cible: Path) -> list[str]:
     return [e.id.split(":", 1)[1] for e in inventaire(cible) if e.id.startswith("route:")]
 
 
-def _capturer(cible: Path, routes: list[str], dossier: Path) -> dict[str, Path]:
-    """Sert le front, visite chaque route, ecrit le DOM rendu. {} si le rendu est impossible.
+_PARAM = re.compile(r":([A-Za-z_][A-Za-z0-9_]*)")
+_VALEUR_EXEMPLE = "1"
+
+
+def _concretiser(route: str) -> tuple[str | None, str | None]:
+    """Rend une route navigable, ou l ecarte AVEC son motif si elle ne peut pas l etre.
+
+    TF-0122 : avant ce correctif, seul `:id` etait substitue (`route.replace(":id", "1")`) —
+    un `:slug`, `:demandeId` ou `:userId` navigait vers une URL contenant le deux-points
+    LITTERAL, une 404 imputee au produit a tort. Ici, TOUT segment `:nom` est substitue. Le
+    joker `*` de react-router (route attrape-tout) n a pas d equivalent navigable : il est
+    ECARTE, jamais tente — c est le motif nomme, pas un echec silencieux.
+    """
+    if "*" in route:
+        return None, f"accessibilite : route {route} ecartee — joker `*` non concretisable"
+    return _PARAM.sub(_VALEUR_EXEMPLE, route), None
+
+
+def _capturer_une_route(
+    page, base: str, route: str, dossier: Path, timeout: int | None = None
+) -> tuple[Path | None, str | None]:
+    """Concretise puis navigue UNE route ; ne leve JAMAIS. (fichier, None) en succes,
+    (None, motif) si ecartee ou injoignable.
+
+    TF-0122 : c est CET isolement qui manquait. Avant, `page.goto` n etait protege par aucun
+    garde (contrairement a `_capturer_distant`, qui en avait deja un) : une seule route
+    innavigable (le `*` react-router, par ex.) propageait son exception jusqu au noyau et
+    faisait tomber l audit ENTIER — exit 2, zero rapport, douze pans perdus pour une route.
+    Chaque route est desormais jugee isolement : son echec est un constat NOMME, jamais une
+    fin de run.
+    """
+    concret, motif = _concretiser(route)
+    if concret is None:
+        return None, motif
+    try:
+        if timeout is not None:
+            page.goto(f"{base}{concret}", wait_until="networkidle", timeout=timeout)
+        else:
+            page.goto(f"{base}{concret}", wait_until="networkidle")
+    except Exception as erreur:  # noqa: BLE001 — route isolee : l echec est un constat
+        return None, (
+            f"accessibilite : route {route} non capturee — navigation impossible "
+            f"({type(erreur).__name__})"
+        )
+    fichier = dossier / (concret.strip("/").replace("/", "_") or "racine")
+    fichier = fichier.with_suffix(".html")
+    fichier.write_text(page.content(), encoding="utf-8")
+    return fichier, None
+
+
+def _capturer(cible: Path, routes: list[str], dossier: Path) -> tuple[dict[str, Path], list[str]]:
+    """Sert le front, visite chaque route, ecrit le DOM rendu.
+
+    ({}, []) si le rendu est globalement impossible (front non servi). Sinon, un couple
+    (captures, motifs) : `motifs` NOMME chaque route ecartee ou injoignable (TF-0122) — une
+    route en echec n empeche jamais les autres d etre capturees.
 
     `FORGE_TESTS_BASE_URL` pointe vers une instance DEJA SERVIE (recette, preproduction). Le
     parcours reste en LECTURE : navigation et capture, aucune ecriture. C est ce qui rend le
@@ -113,11 +168,11 @@ def _capturer(cible: Path, routes: list[str], dossier: Path) -> dict[str, Path]:
     front = cible / "frontend"
     npx = shutil.which("npx")
     if npx is None or not (front / "dist").is_dir():
-        return {}
+        return {}, []
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        return {}
+        return {}, []
 
     port = _port_disponible()
     serveur = subprocess.Popen(
@@ -128,32 +183,33 @@ def _capturer(cible: Path, routes: list[str], dossier: Path) -> dict[str, Path]:
         env={**os.environ, "CI": "1"},
     )
     captures: dict[str, Path] = {}
+    motifs: list[str] = []
     try:
         for _ in range(60):
             if _repond(port):
                 break
             time.sleep(0.5)
         else:
-            return {}
+            return {}, []
         with sync_playwright() as pw:
             navigateur = pw.chromium.launch()
             page = navigateur.new_page()
+            base_locale = f"http://127.0.0.1:{port}"
             for route in routes:
-                concret = route.replace(":id", "1")
-                page.goto(f"http://127.0.0.1:{port}{concret}", wait_until="networkidle")
-                fichier = dossier / (concret.strip("/").replace("/", "_") or "racine")
-                fichier = fichier.with_suffix(".html")
-                fichier.write_text(page.content(), encoding="utf-8")
-                captures[route] = fichier
+                fichier, motif = _capturer_une_route(page, base_locale, route, dossier)
+                if fichier is not None:
+                    captures[route] = fichier
+                else:
+                    motifs.append(motif or f"accessibilite : route {route} non capturee")
             navigateur.close()
     finally:
         _tuer_arbre(serveur)
-    return captures
+    return captures, motifs
 
 
 def _capturer_distant(
     base: str, routes: list[str], dossier: Path, cible: Path
-) -> dict[str, Path]:
+) -> tuple[dict[str, Path], list[str]]:
     """Visite une instance servie ailleurs. GET seulement, aucune action mutante.
 
     Si un compte est configure (.env), le jeton est pose AVANT le premier rendu : sans lui,
@@ -162,11 +218,12 @@ def _capturer_distant(
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        return {}
+        return {}, []
     from forge_tests.authentification import obtenir_jeton, script_injection
 
     jeton = obtenir_jeton(cible)
     captures: dict[str, Path] = {}
+    motifs: list[str] = []
     with sync_playwright() as pw:
         navigateur = pw.chromium.launch()
         contexte = navigateur.new_context()
@@ -174,17 +231,13 @@ def _capturer_distant(
             contexte.add_init_script(script_injection(jeton))
         page = contexte.new_page()
         for route in routes:
-            concret = route.replace(":id", "1")
-            try:
-                page.goto(f"{base}{concret}", wait_until="networkidle", timeout=45000)
-            except Exception:  # noqa: BLE001 — route injoignable : declaree, pas supposee
-                continue
-            fichier = dossier / (concret.strip("/").replace("/", "_") or "racine")
-            fichier = fichier.with_suffix(".html")
-            fichier.write_text(page.content(), encoding="utf-8")
-            captures[route] = fichier
+            fichier, motif = _capturer_une_route(page, base, route, dossier, timeout=45000)
+            if fichier is not None:
+                captures[route] = fichier
+            else:
+                motifs.append(motif or f"accessibilite : route {route} non capturee")
         navigateur.close()
-    return captures
+    return captures, motifs
 
 
 def _juger(capture: Path) -> dict | None:
@@ -222,14 +275,18 @@ def analyser(cible: Path) -> SortieAdaptateur:
     if not routes:
         return SortieAdaptateur(NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, "aucune route"])
     with tempfile.TemporaryDirectory() as temporaire:
-        captures = _capturer(cible, routes, Path(temporaire))
-        if not captures:
+        captures, motifs_ecartees = _capturer(cible, routes, Path(temporaire))
+        # TF-0122 : `motifs_ecartees` NOMME chaque route ecartee (joker non concretisable) ou
+        # injoignable (navigation en echec) — l absence de TOUTE capture n est un « front non
+        # servi » que si AUCUNE route n a meme ete tentee (aucun motif) ; sinon, le front a bien
+        # repondu et c est chaque route qui porte sa propre raison, publiee ci-dessous.
+        if not captures and not motifs_ecartees:
             return SortieAdaptateur(
                 NOM, PAN, str(cible), "SKIP",
                 non_juge=[*NON_JUGE, "front non servi : build absent, npm ou navigateur manquant"],
             )
         findings: list[Finding] = []
-        non_juge = list(NON_JUGE)
+        non_juge = [*NON_JUGE, *motifs_ecartees]
         audites: list[str] = []
         for route, capture in captures.items():
             rapport = _juger(capture)

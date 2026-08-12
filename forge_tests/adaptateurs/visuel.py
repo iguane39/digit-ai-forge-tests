@@ -68,7 +68,13 @@ def _routes(cible: Path) -> list[str]:
 
 
 def capturer(cible: Path) -> dict[str, Path]:
-    """Ecrit le DOM rendu de chaque route dans `<cible>/.visuel/`. Reutilise la mecanique a11y."""
+    """Ecrit le DOM rendu de chaque route dans `<cible>/.visuel/`. Reutilise la mecanique a11y.
+
+    TF-0122 : `_capturer` isole desormais chaque route (joker non concretisable, navigation en
+    echec) au lieu de propager une exception pour l ensemble — ce pan en herite sans rien
+    changer ici. Les motifs d exclusion par route restent l affaire du pan accessibilite, qui
+    les publie deja ; ce pan continue de ne raisonner qu en captures obtenues ou non.
+    """
     from forge_tests.adaptateurs.accessibilite import _capturer
 
     routes = _routes(cible)
@@ -79,7 +85,8 @@ def capturer(cible: Path) -> dict[str, Path]:
         return {}
     dossier = cible / DOSSIER
     dossier.mkdir(parents=True, exist_ok=True)
-    return _capturer(cible, routes, dossier)
+    captures, _motifs_ecartees = _capturer(cible, routes, dossier)
+    return captures
 
 
 def _juger(page: Path, accepter: bool = False) -> dict | None:
