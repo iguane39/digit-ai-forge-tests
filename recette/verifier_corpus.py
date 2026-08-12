@@ -236,13 +236,36 @@ app.mount("/static", StaticFiles(directory="ui/static"), name="static")
 
 
 def _empreintes(banc: Path) -> dict[str, str]:
-    """SHA-256 de chaque source du banc — la seule preuve recevable de « lecture seule »."""
+    """SHA-256 de chaque source du banc — la seule preuve recevable de « lecture seule ».
+
+    TF-0116 : le paquet muté est DÉCOUVERT (`forge_tests.disposition.paquet_sources`), plus
+    supposé sous `backend/app` — voir `forge_tests/adaptateurs/mutation.py`. Une empreinte
+    figée sur `backend/app` dériverait silencieusement de ce que la mutation altère RÉELLEMENT
+    dès qu un projet (ou un banc futur) range son paquet ailleurs ; ce contrôle suit donc la
+    même découverte, avec le même repli.
+    """
     import hashlib
 
+    from forge_tests.disposition import paquet_sources
+
+    racine = paquet_sources(banc) or (banc / "backend" / "app")
     return {
         chemin.as_posix(): hashlib.sha256(chemin.read_bytes()).hexdigest()
-        for chemin in sorted((banc / "backend" / "app").rglob("*.py"))
+        for chemin in sorted(racine.rglob("*.py"))
     }
+
+
+def alterations(empreintes_avant: dict[Path, dict[str, str]]) -> list[str]:
+    """G-1 — fichiers dont l empreinte a changé depuis `empreintes_avant` : altération résiduelle
+    du banc après audit, nommée. Isolée de `main()` pour rester vérifiable sans payer le prix
+    d un audit complet (TF-0116) : un banc et un instantané suffisent à l exercer.
+    """
+    return [
+        f"{banc.name}/{chemin}"
+        for banc, avant in empreintes_avant.items()
+        for chemin, empreinte in avant.items()
+        if _empreintes(banc).get(chemin) != empreinte
+    ]
 
 
 def verifier_lecture_seule() -> int:
@@ -1233,12 +1256,7 @@ def main(argv: list[str] | None = None) -> int:
             rouge = analyser_servi(ROUGE)
         if "vert" in a_auditer:
             vert = analyser_servi(VERT)
-        contexte["alteres"] = [
-            f"{banc.name}/{chemin}"
-            for banc, avant in contexte["empreintes_avant"].items()
-            for chemin, empreinte in avant.items()
-            if _empreintes(banc).get(chemin) != empreinte
-        ]
+        contexte["alteres"] = alterations(contexte["empreintes_avant"])
 
     echecs = {nom: _jouer(nom, rouge, vert, contexte) for nom in choisies}
 
