@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from forge_tests.disposition import paquet_sources
 from forge_tests.execution import executees, motif_indisponibilite
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
@@ -39,7 +40,9 @@ NON_JUGE = [
 
 
 def _src(cible: Path) -> Path:
-    return cible / "backend" / "app" / FICHIER
+    # Paquet DECOUVERT, pas suppose `app` — voir `forge_tests.disposition`.
+    racine = paquet_sources(cible)
+    return (racine or cible / "backend" / "app") / FICHIER
 
 
 def inventaire(cible: Path) -> list[Element]:

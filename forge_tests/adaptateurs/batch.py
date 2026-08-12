@@ -12,6 +12,7 @@ import ast
 import re
 from pathlib import Path
 
+from forge_tests.disposition import paquet_sources
 from forge_tests.execution import arcs_executes, executees, motif_indisponibilite
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
@@ -45,18 +46,23 @@ NON_JUGE = [
 ]
 
 
+def _racine(cible: Path) -> Path:
+    # Paquet DECOUVERT, pas suppose `app` — voir `forge_tests.disposition`.
+    return paquet_sources(cible) or cible / "backend" / "app"
+
+
 def _sources(cible: Path) -> list[Path]:
-    classique = cible / "backend" / "app" / FICHIER
+    classique = _racine(cible) / FICHIER
     if classique.exists():
         return [classique]
-    worker = cible / "backend" / "app" / "worker"
+    worker = _racine(cible) / "worker"
     if worker.is_dir():
         return sorted(p for p in worker.glob("*.py") if p.name != "__init__.py")
     return []
 
 
 def _src(cible: Path) -> Path:
-    return cible / "backend" / "app" / FICHIER
+    return _racine(cible) / FICHIER
 
 
 # ligne du corps -> ligne du test qui y mene. Rempli a l inventaire, lu a la couverture.

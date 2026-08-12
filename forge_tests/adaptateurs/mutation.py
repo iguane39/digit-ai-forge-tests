@@ -34,18 +34,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from forge_tests import seuils
+from forge_tests.disposition import motif_indetermine, paquet_sources
 from forge_tests.execution import resume_fichiers
 from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
 NOM, PAN = "mutation-python", "back"
 SEUIL = seuils.valeur("mutation_globale")
-DOSSIER_SOURCE = Path("backend/app")
+DOSSIER_SOURCE = Path("backend/app")  # conservé pour mémoire : la racine est DÉCOUVERTE
 SUITE = "tests"
 
 POUR_COUVRIR = (
     "fournir un environnement Python du projet (`backend/.venv` ou `.venv`) avec sa suite "
-    "verte, et un dossier de sources sous `backend/app` — la mutation altère la source puis "
+    "verte, et un paquet de sources sous `backend/` — la mutation altère la source puis "
     "rejoue la suite, elle ne peut rien mesurer sans l une ni l autre"
 )
 
@@ -515,14 +516,17 @@ def _findings_modules(dossier: Path, inventaire: list[dict]) -> list[Finding]:
 
 def analyser(cible: Path) -> SortieAdaptateur:
     racine = cible / "backend"
-    dossier = cible / DOSSIER_SOURCE
+    dossier = paquet_sources(cible)
     python = racine / ".venv" / "Scripts" / "python.exe"
     if not python.exists():
         python = racine / ".venv" / "bin" / "python"
-    if not dossier.is_dir():
+    if dossier is None or not dossier.is_dir():
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
-            non_juge=[*NON_JUGE, f"mutation : aucun dossier de sources sous {dossier}"],
+            non_juge=[
+                *NON_JUGE,
+                f"mutation : sources du projet non localisables — {motif_indetermine(cible)}",
+            ],
         )
 
     retenus, exclus = decouvrir(racine, dossier)
