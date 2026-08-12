@@ -146,10 +146,24 @@ def analyser_servi(banc: Path) -> dict:
     """Analyse le banc AVEC son instance servie déclarée — sinon le pan qualif sortirait SKIP."""
     with servir(banc / "qualif-web") as url:
         os.environ["FORGE_TESTS_QUALIF_URL"] = url
+        # TF-0138 — meme geste que QUALIF_URL ci-dessus, SCOPE au seul temps de l analyse : les
+        # DEUX bancs portent `trace: "off"` dans leur propre playwright.config (fixe avant que
+        # `_mode_trace` respecte le choix du projet, TF-0132). Sans cette variable, le pan front
+        # declare desormais — a raison — la couverture NON MESURABLE plutot que nulle (TF-0138),
+        # mais la recette redevient alors aveugle a D-01 (le parcours front tronque du banc
+        # rouge n a plus aucun moyen d etre CONSTATE) et ne peut plus prouver que le banc vert
+        # est exerce a 100 % — seulement qu il ne dit rien. Le poste qui rejoue la recette n a
+        # pas la contrainte poste-client de TF-0132 (ecriture de trace bloquee) : forcer la
+        # mesure ici est le mot de l OPERATEUR de la recette. `pop` en `finally`, comme
+        # QUALIF_URL : un module-level serait importe par d autres tests (test_tf_0116,
+        # test_tf_0136) et polluerait leur process pytest entier — constate en fixture rouge
+        # sur `tests/test_tf_0132.py`, qui verifie precisement l ABSENCE de cette variable.
+        os.environ["FORGE_TESTS_PLAYWRIGHT_TRACE"] = "on"
         try:
             return analyser(banc)
         finally:
             os.environ.pop("FORGE_TESTS_QUALIF_URL", None)
+            os.environ.pop("FORGE_TESTS_PLAYWRIGHT_TRACE", None)
 
 
 def verifier_divergences() -> int:
