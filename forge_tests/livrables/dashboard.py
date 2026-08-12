@@ -121,6 +121,18 @@ def _e(valeur: object) -> str:
     return _html.escape(str(valeur if valeur is not None else ""), quote=True)
 
 
+def _texte_libre(valeur: object) -> str:
+    """Texte LIBRE d un constat mesuré : peut légitimement citer le vocabulaire technique du
+    projet audité (SQL, code, schéma — ex. « NOT NULL »). Loi transverse n° 3 : une valeur
+    ABSENTE ne doit jamais s afficher en littéral technique — mais un constat qui NOMME une
+    contrainte « NOT NULL » n en est pas une, c est le fait mesuré lui-même. `_e` traite déjà
+    toute valeur manquante en chaîne vide (jamais ce littéral) ; `data-litteral-ok` dit à
+    l oracle socle (L11) que le mot « NULL » rencontré ici est un terme du domaine, cité
+    fidèlement, pas une valeur non traitée qui a fuité.
+    """
+    return f"<span data-litteral-ok>{_e(valeur)}</span>"
+
+
 _STYLE = """
     :root {
       --blue:#2563EB; --bg:#FAFBFF; --surface:#FFFFFF; --card:#FFFFFF;
@@ -444,7 +456,7 @@ def _panneau_chapitres(chapitres: list[dict], famille: str) -> str:
                     f"<code>{_e(element['id'])}</code>",
                     _e(element["etat"]),
                     _e(element.get("classe") or ""),
-                    _e(element.get("message") or ""),
+                    _texte_libre(element.get("message") or ""),
                     _e(element.get("risque") if element.get("risque") is not None else "—"),
                 ]
                 for element in sous["elements"]
@@ -519,7 +531,7 @@ def construire(
                     _e(f.get("pan")),
                     f"<code>{_e(f.get('id'))}</code>",
                     _e(f.get("classe")),
-                    _e(f.get("message")),
+                    _texte_libre(f.get("message")),
                     f'<span class="discret">{_e(f.get("localisation"))}</span>',
                 ]
                 for f in (rapport.get("findings") or [])
@@ -577,7 +589,7 @@ def construire(
                 f"<code>{_e(action.get('finding_ref'))}</code>",
                 f'<span class="badge b-info" title="{_e(legende)}">{_e(categorie)}</span>',
                 _e(action.get("etape_cible")),
-                _e(action.get("attendu")),
+                _texte_libre(action.get("attendu")),
             ]
         )
         attributs_actions.append(
