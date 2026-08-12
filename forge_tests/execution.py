@@ -20,6 +20,8 @@ import tempfile
 from functools import lru_cache
 from pathlib import Path
 
+from forge_tests.disposition import motif_indetermine, nom_paquet_sources
+
 SONDES = Path(__file__).resolve().parent / "sondes"
 
 NON_JUGE = [
@@ -147,6 +149,13 @@ def mesurer(banc_str: str) -> dict | None:
         return None
     if not _coverage_present(banc, python):
         return None
+    # Le paquet du produit est DECOUVERT, pas suppose : `--source=app` sur un projet dont le
+    # paquet s appelle autrement rend une couverture vide, et l absence de mesure passait alors
+    # pour une suite qui n exerce rien. Voir `forge_tests.disposition`.
+    paquet = nom_paquet_sources(banc)
+    if paquet is None:
+        _declarer(banc, "backend", f"sources du projet non localisables — {motif_indetermine(banc)}")
+        return None
     racine = banc / "backend"
     with tempfile.TemporaryDirectory() as temporaire:
         releve = Path(temporaire) / "sonde.json"
@@ -163,7 +172,7 @@ def mesurer(banc_str: str) -> dict | None:
         }
         lance = _run(
             [
-                str(python), "-m", "coverage", "run", "--branch", "--source=app,tests",
+                str(python), "-m", "coverage", "run", "--branch", f"--source={paquet},tests",
                 "-m", "pytest", "-q", "--no-header",
                 "-p", "no:cacheprovider", "-p", "no:warnings",
                 "-p", "sonde_api", "-p", "sonde_data",
