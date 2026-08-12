@@ -138,6 +138,15 @@ def inventaire(cible: Path) -> list[Element]:
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
+    # TF-0100 : sans ce garde, un produit a ZERO route inventoriee (routeur non reconnu) tombait
+    # dans le meme SKIP qu un front non servi — le motif publie ACCUSAIT a tort le build, npm et
+    # le navigateur d etre en cause, alors que les trois etaient presents. La cause CONSTATEE
+    # (aucune route a capturer) et la cause d echec de service ne sont pas la meme et n appellent
+    # pas le meme travail.
+    if not _routes(cible):
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, "aucune route a capturer"]
+        )
     captures = capturer(cible)
     if not captures:
         return SortieAdaptateur(

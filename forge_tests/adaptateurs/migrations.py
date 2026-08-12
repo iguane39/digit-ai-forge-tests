@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import configparser
 import re
 from pathlib import Path
 
@@ -52,9 +53,37 @@ def _fichiers(cible: Path) -> list[Path]:
     return sorted((cible / "backend" / "migrations").glob("*.sql"))
 
 
+def _script_location(cible: Path) -> Path | None:
+    """Dossier Alembic déclaré par le projet lui-même (`script_location` de `alembic.ini`).
+
+    TF-0097 : trois chemins codés en dur ne lisaient jamais la configuration que le projet
+    déclare en clair. Un `script_location = migrations` posé dans `backend/alembic.ini`
+    pointait vers `backend/migrations/versions/` — jamais essayé, alors que 9 migrations y
+    vivaient et avaient été appliquées avec succès (`alembic upgrade head`).
+    """
+    for ini in (cible / "backend" / "alembic.ini", cible / "alembic.ini"):
+        if not ini.is_file():
+            continue
+        parseur = configparser.ConfigParser()
+        try:
+            parseur.read(ini, encoding="utf-8")
+        except configparser.Error:
+            continue
+        brut = parseur.get("alembic", "script_location", fallback="").strip()
+        if not brut:
+            continue
+        chemin = Path(brut)
+        return chemin if chemin.is_absolute() else (ini.parent / chemin)
+    return None
+
+
 def _versions_alembic(cible: Path) -> list[Path]:
-    for base in ("backend/app/alembic/versions", "backend/alembic/versions", "alembic/versions"):
-        dossier = cible / base
+    declare = _script_location(cible)
+    candidats = ([declare / "versions"] if declare else []) + [
+        cible / base
+        for base in ("backend/app/alembic/versions", "backend/alembic/versions", "alembic/versions")
+    ]
+    for dossier in candidats:
         if dossier.is_dir():
             return sorted(p for p in dossier.glob("*.py") if p.name != "__init__.py")
     return []
@@ -75,7 +104,20 @@ def inventaire(cible: Path) -> list[Element]:
 
 
 def _motif_sans_migration(cible: Path) -> str:
-    """Pourquoi il n y a AUCUNE migration à inventorier, plutôt qu un compteur à zéro."""
+    """Pourquoi il n y a AUCUNE migration à inventorier, plutôt qu un compteur à zéro.
+
+    TF-0097 : « aucune surface » (le projet n a pas de migrations) et « surface non localisée »
+    (le projet EN DÉCLARE mais le dossier annoncé est introuvable — chemin fautif, script_location
+    mal renseigné) n appellent pas le même travail : la première ne réclame rien, la seconde une
+    correction de configuration. Les confondre revient au faux négatif que ce correctif corrige.
+    """
+    declare = _script_location(cible)
+    if declare is not None and not (declare / "versions").is_dir():
+        return (
+            f"migrations : script_location declare ({declare}) dans alembic.ini mais son "
+            f"dossier versions est introuvable ({declare / 'versions'}) — surface NON "
+            "LOCALISEE, pas absente : verifier le chemin declare"
+        )
     envoyees = instructions_sql(cible) or []
     vues = sources_sql(cible) or []
     if envoyees:

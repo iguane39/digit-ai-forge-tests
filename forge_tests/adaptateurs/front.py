@@ -38,6 +38,11 @@ _ROUTE = re.compile(r'path:\s*"([^"]+)"')
 _TESTID = re.compile(r'data-testid="([^"]+)"')
 _GOTO = re.compile(r'goto\(\s*"([^"]+)"')
 _BYTESTID = re.compile(r'getByTestId\(\s*"([^"]+)"')
+# TF-0100 : `<Route path="...">` (react-router), l un des routeurs React les plus repandus,
+# n etait reconnu ni par `routes.jsx` ni par la convention TanStack — un produit en react-router
+# s inventoriait a zero route, et la surface front tombait a zero en cascade (accessibilite,
+# visuel).
+_ROUTE_JSX = re.compile(r'<Route\b[^>]*\bpath\s*=\s*(["\'])(.*?)\1', re.DOTALL)
 
 NON_JUGE = [
     "front : un element manipule pendant la suite est repute exerce ; la trace dit qu il a ete "
@@ -71,6 +76,26 @@ def _routes_tanstack(racine: Path) -> list[tuple[str, Path]]:
     return routes
 
 
+def _routes_react_router(racine: Path) -> list[tuple[str, Path]]:
+    """Routes déclarées par `<Route path="…">` (react-router), recherchées dans tout `src/`.
+
+    Contrairement à la convention TanStack (un fichier = une route), react-router déclare ses
+    routes dans le JSX d un composant quelconque (souvent `App.tsx`) : il n y a pas de chemin
+    conventionnel unique à lire, il faut chercher le motif dans les sources.
+    """
+    dossier = racine / "src"
+    if not dossier.is_dir():
+        return []
+    routes: list[tuple[str, Path]] = []
+    for fichier in sorted(dossier.rglob("*.tsx")) + sorted(dossier.rglob("*.jsx")):
+        if "routeTree.gen" in fichier.name:
+            continue
+        texte = fichier.read_text(encoding="utf-8", errors="replace")
+        for _guillemet, chemin in _ROUTE_JSX.findall(texte):
+            routes.append((chemin, fichier))
+    return routes
+
+
 def inventaire(cible: Path) -> list[Element]:
     racine = _racine(cible)
     elements: list[Element] = []
@@ -81,6 +106,10 @@ def inventaire(cible: Path) -> list[Element]:
     deja: set[str] = {e.id for e in elements}
     for chemin, fichier in _routes_tanstack(racine):
         # route.tsx et index.tsx d une meme section designent la MEME destination : dedupliquer.
+        if f"route:{chemin}" not in deja:
+            deja.add(f"route:{chemin}")
+            elements.append(Element(f"route:{chemin}", PAN, f"route {chemin}", str(fichier)))
+    for chemin, fichier in _routes_react_router(racine):
         if f"route:{chemin}" not in deja:
             deja.add(f"route:{chemin}")
             elements.append(Element(f"route:{chemin}", PAN, f"route {chemin}", str(fichier)))
