@@ -363,6 +363,16 @@ def _env_front(banc: Path) -> dict[str, str]:
 
 _TRACE_CONFIG = re.compile(r"trace\s*:\s*[\"']([\w-]+)[\"']")
 
+# TF-0136 — message EXACT emis par le runner Playwright (`webServer.reuseExistingServer:
+# false`) quand un AUTRE processus ecoute deja sur l URL configuree : verifie en reel sur ce
+# poste, ou un serveur de preview d un projet totalement etranger occupait le port 4173 du banc
+# rouge, faisant passer la suite pour rouge sur une page qui n avait meme pas les data-testid
+# attendus. Ce motif est produit AVANT le premier test (le serveur ne demarre pas) : il doit
+# etre reconnu avant toute lecture de trace.zip, sans quoi l absence de trace (aucun test
+# execute) se confond avec « ecriture de trace bloquee » (TF-0132) ou pire, avec une suite
+# reellement rouge.
+_PORT_OCCUPE = re.compile(r"(\S+) is already used, make sure that nothing is running on the port")
+
 
 def _mode_trace_projet(front: Path) -> str | None:
     """Le mode de trace DEJA choisi par le projet dans son `playwright.config`, s il y en a un.
@@ -460,6 +470,24 @@ def front_execute(banc_str: str) -> dict | None:
         if resultat is None:
             return None
         if resultat.returncode != 0:
+            # TF-0136 — un port DEJA occupe par un processus etranger au banc fait echouer le
+            # demarrage du webServer avant le premier test : aucune trace n est produite (aucun
+            # test n a tourne), ce qui SANS ce garde tombait dans la branche « trace
+            # indisponible » ci-dessous (diagnostic faux : la trace n est pour rien) ou dans la
+            # suite generique « suite e2e en echec » (diagnostic faux : la suite n a jamais ete
+            # executee). Priorite absolue sur les deux autres causes.
+            occupe = _PORT_OCCUPE.search(f"{resultat.stdout or ''}\n{resultat.stderr or ''}")
+            if occupe:
+                _declarer(
+                    banc,
+                    "front",
+                    f"port deja occupe par un AUTRE processus sur {occupe.group(1)} — le "
+                    "webServer de ce banc n a pas demarre, AUCUN test n a ete execute : ni une "
+                    "trace indisponible, ni une suite rouge. Identifier l occupant "
+                    "(`netstat -ano | findstr <port>` puis le PID dans le Gestionnaire des "
+                    "taches sous Windows) et liberer le port avant de relancer",
+                )
+                return None
             # TF-0132 — deux causes DISTINCTES derriere un code de sortie non nul. Sur un poste
             # ou l ECRITURE de la trace bloque, chaque test se deroule en entier puis expire en
             # « Test timeout exceeded » : la suite est repute rouge alors qu elle est verte de
