@@ -525,6 +525,25 @@ def front_execute(banc_str: str) -> dict | None:
                 f"couverture front non mesurable tant que la suite est rouge{complement}",
             )
             return None
+        # TF-0138 — meme distinction que ci-dessus, cote SUCCES. Un projet qui a fixe
+        # `trace` dans SON PROPRE playwright.config (mode_effectif != "on", cf. `_mode_trace` —
+        # raison legitime : ecriture de trace bloquee sur son poste, TF-0132) passe TOUS ses
+        # tests sans qu aucun trace.zip soit jamais produit. Sans ce garde, la boucle suivante
+        # trouvait zero archive et rapportait testids/routes VIDES — indiscernable d une suite
+        # qui n exerce reellement rien : le seuil de surface tombait a 0 % BLOQUANT sur un
+        # projet dont la suite est verte de bout en bout (constate sur fixtures/banc-vert,
+        # dont le playwright.config porte `trace: "off"` : 26 bloquants a tort, 0 une fois la
+        # mesure correctement declaree NON MESURABLE au lieu de NULLE).
+        if mode_effectif != "on":
+            _declarer(
+                banc,
+                "front",
+                "trace Playwright desactivee par LE PROJET (son propre playwright.config "
+                f"choisit trace={mode_effectif!r}) — couverture front NON MESURABLE, la suite "
+                "elle meme est VERTE (code 0). Definir FORGE_TESTS_PLAYWRIGHT_TRACE=on pour "
+                "forcer la mesure si l ecriture de trace n est pas bloquee sur ce poste",
+            )
+            return None
         for archive in Path(artefacts).rglob("trace.zip"):
             with zipfile.ZipFile(archive) as arc:
                 for nom in arc.namelist():
