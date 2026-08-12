@@ -15,6 +15,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from forge_tests.noyau import Finding, SortieAdaptateur
@@ -51,6 +52,9 @@ NON_JUGE = [
     "securite : le perimetre scanne est le dossier du projet analyse ; ni l historique git, "
     "ni l infrastructure declaree ailleurs (conteneurs, pipelines, secrets d execution)",
     "securite : aucun test d intrusion ni d authentification/autorisation au niveau metier",
+    "securite : le scan est BORNE aux sources du produit (dependances exclues — .venv, "
+    "node_modules, dist, build…) ; un secret commis DANS une dependance versionnee ne serait "
+    "pas vu ici, ce n est pas le meme risque ni le meme destinataire qu un secret du produit",
 ]
 
 
@@ -59,6 +63,40 @@ def _racine_oracles() -> Path | None:
     if declare and Path(declare).is_dir():
         return Path(declare)
     return _DEFAUT if _DEFAUT.is_dir() else None
+
+
+# TF-0099 : constate le 11/08 — `oracle-secrets` complete son scanner integre par un appel a
+# `gitleaks detect -s <cible>` SANS aucune exclusion de repertoire (contrairement a son propre
+# scanner JS, qui exclut deja node_modules/.venv/dist/build). Le reecrire aurait viole la regle
+# R3 (« s appuyer sur l outil qui fait foi, ne pas le reecrire ») : la seule correction possible
+# cote appelant est de ne JAMAIS lui tendre les dependances. 219 « fuites » confirmees, 100 %
+# situees dans des bibliotheques tierces (cryptography, pyjwt, sqlalchemy…) sous .venv/ —
+# aucune dans le code du produit.
+_EXCLUS_DEPENDANCES = (
+    ".venv", "venv", "node_modules", "dist", "build", "__pycache__",
+    ".git", "site-packages", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+)
+
+
+def _sources_du_produit(application: Path, tmp: Path) -> Path:
+    """Copie FILTRÉE de `application`, sans les dossiers de dépendances.
+
+    Border ce que l oracle délégué reçoit est le seul levier qui ne réécrit pas gitleaks : un
+    dossier qui ne contient jamais `.venv` ne peut pas produire de finding « dans » `.venv`,
+    quel que soit le comportement interne de l outil invoqué.
+    """
+    cible = tmp / "sources"
+    shutil.copytree(application, cible, ignore=shutil.ignore_patterns(*_EXCLUS_DEPENDANCES))
+    return cible
+
+
+def _relocaliser(texte: str, scan: Path, application: Path) -> str:
+    """Réécrit un chemin sous la copie filtrée en chemin sous l arbre réel du projet audité.
+
+    Sans ce ré-étiquetage, chaque `localisation` publiée pointerait vers un dossier temporaire
+    détruit à la fin de l analyse — illisible pour quiconque reçoit le rapport.
+    """
+    return texte.replace(str(scan), str(application))
 
 
 def _lancer(script: Path, cible: Path) -> dict | None:
@@ -106,35 +144,38 @@ def analyser(cible: Path) -> SortieAdaptateur:
     echec = False
     joues: list[str] = []
 
-    for nom in ORACLES:
-        script = racine / f"oracle-{nom}.mjs"
-        if not script.exists():
-            non_juge.append(f"securite : oracle-{nom} absent du registre, non joue")
-            continue
-        rapport = _lancer(script, application)
-        if rapport is None:
-            non_juge.append(f"securite : oracle-{nom} n a produit aucun verdict exploitable")
-            continue
-        joues.append(nom)
-        # Les limites de l oracle delegue deviennent de la dette DECLAREE du framework.
-        non_juge.extend(f"securite/{nom} : {ligne}" for ligne in rapport.get("non_juge", []))
-        if rapport.get("verdict") != "FAIL":
-            continue
-        echec = True
-        for brut in rapport.get("findings", []):
-            if brut.get("sev") == "info":
+    with tempfile.TemporaryDirectory(prefix="forge-tests-securite-") as brouillon:
+        scan = _sources_du_produit(application, Path(brouillon))
+        for nom in ORACLES:
+            script = racine / f"oracle-{nom}.mjs"
+            if not script.exists():
+                non_juge.append(f"securite : oracle-{nom} absent du registre, non joue")
                 continue
-            identifiant = f"securite:{nom}:{brut.get('where', application.name)}"
-            findings.append(
-                Finding(
-                    id=identifiant,
-                    classe="securite",
-                    localisation=str(brut.get("where") or application),
-                    message=f"[{nom}] {brut.get('msg', '')}",
-                    severite="bloquant" if brut.get("sev") == "bloquant" else "signale",
-                    risque=coter(PAN, identifiant, str(application)),
+            rapport = _lancer(script, scan)
+            if rapport is None:
+                non_juge.append(f"securite : oracle-{nom} n a produit aucun verdict exploitable")
+                continue
+            joues.append(nom)
+            # Les limites de l oracle delegue deviennent de la dette DECLAREE du framework.
+            non_juge.extend(f"securite/{nom} : {ligne}" for ligne in rapport.get("non_juge", []))
+            if rapport.get("verdict") != "FAIL":
+                continue
+            echec = True
+            for brut in rapport.get("findings", []):
+                if brut.get("sev") == "info":
+                    continue
+                ou = _relocaliser(str(brut.get("where") or application), scan, application)
+                identifiant = f"securite:{nom}:{ou}"
+                findings.append(
+                    Finding(
+                        id=identifiant,
+                        classe="securite",
+                        localisation=ou,
+                        message=f"[{nom}] {brut.get('msg', '')}",
+                        severite="bloquant" if brut.get("sev") == "bloquant" else "signale",
+                        risque=coter(PAN, identifiant, str(application)),
+                    )
                 )
-            )
 
     if not joues:
         return SortieAdaptateur(

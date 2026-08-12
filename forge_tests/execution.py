@@ -372,6 +372,22 @@ def front_execute(banc_str: str) -> dict | None:
             f"dépendances front non installées — {front / 'node_modules'} absent",
         )
         return None
+    # TF-0098 : sans config Playwright, `npx playwright test` ramasse les *.test.tsx de vitest
+    # et plante sur « Vitest failed to access its internal state » — un echec d execution
+    # imputable au projet, alors que le vrai fait est « aucune suite e2e declaree ». Les deux
+    # motifs n appellent pas le meme travail : le premier envoie chercher un bug inexistant.
+    if not any(
+        (front / f"playwright.config{suffixe}").is_file()
+        for suffixe in (".ts", ".js", ".mjs", ".cts", ".mts")
+    ):
+        _declarer(
+            banc,
+            "front",
+            "aucune suite e2e declaree — aucun playwright.config.{ts,js,mjs} sous "
+            f"{front} : lancer `npx playwright test` sans config ramasserait la suite "
+            "unitaire (vitest) du projet et ferait passer son absence pour un echec",
+        )
+        return None
     npx = shutil.which("npx")
     if npx is None:
         _declarer(banc, "front", "npx introuvable sur cette machine — suite e2e non lançable")

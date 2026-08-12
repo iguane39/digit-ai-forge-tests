@@ -89,6 +89,32 @@ def _sql(cible: Path) -> list[Path]:
     return sorted((cible / "backend" / "migrations").glob("*.sql"))
 
 
+_EXCLUS_MODELES = {".venv", "venv", "node_modules", "__pycache__", "tests", "migrations", "alembic"}
+
+
+def _fichiers_modeles(cible: Path) -> list[Path]:
+    """Modules ORM du projet — recherche récursive, pas un seul chemin conventionnel.
+
+    TF-0097 : l adaptateur ne regardait que `backend/app/models.py`. Un projet dont les modèles
+    vivent sous `backend/app/db/models.py` (ou toute autre sous-arborescence) sortait « aucune
+    contrainte ORM à inventorier », alors que les modèles existent bel et bien.
+    """
+    conventionnels = [
+        cible / "backend" / "app" / "models.py",
+        cible / "backend" / "app" / "db" / "models.py",
+    ]
+    trouves = [p for p in conventionnels if p.is_file()]
+    if trouves:
+        return trouves
+    racine = cible / "backend" / "app"
+    if not racine.is_dir():
+        return []
+    return sorted(
+        p for p in racine.rglob("models.py")
+        if not (_EXCLUS_MODELES & set(p.relative_to(racine).parts[:-1]))
+    )
+
+
 def inventaire(cible: Path) -> list[Element]:
     elements: list[Element] = []
     vus: set[str] = set()
@@ -127,8 +153,7 @@ def inventaire(cible: Path) -> list[Element]:
 
     # Contraintes declarees dans l ORM : elles existent au modele meme si aucune migration ne
     # les porte. Leur absence des migrations est justement le genre de divergence a exposer.
-    modeles = cible / "backend" / "app" / "models.py"
-    if modeles.exists():
+    for modeles in _fichiers_modeles(cible):
         source = modeles.read_text(encoding="utf-8")
         for nom in _ORM_NOMMEE.findall(source):
             cle = f"contrainte:{nom}"
@@ -270,8 +295,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
         )
     else:
         reference = " ".join(schema["contraintes"] + schema["index"] + schema["tables"])
-    modeles = cible / "backend" / "app" / "models.py"
-    if modeles.exists():
+    for modeles in _fichiers_modeles(cible):
         for nom in _ORM_NOMMEE.findall(modeles.read_text(encoding="utf-8")):
             if nom in reference:
                 continue

@@ -554,6 +554,12 @@
       "statut": "todo"
     },
     {
+      "id": "securite-oracles-004",
+      "domaine": "securite-oracles",
+      "enonce": "securite : le scan est BORNE aux sources du produit (dependances exclues — .venv, node_modules, dist, build…) ; un secret commis DANS une dependance versionnee ne serait pas vu ici, ce n est pas le meme risque ni le meme destinataire qu un secret du produit",
+      "statut": "todo"
+    },
+    {
       "id": "sql-001",
       "domaine": "sql",
       "enonce": "sql : le decoupage reconnait les litteraux `'...'` (echappement `''`) et les identifiants entre guillemets ; un `;` ou un `--` place dans un litteral DOLLAR-QUOTE (`$$...$$`, corps de fonction PL/pgSQL) ou dans une chaine a echappement backslash (`E'...\\'...'`) reste hors de portee — l instruction serait coupee au mauvais endroit",
