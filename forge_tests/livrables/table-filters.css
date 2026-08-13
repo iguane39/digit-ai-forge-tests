@@ -1,0 +1,54 @@
+/* table-filters.css — habillage charté du composant de filtres de colonne (D-12).
+   TF-0176 (13/08) : un composant se livre AVEC son CSS — livré nu, il sort en rendu brut
+   navigateur chez tous ses hôtes (constaté sur le dashboard forge-tests du 13/08, refusé
+   par son destinataire). À inliner dans le bloc de style de la page, à côté du script du
+   composant — JAMAIS de balise écrite en toutes lettres dans ce commentaire (même famille
+   de piège que RA-1 : un « script » ouvrant en commentaire fausse toute lecture paresseuse
+   du document). Ne consomme que les tokens :root du socle (--surface, --ink, --muted,
+   --line, --blue, --r-sm) : aucune couleur en dur, les deux thèmes sont servis. */
+
+.tf-btn {
+  font: inherit; font-size: .72rem; line-height: 1;
+  color: var(--blue); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 3px 7px; margin-left: 6px; cursor: pointer; vertical-align: middle;
+}
+.tf-btn:hover { border-color: var(--blue); }
+.tf-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+/* filtre ACTIF : l'état se voit sans ouvrir le panneau */
+.tf-btn.tf-on { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+.tf-panel {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0;
+  min-width: 230px; max-width: 320px; max-height: 320px; overflow: auto;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .16);
+  padding: 10px 12px; text-align: left; text-transform: none;
+  font-family: var(--sans); font-size: .85rem; font-weight: 400;
+  letter-spacing: normal; cursor: default;
+}
+.tf-search {
+  width: 100%; font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 6px 10px; margin: 0 0 8px;
+}
+.tf-search:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.tf-actions {
+  display: flex; gap: 14px; border-bottom: 1px solid var(--line);
+  padding-bottom: 8px; margin-bottom: 8px;
+}
+.tf-actions button {
+  font: inherit; font-weight: 600; color: var(--blue);
+  background: none; border: none; cursor: pointer; padding: 2px 4px;
+}
+.tf-actions button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.tf-opts { display: flex; flex-direction: column; gap: 2px; }
+.tf-opts label {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 2px; border-radius: 4px; cursor: pointer;
+}
+.tf-opts label:hover { background: var(--bg, #f6f8fc); }
+.tf-opts input[type="checkbox"] { accent-color: var(--blue); }
+
+@media print { .tf-btn, .tf-panel { display: none; } }
