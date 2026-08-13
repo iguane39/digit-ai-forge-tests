@@ -22,6 +22,7 @@ import datetime
 import functools
 import http.server
 import os
+import re
 import socketserver
 import sys
 import threading
@@ -1161,9 +1162,16 @@ def verifier_dashboard(rouge: dict) -> int:
         # l instance auditee figure legitimement dans les constats du pan qualif, et l interdire
         # reviendrait a censurer le sujet meme de l audit.
         for interdit in ('href="http', "href='http", 'src="', "src='", "@import", "url(http",
-                         "<link", "<script src", "fetch(", "XMLHttpRequest"):
+                         "<script src", "fetch(", "XMLHttpRequest"):
             cas.append((f"aucune ressource distante — « {interdit} » absent",
                         interdit not in page))
+        # Favicon-lettre (13/08) : un <link rel="icon" href="data:…"> ne charge RIEN — le
+        # littéral « <link » n'est plus banni en bloc, chaque <link> est jugé : seul l'icône
+        # en data: URI est licite, tout autre <link (stylesheet, preconnect…) reste interdit.
+        liens = re.findall(r"<link\b[^>]*>", page)
+        cas.append(("aucun <link> autre que le favicon data: (contrôle affiné, pas affaibli)",
+                    all('rel="icon"' in l and 'href="data:' in l for l in liens)
+                    and len(liens) == 1))
         cas.append(("un repli systeme est declare pour chaque police",
                     "system-ui" in page and "Syne" not in page))
         # Contrat de themes TF-0153 (mandat humain du 13/08) : un livrable d audit s ouvre
