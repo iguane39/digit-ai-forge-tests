@@ -374,6 +374,12 @@
       "statut": "todo"
     },
     {
+      "id": "dashboard-004",
+      "domaine": "dashboard",
+      "enonce": "dashboard : le detail d un cas est la derivation des cahiers (memes references stables) — sa pertinence pedagogique est celle du cahier, la page ne l ameliore pas",
+      "statut": "todo"
+    },
+    {
       "id": "data-sql-003",
       "domaine": "data-sql",
       "enonce": "data : le repli `sqlite3` relève les INSTRUCTIONS envoyées au pilote, pas les violations de contrainte ; sur un projet sans SQLAlchemy les contraintes restent donc non attribuables — tables, index et triggers, eux, sont mesurés",

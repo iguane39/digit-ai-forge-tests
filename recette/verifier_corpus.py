@@ -1166,8 +1166,17 @@ def verifier_dashboard(rouge: dict) -> int:
                         interdit not in page))
         cas.append(("un repli systeme est declare pour chaque police",
                     "system-ui" in page and "Syne" not in page))
-        cas.append(("les deux themes sont portes (clair et sombre)",
-                    "prefers-color-scheme: dark" in page and 'data-theme="sombre"' in page))
+        # Contrat de themes TF-0153 (mandat humain du 13/08) : un livrable d audit s ouvre
+        # CLAIR chez tous ses lecteurs — l auto-sombre herite de l OS est retire (c est lui
+        # qui a valu le retour humain), le sombre reste un CHOIX persiste. L assertion
+        # inverse donc l ancienne exigence, elle ne l affaiblit pas : trois controles au
+        # lieu d un.
+        cas.append(("themes TF-0153 : clair par defaut STRICT (pas d auto-sombre OS)",
+                    "prefers-color-scheme: dark" not in page))
+        cas.append(("themes TF-0153 : palette sombre portee, au choix du lecteur",
+                    ':root[data-theme="sombre"]' in page))
+        cas.append(("themes TF-0153 : bascule presente et persistee",
+                    "bascule-theme" in page and "localStorage" in page))
         cas.append(("les six onglets sont presents",
                     all(f'data-cible="{o}"' in page for o in
                         ("synthese", "fonctionnels", "techniques", "echecs", "non-joues",

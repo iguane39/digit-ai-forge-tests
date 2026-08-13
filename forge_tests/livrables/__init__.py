@@ -120,12 +120,52 @@ def produire(
         chemins[famille] = _cahiers.ecrire(chemin, corps, contexte)
 
     # 3. Dashboard — dérivé du SEUL rapport, contrôlé sur ses propres totaux avant d être rendu.
-    page = _dashboard.construire(rapport, contexte, chapitres_bruts, precedent)
+    #    Les chapitres ENRICHIS (cas des cahiers) lui sont passés : le détail dépliable de la
+    #    page porte les mêmes références stables que les cahiers (TF-0153, barre B1).
+    page = _dashboard.construire(
+        rapport, contexte, chapitres_bruts, precedent, chapitres_cas=chapitres
+    )
     ecarts = _dashboard.controler(page, rapport)
     if ecarts:
         raise RuntimeError(
             "dashboard : les totaux affichés divergent du rapport — " + " · ".join(ecarts)
         )
+    # Contrôle pré-génération (contrat pilot §2 bis) : la forge vérifie son gabarit contre les
+    # règles courantes AVANT de livrer. Une dérive ne bloque pas (le run reste borné) : elle
+    # s imprime pour le ledger et remonte au pilot en candidature TODO — le sidecar est déposé
+    # à côté des livrables, donc HORS du projet audité, et se remet à `<pilot>\input\`.
+    derives = _dashboard.controle_pregeneration(page)
+    if derives:
+        sidecar = dossier / "candidature-gabarit-dashboard.tf.jsonl"
+        contenu = (
+            "Contrôle pré-génération (§2 bis) du gabarit dashboard de forge-tests : "
+            + " ; ".join(derives)
+            + ". Remettre ce gabarit à niveau dans la forge (campagne mandatée)."
+        )
+        ligne = {
+            "schema": 1,
+            "titre": "Gabarit dashboard forge-tests : dérive détectée par le contrôle "
+            "pré-génération (§2 bis)",
+            "contenu": contenu,
+            "demandeur": f"contrôle pré-génération forge-tests (produit {produit})",
+            "source": "forge_tests.livrables.dashboard.controle_pregeneration — exécuté à la "
+            "génération des livrables",
+            "date_demande": date,
+            "forges_cibles_initiales": ["forge-tests"],
+            "score": {"gain": 2, "preuve": 3, "effort": 2},
+            "preuve_du_cout": "chaque run de tests livre un dashboard en écart avec les règles "
+            "du socle tant que le gabarit n est pas remis à niveau",
+        }
+        sidecar.write_text(
+            json.dumps(ligne, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+        )
+        print(
+            "[pré-génération §2 bis] DERIVE — "
+            + " ; ".join(derives)
+            + f" · candidature TODO écrite : {sidecar}"
+        )
+    else:
+        print("[pré-génération §2 bis] PASS — gabarit dashboard conforme aux règles courantes")
     chemin_html = nommer(produit, "Dashboard tests", ".html", dossier, jour)
     chemins["dashboard"] = _dashboard.ecrire(chemin_html, page, cible)
     return chemins
