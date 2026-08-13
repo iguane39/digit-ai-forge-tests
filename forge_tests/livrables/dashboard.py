@@ -802,13 +802,18 @@ def _etat_des_seuils(rapport: dict) -> tuple[list[list[str]], list[str], int]:
     return lignes, non_tenus, total
 
 
-def _tendance(rapport: dict, precedent: dict | None) -> str:
-    if precedent is None:
+def _tendance(rapport: dict, precedent: dict | list[dict] | None) -> str:
+    if not precedent:
         return (
             '<p class="discret">Aucun rapport précédent fourni — pas de tendance. '
-            "Passer <code>--precedent &lt;rapport.json&gt;</code> pour l obtenir.</p>"
+            "Passer <code>--precedent &lt;rapport.json&gt;</code> pour l obtenir "
+            "(répétable : plusieurs rapports, du plus ancien au plus récent, donnent "
+            "l historique multi-runs — TF-0159).</p>"
         )
-    avant, apres = totaux(precedent), totaux(rapport)
+    precedents = precedent if isinstance(precedent, list) else [precedent]
+    if len(precedents) > 1:
+        return _tendance_multi(rapport, precedents)
+    avant, apres = totaux(precedents[0]), totaux(rapport)
     cibles = {
         "elements": ("synthese", "table-par-pan", ""),
         "passes": ("synthese", "table-par-pan", ""),
@@ -861,6 +866,59 @@ def _tendance(rapport: dict, precedent: dict | None) -> str:
         )
         + note
     )
+
+
+def _tendance_multi(rapport: dict, precedents: list[dict]) -> str:
+    """TF-0159 (barre Allure B3) : tendance MULTI-RUNS — une colonne par rapport fourni
+    (du plus ancien au plus récent), l écart jugé entre les deux derniers points. Chaque
+    ligne garde son « aller voir » : l agrégat mène à sa liste (B4).
+    """
+    series = [totaux(p) for p in precedents] + [totaux(rapport)]
+    entetes = (
+        ["compteur"]
+        + [f"R-{len(precedents) - i}" for i in range(len(precedents))]
+        + ["ce rapport", "écart (dernier pas)", "aller voir"]
+    )
+    cibles = {
+        "elements": ("synthese", "table-par-pan", ""),
+        "passes": ("synthese", "table-par-pan", ""),
+        "echecs": ("echecs", "table-echecs", ""),
+        "echecs_bloquants": ("echecs", "table-echecs", "bloquant"),
+        "non_joues": ("non-joues", "", ""),
+        "actions": ("actions", "table-actions", ""),
+    }
+    lignes = []
+    for cle in ("elements", "passes", "echecs", "echecs_bloquants", "non_joues", "actions"):
+        valeurs_serie = [s[cle] for s in series]
+        ecart = valeurs_serie[-1] - valeurs_serie[-2]
+        favorable = ecart > 0 if cle in ("elements", "passes") else ecart < 0
+        classe = "b-info" if ecart == 0 else ("b-pass" if favorable else "b-fail")
+        signe = f"{ecart:+d}" if ecart else "="
+        libelle, descriptif = _glossaire.compteur(cle)
+        sens = (
+            "écart nul entre les deux derniers rapports"
+            if ecart == 0
+            else f"{'amélioration' if favorable else 'dégradation'} sur le dernier pas : "
+            f"{valeurs_serie[-2]} → {valeurs_serie[-1]}"
+        )
+        cible, ancre, severite = cibles[cle]
+        voir = (
+            f'<button type="button" class="lien-chapitre" data-cible="{cible}"'
+            + (f' data-ancre="{ancre}"' if ancre else "")
+            + (f' data-filtre-severite="{severite}"' if severite else "")
+            + ">voir</button>"
+        )
+        lignes.append(
+            [f"{_e(libelle)}<br><span class=\"discret\">{_e(descriptif)}</span>"]
+            + [str(v) for v in valeurs_serie]
+            + [f'<span class="badge {classe}" title="{_e(sens)}">{signe}</span>', voir]
+        )
+    note = (
+        f'<p class="discret">Historique : {len(precedents)} rapport(s) antérieur(s) fournis '
+        "(<code>--precedent</code> répétable, du plus ancien au plus récent). Chaque colonne "
+        "compare des TOTAUX : elle ne dit pas si ce sont les mêmes éléments qui ont bougé.</p>"
+    )
+    return _tableau(entetes, lignes) + note
 
 
 # --- Détail d un cas (R11 — barre B1 : le détail à ≤ 2 clics, déplié sur place) -----------------
@@ -1085,9 +1143,16 @@ def construire(
     """
     valeurs = totaux(rapport)
     titre = f"{contexte['produit']} — Dashboard tests — {contexte['date']}"
+    # TF-0159 : `precedent` accepte un rapport OU une liste (multi-runs) — les deltas des
+    # tuiles se jugent toujours contre le PLUS RÉCENT des précédents.
+    dernier_precedent = precedent[-1] if isinstance(precedent, list) and precedent else precedent
     deltas = (
-        {cle: valeurs[cle] - avant for cle, avant in totaux(precedent).items() if cle in valeurs}
-        if precedent
+        {
+            cle: valeurs[cle] - avant
+            for cle, avant in totaux(dernier_precedent).items()
+            if cle in valeurs
+        }
+        if dernier_precedent
         else {}
     )
 
@@ -1423,6 +1488,8 @@ def construire(
  rapport JSON produit par Forge Tests.">
 <meta name="theme-color" content="#2563EB">
 <meta name="color-scheme" content="light dark">
+<!-- Favicon-lettre (13/08, loi transverse n°3) : première lettre du produit audité. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563EB'/%3E%3Ctext x='32' y='44' font-family='Segoe UI,Roboto,sans-serif' font-size='38' font-weight='700' fill='white' text-anchor='middle'%3E{_e(str(contexte["produit"] or "D").strip()[:1].upper())}%3C/text%3E%3C/svg%3E">
 <style>{_STYLE}</style>
 </head>
 <body>
