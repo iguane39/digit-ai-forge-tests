@@ -279,12 +279,25 @@ _STYLE = f"""
       background:var(--surface); color:var(--ink); border-radius:var(--r-sm); padding:6px 12px;
       cursor:pointer; }}
     .outillage .outil-compte {{ color:var(--muted); font-size:.82rem; }}
-    details.cas {{ margin:2px 0; }}
-    details.cas summary {{ color:var(--blue); cursor:pointer; font-size:.84rem; }}
-    details.cas > div {{ background:var(--bg); border:1px solid var(--line);
-      border-radius:var(--r-sm); padding:10px 12px; margin-top:6px; font-size:.86rem; }}
-    details.cas p {{ margin:0 0 .5em; }}
-    details.cas ol {{ margin:.2em 0 .6em; padding-left:1.4em; }}
+    /* TF-0175 — libellés d'éléments : le lisible d'abord, l'id technique en second. */
+    .lib {{ font-weight:600; }}
+    /* TF-0175 — détail de cas en LIGNE PLEINE LARGEUR (retour n°6) : cartes côte à côte. */
+    .btn-detail {{ font:inherit; font-size:.8rem; color:var(--blue); background:var(--surface);
+      border:1px solid var(--line); border-radius:var(--r-sm); padding:3px 10px;
+      cursor:pointer; white-space:nowrap; }}
+    .btn-detail[aria-expanded="true"] {{ background:var(--blue); color:#fff;
+      border-color:var(--blue); }}
+    .btn-detail:focus-visible {{ outline:3px solid var(--blue); outline-offset:2px; }}
+    tr[data-detail] > td {{ background:var(--bg); border-bottom:2px solid var(--line);
+      padding:14px 16px; }}
+    .cas-grille {{ display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr));
+      gap:12px; }}
+    .cas-carte {{ background:var(--surface); border:1px solid var(--line);
+      border-radius:var(--r-sm); padding:12px 14px; font-size:.86rem; }}
+    .cas-carte p {{ margin:0 0 .5em; }}
+    .cas-carte ol {{ margin:.2em 0 .6em; padding-left:1.4em; }}
+    .cas-ref {{ color:var(--muted); }}
+    .outil-chapitre {{ margin:6px 0 10px; }}
     .discret {{ color:var(--muted); font-size:.86rem; }}
     .lien-chapitre {{ font:inherit; color:var(--blue); background:none; border:none;
       cursor:pointer; text-align:left; padding:0; text-decoration:underline; }}
@@ -316,9 +329,11 @@ _STYLE = f"""
       nav.onglets, .filtres, .theme-toggle, .outillage, .tuile-va {{ display:none; }}
       .panneau {{ display:block !important; page-break-before:always; }}
       .card, .tuile, tr {{ break-inside:avoid; page-break-inside:avoid; }}
-      /* Le papier montre tout : aucun filtre écran ne masque une ligne à l impression. */
-      tr[data-tf-hidden], tr[hidden] {{ display:table-row !important; }}
-      @media (max-width:640px) {{ tr[data-tf-hidden], tr[hidden] {{ display:block !important; }} }}
+      /* Le papier montre tout : aucun filtre écran ne masque une ligne à l impression,
+         et les détails de cas sont tous dépliés. */
+      tr[data-tf-hidden], tr[hidden], tr[data-detail] {{ display:table-row !important; }}
+      .btn-detail {{ display:none; }}
+      @media (max-width:640px) {{ tr[data-tf-hidden], tr[hidden], tr[data-detail] {{ display:block !important; }} }}
     }}
 """
 
@@ -343,6 +358,7 @@ _SCRIPT = """
   function majVisibilite(tr) {
     tr.hidden = tr.hasAttribute('data-rech-cache') || tr.hasAttribute('data-sev-cache')
       || tr.hasAttribute('data-axe-cache');
+    if (tr.hidden) replierDetail(tr); // la ligne de détail suit sa ligne mère
   }
   var filtres = document.querySelectorAll('.filtres button');
   function appliquerFiltresActions() {
@@ -400,9 +416,21 @@ _SCRIPT = """
   var norm = function (s) {
     return String(s || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
   };
+  // TF-0175 : un « bloc outillé » est soit une table à barre propre (.bloc-tableau), soit un
+  // CHAPITRE entier (section[data-outille]) dont la barre gouverne TOUTES les tables.
   function lignesDe(bloc) {
-    var tb = bloc.querySelector('table tbody');
-    return tb ? Array.prototype.slice.call(tb.rows) : [];
+    return Array.prototype.slice.call(bloc.querySelectorAll('table tbody tr'))
+      .filter(function (tr) { return !tr.hasAttribute('data-detail'); });
+  }
+  function detailDe(tr) {
+    var d = tr.nextElementSibling;
+    return (d && d.hasAttribute('data-detail')) ? d : null;
+  }
+  function replierDetail(tr) {
+    var d = detailDe(tr);
+    if (d) { d.hidden = true; }
+    var b = tr.querySelector('.btn-detail');
+    if (b) { b.setAttribute('aria-expanded', 'false'); b.textContent = b.textContent.replace('▾', '▸'); }
   }
   function visible(tr) {
     return !tr.hidden && tr.style.display !== 'none' && !tr.hasAttribute('data-rech-cache');
@@ -412,12 +440,25 @@ _SCRIPT = """
     if (!compte) return;
     var lignes = lignesDe(bloc), vues = 0;
     lignes.forEach(function (tr) { if (visible(tr)) vues++; });
-    compte.textContent = vues + ' / ' + lignes.length + ' ligne(s) affichée(s)';
+    var unite = bloc.hasAttribute('data-outille') ? 'élément(s) affiché(s)' : 'ligne(s) affichée(s)';
+    compte.textContent = vues + ' / ' + lignes.length + ' ' + unite;
   }
   function recompterTout() {
-    document.querySelectorAll('.bloc-tableau').forEach(recompter);
+    document.querySelectorAll('.bloc-tableau, section[data-outille]').forEach(recompter);
   }
-  document.querySelectorAll('.bloc-tableau').forEach(function (bloc) {
+  // Dépliage du détail de cas (ligne pleine largeur, retour n°6)
+  document.querySelectorAll('.btn-detail').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var tr = b.closest('tr');
+      var d = detailDe(tr);
+      if (!d) return;
+      var ouvert = !d.hidden;
+      d.hidden = ouvert;
+      b.setAttribute('aria-expanded', ouvert ? 'false' : 'true');
+      b.textContent = ouvert ? b.textContent.replace('▾', '▸') : b.textContent.replace('▸', '▾');
+    });
+  });
+  document.querySelectorAll('.bloc-tableau, section[data-outille]').forEach(function (bloc) {
     var recherche = bloc.querySelector('.outil-recherche');
     var reinit = bloc.querySelector('.outil-reinit');
     var lignes = lignesDe(bloc);
@@ -643,6 +684,8 @@ def _tableau(
     lignes: list[list[str]],
     attributs: list[str] | None = None,
     identifiant: str = "",
+    chapitre: bool = False,
+    details_lignes: list[str] | None = None,
 ) -> str:
     """Tableau accessible. Chaque cellule porte son intitulé de colonne (`data-label`).
 
@@ -656,7 +699,11 @@ def _tableau(
     """
     if not lignes:
         return '<p class="discret">Aucune entrée.</p>'
-    outille = len(lignes) >= _SEUIL_FILTRE
+    # Mode CHAPITRE (TF-0175, retour humain n°4) : l'outillage (recherche/réinit/compteur)
+    # vit au niveau du CHAPITRE — le sous-chapitrage fragmentait les listes sous le seuil et
+    # vidait « pour chaque liste, des filtres » (76 tables sur 79 nues au constat). Ici :
+    # tri sur TOUTES les tables, filtres de colonne dès 4 lignes, jamais de barre par table.
+    outille = len(lignes) >= _SEUIL_FILTRE and not chapitre
     tete = ""
     affiches = []
     for t in entetes:
@@ -664,7 +711,7 @@ def _tableau(
         affiches.append(affiche)
         attribut = f' aria-describedby="{_DESCRIBEDBY[t]}"' if t in _DESCRIBEDBY else ""
         attribut += f' title="{_e(info)}"' if info else ""
-        attribut += ' data-tri=""' if outille else ""
+        attribut += ' data-tri=""' if (outille or chapitre) else ""
         tete += f"<th{attribut}>{_e(affiche)}</th>"
     corps = ""
     for rang, ligne in enumerate(lignes):
@@ -674,8 +721,16 @@ def _tableau(
             for i, c in enumerate(ligne)
         )
         corps += ouverture + cellules + "</tr>"
+        # Ligne de détail PLEINE LARGEUR (retour humain n°6) : le détail d'un cas ne vit
+        # plus dans une cellule étroite — il se déplie sous la ligne, sur toute la largeur.
+        detail = (details_lignes or [])[rang] if details_lignes else ""
+        if detail:
+            corps += (
+                f'<tr data-detail hidden><td colspan="{len(entetes)}" '
+                f'data-label="détail">{detail}</td></tr>'
+            )
     marque = f' id="{identifiant}"' if identifiant else ""
-    filtrable = " data-filterable" if outille else ""
+    filtrable = " data-filterable" if (outille or (chapitre and len(lignes) >= 4)) else ""
     table = (
         f'<div class="zone-tableau"><table{marque}{filtrable}><thead><tr>{tete}</tr></thead>'
         f"<tbody>{corps}</tbody></table></div>"
@@ -722,9 +777,7 @@ def _synthese_par_pan(chapitres: list[dict]) -> str:
                 [
                     lien,
                     _e(chapitre["famille"]),
-                    "0",
-                    "—",
-                    "—",
+                    "0", "—", "—", "—", "—",
                     '<span class="badge b-part" title="aucun élément inventorié : rien n a pu '
                     'être mesuré sur ce pan — la lecture donne le motif">non testé</span>',
                     f'<span class="discret">{lecture}</span>',
@@ -736,28 +789,66 @@ def _synthese_par_pan(chapitres: list[dict]) -> str:
         bloquants = sum(
             1 for e in elements if e["etat"] == "defaut" and e.get("severite") == "bloquant"
         )
-        non_joues = sum(1 for e in elements if e["etat"] in ("non_exerce", "non_testable"))
+        # Retour humain n°3 : les NON-PASSÉS ont leurs colonnes explicites — la vue est
+        # complète sans lire la prose.
+        non_joues = sum(1 for e in elements if e["etat"] == "non_exerce")
+        non_testables = sum(1 for e in elements if e["etat"] == "non_testable")
         pct = round(100 * passes / total)
-        badge = "b-pass" if ko == 0 and non_joues == 0 else ("b-fail" if bloquants else "b-part")
-        lecture = (
-            f"{passes}/{total} passés ({pct} %) — {ko} KO"
-            + (f" dont {bloquants} bloquant(s)" if bloquants else "")
-            + (f", {non_joues} non joué(s)" if non_joues else "")
+        badge = (
+            "b-pass" if ko == 0 and non_joues == 0 and non_testables == 0
+            else ("b-fail" if bloquants else "b-part")
         )
+        # Retour humain n°2 : la lecture apporte un FAIT ABSENT des autres colonnes (H4) —
+        # le constat au plus fort risque, nommé ; ou l'angle mort le plus parlant ; jamais
+        # une redite des compteurs.
+        # Le libellé cité porte SON garde L11 au plus près (data-litteral-ok sur le span du
+        # libellé, pas sur la phrase) : il peut citer le vocabulaire du domaine (« NOT NULL »).
+        def _cite(brut: str) -> str:
+            return f'<span data-litteral-ok>« {_e(brut)} »</span>'
+
+        en_defaut = [e for e in elements if e["etat"] == "defaut" and e.get("risque") is not None]
+        if en_defaut:
+            pire = max(en_defaut, key=lambda e: e["risque"])
+            lib = _libelle_element(pire["id"]) or pire["id"]
+            lecture = (
+                f"plus fort risque : {_e(pire.get('classe') or 'constat')} — "
+                f"{_cite(lib)} (risque {pire['risque']})"
+            )
+        elif ko:
+            pire = next(e for e in elements if e["etat"] == "defaut")
+            lib = _libelle_element(pire["id"]) or pire["id"]
+            lecture = (
+                f"constat sans score : {_e(pire.get('classe') or 'défaut')} — {_cite(lib)}"
+            )
+        elif non_joues or non_testables:
+            angle_mort = next(
+                e for e in elements if e["etat"] in ("non_exerce", "non_testable")
+            )
+            lib = _libelle_element(angle_mort["id"]) or angle_mort["id"]
+            lecture = (
+                f"aucun échec mesuré ; l'angle mort demeure — ex. {_cite(lib)} "
+                + ("jamais exercé" if angle_mort["etat"] == "non_exerce" else "non testable ici")
+            )
+        else:
+            lecture = "pan sain — tous les éléments exercés, aucun constat"
         lignes.append(
             [
                 lien,
                 _e(chapitre["famille"]),
                 str(total),
                 f"{passes} ({pct} %)",
-                str(ko),
+                str(ko) + (f' <span class="discret">dont {bloquants} bloq.</span>' if bloquants else ""),
+                str(non_joues) if non_joues else "0",
+                str(non_testables) if non_testables else "0",
                 f'<span class="badge {badge}" title="passés = éléments exercés sans constat, '
                 f'rapportés aux {total} éléments du chapitre">{_e(f"{pct} % passés")}</span>',
-                f'<span class="discret">{_e(lecture)}</span>',
+                # la lecture est déjà de l'HTML sûr : parties échappées, libellés gardés
+                f'<span class="discret">{lecture}</span>',
             ]
         )
     return _tableau(
-        ["chapitre (pan)", "famille", "éléments", "passés", "KO", "état", "lecture"],
+        ["chapitre (pan)", "famille", "éléments", "passés", "KO", "non joués",
+         "non testables", "résultat", "lecture"],
         lignes,
         identifiant="table-par-pan",
     )
@@ -932,33 +1023,45 @@ def _rendre_exigences_liens(liens: list[dict] | None) -> str:
     )
 
 
-def _detail_element(detail: dict | None) -> str:
-    """Détail dépliable d un élément : ses cas dérivés (cahiers, MÊMES références stables),
-    ou sa raison de non-couverture. Sans détail connu, la cellule le dit — jamais muette.
+def _detail_element(detail: dict | None) -> tuple[str, str]:
+    """(bouton de dépliage, contenu pleine largeur) — TF-0175, retour humain n°6 : le détail
+    ne vit plus dans une cellule étroite. Le bouton annonce le volume (« 4 cas ▸ ») ; le
+    contenu se déplie sous la ligne, cas côte à côte en cartes lisibles.
     """
     if not detail:
-        return '<span class="discret">—</span>'
+        return '<span class="discret">—</span>', ""
     if detail.get("raison"):
-        return (
-            '<details class="cas"><summary>non couvert — voir la raison</summary><div>'
-            f"<p>{_e(detail['raison'])}</p>"
+        contenu = (
+            '<div class="cas-grille"><div class="cas-carte">'
+            f"<p><strong>Non couvert</strong> — {_e(detail['raison'])}</p>"
             f"<p><strong>Exigences</strong> — {_rendre_exigences_liens(detail.get('exigences'))}"
-            "</p></div></details>"
+            "</p></div></div>"
         )
-    morceaux = []
+        return (
+            '<button type="button" class="btn-detail" aria-expanded="false">raison ▸</button>',
+            contenu,
+        )
+    cartes = []
     for cas in detail.get("cas") or []:
         etapes = "".join(f"<li>{_e(geste)}</li>" for geste in (cas.get("etapes") or []))
-        morceaux.append(
-            f'<details class="cas"><summary>cas <code>{_e(cas.get("ref"))}</code> — '
-            "préconditions, étapes, attendu</summary><div>"
+        cartes.append(
+            '<div class="cas-carte">'
+            f'<p class="cas-ref"><code>{_e(cas.get("ref"))}</code> · {_e(cas.get("titre") or "")}</p>'
             f"<p><strong>Préconditions</strong> — {_e(cas.get('preconditions'))}</p>"
             f"<p><strong>Jeu de données</strong> — <code>{_e(cas.get('jeu'))}</code></p>"
             f"<ol>{etapes}</ol>"
             f"<p><strong>Résultat attendu</strong> — {_texte_libre(cas.get('attendu'))}</p>"
-            f"<p><strong>Exigences</strong> — {_rendre_exigences_liens(cas.get('exigences'))}"
-            "</p></div></details>"
+            f"<p><strong>Exigences</strong> — {_rendre_exigences_liens(cas.get('exigences'))}</p>"
+            "</div>"
         )
-    return "".join(morceaux) or '<span class="discret">—</span>'
+    if not cartes:
+        return '<span class="discret">—</span>', ""
+    n = len(cartes)
+    bouton = (
+        f'<button type="button" class="btn-detail" aria-expanded="false">'
+        f"{n} cas ▸</button>"
+    )
+    return bouton, f'<div class="cas-grille">{"".join(cartes)}</div>'
 
 
 def _constat_cellule(element: dict) -> str:
@@ -986,13 +1089,28 @@ def _panneau_chapitres(
     morceaux: list[str] = []
     for chapitre in [c for c in chapitres if c["famille"] == famille]:
         classe = "card grise" if chapitre["grise"] else "card"
-        morceaux.append(f'<section class="{classe}" id="chap-{_e(chapitre["code"])}">')
+        outillage_chapitre = "" if chapitre["grise"] else (
+            # TF-0175 (retour n°4) : l'outillage vit au CHAPITRE — une barre pour toutes les
+            # tables du chapitre, quel que soit le découpage en sous-chapitres.
+            '<div class="outillage outil-chapitre" role="search">'
+            '<input type="search" class="outil-recherche" placeholder="Rechercher dans ce '
+            'chapitre…" aria-label="Rechercher dans les éléments du chapitre (insensible '
+            'aux accents)">'
+            '<button type="button" class="outil-reinit">Réinitialiser les filtres</button>'
+            f'<span class="outil-compte" aria-live="polite">{chapitre["elements"]} / '
+            f'{chapitre["elements"]} élément(s) affiché(s)</span></div>'
+        )
+        morceaux.append(
+            f'<section class="{classe}" id="chap-{_e(chapitre["code"])}"'
+            f'{" data-outille" if outillage_chapitre else ""}>'
+        )
         morceaux.append(f"<h3>{_e(chapitre['code'])} — {_e(chapitre['titre'])}</h3>")
         morceaux.append(
             f'<p class="discret">pan(s) <code>{_e(", ".join(chapitre["pans"]))}</code> · '
             f"découpe par {_e(chapitre['decoupe'])} · {chapitre['elements']} élément(s) "
             f"inventorié(s), dont {chapitre['rattaches']} rattaché(s) par dérivation.</p>"
         )
+        morceaux.append(outillage_chapitre)
         for manquant in chapitre.get("pans_non_couverts") or []:
             morceaux.append(
                 '<p><span class="badge b-part" title="aucun banc d essai n existe pour ce pan '
@@ -1022,24 +1140,27 @@ def _panneau_chapitres(
                     f"colonne « Résultat » — mais rendus ici plutôt que sous un {_e(axe)} : un "
                     "élément rangé nulle part serait un élément qu on cesse de lire.</p>"
                 )
-            lignes = [
-                [
-                    f"<code>{_e(element['id'])}</code>",
-                    _badge_etat(element["etat"]),
-                    _e(element.get("classe") or "")
-                    or '<span class="discret" title="élément passé : aucun constat, '
-                    'donc pas de type">—</span>',
-                    _constat_cellule(element),
-                    _e(element.get("risque"))
-                    if element.get("risque") is not None
-                    else '<span class="discret" title="pas de constat, donc pas de score '
-                    'de risque">—</span>',
-                    _detail_element(details.get((chapitre["code"], element["id"]))),
-                ]
-                for element in sous["elements"]
-            ]
+            lignes, details_lignes = [], []
+            for element in sous["elements"]:
+                bouton, contenu = _detail_element(details.get((chapitre["code"], element["id"])))
+                lignes.append(
+                    [
+                        _cellule_element(element["id"]),
+                        _badge_etat(element["etat"]),
+                        _e(element.get("classe") or "")
+                        or '<span class="discret" title="élément passé : aucun constat, '
+                        'donc pas de type">—</span>',
+                        _constat_cellule(element),
+                        _e(element.get("risque"))
+                        if element.get("risque") is not None
+                        else '<span class="discret" title="pas de constat, donc pas de score '
+                        'de risque">—</span>',
+                        bouton,
+                    ]
+                )
+                details_lignes.append(contenu)
             colonnes = ["élément", "état", "classe", "constat mesuré", "risque", "détail du cas"]
-            morceaux.append(_tableau(colonnes, lignes))
+            morceaux.append(_tableau(colonnes, lignes, chapitre=True, details_lignes=details_lignes))
         morceaux.append("</section>")
     return "\n".join(morceaux) or '<p class="discret">Aucun chapitre de cette famille.</p>'
 
@@ -1126,6 +1247,84 @@ def _composant_filtres() -> str:
     )
     source = skill if skill.exists() else Path(__file__).with_name("table-filters.js")
     return source.read_text(encoding="utf-8")
+
+
+def _composant_filtres_css() -> str:
+    """CSS JUMEAU du composant (TF-0176/H5) : un composant sans son habillage sort en rendu
+    brut navigateur — c'est le retour humain n°1 du 13/08 soir. Même règle de chargement."""
+    skill = (
+        Path.home() / ".claude" / "skills" / "digit-ai-page-html" / "assets" / "table-filters.css"
+    )
+    source = skill if skill.exists() else Path(__file__).with_name("table-filters.css")
+    return source.read_text(encoding="utf-8")
+
+
+# --- Libellés d'éléments (TF-0175) --------------------------------------------------------------
+# « qualif:effet:/:0:form » n'explique rien à un lecteur (retour humain n°5). Le libellé est
+# DÉRIVÉ de la forme de l'identifiant — jamais inventé : forme inconnue → pas de libellé,
+# l'id technique reste toujours affiché en second.
+_TAGS_FR = {
+    "form": "formulaire", "button": "bouton", "a": "lien", "input": "champ",
+    "select": "liste déroulante", "textarea": "zone de texte", "summary": "dépliant",
+}
+_LIBELLES: tuple[tuple[re.Pattern[str], object], ...] = (
+    (re.compile(r"^qualif:effet:(?P<r>[^:]*):(?P<n>\d+):(?P<t>\w+)$"),
+     lambda m: f"{_TAGS_FR.get(m['t'], m['t'])} n°{int(m['n']) + 1} de l'écran {m['r'] or '/'}"),
+    (re.compile(r"^qualif:route:(?P<r>\S+)$"), lambda m: f"chargement de l'écran {m['r']}"),
+    (re.compile(r"^qualif:console:(?P<r>\S+)$"),
+     lambda m: f"console de l'écran {m['r']} (zéro erreur attendue)"),
+    (re.compile(r"^qualif:marqueur:(?P<r>\S+)$"),
+     lambda m: f"rendu de l'écran {m['r']} (marqueur de contenu attendu)"),
+    (re.compile(r"^element:(?P<x>\S+)$"), lambda m: f"élément d'interface « {m['x']} »"),
+    (re.compile(r"^route:(?P<r>\S+)$"), lambda m: f"route {m['r']}"),
+    (re.compile(r"^endpoint:(?P<v>[A-Z]+) (?P<p>\S+)$"), lambda m: f"API {m['v']} {m['p']}"),
+    (re.compile(r"^code:(?P<v>[A-Z]+) (?P<p>[^=]+)=(?P<c>\d+)$"),
+     lambda m: f"API {m['v']} {m['p']} — réponse {m['c']} attendue"),
+    (re.compile(r"^divergence:(?:code|endpoint):(?P<v>[A-Z]+) (?P<p>\S+)"),
+     lambda m: f"API {m['v']} {m['p']} — déclaré ≠ constaté"),
+    (re.compile(r"^contrainte:(?P<x>\S+?)\.not_null$"),
+     lambda m: f"colonne obligatoire « {m['x']} » (NOT NULL)"),
+    (re.compile(r"^contrainte:(?P<x>\S+)$"), lambda m: f"contrainte de données « {m['x']} »"),
+    (re.compile(r"^(?P<k>index|trigger):(?P<x>\S+)$"), lambda m: f"{m['k']} « {m['x']} »"),
+    (re.compile(r"^migration:(?P<x>[^:]+):retour$"),
+     lambda m: f"migration {m['x']} — retour arrière"),
+    (re.compile(r"^migration:(?P<x>[^:]+):rejeu$"), lambda m: f"migration {m['x']} — rejeu"),
+    (re.compile(r"^divergence:migration:(?P<x>[^:]+)"),
+     lambda m: f"migration {m['x']} — défait la précédente"),
+    (re.compile(r"^branche:(?P<f>[^:]+):(?P<l>\d+)$"),
+     lambda m: f"branche de traitement {m['f']} ligne {m['l']}"),
+    (re.compile(r"^chemin:(?P<f>[^:]+):(?P<l>\d+)$"),
+     lambda m: f"chemin de lecture {m['f']} ligne {m['l']}"),
+    (re.compile(r"^mutant:(?P<f>[^:]+):(?P<l>\d+):(?P<mut>\S+)$"),
+     lambda m: f"robustesse : mutation {m['f']} ligne {m['l']} ({m['mut'].replace('->', ' → ')})"),
+    (re.compile(r"^module(?:-non-exerce)?:(?P<x>\S+)$"), lambda m: f"module source {m['x']}"),
+    (re.compile(r"^seuil:mutation-module:(?P<x>\S+)$"),
+     lambda m: f"seuil de mutation du module {m['x']}"),
+    (re.compile(r"^securite:sast:(?P<p>.+):(?P<l>\d+)$"),
+     lambda m: f"analyse sécurité — {Path(m['p']).name} ligne {m['l']}"),
+    (re.compile(r"^a11y:(?P<r>[^:]+)"), lambda m: f"accessibilité de l'écran {m['r']}"),
+    (re.compile(r"^visuel:(?P<r>\S+)"), lambda m: f"rendu visuel de l'écran {m['r']}"),
+    (re.compile(r"^interface:(?P<f>[^:]+):(?P<l>\d+):(?P<t>\w+)$"),
+     lambda m: f"{_TAGS_FR.get(m['t'], m['t'])} ligne {m['l']} de {m['f']}"),
+    (re.compile(r"^rejet:"), lambda m: "codes de rejet du traitement par lot"),
+    (re.compile(r"^seuil:(?P<x>\S+)$"), lambda m: f"seuil opposable « {m['x']} »"),
+)
+
+
+def _libelle_element(identifiant: str) -> str:
+    for motif, gabarit in _LIBELLES:
+        m = motif.match(identifiant)
+        if m:
+            return gabarit(m)
+    return ""
+
+
+def _cellule_element(identifiant: str) -> str:
+    lib = _libelle_element(identifiant)
+    code = f'<code class="discret">{_e(identifiant)}</code>'
+    # data-litteral-ok : un libellé dérivé peut CITER le vocabulaire du domaine audité
+    # (« NOT NULL ») — c'est le fait nommé, pas une valeur non traitée qui fuit (L11).
+    return (f'<span class="lib" data-litteral-ok>{_e(lib)}</span><br>{code}') if lib else code
 
 
 def construire(
@@ -1490,7 +1689,9 @@ def construire(
 <meta name="color-scheme" content="light dark">
 <!-- Favicon-lettre (13/08, loi transverse n°3) : première lettre du produit audité. -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563EB'/%3E%3Ctext x='32' y='44' font-family='Segoe UI,Roboto,sans-serif' font-size='38' font-weight='700' fill='white' text-anchor='middle'%3E{_e(str(contexte["produit"] or "D").strip()[:1].upper())}%3C/text%3E%3C/svg%3E">
-<style>{_STYLE}</style>
+<style>{_STYLE}
+/* Habillage du composant filtres — CSS jumeau (TF-0176/H5), chargé avec le JS. */
+{_composant_filtres_css()}</style>
 </head>
 <body>
 <div class="wrap">
