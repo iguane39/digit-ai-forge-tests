@@ -1,10 +1,10 @@
-﻿/* Copie verbatim D-12 du composant filtres du socle digit-ai-page-html
-   (assets/table-filters.js, skill installé) — provenance : forge-agents, copiée le 2026-08-11
-   (TF-0063). Le chargeur préfère l'asset du skill installé ; cette copie est le repli
-   pour un poste sans skill. Convergence : D-12 (même contrat de marquage). */
-/* Digit-AI â€” Filtres de colonne sur tableaux de donnÃ©es.
+/* Copie verbatim D-12 du composant filtres du socle digit-ai-page-html
+   (assets/table-filters.js, skill installé) — provenance : forge-agents, resynchronisée le
+   2026-08-13 (TF-0175 : lignes [data-detail] ignorées). Le chargeur préfère l'asset du
+   skill installé ; cette copie est le repli pour un poste sans skill. */
+/* Digit-AI — Filtres de colonne sur tableaux de données.
    Socle commun : voir references/composant-filtres-tableau.md (checklist G1-G6).
-   Viewer-only : le JS ne s'exÃ©cute pas Ã  l'export WeasyPrint, la regle @media print
+   Viewer-only : le JS ne s'exécute pas à l'export WeasyPrint, la regle @media print
    du livrable doit reafficher tr[data-tf-hidden]. */
 (function (root) {
   'use strict';
@@ -13,12 +13,16 @@
 
   function norm(s) {
     return String(s == null ? '' : s)
-      .normalize('NFD').replace(/[Ì€-Í¯]/g, '').toLowerCase().trim();
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
   }
 
   function corps(table) {
     var tb = table.tBodies && table.tBodies[0];
-    return tb ? Array.prototype.slice.call(tb.rows) : [];
+    /* TF-0175 : une ligne [data-detail] est le DÉPLIANT pleine largeur de la ligne qui la
+       précède — elle ne porte pas de données de colonnes et ne compte ni ne se filtre. */
+    return tb ? Array.prototype.slice.call(tb.rows).filter(function (tr) {
+      return !tr.hasAttribute('data-detail');
+    }) : [];
   }
 
   function valeur(tr, i) {
@@ -51,7 +55,7 @@
     b.setAttribute('aria-expanded', 'false');
     b.setAttribute('aria-controls', id);
     b.setAttribute('aria-label', 'Filtrer ' + col.th.textContent.trim());
-    b.textContent = 'â–¾';
+    b.textContent = '▾';
     return b;
   }
 
@@ -66,7 +70,7 @@
     var rech = document.createElement('input');
     rech.type = 'search';
     rech.className = 'tf-search';
-    rech.placeholder = 'Rechercherâ€¦';
+    rech.placeholder = 'Rechercher…';
     rech.setAttribute('aria-label', 'Rechercher une valeur');
 
     var actions = document.createElement('div');
@@ -115,7 +119,12 @@
           return e.selection[valeur(tr, e.col.index)] === true;
         });
         if (ok) { tr.removeAttribute('data-tf-hidden'); tr.style.display = ''; visibles++; }
-        else { tr.setAttribute('data-tf-hidden', ''); tr.style.display = 'none'; }
+        else {
+          tr.setAttribute('data-tf-hidden', ''); tr.style.display = 'none';
+          /* la ligne de détail suit le sort de sa ligne mère : masquée ET repliée */
+          var det = tr.nextElementSibling;
+          if (det && det.hasAttribute('data-detail')) { det.hidden = true; }
+        }
       });
       etats.forEach(function (e) {
         var actif = Object.keys(e.selection).some(function (k) { return !e.selection[k]; });
