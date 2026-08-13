@@ -454,7 +454,13 @@
     {
       "id": "invariants-003",
       "domaine": "invariants",
-      "enonce": "invariants : la resolution des gardes deportees s arrete a UN niveau d appel, par nom simple et dans le meme module (RT-9). Un helper qui en appelle un autre, un helper importe, un appel par attribut (`service.refuser()`) ou un status_code calcule restent invisibles — le code declare paraitra alors « jamais leve »",
+      "enonce": "invariants : la resolution des gardes deportees s arrete a UN niveau d appel, par nom simple, cherche dans TOUS les modules de l application (RT-9 / TF-0135). Un helper qui en appelle un autre, un appel par attribut (`service.refuser()`) ou un status_code calcule restent invisibles — le code declare paraitra alors « jamais leve »",
+      "statut": "todo"
+    },
+    {
+      "id": "invariants-004",
+      "domaine": "invariants",
+      "enonce": "invariants : la resolution par nom n est PAS qualifiee par module (TF-0135) — deux fonctions de meme nom dans deux fichiers distincts de l application voient leurs codes fusionnes, ce qui peut masquer ou inventer une garde",
       "statut": "todo"
     },
     {
