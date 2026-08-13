@@ -201,11 +201,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--precedent",
         type=Path,
+        action="append",
         default=None,
         metavar="RAPPORT.json",
         help=(
             "rapport anterieur servant de point de comparaison : le dashboard affiche alors la "
-            "TENDANCE de chaque compteur. Sans lui, l onglet Synthese le declare"
+            "TENDANCE de chaque compteur. REPETABLE (TF-0159, barre Allure B3) : plusieurs "
+            "--precedent, du plus ancien au plus recent, donnent une tendance multi-runs. "
+            "Sans lui, l onglet Synthese le declare"
         ),
     )
     parser.add_argument(
@@ -296,10 +299,13 @@ def main(argv: list[str] | None = None) -> int:
         from forge_tests.livrables import produire, resume
 
         precedent = None
-        if args.precedent is not None:
+        if args.precedent:
             from forge_tests.reprise import charger as charger_rapport
 
-            precedent = charger_rapport(args.precedent)
+            charges = [charger_rapport(p) for p in args.precedent]
+            # TF-0159 : un seul --precedent garde le contrat historique (dict) ; plusieurs
+            # donnent la tendance multi-runs (liste, du plus ancien au plus recent).
+            precedent = charges[0] if len(charges) == 1 else charges
         try:
             chemins = produire(
                 rap,
