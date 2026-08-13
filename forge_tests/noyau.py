@@ -11,6 +11,10 @@ from dataclasses import asdict, dataclass, field
 from typing import Literal
 
 Verdict = Literal["PASS", "FAIL", "SKIP"]
+# TF-0146 — verdict d un ESSAI individuel (un cas exécuté), distinct du Verdict d ADAPTATEUR
+# ci-dessus (un pan entier). Trois valeurs, jamais un vert par défaut : un cas dont l issue
+# n a pas été observée est NON_EXECUTE, jamais tacitement PASSANT.
+VerdictEssai = Literal["passant", "non_passant", "non_execute"]
 
 
 @dataclass(frozen=True)
@@ -50,6 +54,81 @@ class NonTestable:
     champs_requis: list[str]
     pan: str = ""
     motif: str = ""
+
+
+@dataclass(frozen=True)
+class Essai:
+    """TF-0146 — UN cas exécuté (ou non), avec son verdict et son POURQUOI.
+
+    Le noyau ne sait toujours rien de la technologie qui l a produit (pytest, Playwright...) :
+    un `Essai` est une ligne neutre, comme `Finding`. Ce que sait la technologie (nom du test,
+    trace de l échec, message de skip) vit dans l adaptateur ou la sonde qui construit la liste
+    — voir `forge_tests.sondes.junit` pour un exemple qui lit du JUnit XML réel.
+    """
+
+    id: str
+    pan: str
+    verdict: VerdictEssai
+    pourquoi: str | None = None
+    details: str | None = None
+    # None = inconnu (aucun signal disponible) ; False = un « passant » explicitement NON
+    # adossé à une mesure (mutation nulle sur ce module, ou aucune ligne couverte) — c est ce
+    # deuxième cas que « aucun ✓ sans oracle » existe pour rendre visible, jamais silencieux.
+    couvert: bool | None = None
+
+
+class EssaiSansMotif(RuntimeError):
+    """TF-0146 — un essai NON PASSANT ou NON EXÉCUTÉ sans `pourquoi`.
+
+    Un verdict qui ne se motive pas n est pas un verdict exploitable — c est un silence qui
+    porte un vernis de mesure. Refusé avant toute agrégation, comme `RapportRefuse` pour la
+    règle conjointe.
+    """
+
+
+def resume_essais(essais: list[Essai]) -> dict[str, object]:
+    """Agrège une liste d essais en la section `essais` du rapport.
+
+    Oracle « aucun ✓ sans oracle » : un essai PASSANT dont `couvert is False` est un vert que
+    rien ne soutient (mutation nulle, ligne jamais exécutée sous mesure) — il rejoint
+    `signales`, visible, jamais fondu dans le total des passants sans distinction.
+    """
+    manques = [
+        e.id for e in essais if e.verdict != "passant" and not (e.pourquoi or "").strip()
+    ]
+    if manques:
+        raise EssaiSansMotif(
+            "essai(s) sans POURQUOI motivé, non PASSANT : " + ", ".join(sorted(manques))
+        )
+    totaux = {"passant": 0, "non_passant": 0, "non_execute": 0}
+    for e in essais:
+        totaux[e.verdict] += 1
+    signales = [
+        {
+            "id": e.id,
+            "pan": e.pan,
+            "motif": "vert non couvert par la mutation ni par la couverture — aucun ✓ sans "
+            "oracle",
+        }
+        for e in essais
+        if e.verdict == "passant" and e.couvert is False
+    ]
+    return {
+        "cas": [
+            {
+                "id": e.id,
+                "pan": e.pan,
+                "verdict": e.verdict,
+                "pourquoi": e.pourquoi,
+                "details": e.details,
+                "couvert": e.couvert,
+            }
+            for e in sorted(essais, key=lambda e: (e.pan, e.id))
+        ],
+        "totaux": totaux,
+        "signales": signales,
+        "fourni": True,
+    }
 
 
 @dataclass
@@ -192,11 +271,20 @@ def rapport(
     pans_attendus: list[str],
     pour_couvrir: dict[str, str] | None = None,
     modules: list[dict] | None = None,
+    essais: list[Essai] | None = None,
 ) -> dict:
     """Assemble le rapport. Un pan sans adaptateur est NOMME, jamais omis.
 
     A-5 : un pan non couvert ne sort plus un simple motif — il sort ce qu il FAUDRAIT pour le
     couvrir. Un motif seul est un constat ; le couple motif + chemin est une action.
+
+    TF-0146 : `essais`, s il est fourni, porte le détail test-par-test (section `essais` du
+    rapport, agrégée par `resume_essais`). Paramètre optionnel et rétro-compatible : aucun
+    adaptateur actuel n en fournit encore (l intégration réelle — un adaptateur qui lit sa
+    propre trace d exécution, ex. JUnit — est un jalon ultérieur, cf. `forge_tests.sondes.junit`
+    pour le lecteur déjà prêt). Sans lui, la section reste PRÉSENTE mais déclare son absence :
+    un rapport qui l omettrait silencieusement serait indiscernable d un rapport qui l a
+    mesurée et n a rien trouvé, exactement le silence que ce framework interdit ailleurs.
     """
     from forge_tests.actions import classifier
     from forge_tests.risque import NON_JUGE as NON_JUGE_RISQUE
@@ -263,6 +351,11 @@ def rapport(
         # verites. Filtre MEP : `jq '.actions[] | select(.categorie=="manuelle_utilisateur")'`.
         "actions": classifier(findings_json, non_testables_json, non_couverts),
         "non_juge": sorted({n for s in sorties for n in s.non_juge} | set(NON_JUGE_RISQUE)),
+        # TF-0146 — détail test-par-test. Présente même sans `essais` fourni : `fourni: False`
+        # dit explicitement « non mesuré ici », jamais confondu avec « mesuré, rien à signaler ».
+        "essais": resume_essais(essais) if essais is not None else {
+            "cas": [], "totaux": {}, "signales": [], "fourni": False,
+        },
         "verdict": (
             "PARTIEL"
             if non_couverts
