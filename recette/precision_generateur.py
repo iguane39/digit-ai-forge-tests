@@ -54,6 +54,31 @@ def _python(banc: Path) -> Path:
     raise RuntimeError(f"environnement absent pour {banc}")
 
 
+def _collectable(banc: Path, fichier: Path) -> tuple[bool, str]:
+    """TF-0143 — oracle « collectable », seconde moitie : `pytest --collect-only` REUSSIT
+    reellement sur ce banc (imports resolus, fixtures presentes), pas seulement « compile ».
+
+    Sans ce controle, une erreur de COLLECTE (import cassé, fixture absente) ne remonte nulle
+    part : `_echecs` ne reconnait que les lignes `FAILED ...` du texte pytest, et une erreur de
+    collecte s imprime en `ERROR ...` — un defaut du generateur qui ne ferait ni echouer ni
+    reussir la mesure de precision, silencieusement absent des deux compteurs.
+    """
+    destination = banc / "backend" / "tests" / fichier.name
+    shutil.copy(fichier, destination)
+    try:
+        resultat = subprocess.run(
+            [
+                str(_python(banc)), "-m", "pytest", "--collect-only", "-q",
+                f"tests/{fichier.name}", "-p", "no:cacheprovider", "-p", "no:warnings",
+            ],
+            cwd=banc / "backend", capture_output=True, text=True, timeout=120,
+            encoding="utf-8", errors="replace",
+        )
+        return resultat.returncode == 0, (resultat.stdout + resultat.stderr)[-1500:]
+    finally:
+        destination.unlink(missing_ok=True)
+
+
 def _echecs(banc: Path, fichier: Path) -> set[str]:
     """Noms des cas en échec quand le fichier généré est exécuté sur ce banc."""
     destination = banc / "backend" / "tests" / fichier.name
@@ -80,6 +105,21 @@ def main() -> int:
         return 1
 
     total = len(re.findall(r"^def (test_genere_\w+)", genere.read_text(encoding="utf-8"), re.M))
+
+    # TF-0143 — un cas genere n est un cas que s il COLLECTE reellement sous pytest. Verifie sur
+    # les DEUX bancs : le fichier est le meme, l environnement (deps, app) doit le rendre
+    # collectable partout ou il est depose, pas seulement la ou la mesure de precision passe.
+    for banc, nom in ((ROUGE, "ROUGE"), (VERT, "VERT")):
+        collectable, sortie = _collectable(banc, genere)
+        print(f"  collectable (pytest --collect-only) sur banc {nom:<5} : "
+              f"{'OUI' if collectable else 'NON'}")
+        if not collectable:
+            print(sortie)
+            print("=" * 78)
+            print("  NON COLLECTABLE : le fichier genere ne passe pas la collecte pytest — "
+                  "defaut du generateur, mesure de precision non poursuivie")
+            return 1
+
     echecs_rouge = _echecs(ROUGE, genere)
     echecs_vert = _echecs(VERT, genere)
 

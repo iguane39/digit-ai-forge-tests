@@ -40,6 +40,32 @@ _CODE = re.compile(r"^code:(?P<methode>[A-Z]+) (?P<chemin>\S+)=(?P<code>\d{3})$"
 # Codes dont la precondition n est pas derivable du schema OpenAPI.
 NON_GENERABLES = {400, 403, 409, 415, 429, 500}
 
+
+class CasNonCollectable(RuntimeError):
+    """TF-0143 — le fichier assemble ne COMPILE pas : defaut du generateur, jamais ecrit tel
+    quel. Un cas qui ne compile pas ne collecte pas non plus (pytest s arrete a l import) — le
+    silence sur ce point produirait une PROPOSITION invalide, presentee comme exploitable.
+    """
+
+
+def verifier_syntaxe(contenu: str, nom: str = "<forge-tests:genere-api>") -> None:
+    """Oracle « collectable », premiere moitie (COMPILE) : leve `CasNonCollectable` au premier
+    defaut de syntaxe. Ne renvoie rien : le silence vaut preuve, comme `jeux.verifier`.
+
+    La seconde moitie (COLLECTE reellement sous pytest, imports et fixtures resolus) exige un
+    environnement du projet cible et vit donc cote recette (`recette/precision_generateur.py`,
+    qui dispose des bancs) — ce module reste sans dependance a l execution.
+    """
+    if not contenu:
+        return
+    try:
+        compile(contenu, nom, "exec")
+    except SyntaxError as erreur:
+        raise CasNonCollectable(
+            f"le cas genere ne compile pas ({erreur.__class__.__name__}: {erreur}) — le "
+            "generateur a un defaut, rien n est ecrit tant que la syntaxe n est pas valide"
+        ) from erreur
+
 ENTETE = '''"""Cas générés par Forge Tests — À RELIRE AVANT USAGE.
 
 Chaque cas cible un élément de surface INVENTORIÉ ET NON EXERCÉ, cité avec son score de risque.
@@ -254,7 +280,11 @@ def construire(rapport: dict, schema: dict, limite: int = 30) -> tuple[str, list
         )
         if len(cas) >= limite:
             break
-    return (ENTETE + "".join(cas) if cas else ""), refuses
+    contenu = ENTETE + "".join(cas) if cas else ""
+    # TF-0143 — un cas genere doit etre EXECUTABLE : compiler est la condition necessaire a
+    # toute collecte pytest. Verifie ICI, avant que `ecrire` ne pose le fichier en proposition.
+    verifier_syntaxe(contenu)
+    return contenu, refuses
 
 
 def ecrire(rapport: dict, destination: Path, schema: dict | None = None, limite: int = 30):
