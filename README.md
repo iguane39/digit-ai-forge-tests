@@ -11,8 +11,8 @@ qualification des non-testables (RT-6) et l'analyse statique des divergences (RT
 
 ## Catalogue de services
 
-> Section proposée par la campagne « catalogues » du pilot (2026-08-12) — générée depuis
-> la source unique `catalogues/catalogue.jsonl` du pilot (v1.5.0, challengée état de
+> Section proposée par la campagne « catalogues » du pilot (2026-08-13) — générée depuis
+> la source unique `catalogues/catalogue.jsonl` du pilot (v1.6.0, challengée état de
 > l'art le 12/08/2026). **prouvé** = preuve exécutée ; *déclaré* = méthode documentée seulement.
 
 | Service | Intention (« je veux… ») | Point d'entrée | Statut |
@@ -23,6 +23,8 @@ qualification des non-testables (RT-6) et l'analyse statique des divergences (RT
 | **Tendance et reprise ciblée** | comparer deux audits et ne rejouer que ce qui n'était pas vert | `uv run python -m forge_tests <racine> --precedent <r.json> | --reprendre <r.json>` | prouvé (experimental) |
 | **Inventaire sans exécution** | cartographier la surface de test sans rien exécuter | `env FORGE_TESTS_SANS_EXECUTION=1 + CLI` | déclaré (experimental) |
 | **Impact par diff, flaky, propriétés, mutation par risque** | auditer moins mais juste : cibler par diff, isoler les flaky, proposer du property-based | `forge_tests\{impact,flaky,generateur_proprietes}.py · risque.repartir_mutants` | déclaré (experimental) |
+| **Rapport exhaustif test-par-test** | obtenir le verdict et le pourquoi de CHAQUE test, pas seulement un agrégat par pan | `forge_tests
+oyau.py (section essais) + forge_tests\junit.py` | prouvé (experimental) |
 
 Le catalogue consolidé des dix forges vit chez le pilot :
 [digit-ai-forge-pilot/catalogues/CATALOGUES.md](https://github.com/iguane39/digit-ai-forge-pilot/blob/main/catalogues/CATALOGUES.md).
