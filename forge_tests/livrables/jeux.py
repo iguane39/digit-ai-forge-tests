@@ -39,6 +39,15 @@ class DonneeNonSynthetique(RuntimeError):
     """Une valeur du jeu de données ne peut pas être prouvée synthétique. Rien n est écrit."""
 
 
+class CasSansJeu(RuntimeError):
+    """TF-0144 — un jeu est réclamé pour un cas qu aucun chapitre du rapport ne décrit.
+
+    Sans élément rattaché, il n y a pas de schéma dont dériver des valeurs : refus motivé,
+    jamais un jeu générique inventé pour l occasion — un jeu inventé sans rattachement à
+    l élément qu il prétend couvrir serait un jeu qui MENT sur ce qu il dimensionne.
+    """
+
+
 # TLD réservés : aucun ne peut être enregistré, donc aucun ne peut désigner une personne réelle.
 DOMAINES_RESERVES = ("exemple.test", "example.test", "exemple.invalid", "example.invalid")
 DOMAINE = DOMAINES_RESERVES[0]
@@ -216,8 +225,17 @@ def jeu_technique(identifiant: str) -> dict:
 
 
 def construire(chapitres: list[dict], produit: str) -> dict:
-    """Jeu de données complet, dérivé des chapitres — une entrée par sous-chapitre garni."""
+    """Jeu de données complet, dérivé des chapitres.
+
+    Deux granularités cohabitent : `jeux` porte une entrée par SOUS-CHAPITRE (pour les cahiers
+    dérivés, Mandat 1) ; `jeux_par_cas` (TF-0144) porte une entrée par CAS — un sous-chapitre
+    regroupe souvent plusieurs éléments qui ne se dimensionnent pas à l identique (l un viole
+    une unicité, l autre une non-nullité), et « un cas → son jeu » exige que chacun ait le sien,
+    pas un jeu partagé par tout le groupe. Même règle de déterminisme (`_rang`), appliquée à
+    l identifiant du CAS plutôt qu à celui du groupe.
+    """
     blocs = []
+    par_cas: dict[str, dict] = {}
     for chapitre in chapitres:
         for sous in chapitre["sous_chapitres"]:
             if not sous["elements"]:
@@ -233,6 +251,19 @@ def construire(chapitres: list[dict], produit: str) -> dict:
                     "donnees": jeu_fonctionnel(cle) if fonctionnel else jeu_technique(cle),
                 }
             )
+            for element in sous["elements"]:
+                identifiant = element["id"]
+                par_cas[identifiant] = {
+                    "cas": identifiant,
+                    "pan": element.get("pan", ""),
+                    "chapitre": chapitre["code"],
+                    "sous_chapitre": sous["libelle"],
+                    "donnees": (
+                        jeu_fonctionnel(identifiant)
+                        if fonctionnel
+                        else jeu_technique(identifiant)
+                    ),
+                }
     return {
         "produit": produit,
         "nature": "jeu de données SYNTHÉTIQUE — aucune donnée réelle, aucune PII",
@@ -245,4 +276,32 @@ def construire(chapitres: list[dict], produit: str) -> dict:
         "etats_fonctionnels": list(ETATS_FONCTIONNELS),
         "preconditions_par_etat": dict(_PRECONDITIONS),
         "jeux": blocs,
+        "jeux_par_cas": par_cas,
     }
+
+
+def exiger(jeu: dict, identifiant: str) -> dict:
+    """TF-0144 — le jeu du cas `identifiant`, ou refus motivé (`CasSansJeu`).
+
+    L accès direct (`jeu["jeux_par_cas"][id]`) lèverait un `KeyError` muet sur la raison ; ici
+    le motif dit EXPLICITEMENT pourquoi aucun jeu n existe (absence de schéma), au lieu de
+    laisser l appelant fabriquer une donnée de secours qui ne serait plus une donnée du cas.
+    """
+    donnees = (jeu.get("jeux_par_cas") or {}).get(identifiant)
+    if donnees is None:
+        raise CasSansJeu(
+            f"« {identifiant} » : aucun jeu de données pour ce cas — aucun sous-chapitre du "
+            "rapport ne le décrit (pas de schéma dont dériver des valeurs), un jeu ne peut pas "
+            "être inventé à sa place"
+        )
+    return donnees
+
+
+def verifier_suffisance(jeu: dict, cas_ids: list[str]) -> list[str]:
+    """TF-0144 — identifiants de `cas_ids` SANS jeu associé. Vide = suffisance prouvée.
+
+    Bilan (au pluriel) plutôt qu exception unique : utile en recette pour lister d un coup tous
+    les cas orphelins d un lot adopté, plutôt que de s arrêter au premier via `exiger`.
+    """
+    disponibles = set((jeu.get("jeux_par_cas") or {}).keys())
+    return [identifiant for identifiant in cas_ids if identifiant not in disponibles]
