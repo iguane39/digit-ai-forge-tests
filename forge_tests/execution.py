@@ -21,7 +21,12 @@ import tempfile
 from functools import lru_cache
 from pathlib import Path
 
-from forge_tests.disposition import motif_indetermine, nom_paquet_sources
+from forge_tests.disposition import (
+    motif_indetermine,
+    motif_racine_execution,
+    nom_paquet_sources,
+    racine_execution,
+)
 
 SONDES = Path(__file__).resolve().parent / "sondes"
 
@@ -90,16 +95,20 @@ def _contrat_projet(banc: Path) -> None:
     charger_env(banc)
 
 
+def _venvs_essayes(banc: Path) -> list[Path]:
+    """Environnements Python cherchés, dans l ordre — la racine DÉCOUVERTE en tête (TF-0216)."""
+    racines: list[Path] = []
+    for racine in (racine_execution(banc), banc / "backend", banc):
+        if racine not in racines:
+            racines.append(racine)
+    return [racine / ".venv" for racine in racines]
+
+
 def _python(banc: Path) -> Path | None:
-    for candidat in (
-        banc / "backend" / ".venv" / "Scripts" / "python.exe",
-        banc / "backend" / ".venv" / "bin" / "python",
-        # Workspace uv : le venv vit a la RACINE du depot (constate sur le premier projet reel)
-        banc / ".venv" / "Scripts" / "python.exe",
-        banc / ".venv" / "bin" / "python",
-    ):
-        if candidat.exists():
-            return candidat
+    for venv in _venvs_essayes(banc):
+        for candidat in (venv / "Scripts" / "python.exe", venv / "bin" / "python"):
+            if candidat.exists():
+                return candidat
     return None
 
 
@@ -139,13 +148,19 @@ def mesurer(banc_str: str) -> dict | None:
     if os.environ.get("FORGE_TESTS_SANS_EXECUTION") == "1":
         _declarer(banc, "backend", "exécution désactivée par FORGE_TESTS_SANS_EXECUTION=1")
         return None
+    # TF-0216 — la racine d exécution retenue est DÉCLARÉE avant toute mesure : elle est lisible
+    # par `motif_indisponibilite(banc, "racine-execution", …)` quoi qu il advienne ensuite, et
+    # elle est reprise dans les motifs d échec ci-dessous. Une découverte muette qui changerait
+    # d un projet à l autre serait pire que l ancre en dur qu elle remplace.
+    _declarer(banc, "racine-execution", motif_racine_execution(banc))
     python = _python(banc)
     if python is None:
+        essayes = ", ".join(str(v) for v in _venvs_essayes(banc))
         _declarer(
             banc,
             "backend",
-            "aucun environnement Python dans le projet analysé — attendu "
-            f"{banc / 'backend' / '.venv'} ou {banc / '.venv'}",
+            f"aucun environnement Python dans le projet analysé — cherché sous {essayes} ; "
+            f"{motif_racine_execution(banc)}",
         )
         return None
     if not _coverage_present(banc, python):
@@ -157,7 +172,10 @@ def mesurer(banc_str: str) -> dict | None:
     if paquet is None:
         _declarer(banc, "backend", f"sources du projet non localisables — {motif_indetermine(banc)}")
         return None
-    racine = banc / "backend"
+    # TF-0216 : la suite se lance depuis la racine DÉCOUVERTE, pas depuis `<cible>/backend`
+    # supposé. Sur un produit à racine plate, ce `cwd` en dur pointait un dossier inexistant et
+    # emportait sept pans d un coup — alors que la suite y est verte.
+    racine = racine_execution(banc)
     with tempfile.TemporaryDirectory() as temporaire:
         releve = Path(temporaire) / "sonde.json"
         releve_data = Path(temporaire) / "sonde-data.json"
@@ -279,7 +297,7 @@ def violations_levees(banc: Path) -> list[str] | None:
 
 
 def resume_fichiers(banc: Path) -> dict[str, dict] | None:
-    """Lignes et branches couvertes PAR FICHIER (chemin relatif au dossier `backend`).
+    """Lignes et branches couvertes PAR FICHIER (chemin relatif à la racine d exécution).
 
     None = la suite n a pas pu être exécutée. Un dictionnaire VIDE dirait autre chose : que la
     suite a tourné sans rien couvrir. Les deux ne se confondent jamais.
@@ -331,7 +349,7 @@ def schema_openapi(banc_str: str) -> dict | None:
         resultat = _run(
             [str(python), str(SONDES / "dump_openapi.py"), str(sortie)],
             banc=banc, domaine="backend", quoi="extraction du schéma OpenAPI",
-            cwd=banc / "backend",
+            cwd=racine_execution(banc),  # TF-0216 — racine DÉCOUVERTE, pas `backend` supposé
             timeout=180,
             env={**os.environ, "PYTHONPATH": ".", "PYTHONDONTWRITEBYTECODE": "1"},
         )
@@ -577,10 +595,10 @@ def schema_obtenu(banc_str: str) -> dict | None:
         resultat = _run(
             [
                 str(python), str(SONDES / "verifier_schema.py"),
-                str(banc / "backend"), str(sortie),
+                str(racine_execution(banc)), str(sortie),
             ],
             banc=banc, domaine="backend", quoi="rejeu des migrations sur base neuve",
-            cwd=banc / "backend", timeout=900,
+            cwd=racine_execution(banc), timeout=900,  # TF-0216 — racine DÉCOUVERTE
             env={**os.environ, "PYTHONPATH": ".", "PYTHONDONTWRITEBYTECODE": "1"},
         )
         if resultat is None or resultat.returncode != 0 or not sortie.exists():

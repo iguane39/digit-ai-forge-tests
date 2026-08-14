@@ -3,11 +3,32 @@
   "note": "Dette de jugement du framework. `todo` = à outiller · `assume` = limite acceptée et déclarée pour toujours · `ok` = comblée, et le champ `preuve` NOMME le test ou le contrôle de recette qui la tient · `retiree` = énoncé disparu du code sans preuve, ce qui n est PAS une fermeture. L identifiant est stable et découplé de l énoncé : reformuler une phrase conserve l entrée. Régénéré depuis le code (`python -m forge_tests.dette`) et vérifié en recette (`--verifier`) : ne pas éditer les énoncés à la main, seulement les statuts, les preuves et les notes.",
   "dette": [
     {
+      "id": "accessibilite-a11y-001",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : le DOM est capture a l etat INITIAL de chaque route ; les etats atteints apres interaction (menu ouvert, modale, message d erreur) ne sont pas audites",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (lot COMPTA) : limite declaree par le correctif lui-meme — perimetre du garde-fou, provenance des routes, racine d execution decouverte. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
+      "id": "accessibilite-a11y-002",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : sans compte configure (.env), les routes protegees redirigent vers la page publique — le nombre de PAGES DISTINCTES rendues le dit au rapport",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (lot COMPTA) : limite declaree par le correctif lui-meme — perimetre du garde-fou, provenance des routes, racine d execution decouverte. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
       "id": "accessibilite-a11y-003",
       "domaine": "accessibilite-a11y",
       "enonce": "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
       "statut": "assume",
       "note": "limite propre de oracle-a11y, reprise telle quelle : audit axe-core complet, contraste et navigation clavier sortent de son contrat."
+    },
+    {
+      "id": "accessibilite-a11y-004",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : les routes RELEVEES sur l instance servie sont celles que la racine LIE — une page atteinte seulement apres une action (formulaire poste, menu ouvert) ou par une URL que rien ne lie n y figure pas ; la declarer par FORGE_TESTS_QUALIF_ROUTES (TF-0217)",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (lot COMPTA) : limite declaree par le correctif lui-meme — perimetre du garde-fou, provenance des routes, racine d execution decouverte. Reevaluer si un run reel prouve que la limite coute."
     },
     {
       "id": "actions-001",
@@ -206,6 +227,13 @@
       "note": "par conception : la faiblesse d assertion est mesuree par la mutation, jamais par la couverture. Deux contre-oracles, deux roles."
     },
     {
+      "id": "execution-003",
+      "domaine": "execution",
+      "enonce": "exécution : la configuration Playwright du projet peut démarrer son propre webServer, qui ÉCRIT dans l arbre analysé (build, code généré) — hors de portée du garde-fou lecture seule ; seuls les artefacts produits par Forge Tests sont routés hors du projet",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (lot COMPTA) : limite declaree par le correctif lui-meme — perimetre du garde-fou, provenance des routes, racine d execution decouverte. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
       "id": "exigences-001",
       "domaine": "exigences",
       "enonce": "exigences : sans cle technique au referentiel, le rattachement d un cas a une exigence est LEXICAL (deux racines de 5 caracteres communes au minimum) — il est publie avec sa provenance et doit etre valide par un humain, jamais lu comme un fait",
@@ -337,6 +365,13 @@
       "enonce": "jeux de donnees : les valeurs sont derivees de l IDENTIFIANT de l element, pas de son type metier — un jeu couvre la FORME du cas (nominal, vide, erreur), pas la semantique d un domaine que le rapport ne connait pas",
       "statut": "assume",
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : les jeux couvrent la FORME du cas ; garde-fou borné au LISIBLE — au-delà, il promettrait ce qu il ne peut tenir. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "jeux-de-donnees-003",
+      "domaine": "jeux-de-donnees",
+      "enonce": "jeux de donnees : les variables `FORGE_TESTS_*` qui NOMMENT (PRODUIT, SOURCES, APP, BASE_URL, QUALIF_*, ORACLES...) configurent l AUDITEUR et sont hors du corpus interdit — une valeur du jeu qui reprendrait l une d elles n est PAS signalee ; celles qui AUTHENTIFIENT (LOGIN, PASSWORD, TOKEN, SECRET, KEY, CRED...) y restent (TF-0215)",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (lot COMPTA) : limite declaree par le correctif lui-meme — perimetre du garde-fou, provenance des routes, racine d execution decouverte. Reevaluer si un run reel prouve que la limite coute."
     },
     {
       "id": "migrations-sql-001",
@@ -704,27 +739,9 @@
       "statut": "retiree"
     },
     {
-      "id": "accessibilite-a11y-001",
-      "domaine": "accessibilite-a11y",
-      "enonce": "accessibilite : le DOM est capture a l etat INITIAL de chaque route ; les etats atteints apres interaction (menu ouvert, modale, message d erreur) ne sont pas audites",
-      "statut": "todo"
-    },
-    {
-      "id": "accessibilite-a11y-002",
-      "domaine": "accessibilite-a11y",
-      "enonce": "accessibilite : sans compte configure (.env), les routes protegees redirigent vers la page publique — le nombre de PAGES DISTINCTES rendues le dit au rapport",
-      "statut": "todo"
-    },
-    {
       "id": "dashboard-005",
       "domaine": "dashboard",
       "enonce": "dashboard : un constat DECLARE par le projet (RT-18) sort du compteur « Constats d echec » et reste integralement affiche, avec son motif type et sa contre-preuve — la page rend la declaration, elle ne la valide pas",
-      "statut": "todo"
-    },
-    {
-      "id": "execution-003",
-      "domaine": "execution",
-      "enonce": "exécution : la configuration Playwright du projet peut démarrer son propre webServer, qui ÉCRIT dans l arbre analysé (build, code généré) — hors de portée du garde-fou lecture seule ; seuls les artefacts produits par Forge Tests sont routés hors du projet",
       "statut": "todo"
     },
     {

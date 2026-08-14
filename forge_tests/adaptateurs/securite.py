@@ -18,6 +18,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from forge_tests.disposition import motif_racine_execution, racine_execution
 from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -25,8 +26,9 @@ NOM, PAN = "securite-oracles", "securite"
 
 # A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
 POUR_COUVRIR = (
-    "fournir des sources Python lisibles sous `backend/` : le pan est un contrôle statique, "
-    "il n'a besoin d'aucune exécution mais il lui faut du code à lire"
+    "fournir des sources Python lisibles sous la racine d'exécution du projet (`backend/` ou "
+    "la racine du dépôt elle-même) : le pan est un contrôle statique, il n'a besoin d'aucune "
+    "exécution mais il lui faut du code à lire"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
@@ -75,6 +77,15 @@ def _racine_oracles() -> Path | None:
 _EXCLUS_DEPENDANCES = (
     ".venv", "venv", "node_modules", "dist", "build", "__pycache__",
     ".git", "site-packages", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+    # TF-0216 : depuis que la racine est DECOUVERTE, ce pan peut lire la racine du depot
+    # elle-meme (projet plat) et non plus seulement `backend/`. Les dossiers d ARTEFACTS de la
+    # convention pilot y vivent — `forge\` (livrables archives des cycles precedents, cf.
+    # TF-0218), `output\`, ses archives `old\`/`Old\`, les PNG d oracles. Les tendre a l oracle
+    # delegue rejouerait exactement RT-9/RT-4 dans le pan securite : volume copie sans rapport
+    # avec le produit, et « fuites » imputees a des livrables de forge-tests plutot qu au code
+    # audite. Meme raisonnement que pour `.venv` : un dossier jamais copie ne peut pas produire
+    # de finding.
+    "forge", "output", "old", "Old", ".oracles",
 )
 
 
@@ -128,8 +139,16 @@ def analyser(cible: Path) -> SortieAdaptateur:
     racine = _racine_oracles()
     # Perimetre elargi : le code applicatif ET tout ce qui l entoure — configuration, tests,
     # scripts. Un secret en dur vit rarement dans le module metier.
-    application = cible / "backend"
-    if racine is None or not application.is_dir():
+    # TF-0216 : la racine est DECOUVERTE (`backend/` puis la racine plate), plus supposee. Sur un
+    # produit a racine plate, `cible/'backend'` n existait pas et ce pan sortait SKIP alors que
+    # ses sources etaient juste a cote, parfaitement lisibles.
+    application = racine_execution(cible)
+    # TF-0219 — DEUX causes, DEUX motifs. Le motif unique publiait « registre d oracles
+    # introuvable » y compris quand le registre etait parfaitement resolu et que la vraie cause
+    # etait l absence de sources a lire : un aller-retour de configuration inutile, mesure au
+    # ledger du lot COMPTA (seq 17). Le `POUR_COUVRIR` de ce pan disait deja la bonne cause ;
+    # le motif s aligne dessus. Le motif publie au rapport est le DERNIER de la liste.
+    if racine is None:
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
             non_juge=[
@@ -138,9 +157,21 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 "scripts de quality-oracles",
             ],
         )
+    if not application.is_dir():
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            non_juge=[
+                *NON_JUGE,
+                f"aucune source a lire : {application} n existe pas — le registre d oracles, "
+                f"lui, EST resolu ({racine}). {motif_racine_execution(cible)}",
+            ],
+        )
 
     findings: list[Finding] = []
-    non_juge: list[str] = list(NON_JUGE)
+    # TF-0216 (garde-fou de methode) : le pan DIT sur quelle racine il a lu. Une decouverte qui
+    # change d un projet a l autre sans se declarer serait pire que l ancre en dur qu elle
+    # remplace — ce pan est le canal de publication toujours present pour cette phrase.
+    non_juge: list[str] = [*NON_JUGE, f"securite : {motif_racine_execution(cible)}"]
     echec = False
     joues: list[str] = []
 

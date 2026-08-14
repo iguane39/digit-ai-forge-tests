@@ -62,6 +62,14 @@ _EXCLUS = {
     # change. Trois defauts en un : auto-audit (G-1), inventaire qui recompense l accumulation,
     # et mesure non reproductible apres rangement.
     "output", "old", "Old", ".oracles",
+    # TF-0218 (RT-4, lot COMPTA 20260814a) : `forge\` est le dossier de RUN du pilot, jamais du
+    # produit. La convention ETAPES-RUN y archive les livrables du cycle N-1
+    # (`forge\etapes\tests\livrables\` : dashboards HTML, cahiers de tests), que ce pan
+    # inventoriait ensuite comme surface du produit au cycle N — 344 elements au cycle 2 dont
+    # 262 issus de ces archives, contre 82 elements produit au cycle 1. Meme defaut que RT-9,
+    # meme remede : la mesure est POLLUEE et, pire, CROISSANTE a chaque cycle — un produit
+    # inchange verrait sa surface grossir indefiniment du seul fait d avoir ete audite.
+    "forge",
 }
 _PLAFOND_JS = 8_000_000  # octets de corpus JS lus ; au-delà, la troncature est DÉCLARÉE
 
