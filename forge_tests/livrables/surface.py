@@ -193,10 +193,43 @@ def inventaire(rapport: dict) -> dict[str, list[dict]]:
             etat, message = "exerce", "module source importé par la suite"
         poser("back", _element(f"module:{nom}", etat, message=message, mute=module.get("mute")))
 
+    _rattacher_porteurs(par_pan)
     return {
         pan: sorted(elements.values(), key=lambda e: e["id"])
         for pan, elements in par_pan.items()
     }
+
+
+# RT-12 (lot bourse-aux-vacants 20260814a) : le constat qui EXPLIQUE un élément vit souvent sur
+# la route qui le porte, deux sous-chapitres plus loin. Sur `qualif:effet:/:0:form`, la cellule
+# affichait « formulaire sans action ni écouteur » sans le `401` de `qualif:route:/` qui en est
+# la cause — le cahier imprimait les deux, la mise en écran perdait le lien. On rattache donc le
+# constat porteur À LA SOURCE : dashboard et cahiers le lisent au même endroit.
+_PORTE_PAR_ROUTE = re.compile(r"^qualif:(?:effet|console|marqueur|a11y|visuel):(?P<route>[^:]*)")
+_EST_UNE_ROUTE = re.compile(r"^qualif:route:(?P<route>.+)$")
+
+
+def _rattacher_porteurs(par_pan: dict[str, dict[str, dict]]) -> None:
+    porteurs: dict[str, dict] = {}
+    for elements in par_pan.values():
+        for element in elements.values():
+            trouve = _EST_UNE_ROUTE.match(element["id"])
+            if trouve and element.get("message"):
+                porteurs[trouve["route"]] = element
+    for elements in par_pan.values():
+        for element in elements.values():
+            trouve = _PORTE_PAR_ROUTE.match(element["id"])
+            if not trouve:
+                continue
+            porteur = porteurs.get(trouve["route"] or "/")
+            if porteur is None or porteur["id"] == element["id"]:
+                continue
+            element["porteur"] = {
+                "id": porteur["id"],
+                "route": trouve["route"] or "/",
+                "classe": porteur.get("classe"),
+                "message": porteur.get("message"),
+            }
 
 
 def repartir(rapport: dict, registre: dict) -> list[dict]:

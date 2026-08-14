@@ -24,6 +24,20 @@
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : classification par CLASSE = doctrine du module (déterminisme opposable, jq du DOSSIER-MEP). Réévaluer si un run réel prouve que la limite coûte."
     },
     {
+      "id": "adoption-001",
+      "domaine": "adoption",
+      "enonce": "adoption : le fichier `forge/cas-adoptes.jsonl` est une DECLARATION du projet — ce module verifie que le test cite existe, jamais qu il couvre reellement le cas ni qu il affirme quoi que ce soit (c est le role de la mutation)",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (RT-13) : limites constitutives du mécanisme — le module constate une DÉCLARATION du projet et l'existence de son support ; juger qu'un test couvre vraiment son cas est le rôle de la mutation. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "adoption-002",
+      "domaine": "adoption",
+      "enonce": "adoption : un cas adopte puis renomme cote cahier ressort en reference INCONNUE, declaree telle quelle — la reference de cas est stable par construction, pas eternelle",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (RT-13) : limites constitutives du mécanisme — le module constate une DÉCLARATION du projet et l'existence de son support ; juger qu'un test couvre vraiment son cas est le rôle de la mutation. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
       "id": "api-fastapi-001",
       "domaine": "api-fastapi",
       "enonce": "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une ASSERTION porte sur lui — c est le role du second contre-oracle",

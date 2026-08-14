@@ -55,6 +55,13 @@ _EXCLUS = {
     "node_modules", ".venv", "venv", ".git", "__pycache__", "site-packages", "dist", "build",
     ".next", ".nuxt", ".svelte-kit", ".visuel", "htmlcov", "coverage", ".tox", ".mypy_cache",
     ".ruff_cache", ".pytest_cache", "vendor", ".forge",
+    # RT-9/RT-10 (lot bourse-aux-vacants 20260814a) : les dossiers d ARTEFACTS de la convention
+    # pilot — `output\` (regle 16 : tout livrable date y est copie), ses archives `old\`/`Old\`
+    # et les PNG d oracles. Sans eux, ce pan inventoriait les DASHBOARDS produits par
+    # forge-tests elle-meme : 6 -> 27 elements entre deux audits sans qu une ligne de gabarit
+    # change. Trois defauts en un : auto-audit (G-1), inventaire qui recompense l accumulation,
+    # et mesure non reproductible apres rangement.
+    "output", "old", "Old", ".oracles",
 }
 _PLAFOND_JS = 8_000_000  # octets de corpus JS lus ; au-delà, la troncature est DÉCLARÉE
 

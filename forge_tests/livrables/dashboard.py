@@ -305,6 +305,8 @@ _STYLE = f"""
     .cas-carte p {{ margin:0 0 .5em; }}
     .cas-carte ol {{ margin:.2em 0 .6em; padding-left:1.4em; }}
     .cas-ref {{ color:var(--muted); }}
+    /* RT-12 — constat de la route porteuse, rendu sous le constat propre de l'élément. */
+    .porteur {{ color:var(--muted); font-size:.92em; }}
     .outil-chapitre {{ margin:6px 0 10px; }}
     /* Chapitres REPLIABLES (retour humain du 14/08) : chevron qui tourne, repli au choix
        du lecteur — ouverts par défaut, le papier déplie tout. */
@@ -1123,12 +1125,16 @@ def _detail_element(detail: dict | None) -> tuple[str, str]:
             contenu,
         )
     cartes = []
+    adoptes = 0
     for cas in detail.get("cas") or []:
         etapes = "".join(f"<li>{_e(geste)}</li>" for geste in (cas.get("etapes") or []))
+        adoption = cas.get("adoption") or {"statut": "proposition"}
+        adoptes += adoption.get("statut") == "adopte"
         cartes.append(
             '<div class="cas-carte">'
             f'<p class="cas-ref"><code>{_e(cas.get("ref"))}</code> · {_e(cas.get("titre") or "")}</p>'
-            f"<p><strong>Préconditions</strong> — {_e(cas.get('preconditions'))}</p>"
+            + _badge_adoption(adoption)
+            + f"<p><strong>Préconditions</strong> — {_e(cas.get('preconditions'))}</p>"
             f"<p><strong>Jeu de données</strong> — <code>{_e(cas.get('jeu'))}</code></p>"
             f"<ol>{etapes}</ol>"
             f"<p><strong>Résultat attendu</strong> — {_texte_libre(cas.get('attendu'))}</p>"
@@ -1138,11 +1144,44 @@ def _detail_element(detail: dict | None) -> tuple[str, str]:
     if not cartes:
         return '<span class="discret">—</span>', ""
     n = len(cartes)
+    # RT-12 : le bouton ne dit plus « 4 cas » (que le lecteur lisait comme « 4 tests non
+    # joués ») mais ce que ces cas SONT — des propositions, dont x adoptées par le projet.
+    libelle = f"{n} cas proposé{'s' if n > 1 else ''}"
+    if adoptes:
+        libelle += f", {adoptes} adopté{'s' if adoptes > 1 else ''}"
     bouton = (
-        f'<button type="button" class="btn-detail" aria-expanded="false">'
-        f"{n} cas ▸</button>"
+        f'<button type="button" class="btn-detail" aria-expanded="false" '
+        f'title="cas DÉRIVÉS de la surface, déposés hors du projet (G-1) : des propositions '
+        f'à adopter, pas des tests que l audit aurait sautés">{_e(libelle)} ▸</button>'
     )
     return bouton, f'<div class="cas-grille">{"".join(cartes)}</div>'
+
+
+def _badge_adoption(adoption: dict) -> str:
+    """Statut d'un cas dérivé (RT-13) — « Proposition » n'est pas « Non joué ».
+
+    Retour humain du 14/08 : le lecteur a lu « Non joué » sur un cas dérivé et a demandé
+    « pourquoi ce type de tests n'est pas joué ? ». Un cas dérivé n'est pas joué par
+    construction — il n'appartient pas encore à la suite du projet.
+    """
+    statut = adoption.get("statut")
+    if statut == "adopte":
+        return (
+            '<p><span class="badge b-pass" title="le projet a déclaré ce cas adopté et le '
+            'test cité existe">✓ Adopté par le projet</span> '
+            f'<code>{_e(adoption.get("test"))}</code></p>'
+        )
+    if statut == "refuse":
+        return (
+            '<p><span class="badge b-fail" title="adoption déclarée mais non vérifiable">'
+            f'✕ Adoption refusée</span> <span class="discret">{_e(adoption.get("motif"))}'
+            "</span></p>"
+        )
+    return (
+        '<p><span class="badge b-part" title="cas dérivé de la surface : il n appartient pas '
+        "encore à la suite du projet — ce n est pas un test que l audit aurait sauté\">"
+        "○ Proposition (non adoptée)</span></p>"
+    )
 
 
 def _constat_cellule(element: dict) -> str:
@@ -1157,27 +1196,43 @@ def _constat_cellule(element: dict) -> str:
         champs = ", ".join(element.get("champs_requis") or [])
         motif = _e(message) if message else "la configuration requise est absente"
         return (
-            f'<span data-litteral-ok><strong>Pourquoi non joué :</strong> {motif}'
+            f'<span data-litteral-ok><strong>Pourquoi non testable ici :</strong> {motif}'
             + (
                 f" — fournir (noms seuls, jamais les valeurs) : <code>{_e(champs)}</code>"
                 if champs
                 else ""
             )
             + ", puis <code>--reprendre</code> le rapport</span>"
-        )
+        ) + _contexte_porteur(element)
     if etat == "non_exerce":
         constat = f"{_e(message)} — " if message else ""
         return (
-            f"<span data-litteral-ok>{constat}<strong>Pourquoi non joué :</strong> aucun test "
+            f"<span data-litteral-ok>{constat}<strong>Pourquoi non exercé :</strong> aucun test "
             "de la suite du projet n atteint cet élément — l audit mesure la suite existante, "
             "il ne joue pas de cas à sa place (garde-fou G-1) ; le cas à ajouter est dépliable "
             "dans la colonne « détail »</span>"
-        )
+        ) + _contexte_porteur(element)
     if message:
-        return _texte_libre(message)
+        return _texte_libre(message) + _contexte_porteur(element)
     if etat == "exerce":
         return '<span class="discret">✓ Passé — aucun constat</span>'
     return '<span class="discret">sans objet</span>'
+
+
+def _contexte_porteur(element: dict) -> str:
+    """RT-12 : le constat de la ROUTE qui porte l'élément, quand il existe et qu'il diffère.
+
+    Sans lui, la cellule affichait « formulaire sans action ni écouteur » sans le `401` de
+    l'écran qui l'explique — celui-ci vivant deux sous-chapitres plus loin.
+    """
+    porteur = element.get("porteur")
+    if not porteur or not porteur.get("message"):
+        return ""
+    return (
+        f'<br><span class="porteur" data-litteral-ok><strong>Contexte de l\'écran '
+        f'{_e(porteur.get("route"))}</strong> ({_e(porteur.get("classe") or "constat")}) : '
+        f'{_e(porteur.get("message"))}</span>'
+    )
 
 
 def _kpis_chapitre(chapitre: dict) -> str:
