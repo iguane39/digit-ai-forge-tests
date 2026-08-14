@@ -158,6 +158,23 @@ def test_rt13_aucune_declaration_n_est_pas_une_faute(tmp_path: Path) -> None:
     assert adoption.charger(tmp_path) == {}
 
 
+# --- Régression du 14/08 matin, attrapée en recette : une règle §2 bis qui crie au loup -------
+def test_regle_conditionnelle_ne_produit_pas_de_faux_positif() -> None:
+    """« H4-actions-structurees » sortait DÉRIVE sur les bancs d essai, dont le rapport ne porte
+    aucune action « à vous » : elle exigeait un marqueur que la page n avait aucune raison de
+    porter. Une règle qui crie au loup fait ignorer le contrôle — et celui-ci écrit une
+    candidature TODO à chaque écart."""
+    from forge_tests.livrables import dashboard
+
+    def h4(page: str) -> list[str]:
+        return [e for e in dashboard.controle_pregeneration(page) if "H4-actions" in e]
+
+    assert h4("<html>aucune action utilisateur</html>") == []
+    assert h4('<strong>Vos 8 action(s)</strong><span class="a-quoi">Quoi</span>') == []
+    # Le sens rouge tient : le bloc présent SANS sa forme structurée est dénoncé.
+    assert h4("<strong>Vos 8 action(s)</strong><li>une phrase-fleuve</li>")
+
+
 def test_rt13_reference_inconnue_du_cahier_est_declaree(tmp_path: Path) -> None:
     test = tmp_path / "t.spec.ts"
     test.write_text("x", encoding="utf-8")
