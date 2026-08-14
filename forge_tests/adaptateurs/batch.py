@@ -12,9 +12,11 @@ import ast
 import re
 from pathlib import Path
 
+from forge_tests import declencheurs as _declencheurs
 from forge_tests.disposition import paquet_sources
 from forge_tests.execution import arcs_executes, executees, motif_indisponibilite
-from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
+from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
+from forge_tests.risque import coter
 
 NOM, PAN, SEUIL = "batch-python", "batch", 0.90
 
@@ -77,6 +79,11 @@ def inventaire(cible: Path) -> list[Element]:
     elements: list[Element] = []
     for src in _sources(cible):
         elements.extend(_inventaire_module(src))
+    # TF-0203 : les DÉCLENCHEURS ne sont volontairement pas comptés dans cette surface — ils
+    # portent leurs constats propres (voir `_findings_declencheurs`). Les y mettre ferait
+    # tomber le taux de couverture du pan pour une raison qui n'est pas un trou de test : un
+    # lot n'est presque jamais déclenché PAR la suite. Le choix est déclaré au `non_juge`,
+    # pas silencieux.
     return elements
 
 
@@ -160,19 +167,54 @@ def exerces(cible: Path) -> set[str] | None:
     return couvert
 
 
+def _findings_declencheurs(cible: Path) -> list[Finding]:
+    """Constats propres aux déclencheurs (TF-0203) — hors du calcul de surface.
+
+    Un déclencheur non câblé n'est pas « non exercé » : il est CASSÉ. Le confondre avec un
+    trou de couverture le noierait dans la liste des éléments à tester, alors qu'il demande
+    une correction, pas un cas de test.
+    """
+    inventories = _declencheurs.inventorier(cible)
+    jobs = [
+        e.id for src in _sources(cible) for e in _inventaire_module(src)
+    ]
+    return [
+        Finding(
+            id=constat["id"],
+            classe=constat["classe"],
+            localisation=constat["localisation"],
+            message=constat["message"],
+            risque=coter(PAN, constat["id"], constat["localisation"]),
+        )
+        for constat in _declencheurs.constats(cible, inventories, jobs)
+    ]
+
+
 def analyser(cible: Path) -> SortieAdaptateur:
     couvert = exerces(cible)
+    findings_triggers = _findings_declencheurs(cible)
     if couvert is None:
         inv = inventaire(cible)
         return SortieAdaptateur(
             NOM,
             PAN,
             str(cible),
-            "SKIP",
+            # Un déclencheur cassé se juge SANS exécuter la suite : le constat tient même
+            # quand la couverture n'est pas mesurable ici.
+            "FAIL" if findings_triggers else "SKIP",
+            findings=findings_triggers,
             non_juge=[
                 *NON_JUGE,
+                *_declencheurs.NON_JUGE,
                 f"batch : {len(inv)} branches/rejets INVENTORIES mais couverture non mesurable — "
                 + motif_indisponibilite(cible, "backend", "suite non executee sous sonde"),
             ],
         )
-    return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)
+    sortie = evaluer_surface(
+        NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL,
+        [*NON_JUGE, *_declencheurs.NON_JUGE],
+    )
+    if findings_triggers:
+        sortie.findings = [*findings_triggers, *sortie.findings]
+        sortie.verdict = "FAIL"
+    return sortie
