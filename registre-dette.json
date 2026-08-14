@@ -136,6 +136,62 @@
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : repli sqlite3 déclaré comme repli — il relève ce qu il peut relever. Réévaluer si un run réel prouve que la limite coûte."
     },
     {
+      "id": "declarations-001",
+      "domaine": "declarations",
+      "enonce": "declarations : le fichier `forge/constats-contestes.jsonl` est une DECLARATION du projet — ce module verifie que la preuve citee EXISTE, jamais qu elle etablit ce qu elle pretend (c est le role de la mutation et de l execution)",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (RT-18) : le canal constate une DECLARATION du projet et l'existence de sa preuve ; juger la sincerite de la contre-preuve est le role du relecteur, pas de l'outil. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
+      "id": "declarations-002",
+      "domaine": "declarations",
+      "enonce": "declarations : un constat ecarte reste MESURE et reste au rapport ; il sort du decompte principal, il ne sort pas de l inventaire — la mesure demeure opposable, la declaration aussi",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (RT-18) : le canal constate une DECLARATION du projet et l'existence de sa preuve ; juger la sincerite de la contre-preuve est le role du relecteur, pas de l'outil. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
+      "id": "declarations-003",
+      "domaine": "declarations",
+      "enonce": "declarations : la peremption se juge sur la DATE DECLAREE par le projet, jamais sur une horloge externe — une date postee en avant differe le terme d autant, et cela se lit",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (RT-18) : le canal constate une DECLARATION du projet et l'existence de sa preuve ; juger la sincerite de la contre-preuve est le role du relecteur, pas de l'outil. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
+      "id": "declarations-004",
+      "domaine": "declarations",
+      "enonce": "declarations : une declaration qui ne vise aucun constat du rapport courant sort en INCONNUE, declaree telle quelle — le constat a pu disparaitre, ou l identifiant changer",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (RT-18) : le canal constate une DECLARATION du projet et l'existence de sa preuve ; juger la sincerite de la contre-preuve est le role du relecteur, pas de l'outil. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
+      "id": "declencheurs-001",
+      "domaine": "declencheurs",
+      "enonce": "declencheurs : la decouverte est STATIQUE et bornee aux formes reconnues (cron d un workflow CI, crontab, timer systemd, decorateurs de planification Python, taches Celery, point d entree `__main__`) — un declencheur pose a l execution par un ordonnanceur externe (Airflow deporte, planificateur du cloud configure hors depot) n est pas inventoriable ici, et le declarer serait mentir",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (TF-0203) : decouverte STATIQUE bornee aux formes reconnues ; un ordonnanceur configure hors depot n'est pas inventoriable, et le declarer serait mentir. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
+      "id": "declencheurs-002",
+      "domaine": "declencheurs",
+      "enonce": "declencheurs : le cablage est verifie sur le NOM de la cible (module, fonction, commande) presente dans le depot ; qu elle soit la BONNE cible, et qu elle fasse ce que le declencheur promet, releve du cas de test, pas de l inventaire",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (TF-0203) : decouverte STATIQUE bornee aux formes reconnues ; un ordonnanceur configure hors depot n'est pas inventoriable, et le declarer serait mentir. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
+      "id": "declencheurs-003",
+      "domaine": "declencheurs",
+      "enonce": "declencheurs : une expression cron syntaxiquement valide n est pas pour autant la cadence VOULUE — l ecart entre la cadence declaree et la cadence attendue est un jugement humain",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (TF-0203) : decouverte STATIQUE bornee aux formes reconnues ; un ordonnanceur configure hors depot n'est pas inventoriable, et le declarer serait mentir. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
+      "id": "declencheurs-004",
+      "domaine": "declencheurs",
+      "enonce": "declencheurs : la v0 juge le CABLAGE, la lisibilite de la planification et l absence totale de declencheur ; elle ne dit pas si la suite de tests DECLENCHE le lot au moins une fois (il faudrait relier le declencheur a la couverture d execution de sa cible) — ce volet est declare comme reste-a-faire, pas comme mesure",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (TF-0203) : decouverte STATIQUE bornee aux formes reconnues ; un ordonnanceur configure hors depot n'est pas inventoriable, et le declarer serait mentir. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
       "id": "execution-001",
       "domaine": "execution",
       "enonce": "exécution : la couverture combine lignes et ARCS de branchement ; une branche implicite (ternaire, court-circuit booléen) reste hors de portée de coverage.py",
@@ -323,6 +379,13 @@
       "enonce": "modules : un module est dit « exerce » des qu une ligne en est couverte — l etre ne dit pas qu il soit VERIFIE, c est le role du score de mutation qui l accompagne",
       "statut": "assume",
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : jeu d opérateurs et échantillonnage déclarés au rapport ; exercé ≠ vérifié est précisément le rôle du score. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "prompts-statique-001",
+      "domaine": "prompts-statique",
+      "enonce": "prompts : la v0 est STATIQUE et GRATUITE — le volet execute (rejeu N fois pour mesurer la stabilite d une reponse, jugement semantique par un juge) est HORS PERIMETRE : il depense des jetons, donc il releve d un mandat humain (regle 29). `mesure_d_instabilite` en porte la mesure, testee sur donnees figees et JAMAIS appelee par l audit",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (TF-0200) : v0 GRATUITE par construction — mesurer la stabilite ou juger le sens exige un modele, donc une depense, donc un mandat (regle 34). Reevaluer si un run reel prouve que la limite coute."
     },
     {
       "id": "prompts-statique-002",
@@ -653,6 +716,12 @@
       "statut": "todo"
     },
     {
+      "id": "dashboard-005",
+      "domaine": "dashboard",
+      "enonce": "dashboard : un constat DECLARE par le projet (RT-18) sort du compteur « Constats d echec » et reste integralement affiche, avec son motif type et sa contre-preuve — la page rend la declaration, elle ne la valide pas",
+      "statut": "todo"
+    },
+    {
       "id": "execution-003",
       "domaine": "execution",
       "enonce": "exécution : la configuration Playwright du projet peut démarrer son propre webServer, qui ÉCRIT dans l arbre analysé (build, code généré) — hors de portée du garde-fou lecture seule ; seuls les artefacts produits par Forge Tests sont routés hors du projet",
@@ -663,13 +732,6 @@
       "domaine": "generateur",
       "enonce": "generateur : pans API et Data generes ; Front, Batch et Fichiers ne le sont pas — leurs cas exigent un scenario, pas une seule requete",
       "statut": "todo"
-    },
-    {
-      "id": "prompts-statique-001",
-      "domaine": "prompts-statique",
-      "enonce": "prompts : la v0 est STATIQUE et GRATUITE — le volet execute (rejeu N fois pour mesurer la stabilite d une reponse, jugement semantique par un juge) est HORS PERIMETRE : il depense des jetons, donc il releve d un mandat humain (regle 29). `mesure_d_instabilite` en porte la mesure, testee sur donnees figees et JAMAIS appelee par l audit",
-      "statut": "todo",
-      "note": "Reste-a-faire NOMME (TF-0201) : le volet execute est un mandat de DEPENSE (regle 29), pas une omission. La mesure existe et est testee sur donnees figees ; seul son declenchement attend un mandat humain."
     },
     {
       "id": "qualif-navigateur-002",

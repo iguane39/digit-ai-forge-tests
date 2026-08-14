@@ -10,7 +10,22 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
-Verdict = Literal["PASS", "FAIL", "SKIP"]
+# « NA » (sans objet) — décision humaine du 14/08 : « les pans qui n'ont pas de périmètre dans
+# un projet doivent ressortir en Non Applicable lors des tests, puisqu'il n'y a rien à tester ».
+#
+# NA n'est PAS un synonyme de SKIP, et la distinction est tout l'intérêt :
+#   - SKIP  = il y a quelque chose à mesurer et je n'ai PAS PU (configuration absente, suite non
+#             exécutée, précondition non établie). C'est un manque, il compte, il rend PARTIEL ;
+#   - NA    = il n'y a RIEN à mesurer ici, et je le PROUVE (le projet n'a pas de migrations, pas
+#             de front, pas de prompt). Ce n'est pas un manque : ne pas avoir de traitement par
+#             lot n'est pas un défaut.
+#
+# Garde-fou hérité, non négociable : un inventaire vide ne suffit PAS à conclure NA. Le
+# framework tient depuis l'origine qu'« un inventaire vide ne prouve pas que tout est couvert :
+# il prouve que l'adaptateur n'a RIEN SU ÉNUMÉRER ici ». NA exige donc une preuve POSITIVE
+# d'absence, fournie par l'adaptateur (`sans_objet=` d'`evaluer_surface`) : il a cherché aux
+# endroits qu'il déclare, et ces endroits n'existent pas. Sans cette preuve, on reste en SKIP.
+Verdict = Literal["PASS", "FAIL", "SKIP", "NA"]
 # TF-0146 — verdict d un ESSAI individuel (un cas exécuté), distinct du Verdict d ADAPTATEUR
 # ci-dessus (un pan entier). Trois valeurs, jamais un vert par défaut : un cas dont l issue
 # n a pas été observée est NON_EXECUTE, jamais tacitement PASSANT.
@@ -183,11 +198,25 @@ def evaluer_surface(
     exerces: set[str],
     seuil: float,
     non_juge: list[str],
+    sans_objet: str | None = None,
 ) -> SortieAdaptateur:
-    """Compare l inventaire au perimetre exerce. Tout element non exerce est un FAIL NOMME."""
+    """Compare l inventaire au perimetre exerce. Tout element non exerce est un FAIL NOMME.
+
+    `sans_objet` (14/08) : PREUVE POSITIVE que le projet n a pas ce perimetre — « aucun dossier
+    `frontend\\`, aucun fichier de migration ». Fournie, et l inventaire etant vide, le pan sort
+    **NA** : il n y a rien a tester, ce n est pas un manque. Absente, l inventaire vide reste un
+    SKIP : l adaptateur n a rien su enumerer, et c est autre chose.
+    """
     from forge_tests.risque import coter
 
     if not inventaire:
+        if sans_objet:
+            # Sans objet, et PROUVE : le pan a cherche aux endroits qu il declare, ils n existent
+            # pas. Ne pas avoir de traitement par lot n est pas un defaut de traitement par lot.
+            return SortieAdaptateur(
+                adaptateur, pan, cible, "NA",
+                non_juge=[*non_juge, f"{pan} : SANS OBJET sur ce projet — {sans_objet}"],
+            )
         # Un inventaire vide ne prouve pas que tout est couvert : il prouve que l adaptateur
         # n a RIEN SU ENUMERER ici. Conclure « 100 % OK » serait l absence silencieuse que le
         # framework existe pour interdire — revele par la phase 2, premier projet reel.
@@ -292,7 +321,15 @@ def rapport(
 
     verifier_regle_conjointe(sorties)
     chemins = pour_couvrir or {}
-    couverts = {s.pan for s in sorties if s.verdict != "SKIP"}
+    couverts = {s.pan for s in sorties if s.verdict not in ("SKIP", "NA")}
+    # NA — sans objet, PROUVE : le pan sort du calcul de couverture sans compter comme manque.
+    # Il reste NOMME au rapport avec son motif : un pan qui disparaitrait laisserait croire que
+    # le sujet n existe pas dans le framework, exactement l absence silencieuse interdite.
+    sans_objet = {
+        s.pan: (s.non_juge[-1] if s.non_juge else "sans motif")
+        for s in sorties
+        if s.verdict == "NA"
+    }
     motifs_skip = {
         s.pan: s.non_juge[-1] if s.non_juge else "sans motif"
         for s in sorties
@@ -305,7 +342,7 @@ def rapport(
             "pour_couvrir": chemins.get(p, POUR_COUVRIR_DEFAUT),
         }
         for p in pans_attendus
-        if p not in couverts
+        if p not in couverts and p not in sans_objet
     ]
     # Le PAN de chaque finding est porte au rapport : sans lui, une reprise ne sait pas quels
     # findings d un rapport anterieur appartiennent a un pan qu elle ne rejoue pas (RT-6b).
@@ -340,6 +377,11 @@ def rapport(
             m for s in sorties for m in s.modules
         ],
         "pans_non_couverts": non_couverts,
+        # « NA » (14/08) : les pans SANS OBJET sur ce projet, nommés avec leur preuve d absence.
+        # Distincts des non couverts : ceux-ci sont un manque, ceux-là n en sont pas un.
+        "pans_sans_objet": [
+            {"pan": p, "motif": motif} for p, motif in sorted(sans_objet.items())
+        ],
         "motifs_non_couverture": motifs_skip,
         "bandes_de_risque": bandes,
         "findings": findings_json,

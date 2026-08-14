@@ -28,12 +28,28 @@ non-destructivité sur une instance de qualification.
 Sans instance servie, le pan ne devine rien : il sort SKIP avec son motif et les champs à
 fournir, que le mécanisme central de qualification (RT-6a) publie en `non_testables[]`. Une
 fois l URL fournie, `--reprendre` rejoue ce seul pan.
+
+**Garde de précondition (RT-16 / TF-0211) — un pan aveugle qui se tait est utile ; un pan
+aveugle qui accuse coûte un audit entier à démentir.** Ce pan EXIGE un état pour mesurer quoi
+que ce soit : une session ouverte sur l instance. Constaté en production : l authentification
+n a jamais abouti — le pan l avait lui-même consigné (`401 UNAUTHORIZED` sur les six routes) —
+et il a néanmoins photographié six fois l écran de connexion pour en tirer 13 findings (6
+`route-en-defaut` « marqueur absent », 6 `affordance-sans-effet` citant mot pour mot le même
+formulaire de connexion, 1 `seuil:qualif` qui n était que leur somme), tous au même risque, donc
+tous remontés en bloc : 39 % des constats du rapport, tous faux, produits par un pan qui
+regardait une page qui n était pas celle qu il croyait. Le pan `api` dans la même situation sort
+un inventaire VIDE et zéro constat ; ce pan fait désormais de même.
+
+Le critère est écrit dans `precondition_absente` et ne se déclenche QUE si la précondition est
+manifestement absente pour TOUT le pan : une seule route en 401 parmi des routes saines reste
+un défaut de cette route, et elle est conservée.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 from collections import deque
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -101,6 +117,93 @@ _TRACES = (
     "django.core.exceptions",
 )
 _PLAFOND_DEFAUT = 40
+
+# --- Précondition du pan : une session ouverte (RT-16 / TF-0211) -------------------------------
+# Ce qui DÉBLOQUE le pan quand sa précondition manque — publié en `non_testables[].champs_requis`.
+CHAMPS_REQUIS_SESSION = ("FORGE_TESTS_QUALIF_LOGIN", "FORGE_TESTS_QUALIF_PASSWORD")
+
+# Une seule route ne permet pas de distinguer « cette route est en défaut » de « le pan entier
+# est aveugle ». En dessous de ce nombre de routes parcourues, la garde ne se déclenche jamais :
+# on préfère laisser passer un constat douteux plutôt que taire un pan qu on n a pas su juger.
+_ROUTES_MIN_GARDE = 2
+
+_REFUS_CODES = re.compile(r"\b(?:401|403)\b")
+_REFUS_MOTS = (
+    "unauthorized",
+    "forbidden",
+    "non autorise",
+    "non autorisé",
+    "failed to load resource",
+    "status of",
+    "status code",
+)
+
+
+def _est_refus_auth(texte: str) -> bool:
+    """Ce texte de console dit-il un refus d authentification ?
+
+    Le code seul ne suffit pas : « 401 » peut être une donnée affichée. Il faut le code ET un
+    mot de statut HTTP — c est la forme exacte que le navigateur écrit (« Failed to load
+    resource: the server responded with a status of 401 (UNAUTHORIZED) »).
+    """
+    minuscule = (texte or "").lower()
+    if not _REFUS_CODES.search(minuscule):
+        return False
+    return any(mot in minuscule for mot in _REFUS_MOTS)
+
+
+def _signal_session_absente(page_vue: dict, config: dict) -> str | None:
+    """Motif si CETTE route atteste d une session absente ; None si elle est saine.
+
+    Trois attestations, de la plus directe à la plus indirecte :
+      - la route elle-même rend 401/403 ;
+      - la route rend 200 mais ses appels de données sont refusés en 401/403 (cas réel : la mire
+        de connexion s affiche, le navigateur consigne le refus) ;
+      - le marqueur de contenu DÉCLARÉ par le projet pour cette route est absent de la page —
+        la page rendue n est pas celle qu on attendait. Seul un marqueur déclaré compte : un
+        marqueur dérivé du titre n est pas « attendu », il est constaté.
+    """
+    statut = page_vue.get("statut")
+    if statut in (401, 403):
+        return f"HTTP {statut}"
+    for ligne in page_vue.get("console") or []:
+        if _est_refus_auth(ligne):
+            return f"erreur console : {ligne[:120]}"
+    marqueur = config["marqueurs"].get(page_vue["route"])
+    if marqueur and marqueur.lower() not in (page_vue.get("corps") or "").lower():
+        return f"marqueur déclaré {marqueur!r} absent de la page rendue"
+    return None
+
+
+def precondition_absente(releve: list[dict], config: dict) -> str | None:
+    """Motif si la précondition du pan — une session ouverte — manque POUR TOUT LE PAN.
+
+    **Critère, et rien d autre** : au moins `_ROUTES_MIN_GARDE` routes parcourues, et CHACUNE
+    d elles atteste d une session absente (`_signal_session_absente`). Une seule route saine
+    suffit à écarter la garde : ce n est alors pas une précondition manquée, c est un défaut de
+    la route qui échoue, et il doit être conservé. Une route dont on ne sait rien (navigation
+    impossible) ne porte pas de signal, donc écarte la garde elle aussi — la garde ne se déduit
+    jamais d une ignorance, seulement d un faisceau de constats concordants.
+    """
+    if len(releve) < _ROUTES_MIN_GARDE:
+        return None
+    signaux: list[str] = []
+    for page_vue in releve:
+        signal = _signal_session_absente(page_vue, config)
+        if signal is None:
+            return None
+        signaux.append(f"{page_vue['route']} ({signal})")
+    return (
+        f"qualif : PRECONDITION NON ETABLIE — le pan exige une session ouverte sur l instance, "
+        f"et les {len(releve)} route(s) parcourue(s) sur {config['base']} l attestent toutes "
+        f"absente : " + " · ".join(signaux) + ". Le pan a donc photographie le meme ecran "
+        "autant de fois qu il a visite de routes : son inventaire est declare NON MESURABLE et "
+        "il n emet AUCUN constat produit. Fournir ou corriger "
+        + ", ".join(CHAMPS_REQUIS_SESSION)
+        + " (et FORGE_TESTS_QUALIF_CONNEXION si la mire n est pas sur /connexion ou /login), "
+        "puis `--reprendre` le rapport. Un pan aveugle qui se tait est utile ; un pan aveugle "
+        "qui accuse coute un audit entier a dementir"
+    )
 
 # Descripteur de chaque affordance, lu dans le DOM RENDU (et non dans le gabarit source).
 _JS_AFFORDANCES = """
@@ -410,7 +513,7 @@ def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN00
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
-    from forge_tests.qualification import declarer, detecter
+    from forge_tests.qualification import declarer
 
     config = _config(cible)
     if not config["base"]:
@@ -461,12 +564,48 @@ def analyser(cible: Path) -> SortieAdaptateur:
             non_juge=[*non_juge, f"qualif : aucune route atteinte sur {config['base']}"],
         )
     non_juge.extend(sorted(set(avertissements)))
+    return conclure(cible, config, releve, non_juge)
+
+
+def conclure(
+    cible: Path, config: dict, releve: list[dict], non_juge: list[str]
+) -> SortieAdaptateur:
+    """Traduit le relevé de parcours en verdict — SEUL endroit où ce pan accuse le produit.
+
+    Séparé de `analyser` pour que la garde de précondition et les constats qu elle retient
+    soient prouvables sans navigateur : c est le relevé qui décide, et un relevé s écrit.
+    """
+    from forge_tests.noyau import NonTestable
+    from forge_tests.qualification import declarer, detecter
+
+    # RT-16 : AVANT tout constat. Un pan qui n a pas pu établir l état qu il exige ne mesure pas
+    # le produit, il mesure son propre échec — le publier comme un défaut du produit fabrique un
+    # bloc de findings identiques, tous au même risque, qu il faut un audit entier pour démentir.
+    motif = precondition_absente(releve, config)
+    if motif is not None:
+        declarer(cible, "acces", CHAMPS_REQUIS_SESSION)
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            non_juge=[*non_juge, motif],
+            # L inventaire est NOMMÉ route par route — non mesurable, jamais « rien à voir ici ».
+            non_testables=[
+                NonTestable(
+                    element=f"qualif:route:{page_vue['route']}",
+                    champs_requis=list(CHAMPS_REQUIS_SESSION),
+                    pan=PAN,
+                    motif=(
+                        f"qualif : {page_vue['route']} non mesurable — precondition du pan "
+                        "(session ouverte) non etablie ; aucun constat produit n en est tire"
+                    ),
+                )
+                for page_vue in releve
+            ],
+        )
 
     inventaire: list[str] = []
     exerces: list[str] = []
     findings: list[Finding] = []
     non_testables: list = []
-    from forge_tests.noyau import NonTestable
 
     for page_vue in releve:
         route = page_vue["route"]

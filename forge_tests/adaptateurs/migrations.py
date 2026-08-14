@@ -291,9 +291,21 @@ def analyser(cible: Path) -> SortieAdaptateur:
         haut = sans_commentaires(_sections(fichier)[0])
         # `DROP CONSTRAINT x` n ANNONCE pas x, il le retire : le compter serait accuser la
         # migration qui defait au lieu de celle qui promet.
-        annonces = set(re.findall(r"(?<!DROP )CONSTRAINT (\w+)", haut, re.IGNORECASE))
-        annonces |= set(re.findall(r"CREATE (?:UNIQUE )?INDEX (\w+)", haut, re.IGNORECASE))
-        annonces |= set(re.findall(r"CREATE TABLE (\w+)", haut, re.IGNORECASE))
+        # TF-0208 (RT-14) etendu a CE pan : `IF NOT EXISTS` doit etre CONSOMME avant de lire le
+        # nom, sinon l objet annonce s appelle « IF » — introuvable au schema, donc une
+        # divergence BLOQUANTE fabriquee. Le comble : c est ce pan qui EXIGE l idiome
+        # idempotent (aller/rejeu/retour), et c est lui qui le punissait. Meme fragment que
+        # `data._SI_EXISTE`, ecrit ici pour ne pas coupler deux adaptateurs.
+        si_existe = r"(?:IF\s+(?:NOT\s+)?EXISTS\s+)?"
+        annonces = set(
+            re.findall(rf"(?<!DROP )CONSTRAINT {si_existe}(\w+)", haut, re.IGNORECASE)
+        )
+        annonces |= set(
+            re.findall(rf"CREATE (?:UNIQUE )?INDEX {si_existe}(\w+)", haut, re.IGNORECASE)
+        )
+        annonces |= set(re.findall(rf"CREATE TABLE {si_existe}(\w+)", haut, re.IGNORECASE))
+        # « IF » n est jamais un nom d objet : si un motif le laisse encore passer, il ment.
+        annonces -= {"IF", "if"}
         for nom in sorted(annonces - presents):
             sortie.findings.append(
                 Finding(

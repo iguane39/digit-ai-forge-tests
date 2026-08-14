@@ -62,6 +62,8 @@ def collecter() -> list[dict]:
     from forge_tests import (
         actions,
         adoption,
+        declarations,
+        declencheurs,
         execution,
         generateur,
         generateur_data,
@@ -88,6 +90,8 @@ def collecter() -> list[dict]:
         ("reprise", list(reprise.NON_JUGE)),
         ("actions", list(actions.NON_JUGE)),
         ("adoption", list(adoption.NON_JUGE)),
+        ("declarations", list(declarations.NON_JUGE)),
+        ("declencheurs", list(declencheurs.NON_JUGE)),
         ("cahiers", list(cahiers.NON_JUGE)),
         ("jeux-de-donnees", list(jeux.NON_JUGE)),
         ("exigences", list(exigences.NON_JUGE)),
