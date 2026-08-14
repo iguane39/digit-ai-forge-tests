@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from forge_tests import seuils
-from forge_tests.disposition import motif_indetermine, paquet_sources
+from forge_tests.disposition import motif_indetermine, paquet_sources, racine_execution
 from forge_tests.execution import resume_fichiers
 from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
@@ -364,6 +364,13 @@ def _purger_bytecode(racine: Path) -> None:
         shutil.rmtree(cache, ignore_errors=True)
 
 
+class InterpreteurInutilisable(RuntimeError):
+    """Le python désigné existe mais ne s exécute pas — venv d un autre système, lien mort,
+    fichier tronqué. TF-0216 : sans cette classe, l `OSError` remontait jusqu au noyau, qui
+    sortait en exit 2 et perdait le rapport ENTIER. Un interpréteur injouable rend un pan non
+    mesurable, il ne fait pas perdre les onze autres."""
+
+
 def _suite_verte(racine: Path, python: Path) -> bool:
     _purger_bytecode(racine)
     resultat = subprocess.run(
@@ -380,6 +387,18 @@ def _suite_verte(racine: Path, python: Path) -> bool:
         env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
     )
     return resultat.returncode == 0
+
+
+def _suite_verte_ou_injouable(racine: Path, python: Path) -> bool:
+    """`_suite_verte`, mais un interpréteur qui refuse de démarrer se DÉCLARE au lieu de lever."""
+    try:
+        return _suite_verte(racine, python)
+    except OSError as erreur:  # WinError 193, ENOEXEC, permission refusée…
+        raise InterpreteurInutilisable(
+            f"l interpréteur « {python} » existe mais ne s exécute pas sur ce système "
+            f"({type(erreur).__name__}: {erreur}) — venv construit ailleurs, lien mort ou "
+            "binaire tronqué. Recréer l environnement virtuel du projet, puis rejouer"
+        ) from erreur
 
 
 def _entier_env(nom: str, defaut: int) -> int:
@@ -515,7 +534,12 @@ def _findings_modules(dossier: Path, inventaire: list[dict]) -> list[Finding]:
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
-    racine = cible / "backend"
+    # TF-0216 (RT-2, lot COMPTA) : la racine d exécution est DÉCOUVERTE, plus ancrée en dur sur
+    # `backend\`. Laisser l ancre ici pendant que `paquet_sources` suit la racine découverte
+    # faisait diverger les deux sur un projet à racine plate : `source.relative_to(racine)`
+    # levait, le noyau rattrapait tout en exit 2, et le rapport ENTIER était perdu — strictement
+    # pire que le SKIP d avant. Un correctif qui aggrave le cas qu il vise n en est pas un.
+    racine = racine_execution(cible)
     dossier = paquet_sources(cible)
     python = racine / ".venv" / "Scripts" / "python.exe"
     if not python.exists():
@@ -609,7 +633,19 @@ def analyser(cible: Path) -> SortieAdaptateur:
         libelle=f"mutation de {cible.name} ({len(plan)} mutants)",
     )
     try:
-        if not _suite_verte(racine, python):
+        try:
+            verte = _suite_verte_ou_injouable(racine, python)
+        except InterpreteurInutilisable as injouable:
+            # TF-0216 : ce pan devient non mesurable, les onze autres restent mesurés.
+            inventaire = _inventaire_modules(racine, retenus, exclus, couverture, {})
+            av.final()
+            return SortieAdaptateur(
+                NOM, PAN, str(cible), "SKIP",
+                findings=_findings_modules(dossier, inventaire),
+                non_juge=[*non_juge, f"back : interpréteur injouable — {injouable}"],
+                modules=inventaire,
+            )
+        if not verte:
             inventaire = _inventaire_modules(racine, retenus, exclus, couverture, {})
             av.final()
             return SortieAdaptateur(

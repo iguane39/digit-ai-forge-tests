@@ -30,7 +30,9 @@ NOM, PAN = "visuel-golden", "visuel"
 POUR_COUVRIR = (
     "servir le front pour que chaque route soit capturable, puis ACCEPTER les goldens hors "
     "boucle (`--accepter`) : aucun golden n'est créé pendant un run, un rendu qui vient "
-    "d'échouer ne s'entérine pas tout seul"
+    "d'échouer ne s'entérine pas tout seul. Application rendue CÔTÉ SERVEUR : déclarer ses "
+    "routes par FORGE_TESTS_QUALIF_ROUTES, sans quoi elles sont relevées sur les liens de la "
+    "racine servie (FORGE_TESTS_BASE_URL)"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
@@ -62,9 +64,17 @@ NON_JUGE = [
 
 
 def _routes(cible: Path) -> list[str]:
-    from forge_tests.adaptateurs.front import inventaire
+    """TF-0217 — MÊME découverte que le pan accessibilité, jamais une seconde définition.
 
-    return [e.id.split(":", 1)[1] for e in inventaire(cible) if e.id.startswith("route:")]
+    Ce pan lisait, comme lui, le seul inventaire de `front.py` : sur une application rendue côté
+    serveur (gabarits Jinja servis par le backend), « aucune route à capturer » alors que
+    l instance était servie et déjà parcourue. La découverte partagée (`routes_a_auditer`) lit
+    les sources front, puis la déclaration du projet, puis les liens de l instance servie. La
+    dépendance existait déjà — ce module importe `_capturer` du même endroit.
+    """
+    from forge_tests.adaptateurs.accessibilite import routes_a_auditer
+
+    return routes_a_auditer(cible)[0]
 
 
 def capturer(cible: Path) -> dict[str, Path]:
@@ -137,10 +147,13 @@ def semer_goldens(reference: Path, cibles: list[Path]) -> int:
 
 
 def inventaire(cible: Path) -> list[Element]:
-    source = str(cible / "frontend" / "src" / "routes.jsx")
+    from forge_tests.adaptateurs.accessibilite import provenance_des_routes, source_des_routes
+
+    routes = _routes(cible)
+    source = source_des_routes(cible, provenance_des_routes(cible))
     return [
         Element(f"visuel:{route}", PAN, f"rendu de la route {route}", source)
-        for route in _routes(cible)
+        for route in routes
     ]
 
 
@@ -150,10 +163,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # le navigateur d etre en cause, alors que les trois etaient presents. La cause CONSTATEE
     # (aucune route a capturer) et la cause d echec de service ne sont pas la meme et n appellent
     # pas le meme travail.
+    # TF-0217 : « aucune route » se dédouble à son tour. Sur un projet qui ne rend RIEN (ni
+    # `frontend\`, ni instance servie, ni route déclarée), il n y a pas de rendu à comparer : le
+    # pan est SANS OBJET (NA), pas non mesurable. Dès qu une instance est servie, l absence de
+    # route reste un SKIP — quelque chose existe que le pan n a pas su énumérer.
+    from forge_tests.adaptateurs.accessibilite import verdict_sans_route
+
     if not _routes(cible):
-        return SortieAdaptateur(
-            NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, "aucune route a capturer"]
-        )
+        return verdict_sans_route(NOM, PAN, cible, NON_JUGE)
     captures = capturer(cible)
     if not captures:
         return SortieAdaptateur(

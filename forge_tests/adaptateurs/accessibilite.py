@@ -30,7 +30,9 @@ NOM, PAN = "accessibilite-a11y", "accessibilite"
 POUR_COUVRIR = (
     "servir le front (build présent et `npm`/navigateur disponibles) ou déclarer l'instance "
     "SERVIE dans FORGE_TESTS_BASE_URL : le pan juge le DOM RENDU de chaque route, il n'a rien "
-    "à lire tant qu'aucune page n'est rendue"
+    "à lire tant qu'aucune page n'est rendue. Application rendue CÔTÉ SERVEUR (gabarits Jinja, "
+    "Django, Rails : aucune table de routage sous `frontend/src`) : déclarer ses routes par "
+    "FORGE_TESTS_QUALIF_ROUTES — à défaut elles sont relevées sur les liens de la racine servie"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
@@ -61,6 +63,9 @@ NON_JUGE = [
     "page publique — le nombre de PAGES DISTINCTES rendues le dit au rapport",
     "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni "
     "contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
+    "accessibilite : les routes RELEVEES sur l instance servie sont celles que la racine LIE — "
+    "une page atteinte seulement apres une action (formulaire poste, menu ouvert) ou par une URL "
+    "que rien ne lie n y figure pas ; la declarer par FORGE_TESTS_QUALIF_ROUTES (TF-0217)",
 ]
 
 
@@ -92,10 +97,244 @@ def _tuer_arbre(processus: subprocess.Popen) -> None:
         processus.kill()
 
 
-def _routes(cible: Path) -> list[str]:
+# --- Découverte des routes : le POINT DE PARTAGE (TF-0217) ------------------------------------
+#
+# RT-3 (lot COMPTA, 14/08) : ce pan et le pan `visuel` lisaient UNIQUEMENT l inventaire de
+# `front.py`, qui cherche `frontend/src/routes.jsx`, la convention TanStack ou `<Route path=…>`.
+# Sur une application servie par son backend (FastAPI + gabarits Jinja), aucun de ces trois
+# chemins n existe : « aucune route » — alors que `FORGE_TESTS_BASE_URL` était servie et que le
+# pan `qualif` venait d y parcourir 33 puis 42 éléments. Deux pans perdus pour toute application
+# rendue côté serveur, sur une instance pourtant déjà parcourue.
+#
+# La découverte vit ICI, en fonction unique et publique, et `visuel` l appelle — il importait
+# déjà `_capturer` de ce module. Le sens de la dépendance est inchangé (`visuel` → `accessibilite`
+# → `front`), et l ajout `accessibilite` → `qualif` ne referme aucun cycle : `qualif` n importe ni
+# l un ni l autre. Rien n est recopié de `qualif` : la normalisation d un href en route interne et
+# le JS de relevé des liens sont RÉUTILISÉS tels quels, pour qu une seule définition de « route
+# interne » existe dans le framework.
+PROVENANCE_FRONT = "sources du front"
+PROVENANCE_DECLAREE = "déclaration du projet (FORGE_TESTS_QUALIF_ROUTES)"
+PROVENANCE_SERVIE = "parcours de l instance servie (FORGE_TESTS_BASE_URL)"
+
+# Le champ par lequel un projet DÉCLARE ses routes. C est celui du pan `qualif`, à dessein : un
+# projet ne renseigne pas deux listes pour la même application.
+CHAMP_ROUTES = "FORGE_TESTS_QUALIF_ROUTES"
+# Découverte bornée : la page racine et ses liens. Le parcours EXHAUSTIF est le métier du pan
+# `qualif` ; ici il ne s agit que de savoir QUOI rendre, et une nef de liens suffit à le dire.
+PLAFOND_DECOUVERTE = 40
+
+
+def _base_servie(cible: Path) -> str:
+    """URL de l instance que CE pan capturera, ou "" — `FORGE_TESTS_BASE_URL`, et elle seule.
+
+    Volontairement pas de repli sur `FORGE_TESTS_QUALIF_URL` : `_capturer` ne sait servir que
+    `BASE_URL`. Découvrir les routes d une instance et rendre celles d une autre produirait un
+    audit qui ne porte sur rien.
+    """
+    from forge_tests.authentification import charger_env
+
+    charger_env(cible)
+    base = (os.environ.get("FORGE_TESTS_BASE_URL") or "").strip().rstrip("/")
+    return base
+
+
+def _routes_declarees(cible: Path) -> list[str]:
+    """Routes que le PROJET déclare, dans l ordre déclaré. Toute route est ramenée à `/…`."""
+    from forge_tests.authentification import charger_env
+
+    charger_env(cible)
+    brut = (os.environ.get(CHAMP_ROUTES) or "").split(",")
+    routes: list[str] = []
+    for morceau in brut:
+        route = morceau.strip()
+        if not route:
+            continue
+        route = route if route.startswith("/") else f"/{route}"
+        if route not in routes:
+            routes.append(route)
+    return routes
+
+
+def _routes_depuis_liens(hrefs: list[str], base: str) -> list[str]:
+    """Liens relevés dans une page -> routes internes, dédupliquées et triées.
+
+    Fonction PURE : c est elle qui rend la découverte servie vérifiable sans navigateur. La
+    normalisation est celle du pan `qualif` (`_route`) — externe, `mailto:`, ancre et requête
+    sont écartés là-bas, une seule fois pour tout le framework.
+    """
+    from forge_tests.adaptateurs.qualif import _route
+
+    routes = {"/"}
+    for href in hrefs:
+        interne = _route(href or "", base)
+        if interne is not None:
+            routes.add(interne)
+    return sorted(routes)[:PLAFOND_DECOUVERTE]
+
+
+def _relever_liens(page, base: str) -> list[str] | None:  # noqa: ANN001
+    """Liens de la racine, ou None si la RACINE ELLE-MÊME n a pas été atteinte. Ne lève jamais.
+
+    La distinction porte une décision : racine atteinte sans aucun lien = une route (`/`), et
+    elle mérite d être auditée ; racine INJOIGNABLE = aucune route, et le pan doit alors dire
+    qu il n a rien pu découvrir plutôt que d inventer un `/` qui ne répond pas.
+    """
+    from forge_tests.adaptateurs.qualif import _JS_LIENS
+
+    try:
+        page.goto(f"{base}/", wait_until="networkidle", timeout=45000)
+    except Exception:  # noqa: BLE001 — une instance injoignable est un CONSTAT, pas une panne
+        return None
+    try:
+        return list(page.evaluate(_JS_LIENS) or [])
+    except Exception:  # noqa: BLE001 — page rendue mais liens illisibles : la racine reste une route
+        return []
+
+
+def _parcourir_racine(cible: Path, base: str) -> list[str]:
+    """Ouvre un navigateur, relève la racine, rend ses routes. [] si rien n est possible.
+
+    Le jeton est posé s il est configuré, exactement comme pour la capture : sans lui, la racine
+    d une application protégée ne montre que les liens de la mire.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return []
+    from forge_tests.authentification import obtenir_jeton, script_injection
+
+    jeton = obtenir_jeton(cible)
+    with sync_playwright() as pw:
+        navigateur = pw.chromium.launch()
+        contexte = navigateur.new_context()
+        if jeton:
+            contexte.add_init_script(script_injection(jeton))
+        liens = _relever_liens(contexte.new_page(), base)
+        routes = [] if liens is None else _routes_depuis_liens(liens, base)
+        navigateur.close()
+    return routes
+
+
+# Mémoire du parcours, par (cible, instance). Un audit ouvre l inventaire PLUSIEURS fois — pan
+# accessibilité, pan visuel, dérivation des livrables — et la découverte servie coûte un
+# navigateur à chaque appel, là où la lecture d un `routes.jsx` était gratuite. Les routes d une
+# instance ne changent pas pendant un run : elles se relèvent une fois. La clé porte la cible ET
+# l URL, pour que deux projets audités dans le même processus ne se prêtent jamais leurs routes.
+_PARCOURS_MEMOIRE: dict[tuple[str, str], list[str]] = {}
+
+
+def _routes_servies(cible: Path, base: str, page=None) -> list[str]:  # noqa: ANN001
+    """Routes découvertes SUR l instance servie. `page` injectable : la mécanique est testable.
+
+    Avec `page`, rien n est mémorisé : l appelant fournit le banc, il en maîtrise le contenu.
+    """
+    if page is not None:
+        liens = _relever_liens(page, base)
+        return [] if liens is None else _routes_depuis_liens(liens, base)
+    cle = (str(cible), base)
+    if cle not in _PARCOURS_MEMOIRE:
+        _PARCOURS_MEMOIRE[cle] = _parcourir_racine(cible, base)
+    return list(_PARCOURS_MEMOIRE[cle])
+
+
+def _routes_du_front(cible: Path) -> list[str]:
     from forge_tests.adaptateurs.front import inventaire
 
     return [e.id.split(":", 1)[1] for e in inventaire(cible) if e.id.startswith("route:")]
+
+
+def provenance_des_routes(cible: Path) -> str:
+    """QUELLE source fournira les routes de ce projet — sans rien parcourir.
+
+    L ordre des trois sources est écrit ICI et nulle part ailleurs, pour que la liste et son
+    étiquette ne puissent pas diverger :
+
+    1. **sources du front** — la table de routage du code (`front.inventaire`). Elle prime :
+       c est la déclaration la plus proche du produit, et elle ne coûte rien ;
+    2. **déclaration du projet** — `FORGE_TESTS_QUALIF_ROUTES`, quand aucune source front ne
+       porte de routes (application rendue côté serveur, gabarits Jinja) ;
+    3. **parcours de l instance servie** — les liens de la racine de `FORGE_TESTS_BASE_URL`.
+    """
+    if _routes_du_front(cible):
+        return PROVENANCE_FRONT
+    if _routes_declarees(cible):
+        return PROVENANCE_DECLAREE
+    if _base_servie(cible):
+        return PROVENANCE_SERVIE
+    return ""
+
+
+def routes_a_auditer(cible: Path) -> tuple[list[str], str]:
+    """(routes à rendre, PROVENANCE de la liste) — la découverte partagée par les deux pans.
+
+    La provenance est rendue avec la liste, et publiée au rapport : « 12 routes » ne veut pas
+    dire la même chose selon qu elles sont lues dans le code, déclarées par le projet ou
+    relevées sur une instance servie. Un parcours qui ne trouve rien ne rend PAS
+    `PROVENANCE_SERVIE` avec une liste vide : sans route, il n y a pas de provenance.
+    """
+    provenance = provenance_des_routes(cible)
+    if provenance == PROVENANCE_FRONT:
+        return _routes_du_front(cible), provenance
+    if provenance == PROVENANCE_DECLAREE:
+        return _routes_declarees(cible), provenance
+    if provenance == PROVENANCE_SERVIE:
+        servies = _routes_servies(cible, _base_servie(cible))
+        return (servies, provenance) if servies else ([], "")
+    return [], ""
+
+
+# Ce qui atteste qu on regarde un PROJET, et non un dossier vide ou une cible mal désignée.
+# Volontairement borné à deux niveaux : il ne s agit pas d inventorier, seulement de constater
+# qu il y a du code ici.
+_MANIFESTES = (
+    "pyproject.toml", "setup.py", "requirements.txt", "package.json", "go.mod", "Gemfile",
+    "pom.xml", "build.gradle", "Cargo.toml", "composer.json",
+)
+_SOURCES = ("*.py", "*.js", "*.ts", "*.jsx", "*.tsx", "*.rb", "*.go", "*.php", "*.java")
+
+
+def _code_visible(cible: Path) -> bool:
+    """Le projet montre-t-il du code à cet emplacement ?"""
+    if any((cible / manifeste).is_file() for manifeste in _MANIFESTES):
+        return True
+    return any(
+        next(cible.glob(motif), None) is not None
+        or next(cible.glob(f"*/{motif}"), None) is not None
+        for motif in _SOURCES
+    )
+
+
+def sans_objet(cible: Path) -> str | None:
+    """PREUVE POSITIVE qu il n y a AUCUNE page à rendre — pas une supposition (TF-0217).
+
+    Le choix, déclaré : **NA quand rien ne PEUT rendre une page, SKIP quand quelque chose le
+    pourrait et que la liste reste vide.** Un lot batch, une bibliothèque, une API sans gabarit
+    n ont ni accessibilité ni rendu : ce n est pas un trou de mesure, c est l absence du sujet.
+    Mais dès qu une instance est SERVIE (ou qu un `frontend\\` existe), il y a bien quelque chose
+    à auditer : n avoir rien su énumérer est alors un NON MESURABLE, qui doit rester un manque
+    visible — et se répare en déclarant `FORGE_TESTS_QUALIF_ROUTES`.
+
+    Troisième condition, celle qui empêche NA de devenir un vert de complaisance : le projet doit
+    MONTRER du code ici. Un dossier vide — cible mal désignée, sources ailleurs (le cas d une
+    racine plate mal ancrée) — ne prouve pas qu il n y a rien à rendre : il prouve qu on n a rien
+    regardé. Ce cas reste un SKIP, exactement comme l inventaire vide du noyau.
+    """
+    if (cible / "frontend").is_dir():
+        return None
+    if _base_servie(cible):
+        return None
+    if _routes_declarees(cible):
+        return None
+    if not _code_visible(cible):
+        return None
+    return (
+        "aucun dossier `frontend\\`, aucune instance servie (FORGE_TESTS_BASE_URL) et aucune "
+        "route déclarée (FORGE_TESTS_QUALIF_ROUTES) : ce projet ne rend aucune page"
+    )
+
+
+def _routes(cible: Path) -> list[str]:
+    return routes_a_auditer(cible)[0]
 
 
 _PARAM = re.compile(r":([A-Za-z_][A-Za-z0-9_]*)")
@@ -280,19 +519,73 @@ def _juger(capture: Path) -> dict | None:
         return None
 
 
+def source_des_routes(cible: Path, provenance: str) -> str:
+    """D OÙ vient la liste, dit dans le vocabulaire du lecteur du rapport (TF-0217).
+
+    Publier `frontend/src/routes.jsx` pour une application à gabarits Jinja désignait un fichier
+    qui n existe pas : le constat devenait invérifiable.
+    """
+    if provenance == PROVENANCE_FRONT:
+        return str(cible / "frontend" / "src" / "routes.jsx")
+    if provenance == PROVENANCE_DECLAREE:
+        return CHAMP_ROUTES
+    if provenance == PROVENANCE_SERVIE:
+        return _base_servie(cible) or str(cible)
+    return str(cible)
+
+
+def verdict_sans_route(
+    nom: str, pan: str, cible: Path, non_juge: list[str]
+) -> SortieAdaptateur:
+    """Sortie des deux pans quand AUCUNE route n a été découverte — NA ou SKIP, jamais au hasard.
+
+    Le même arbitrage sert `accessibilite` et `visuel` : deux pans qui regardent la même surface
+    ne peuvent pas conclure différemment sur son existence.
+    """
+    motif = sans_objet(cible)
+    if motif:
+        # Le motif est le DERNIER `non_juge` : c est celui que le rapport publie en
+        # `pans_sans_objet` (`noyau.rapport`), comme le fait `evaluer_surface`.
+        return SortieAdaptateur(
+            nom, pan, str(cible), "NA",
+            non_juge=[*non_juge, f"{pan} : SANS OBJET sur ce projet — {motif}"],
+        )
+    return SortieAdaptateur(
+        nom, pan, str(cible), "SKIP",
+        non_juge=[
+            *non_juge,
+            f"{pan} : aucune route découverte — ni table de routage sous `frontend\\src`, ni "
+            f"`{CHAMP_ROUTES}`, ni lien relevé sur l instance servie. Une application rendue "
+            f"côté serveur déclare ses routes par `{CHAMP_ROUTES}` (le champ du pan qualif), "
+            "puis `--reprendre` le rapport",
+        ],
+    )
+
+
 def inventaire(cible: Path) -> list[Element]:
     """Une route = un artefact a auditer."""
-    source = str(cible / "frontend" / "src" / "routes.jsx")
+    routes = _routes(cible)
+    source = source_des_routes(cible, provenance_des_routes(cible))
     return [
         Element(f"a11y:{route}", PAN, f"accessibilite de la route {route}", source)
-        for route in _routes(cible)
+        for route in routes
     ]
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
+    # `_routes` reste le point d entrée (et le point d injection des tests de TF-0122) ; la
+    # provenance se relit à côté, sans reparcourir quoi que ce soit.
     routes = _routes(cible)
     if not routes:
-        return SortieAdaptateur(NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, "aucune route"])
+        return verdict_sans_route(NOM, PAN, cible, NON_JUGE)
+    provenance = provenance_des_routes(cible)
+    # La provenance est PUBLIÉE : « 12 routes » ne dit pas la même chose selon qu elles sont
+    # lues dans le code, déclarées par le projet, ou relevées sur l instance servie.
+    socle = [
+        *NON_JUGE,
+        f"accessibilite : {len(routes)} route(s) a auditer — provenance : "
+        + (provenance or "inventaire fourni a l adaptateur"),
+    ]
     with tempfile.TemporaryDirectory() as temporaire:
         captures, motifs_ecartees = _capturer(cible, routes, Path(temporaire))
         # TF-0122 : `motifs_ecartees` NOMME chaque route ecartee (joker non concretisable) ou
@@ -302,10 +595,10 @@ def analyser(cible: Path) -> SortieAdaptateur:
         if not captures and not motifs_ecartees:
             return SortieAdaptateur(
                 NOM, PAN, str(cible), "SKIP",
-                non_juge=[*NON_JUGE, "front non servi : build absent, npm ou navigateur manquant"],
+                non_juge=[*socle, "front non servi : build absent, npm ou navigateur manquant"],
             )
         findings: list[Finding] = []
-        non_juge = [*NON_JUGE, *motifs_ecartees]
+        non_juge = [*socle, *motifs_ecartees]
         audites: list[str] = []
         for route, capture in captures.items():
             rapport = _juger(capture)
