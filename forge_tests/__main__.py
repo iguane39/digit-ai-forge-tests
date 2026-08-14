@@ -122,16 +122,52 @@ def _resume(rap: dict) -> str:
             if len(elements) > 3:
                 lignes.append(f"        ... et {len(elements) - 3} autre(s)")
     bandes = rap["bandes_de_risque"]
+    # RT-18 : un constat DÉCLARÉ par le projet (contesté avec contre-preuve, bloqué par
+    # configuration ou par du code supplanté) reste au rapport et sort du décompte principal.
+    # Les deux nombres sont donnés côte à côte : un décompte qui baisserait sans dire pourquoi
+    # serait exactement l inverse de ce que la déclaration existe pour rendre lisible.
+    from forge_tests.declarations import est_ecarte
+
+    opposables = [f for f in rap["findings"] if not est_ecarte(f)]
+    ecartes = [f for f in rap["findings"] if est_ecarte(f)]
     lignes.append("")
     lignes.append(
-        f"findings nommés : {len(rap['findings'])}  "
+        f"findings nommés : {len(opposables)}  "
         f"(critique {bandes['critique']} · standard {bandes['standard']} · "
         f"différé {bandes['differe']} · non coté {bandes['non_cote']})"
     )
-    if rap["findings"]:
+    declarations = rap.get("declarations") or {}
+    compte = declarations.get("compte") or {}
+    if declarations:
+        lignes.append(
+            f"constats déclarés par le projet ({declarations.get('fichier')}) : "
+            f"{compte.get('constats_ecartes', 0)} écarté(s) du décompte · "
+            f"{compte.get('refusee', 0)} déclaration(s) REFUSÉE(S) · "
+            f"{compte.get('perimee', 0)} périmée(s) · "
+            f"{compte.get('inconnues', 0)} sans constat correspondant"
+        )
+        for entree in declarations.get("entrees") or []:
+            if entree.get("statut") in ("refusee", "perimee"):
+                lignes.append(
+                    f"  DECLARATION {entree['statut'].upper():<8} {entree.get('constat') or '?'}"
+                    f" — {entree.get('motif_du_refus')}"
+                )
+    if ecartes:
+        lignes.append("")
+        lignes.append(
+            "écartés du décompte, TOUJOURS mesurés — motif typé et contre-preuve en regard :"
+        )
+        for f in ecartes[:8]:
+            declaration = f.get("declaration") or {}
+            lignes.append(
+                f"  {f['id']} — {declaration.get('motif')} · preuve "
+                f"{declaration.get('preuve')} · déclaré par {declaration.get('par')} le "
+                f"{declaration.get('date')}"
+            )
+    if opposables:
         lignes.append("")
         lignes.append("les plus risqués")
-        for f in rap["findings"][:8]:
+        for f in opposables[:8]:
             cote = f"{f['risque']:>3}" if f["risque"] is not None else "  -"
             lignes.append(f"  risque {cote}  {f['id']}")
     return "\n".join(lignes)
@@ -231,6 +267,13 @@ def main(argv: list[str] | None = None) -> int:
             from forge_tests.reprise import charger, fusionner, pans_a_rejouer
 
             ancien = charger(args.reprendre)
+            # RT-18 : un rapport antérieur peut avoir été produit AVEC les déclarations du
+            # projet appliquées. Réintégrer avant de fusionner, c est repartir de la mesure
+            # entière : sinon une déclaration retirée entre deux runs ne rendrait jamais son
+            # constat, et la reprise croirait le pan vert.
+            from forge_tests.declarations import reintegrer
+
+            reintegrer(ancien)
             rejoues = pans_a_rejouer(ancien)
             if args.pans is not None:
                 rejoues = [p for p in rejoues if p in args.pans]
@@ -247,6 +290,12 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             rap = analyser(args.cible.resolve(), args.pans)
+        # RT-18 — point d application UNIQUE des déclarations du projet, APRÈS la fusion de
+        # `--reprendre` comme après un audit complet : le rapport publié et les livrables qui
+        # en dérivent lisent donc le même décompte. Lecture seule chez l audité (G-1).
+        from forge_tests.declarations import appliquer as appliquer_declarations
+
+        appliquer_declarations(rap, args.cible.resolve())
         if args.generer is not None:
             from forge_tests.execution import schema_openapi
             from forge_tests.generateur import ecrire

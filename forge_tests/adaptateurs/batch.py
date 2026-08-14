@@ -167,6 +167,24 @@ def exerces(cible: Path) -> set[str] | None:
     return couvert
 
 
+def sans_objet(cible: Path) -> str | None:
+    """PREUVE d absence de traitement par lot (NA, 14/08) — pas une supposition.
+
+    Un produit purement interactif n a pas de lot. Ne pas en avoir n est pas un défaut de lot.
+    La garde reste stricte : s il existe un module de lot OU un déclencheur, le pan n est PAS
+    sans objet — même à inventaire vide, il y a alors quelque chose que l adaptateur n a pas su
+    lire, et c est un SKIP, pas un NA.
+    """
+    if _sources(cible):
+        return None
+    if _declencheurs.inventorier(cible):
+        return None
+    return (
+        "aucun module de traitement par lot (`batch.py`, `worker\\`) et aucun déclencheur "
+        "(cron, timer, tâche de file) : ce projet n a pas de lot à enclencher"
+    )
+
+
 def _findings_declencheurs(cible: Path) -> list[Finding]:
     """Constats propres aux déclencheurs (TF-0203) — hors du calcul de surface.
 
@@ -213,6 +231,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     sortie = evaluer_surface(
         NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL,
         [*NON_JUGE, *_declencheurs.NON_JUGE],
+        sans_objet=sans_objet(cible),
     )
     if findings_triggers:
         sortie.findings = [*findings_triggers, *sortie.findings]

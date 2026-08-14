@@ -34,11 +34,37 @@ CHAPITRES = (
      "decoupe": "table", "axe_cas": "unitaire"},
 )
 
-_TABLE = re.compile(r"CREATE TABLE (\w+)\s*\(", re.IGNORECASE)
-_CONTRAINTE = re.compile(r"CONSTRAINT (\w+)", re.IGNORECASE)
+# RT-14 (TF-0208) : le mot qui suit le mot-cle n est PAS toujours le nom de l objet. Les formes
+# idempotentes `IF EXISTS` / `IF NOT EXISTS` s intercalent, et l inventaire retenait `IF` — une
+# contrainte FANTOME, introuvable dans la base, donc « jamais exercee », cotee bloquante et
+# impossible a satisfaire autrement qu en fabriquant une contrainte inexistante (G-2 : refuse).
+#
+# Le conflit etait INTERNE a la forge : le pan `migrations` EXIGE les trois sens (aller, rejeu,
+# retour), donc l idiome `DROP CONSTRAINT IF EXISTS <nom>; ADD CONSTRAINT <nom> …` ; le pan
+# `data` transformait ensuite cet idiome en defaut bloquant. Aucun projet ne pouvait satisfaire
+# les deux pans a la fois — un defaut de l auditeur, jamais de l audite.
+_SI_EXISTE = r"(?:IF\s+(?:NOT\s+)?EXISTS\s+)?"
+_TABLE = re.compile(rf"CREATE\s+TABLE\s+{_SI_EXISTE}(\w+)\s*\(", re.IGNORECASE)
+# `DROP CONSTRAINT x` n ANNONCE pas x, il le RETIRE : l inventorier fabriquerait un element que
+# rien ne peut plus violer. Meme regle, meme motif que `migrations.py` (`(?<!DROP )CONSTRAINT`).
+# Dans l idiome idempotent, c est l `ADD CONSTRAINT` qui suit qui porte l objet reellement cree.
+_CONTRAINTE = re.compile(
+    rf"(?:(DROP|ADD)\s+)?CONSTRAINT\s+{_SI_EXISTE}(\w+)", re.IGNORECASE
+)
 _NOT_NULL = re.compile(r"^\s*(\w+)\s+\w+\s+NOT NULL", re.IGNORECASE | re.MULTILINE)
-_INDEX = re.compile(r"CREATE (?:UNIQUE )?INDEX (\w+)", re.IGNORECASE)
-_TRIGGER = re.compile(r"CREATE TRIGGER (\w+)", re.IGNORECASE)
+_INDEX = re.compile(rf"CREATE\s+(?:UNIQUE\s+)?INDEX\s+{_SI_EXISTE}(\w+)", re.IGNORECASE)
+_TRIGGER = re.compile(rf"CREATE\s+TRIGGER\s+{_SI_EXISTE}(\w+)", re.IGNORECASE)
+
+
+def contraintes_declarees(texte: str) -> list[str]:
+    """Noms des contraintes qu un fragment SQL CREE, dans l ordre, sans les formes idempotentes.
+
+    Le texte est attendu DEJA nettoye de ses commentaires (`forge_tests.sql.sans_commentaires`) :
+    la ligne de commentaire qui cite `DROP CONSTRAINT IF EXISTS` — un en-tete de migration qui
+    documente son propre idiome — ne doit rien inventorier.
+    """
+    return [nom for verbe, nom in _CONTRAINTE.findall(texte) if verbe.upper() != "DROP"]
+
 
 _ORM_NOMMEE = re.compile(r"(?:UniqueConstraint|CheckConstraint|ForeignKey)\([^)]*name=\"(\w+)\"")
 _ORM_NOT_NULL = re.compile(r"^\s*(\w+)\s*=\s*Column\([^)]*nullable=False", re.MULTILINE)
@@ -129,7 +155,7 @@ def inventaire(cible: Path) -> list[Element]:
             if f"table:{table}" not in vus and not table.endswith(("_nouveau", "_ancien")):
                 vus.add(f"table:{table}")
                 elements.append(Element(f"table:{table}", PAN, f"table {table}", str(fichier)))
-        for nom in _CONTRAINTE.findall(haut):
+        for nom in contraintes_declarees(haut):
             if f"contrainte:{nom}" not in vus:
                 vus.add(f"contrainte:{nom}")
                 elements.append(

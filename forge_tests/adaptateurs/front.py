@@ -196,4 +196,21 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 + motif_indisponibilite(cible, "front", "suite e2e non executee"),
             ],
         )
-    return evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)
+    return evaluer_surface(
+        NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE, sans_objet=sans_objet(cible)
+    )
+
+
+def sans_objet(cible: Path) -> str | None:
+    """PREUVE d absence de périmètre front (NA, 14/08) — pas une supposition.
+
+    Un projet purement API, un lot batch, un outil en ligne de commande n ont pas de front :
+    leur absence de routes n est pas un trou de couverture, c est l absence du sujet. La preuve
+    est positive : le dossier que ce pan déclare lire n existe pas.
+    """
+    racine = _racine(cible)
+    if not racine.is_dir():
+        return "aucun dossier `frontend\\` : ce projet n a pas de front à parcourir"
+    if not (racine / "src").is_dir():
+        return "`frontend\\` présent mais aucun `src\\` : aucune source de routes à lire"
+    return None

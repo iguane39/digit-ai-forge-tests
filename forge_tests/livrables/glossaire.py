@@ -57,6 +57,13 @@ COMPTEURS: dict[str, tuple[str, str]] = {
         "Actions proposées",
         "suites à donner, classées : automatisable par l IA, développeur, ou vous",
     ),
+    # RT-18 (14/08) — identifiant GELÉ comme les autres (contrat §3 bis) : seule la couche
+    # d affichage vit ici. Un constat déclaré n est pas effacé, il est compté à part.
+    "declares": (
+        "Constats déclarés par le projet",
+        "constats contestés avec contre-preuve, ou bloqués par configuration/code supplanté — "
+        "sortis du décompte opposable, jamais du rapport",
+    ),
 }
 
 # --- États d un élément (clé = état du rapport, GELÉ — surface.ETATS) --------------------------

@@ -306,6 +306,30 @@ def inventaire(cible: Path) -> list[Element]:
     ]
 
 
+def sans_objet(cible: Path) -> str | None:
+    """PREUVE que ce projet n a pas de gabarits à lire (NA) — jamais une supposition.
+
+    RT-9-bis : sur quatre audits du même produit, l inventaire a fait 6 → 27 → 335 → 0 sans
+    qu une ligne de gabarit change. Les trois premiers chiffres venaient des ARTEFACTS
+    (corrigé par RT-9) ; le quatrième est la vérité — ce produit n a pas de gabarit serveur.
+    Le dire « non énumérable » accusait l adaptateur là où il n y a simplement rien.
+
+    Le critère est POSITIF et discriminant : aucun fichier de gabarit hors artefacts, ET des
+    sources de framework présentes (l interface est construite à l exécution). Sans la seconde
+    moitié, un projet dont on n aurait rien su lire passerait pour un projet sans interface.
+    """
+    if _fichiers(cible, EXTENSIONS):
+        return None
+    sources = _fichiers(cible, EXTENSIONS_JS)
+    if not sources:
+        return None  # ni gabarit ni source : on ne sait rien, ce n est pas un « sans objet »
+    return (
+        f"aucun gabarit ({', '.join(EXTENSIONS[:3])}…) hors artefacts, mais "
+        f"{len(sources)} source(s) de framework : l interface est construite à l exécution — "
+        "elle relève du pan `qualif`, qui la juge servie, pas d un gabarit statique"
+    )
+
+
 def analyser(cible: Path) -> SortieAdaptateur:
     releve, tronque = _relever(cible)
     non_juge = list(NON_JUGE)
@@ -315,6 +339,17 @@ def analyser(cible: Path) -> SortieAdaptateur:
             "pourrait etre declare inerte alors que son cablage vit dans la partie non lue"
         )
     if not releve:
+        motif_sans_objet = sans_objet(cible)
+        if motif_sans_objet:
+            # NA (14/08) : ce pan lit des GABARITS (HTML, Jinja, Twig…). Un produit dont
+            # l'interface est construite à l'exécution par un framework n'en a pas — et ne
+            # pas avoir de gabarit n'est pas un défaut de gabarit. C'est le cas de RT-9-bis :
+            # après l'exclusion des artefacts (RT-9), l'inventaire de ce produit est tombé à
+            # zéro, et « surface non énumérable » accusait à tort là où il n'y a rien.
+            return SortieAdaptateur(
+                NOM, PAN, str(cible), "NA",
+                non_juge=[*non_juge, f"interface : SANS OBJET sur ce projet — {motif_sans_objet}"],
+            )
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
             non_juge=[
