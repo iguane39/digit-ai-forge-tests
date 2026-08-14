@@ -30,6 +30,7 @@ from pathlib import Path
 
 from forge_tests.livrables import exigences as _exigences
 from forge_tests.livrables import jeux as _jeux
+from forge_tests.livrables import libelles as _libelles
 from forge_tests.livrables.nommage import empreinte, sceller
 
 NON_JUGE = [
@@ -76,44 +77,129 @@ def _non_couvert(element: dict) -> str | None:
     return None
 
 
-_ROUTE_DANS_ID = re.compile(r"^(?:qualif:)?(?:route|a11y|visuel):(?P<route>/\S*)$")
+_ROUTE_DANS_ID = re.compile(
+    r"^(?:qualif:)?(?:route|console|marqueur|a11y|visuel):(?P<route>/\S*)$"
+)
+_QUALIF_EFFET = re.compile(r"^qualif:effet:(?P<route>[^:]*):(?P<n>\d+):(?P<tag>\w+)$")
+
+
+def _contexte_element(identifiant: str) -> tuple[str, str, str]:
+    """(libellé humain, route, balise) — dérivés de la FORME de l'identifiant, sinon vides.
+
+    Retour humain du 14/08 : deux cas différents portaient exactement le même texte. Le cas
+    doit nommer SON élément et SON écran — toujours par dérivation, jamais par invention.
+    """
+    label = _libelles.libelle_element(identifiant)
+    effet = _QUALIF_EFFET.match(identifiant)
+    if effet:
+        return label or identifiant, effet["route"] or "/", effet["tag"]
+    route = _ROUTE_DANS_ID.match(identifiant)
+    if route:
+        return label or identifiant, route["route"], ""
+    return label or identifiant, "", ""
 
 
 def _ouverture(identifiant: str) -> str:
     """Premier geste d un cas d écran. Une route s ouvre ; un élément d écran se rejoint."""
-    trouve = _ROUTE_DANS_ID.match(identifiant)
-    if trouve:
-        return f"ouvrir la route « {trouve['route']} » avec l acteur du jeu de données"
+    label, route, tag = _contexte_element(identifiant)
+    if route and tag:
+        return (
+            f"ouvrir l'écran {route} avec l'acteur du jeu de données, puis repérer le "
+            f"{label} (« {identifiant} »)"
+        )
+    if route:
+        return f"ouvrir l'écran {route} avec l'acteur du jeu de données"
     return (
         f"ouvrir l écran du sous-chapitre avec l acteur du jeu de données, puis atteindre "
         f"« {identifiant} »"
     )
 
 
+def _geste_central(label: str, tag: str, etat: str) -> str | None:
+    """Le geste propre à l'élément — dérivé de sa balise. Un écran sans élément s'observe."""
+    if tag == "form":
+        return (
+            f"renseigner les champs du {label} avec les valeurs du jeu § {etat}, "
+            "puis le soumettre"
+        )
+    if tag in ("button", "summary"):
+        return f"activer le {label} (clic) et observer l'effet produit"
+    if tag == "a":
+        return f"suivre le {label} et observer la destination atteinte"
+    if tag in ("input", "select", "textarea"):
+        return f"saisir dans le {label} la valeur du jeu § {etat}, puis valider"
+    return None
+
+
+def _attendu_etat(etat: str, label: str, route: str, tag: str) -> str:
+    """Résultat attendu, contextualisé à l'élément et à l'écran — dégradations génériques
+    (doctrine du cahier), mais JAMAIS le même texte pour deux éléments différents."""
+    ecran = f"l'écran {route}" if route else "l'écran"
+    if etat == "nominal":
+        if tag == "form":
+            return (
+                f"la soumission du {label} aboutit : un effet est observable (requête émise, "
+                f"navigation ou confirmation) et {ecran} affiche les données du jeu ; aucune "
+                "erreur console, aucun 5xx"
+            )
+        if tag:
+            return (
+                f"l'activation du {label} produit son effet observable ; {ecran} affiche les "
+                "données du jeu ; aucune erreur console, aucun 5xx"
+            )
+        return f"{ecran} affiche les données du jeu ; aucune erreur console, aucun 5xx"
+    if etat == "vide":
+        return (
+            f"{ecran} affiche un état vide explicite (message ou zone dédiée), jamais une "
+            "page blanche ni une erreur"
+            + (f" ; le {label} reste utilisable ou explicitement désactivé" if tag else "")
+        )
+    if etat == "erreur":
+        return (
+            f"{ecran} affiche un message d'erreur lisible et reste utilisable ; aucune trace "
+            "technique n'est rendue à l'utilisateur"
+            + (f" ; la saisie du {label} n'est pas perdue" if tag == "form" else "")
+        )
+    return (
+        f"{ecran} affiche un indicateur d'attente ; aucune interaction destructrice n'est "
+        "possible pendant l'attente"
+        + (
+            f" ; un double envoi du {label} est impossible"
+            if tag in ("form", "button")
+            else ""
+        )
+    )
+
+
 def _cas_etats(element: dict, chapitre: dict, cle_jeu: str) -> list[dict]:
-    return [
-        {
-            "suffixe": etat,
-            "titre": f"{element['id']} — état {etat}",
-            "preconditions": _jeux._PRECONDITIONS[etat],
-            "jeu": f"{cle_jeu} § {etat}",
-            "etapes": [
-                _ouverture(element["id"]),
-                f"placer la dépendance dans l état « {etat} » selon les préconditions",
-                "observer le rendu, la console et le code de réponse",
-            ],
-            "attendu": {
-                "nominal": "l écran affiche les données du jeu ; aucune erreur console, aucun 5xx",
-                "vide": "l écran affiche un état vide explicite (message ou zone dédiée), "
-                "jamais une page blanche ni une erreur",
-                "erreur": "l écran affiche un message d erreur lisible et reste utilisable ; "
-                "aucune trace technique n est rendue à l utilisateur",
-                "chargement": "l écran affiche un indicateur d attente ; aucune interaction "
-                "destructrice n est possible pendant l attente",
-            }[etat],
-        }
-        for etat in _jeux.ETATS_FONCTIONNELS
-    ]
+    label, route, tag = _contexte_element(element["id"])
+    cas = []
+    for etat in _jeux.ETATS_FONCTIONNELS:
+        etapes = [
+            _ouverture(element["id"]),
+            f"placer la dépendance dans l état « {etat} » selon les préconditions",
+        ]
+        geste = _geste_central(label, tag, etat)
+        if geste:
+            etapes.append(geste)
+        etapes.append("observer le rendu, la console et le code de réponse")
+        attendu = _attendu_etat(etat, label, route, tag)
+        # Le constat DÉJÀ mesuré par l'audit est rappelé au cas nominal : le testeur sait
+        # qu'il vérifiera d'abord la correction d'un défaut connu, pas une hypothèse.
+        if etat == "nominal" and element.get("message"):
+            attendu += f" (constat mesuré lors de l'audit, à corriger d'abord : {element['message']})"
+        cas.append(
+            {
+                "suffixe": etat,
+                "titre": f"{label} — état {etat}",
+                "preconditions": _jeux._PRECONDITIONS[etat]
+                + (f" — écran cible : {route}" if route else ""),
+                "jeu": f"{cle_jeu} § {etat}",
+                "etapes": etapes,
+                "attendu": attendu,
+            }
+        )
+    return cas
 
 
 def _cas_rendu(element: dict, chapitre: dict, cle_jeu: str) -> list[dict]:

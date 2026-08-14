@@ -47,10 +47,18 @@ import html as _html
 import re
 from pathlib import Path
 
-from forge_tests.actions import CATEGORIES, ETAPES, repartition
+from forge_tests.actions import (
+    CATEGORIES,
+    ETAPES,
+    PREFIXE_NON_TESTABLE,
+    PREFIXE_PAN_NON_COUVERT,
+    repartition,
+)
 from forge_tests.livrables import glossaire as _glossaire
 from forge_tests.livrables import surface as _surface
 from forge_tests.livrables.jeux import _valeurs_de_configuration
+from forge_tests.livrables.libelles import libelle_element as _libelle_element
+from forge_tests.livrables.libelles import objectif_element as _objectif_element
 
 NON_JUGE = [
     "dashboard : la page rend le rapport, elle ne le juge pas — un chiffre surprenant se "
@@ -298,6 +306,31 @@ _STYLE = f"""
     .cas-carte ol {{ margin:.2em 0 .6em; padding-left:1.4em; }}
     .cas-ref {{ color:var(--muted); }}
     .outil-chapitre {{ margin:6px 0 10px; }}
+    /* Chapitres REPLIABLES (retour humain du 14/08) : chevron qui tourne, repli au choix
+       du lecteur — ouverts par défaut, le papier déplie tout. */
+    details.pli > summary {{ cursor:pointer; list-style:none; }}
+    details.pli > summary::-webkit-details-marker {{ display:none; }}
+    details.pli > summary h3 {{ display:flex; align-items:center; gap:10px; margin:0; }}
+    details.pli > summary .chevron {{ color:var(--blue); font-size:.85em;
+      transition:transform .15s ease; transform:rotate(-90deg); }}
+    details.pli[open] > summary .chevron {{ transform:none; }}
+    details.pli > summary:hover h3 {{ color:var(--blue); }}
+    .pli-commandes {{ margin:10px 0 0; }}
+    /* KPIs d'état par chapitre (retour humain du 14/08) : compteurs cliquables qui filtrent
+       les tables du chapitre. Habillés sur les mêmes pastilles que les badges d'état. */
+    .kpis-chapitre {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 10px; }}
+    .kpi-etat {{ font:inherit; font-size:.84rem; font-weight:700; border-radius:999px;
+      border:1px solid var(--line); padding:4px 13px; cursor:pointer; }}
+    .kpi-etat[aria-pressed="true"] {{ outline:2px solid var(--blue); outline-offset:1px; }}
+    .kpi-etat:focus-visible {{ outline:3px solid var(--blue); outline-offset:2px; }}
+    /* Colonne « objectif du test » : lisible mais discrète — la donnée d'abord. */
+    .objectif {{ font-size:.84rem; color:var(--muted); }}
+    /* Actions structurées Quoi / Pourquoi / Vous obtiendrez (retour humain du 14/08). */
+    .actions-vous > li {{ margin:0 0 14px; }}
+    .actions-vous .a-quoi, .actions-vous .a-pourquoi, .actions-vous .a-obtenu {{
+      display:block; margin:2px 0; }}
+    .actions-vous .a-pourquoi, .actions-vous .a-obtenu {{ color:var(--muted);
+      font-size:.92em; }}
     .discret {{ color:var(--muted); font-size:.86rem; }}
     .lien-chapitre {{ font:inherit; color:var(--blue); background:none; border:none;
       cursor:pointer; text-align:left; padding:0; text-decoration:underline; }}
@@ -326,7 +359,8 @@ _STYLE = f"""
       :root, :root[data-theme="sombre"] {{{_TOKENS_CLAIRS}}}
       body {{ background:#FFFFFF; }}
       .wrap {{ max-width:none; padding:0; }}
-      nav.onglets, .filtres, .theme-toggle, .outillage, .tuile-va {{ display:none; }}
+      nav.onglets, .filtres, .theme-toggle, .outillage, .tuile-va,
+      .kpis-chapitre {{ display:none; }}
       .panneau {{ display:block !important; page-break-before:always; }}
       .card, .tuile, tr {{ break-inside:avoid; page-break-inside:avoid; }}
       /* Le papier montre tout : aucun filtre écran ne masque une ligne à l impression,
@@ -357,7 +391,7 @@ _SCRIPT = """
   // colonne) reste indépendant via display/data-tf-hidden, et compose de fait.
   function majVisibilite(tr) {
     tr.hidden = tr.hasAttribute('data-rech-cache') || tr.hasAttribute('data-sev-cache')
-      || tr.hasAttribute('data-axe-cache');
+      || tr.hasAttribute('data-axe-cache') || tr.hasAttribute('data-etat-cache');
     if (tr.hidden) replierDetail(tr); // la ligne de détail suit sa ligne mère
   }
   var filtres = document.querySelectorAll('.filtres button');
@@ -484,7 +518,12 @@ _SCRIPT = """
           tr.removeAttribute('data-rech-cache');
           tr.removeAttribute('data-sev-cache');
           tr.removeAttribute('data-axe-cache');
+          tr.removeAttribute('data-etat-cache');
           majVisibilite(tr);
+        });
+        // KPIs d'état du chapitre : relâcher.
+        bloc.querySelectorAll('.kpi-etat[aria-pressed="true"]').forEach(function (k) {
+          k.setAttribute('aria-pressed', 'false');
         });
         // Filtres de colonne D-12 : recocher tout + événement change (l API n expose pas de reset).
         bloc.querySelectorAll('.tf-opt').forEach(function (cb) {
@@ -577,16 +616,52 @@ _SCRIPT = """
     });
   });
 
-  // À l impression navigateur, tout détail se déplie : le papier ne cache rien.
+  // --- KPIs d'état par chapitre (retour humain du 14/08) : cliquer filtre les tables du
+  //     chapitre sur cet état ; re-cliquer montre tout. Un seul état actif à la fois.
+  document.querySelectorAll('.kpi-etat').forEach(function (k) {
+    k.addEventListener('click', function () {
+      var section = k.closest('section');
+      if (!section) return;
+      var actif = k.getAttribute('aria-pressed') === 'true';
+      section.querySelectorAll('.kpi-etat').forEach(function (a) {
+        a.setAttribute('aria-pressed', 'false');
+      });
+      k.setAttribute('aria-pressed', actif ? 'false' : 'true');
+      var etat = actif ? null : k.dataset.etat;
+      lignesDe(section).forEach(function (tr) {
+        if (etat && tr.dataset.etat !== etat) {
+          tr.setAttribute('data-etat-cache', '');
+        } else {
+          tr.removeAttribute('data-etat-cache');
+        }
+        majVisibilite(tr);
+      });
+      recompter(section);
+    });
+  });
+
+  // --- Ouvrir tout / fermer tout (retour humain du 14/08) : les chapitres de l'ONGLET.
+  document.querySelectorAll('.pli-tout').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var panneau = b.closest('.panneau');
+      if (!panneau) return;
+      panneau.querySelectorAll('details.pli').forEach(function (d) {
+        d.open = b.dataset.sens === 'ouvrir';
+      });
+    });
+  });
+
+  // À l impression navigateur, tout détail se déplie : le papier ne cache rien — les
+  // chapitres repliés aussi.
   var etatDetails = [];
   window.addEventListener('beforeprint', function () {
     etatDetails = [];
-    document.querySelectorAll('details.cas').forEach(function (d) {
+    document.querySelectorAll('details.cas, details.pli').forEach(function (d) {
       etatDetails.push(d.open); d.open = true;
     });
   });
   window.addEventListener('afterprint', function () {
-    document.querySelectorAll('details.cas').forEach(function (d, i) {
+    document.querySelectorAll('details.cas, details.pli').forEach(function (d, i) {
       d.open = etatDetails[i] === true;
     });
   });
@@ -686,6 +761,7 @@ def _tableau(
     identifiant: str = "",
     chapitre: bool = False,
     details_lignes: list[str] | None = None,
+    outille_force: bool = False,
 ) -> str:
     """Tableau accessible. Chaque cellule porte son intitulé de colonne (`data-label`).
 
@@ -703,7 +779,9 @@ def _tableau(
     # vit au niveau du CHAPITRE — le sous-chapitrage fragmentait les listes sous le seuil et
     # vidait « pour chaque liste, des filtres » (76 tables sur 79 nues au constat). Ici :
     # tri sur TOUTES les tables, filtres de colonne dès 4 lignes, jamais de barre par table.
-    outille = len(lignes) >= _SEUIL_FILTRE and not chapitre
+    # `outille_force` (retour humain du 14/08, onglet Non joués) : certaines tables doivent
+    # leurs outils quel que soit leur volume — le lecteur y CHERCHE un pan ou un champ précis.
+    outille = (len(lignes) >= _SEUIL_FILTRE or outille_force) and not chapitre
     tete = ""
     affiches = []
     for t in entetes:
@@ -749,9 +827,12 @@ def _tableau(
 
 
 # --- Synthèse par pan (R2) ----------------------------------------------------------------------
-def _synthese_par_pan(chapitres: list[dict]) -> str:
+def _synthese_par_pan(chapitres: list[dict], identifiant: str = "table-par-pan") -> str:
     """Un bloc par chapitre (pan) : x/y passés, %, et une phrase de lecture — dérivés des
     éléments que la page rend déjà dans les onglets. Un pan non mesuré le DIT, avec sa raison.
+
+    `identifiant` : la même table sert la Synthèse ET l'en-tête de chaque onglet de famille
+    (retour humain du 14/08) — deux rendus, deux ids, jamais deux dérivations.
     """
     lignes = []
     for chapitre in chapitres:
@@ -850,7 +931,7 @@ def _synthese_par_pan(chapitres: list[dict]) -> str:
         ["chapitre (pan)", "famille", "éléments", "passés", "KO", "non joués",
          "non testables", "résultat", "lecture"],
         lignes,
-        identifiant="table-par-pan",
+        identifiant=identifiant,
     )
 
 
@@ -1066,28 +1147,85 @@ def _detail_element(detail: dict | None) -> tuple[str, str]:
 
 def _constat_cellule(element: dict) -> str:
     """La colonne « constat mesuré — pourquoi » ne se tait JAMAIS (retour humain du 13/08 :
-    une cellule vide est indistinguable d un bug d affichage).
+    une cellule vide est indistinguable d un bug d affichage), et pour un élément NON JOUÉ
+    elle explique POURQUOI il ne l a pas été (retour humain du 14/08) — la raison est dérivée
+    de l état et des champs du rapport, jamais inventée.
     """
     message = element.get("message")
+    etat = element.get("etat")
+    if etat == "non_testable":
+        champs = ", ".join(element.get("champs_requis") or [])
+        motif = _e(message) if message else "la configuration requise est absente"
+        return (
+            f'<span data-litteral-ok><strong>Pourquoi non joué :</strong> {motif}'
+            + (
+                f" — fournir (noms seuls, jamais les valeurs) : <code>{_e(champs)}</code>"
+                if champs
+                else ""
+            )
+            + ", puis <code>--reprendre</code> le rapport</span>"
+        )
+    if etat == "non_exerce":
+        constat = f"{_e(message)} — " if message else ""
+        return (
+            f"<span data-litteral-ok>{constat}<strong>Pourquoi non joué :</strong> aucun test "
+            "de la suite du projet n atteint cet élément — l audit mesure la suite existante, "
+            "il ne joue pas de cas à sa place (garde-fou G-1) ; le cas à ajouter est dépliable "
+            "dans la colonne « détail »</span>"
+        )
     if message:
         return _texte_libre(message)
-    etat = element.get("etat")
     if etat == "exerce":
         return '<span class="discret">✓ Passé — aucun constat</span>'
-    if etat == "non_exerce":
-        return (
-            '<span class="discret">inventorié mais jamais atteint par la suite — '
-            "aucune mesure</span>"
-        )
     return '<span class="discret">sans objet</span>'
+
+
+def _kpis_chapitre(chapitre: dict) -> str:
+    """KPIs cliquables du CHAPITRE (retour humain du 14/08) : un compteur par état mesuré,
+    qui FILTRE les tables du chapitre au clic. Dérivés des mêmes éléments que les tables —
+    jamais deux vérités. Un état absent du chapitre n affiche pas de bouton mort."""
+    elements = [e for s in chapitre["sous_chapitres"] for e in s["elements"]]
+    if not elements:
+        return ""
+    comptes: dict[str, int] = {}
+    for element in elements:
+        comptes[element["etat"]] = comptes.get(element["etat"], 0) + 1
+    boutons = []
+    for etat in ("exerce", "defaut", "non_exerce", "non_testable", "exclu"):
+        n = comptes.get(etat, 0)
+        if not n:
+            continue
+        picto, libelle, classe, descriptif = _glossaire.etat(etat)
+        boutons.append(
+            f'<button type="button" class="kpi-etat {classe}" data-etat="{_e(etat)}" '
+            f'aria-pressed="false" title="{_e(descriptif)} — cliquer : ne montrer que ces '
+            f'éléments dans ce chapitre (re-cliquer : tout montrer)">'
+            f"{_e(picto)} {_e(libelle)} · {n}</button>"
+        )
+    return f'<div class="kpis-chapitre">{"".join(boutons)}</div>'
 
 
 def _panneau_chapitres(
     chapitres: list[dict], famille: str, details: dict[tuple[str, str], dict] | None = None
 ) -> str:
     details = details or {}
-    morceaux: list[str] = []
-    for chapitre in [c for c in chapitres if c["famille"] == famille]:
+    retenus = [c for c in chapitres if c["famille"] == famille]
+    # Retour humain du 14/08 : l'onglet ouvre sur SA synthèse (mêmes colonnes que l'onglet
+    # Synthèse, restreinte à la famille) + les commandes de repli global des chapitres.
+    morceaux: list[str] = [
+        '<section class="card">',
+        f"<h3>Synthèse des chapitres {('fonctionnels' if famille == 'fonctionnel' else 'techniques')}</h3>",
+        '<p class="discret">La même dérivation que l\'onglet Synthèse, restreinte à cette '
+        "famille — le lien ouvre le chapitre détaillé ci-dessous.</p>",
+        _synthese_par_pan(retenus, identifiant=f"table-par-pan-{famille}"),
+        '<div class="outillage pli-commandes">'
+        '<button type="button" class="outil-reinit pli-tout" data-sens="ouvrir">'
+        "Ouvrir tous les chapitres</button>"
+        '<button type="button" class="outil-reinit pli-tout" data-sens="fermer">'
+        "Fermer tous les chapitres</button></div>",
+        "</section>",
+    ]
+    for chapitre in retenus:
         classe = "card grise" if chapitre["grise"] else "card"
         outillage_chapitre = "" if chapitre["grise"] else (
             # TF-0175 (retour n°4) : l'outillage vit au CHAPITRE — une barre pour toutes les
@@ -1104,12 +1242,20 @@ def _panneau_chapitres(
             f'<section class="{classe}" id="chap-{_e(chapitre["code"])}"'
             f'{" data-outille" if outillage_chapitre else ""}>'
         )
-        morceaux.append(f"<h3>{_e(chapitre['code'])} — {_e(chapitre['titre'])}</h3>")
+        # Chapitre REPLIABLE (retour humain du 14/08) : chevron natif <details>, ouvert par
+        # défaut — replier est un choix du lecteur, jamais un masquage par défaut.
+        morceaux.append('<details class="pli" open><summary>')
+        morceaux.append(
+            f'<h3>{_e(chapitre["code"])} — {_e(chapitre["titre"])}'
+            '<span class="chevron" aria-hidden="true">▾</span></h3>'
+        )
+        morceaux.append("</summary>")
         morceaux.append(
             f'<p class="discret">pan(s) <code>{_e(", ".join(chapitre["pans"]))}</code> · '
             f"découpe par {_e(chapitre['decoupe'])} · {chapitre['elements']} élément(s) "
             f"inventorié(s), dont {chapitre['rattaches']} rattaché(s) par dérivation.</p>"
         )
+        morceaux.append(_kpis_chapitre(chapitre))
         morceaux.append(outillage_chapitre)
         for manquant in chapitre.get("pans_non_couverts") or []:
             morceaux.append(
@@ -1140,12 +1286,13 @@ def _panneau_chapitres(
                     f"colonne « Résultat » — mais rendus ici plutôt que sous un {_e(axe)} : un "
                     "élément rangé nulle part serait un élément qu on cesse de lire.</p>"
                 )
-            lignes, details_lignes = [], []
+            lignes, details_lignes, attributs = [], [], []
             for element in sous["elements"]:
                 bouton, contenu = _detail_element(details.get((chapitre["code"], element["id"])))
                 lignes.append(
                     [
                         _cellule_element(element["id"]),
+                        _cellule_objectif(element["id"]),
                         _badge_etat(element["etat"]),
                         _e(element.get("classe") or "")
                         or '<span class="discret" title="élément passé : aucun constat, '
@@ -1159,18 +1306,42 @@ def _panneau_chapitres(
                     ]
                 )
                 details_lignes.append(contenu)
-            colonnes = ["élément", "état", "classe", "constat mesuré", "risque", "détail du cas"]
-            morceaux.append(_tableau(colonnes, lignes, chapitre=True, details_lignes=details_lignes))
-        morceaux.append("</section>")
+                # data-etat : la donnée que les KPIs de chapitre filtrent au clic.
+                attributs.append(f' data-etat="{_e(element["etat"])}"')
+            colonnes = [
+                "élément", "objectif", "état", "classe", "constat mesuré", "risque",
+                "détail du cas",
+            ]
+            morceaux.append(
+                _tableau(
+                    colonnes, lignes, attributs=attributs, chapitre=True,
+                    details_lignes=details_lignes,
+                )
+            )
+        morceaux.append("</details></section>")
     return "\n".join(morceaux) or '<p class="discret">Aucun chapitre de cette famille.</p>'
 
 
 # --- Actions (R8) -------------------------------------------------------------------------------
+def _action_structuree(quoi: str, pourquoi: str, obtenu: str, badge: str = "") -> str:
+    """Une action lisible (retour humain du 14/08) : QUOI faire, POURQUOI, ce qu'on OBTIENT.
+    Trois lignes nommées — jamais une phrase-fleuve où tout se mélange."""
+    return (
+        "<li>" + badge
+        + f'<span class="a-quoi" data-litteral-ok><strong>Quoi :</strong> {quoi}</span>'
+        + f'<span class="a-pourquoi" data-litteral-ok><strong>Pourquoi :</strong> '
+        f"{pourquoi}</span>"
+        + f'<span class="a-obtenu" data-litteral-ok><strong>Vous obtiendrez :</strong> '
+        f"{obtenu}</span></li>"
+    )
+
+
 def _synthese_actions(rapport: dict, valeurs: dict[str, int]) -> str:
     """Synthèse des suites à donner : plan de rejeu pour l IA, priorités pour l humain.
 
-    Tout est dérivé du rapport (actions[], findings[].risque) — la page n invente aucun
-    ordre : la priorité EST le risque calculé au rapport.
+    Tout est dérivé du rapport (actions[], findings[].risque, non_testables[],
+    pans_non_couverts[]) — la page n invente aucun ordre : la priorité EST le risque calculé
+    au rapport, et la configuration passe d abord parce qu elle DÉBLOQUE la mesure.
     """
     risques = {
         str(f.get("id")): f.get("risque")
@@ -1179,7 +1350,8 @@ def _synthese_actions(rapport: dict, valeurs: dict[str, int]) -> str:
     }
     actions = rapport.get("actions") or []
     morceaux = ['<section class="card" id="synthese-actions"><h3>Que faire de cet audit ?</h3>']
-    # 1. auto_ia — le plan de rejeu, borné (G-3 : jamais de boucle sans fin).
+    # 1. auto_ia — le plan de rejeu, borné (G-3 amendé sur mandat humain du 14/08 : 5 cycles,
+    #    extensibles à 7 si chaque cycle réduit strictement le reste — jamais de boucle sans fin).
     auto = [a for a in actions if a.get("categorie") == "auto_ia"]
     if auto:
         par_etape: dict[str, int] = {}
@@ -1190,44 +1362,114 @@ def _synthese_actions(rapport: dict, valeurs: dict[str, int]) -> str:
             f"{n} en {_glossaire.etape_action(etape)}"
             for etape, n in sorted(par_etape.items(), key=lambda kv: -kv[1])
         )
+        boucle = rapport.get("boucle_fermeture") or {}
+        if boucle:
+            etat_boucle = (
+                f"<p><strong>Boucle jouée sur cet audit :</strong> "
+                f"{_e(boucle.get('cycles'))} cycle(s) sur une borne de "
+                f"{_e(boucle.get('borne', 5))} — il reste {len(auto)} action(s) "
+                "automatisables, listées ci-dessous avec leur motif.</p>"
+            )
+        else:
+            etat_boucle = (
+                '<p class="discret">La boucle n a PAS tourné sur cet audit : ce rapport est '
+                "une mesure one-shot — les actions ci-dessous sont le PLAN du premier cycle. "
+                "Ces correctifs s écrivent dans la SUITE DU PROJET, que l audit ne modifie "
+                "jamais (garde-fou G-1) : c est l agent du run qui les applique, pas la "
+                "forge.</p>"
+            )
         morceaux.append(
             f"<p><strong>{len(auto)} action(s) automatisables par l IA</strong> "
-            f"({repartition_txt}) — plan de rejeu, en <strong>boucle bornée</strong> "
-            "(3 cycles maximum, garde-fou G-3) :</p>"
+            f"({repartition_txt}) — à traiter en <strong>boucle bornée</strong> jusqu à "
+            "épuisement : 5 cycles maximum, 7 si chaque cycle réduit strictement le reste "
+            "(garde-fou G-3, amendé le 14/08) :</p>"
             "<ol>"
             "<li>appliquer les correctifs <code>auto_ia</code> par lot (la source qui fait foi "
             "dit quoi écrire — chaque cas généré reste une proposition relue) ;</li>"
             "<li>re-mesurer : <code>--reprendre &lt;rapport.json&gt;</code> rejoue l audit sur "
             "l état corrigé ;</li>"
-            "<li>si des actions <code>auto_ia</code> subsistent après 3 cycles, livrer avec la "
-            "liste des écarts résiduels — jamais assouplir une assertion pour « faire passer » "
-            "(interdit G-2).</li>"
-            "</ol>"
+            "<li>répéter tant qu il reste des actions <code>auto_ia</code> ET que la borne n "
+            "est pas atteinte ; au-delà, livrer avec la liste des écarts résiduels — jamais "
+            "assouplir une assertion pour « faire passer » (interdit G-2).</li>"
+            "</ol>" + etat_boucle
         )
-    # 2. manuelle_utilisateur — VOS actions, triées par risque décroissant du finding source.
+    # 2. manuelle_utilisateur — VOS actions, structurées (Quoi / Pourquoi / Vous obtiendrez).
+    #    La configuration d abord (elle débloque la mesure), puis les arbitrages par risque.
     votres = [a for a in actions if a.get("categorie") == "manuelle_utilisateur"]
     if votres:
-        votres = sorted(
-            votres,
-            key=lambda a: -(risques.get(str(a.get("finding_ref")), 0) or 0),
-        )
-        elements = "".join(
-            "<li>"
-            + (
+        elements: list[str] = []
+        # 2a. Configuration absente — UN bloc par jeu de champs, pans regroupés (le rapport
+        #     porte le détail par pan ; l afficher quatre fois était le retour n°1 du 14/08).
+        groupes: dict[tuple[str, ...], dict[str, int]] = {}
+        for entree in rapport.get("non_testables") or []:
+            champs = tuple(entree.get("champs_requis") or [])
+            pan = str(entree.get("pan") or "")
+            groupes.setdefault(champs, {})
+            groupes[champs][pan] = groupes[champs].get(pan, 0) + 1
+        for champs, pans in sorted(groupes.items()):
+            detail_pans = " · ".join(f"{n} du pan « {p} »" for p, n in sorted(pans.items()))
+            total = sum(pans.values())
+            elements.append(
+                _action_structuree(
+                    "renseigner la configuration d audit dans "
+                    "<code>&lt;projet&gt;/.env.forge-tests</code> — "
+                    f"{len(champs)} champ(s), noms seuls (les valeurs ne transitent jamais) : "
+                    f"<code>{_e(', '.join(champs))}</code> — puis relancer avec "
+                    "<code>--reprendre &lt;rapport.json&gt;</code>",
+                    f"{total} élément(s) inventorié(s) sont injouables ici ({detail_pans}) : "
+                    "personne ne POUVAIT les exercer sans cette configuration — manque d "
+                    "environnement, pas trou de couverture du projet",
+                    "ces éléments mesurés au prochain audit ; les pans concernés sortent de "
+                    "« non joués » et le verdict PARTIEL peut se prononcer",
+                )
+            )
+        # 2b. Pans non couverts : motif et chemin de couverture, tels que le rapport les
+        #     porte. TOUS rendus — même quand le pan attend aussi la configuration du 2a,
+        #     son `pour_couvrir` est un geste DISTINCT (déclarer l'app, exposer un module…)
+        #     qui serait perdu s'il était absorbé par le regroupement.
+        for entree in rapport.get("pans_non_couverts") or []:
+            if not isinstance(entree, dict):
+                continue
+            elements.append(
+                _action_structuree(
+                    _e(entree.get("pour_couvrir") or "chemin de couverture non déclaré"),
+                    f"le pan « {_e(entree.get('pan'))} » est entièrement NON MESURÉ — "
+                    f"{_e(entree.get('motif') or 'sans motif')}",
+                    "le pan mesuré au prochain audit, avec ses éléments dans les chapitres",
+                )
+            )
+        # 2c. Les autres actions à vous (arbitrages, sondes) — par risque décroissant.
+        deja = {PREFIXE_NON_TESTABLE, PREFIXE_PAN_NON_COUVERT}
+        restantes = [
+            a for a in votres
+            if not any(str(a.get("finding_ref") or "").startswith(p) for p in deja)
+        ]
+        restantes.sort(key=lambda a: -(risques.get(str(a.get("finding_ref")), 0) or 0))
+        for action in restantes:
+            badge = (
                 f'<span class="badge b-fail" title="risque du constat source '
-                f'(criticité × probabilité × coût)">risque {risques[str(a.get("finding_ref"))]}'
-                "</span> "
-                if str(a.get("finding_ref")) in risques
+                f'(criticité × probabilité × coût)">risque '
+                f'{risques[str(action.get("finding_ref"))]}</span> '
+                if str(action.get("finding_ref")) in risques
                 else ""
             )
-            + f"{_texte_libre(a.get('attendu'))} "
-            f"<span class=\"discret\">(étape : {_e(_glossaire.etape_action(str(a.get('etape_cible') or '')))})</span></li>"
-            for a in votres
+            elements.append(
+                "<li>" + badge + f"{_texte_libre(action.get('attendu'))} "
+                f"<span class=\"discret\">(étape : "
+                f"{_e(_glossaire.etape_action(str(action.get('etape_cible') or '')))})"
+                "</span></li>"
+            )
+        regroupement = (
+            f", regroupées en {len(elements)} point(s) — la configuration compte pour un seul "
+            "geste, quel que soit le nombre de pans qu'elle débloque"
+            if len(elements) != len(votres)
+            else ""
         )
         morceaux.append(
-            f"<p><strong>Vos {len(votres)} action(s)</strong> — personne d autre ne peut les "
-            "faire, par priorité (risque décroissant) :</p>"
-            f"<ol>{elements}</ol>"
+            f"<p><strong>Vos {len(votres)} action(s)</strong>{regroupement} — personne "
+            "d'autre ne peut les faire. La configuration d'abord (elle débloque la mesure), "
+            "puis les arbitrages par risque décroissant :</p>"
+            f'<ol class="actions-vous">{"".join(elements)}</ol>'
         )
     # 3. manuelle_dev — le reste du travail humain, pointé vers la liste filtrable.
     dev = valeurs.get("actions_manuelle_dev", 0)
@@ -1260,63 +1502,22 @@ def _composant_filtres_css() -> str:
 
 
 # --- Libellés d'éléments (TF-0175) --------------------------------------------------------------
-# « qualif:effet:/:0:form » n'explique rien à un lecteur (retour humain n°5). Le libellé est
-# DÉRIVÉ de la forme de l'identifiant — jamais inventé : forme inconnue → pas de libellé,
-# l'id technique reste toujours affiché en second.
-_TAGS_FR = {
-    "form": "formulaire", "button": "bouton", "a": "lien", "input": "champ",
-    "select": "liste déroulante", "textarea": "zone de texte", "summary": "dépliant",
-}
-_LIBELLES: tuple[tuple[re.Pattern[str], object], ...] = (
-    (re.compile(r"^qualif:effet:(?P<r>[^:]*):(?P<n>\d+):(?P<t>\w+)$"),
-     lambda m: f"{_TAGS_FR.get(m['t'], m['t'])} n°{int(m['n']) + 1} de l'écran {m['r'] or '/'}"),
-    (re.compile(r"^qualif:route:(?P<r>\S+)$"), lambda m: f"chargement de l'écran {m['r']}"),
-    (re.compile(r"^qualif:console:(?P<r>\S+)$"),
-     lambda m: f"console de l'écran {m['r']} (zéro erreur attendue)"),
-    (re.compile(r"^qualif:marqueur:(?P<r>\S+)$"),
-     lambda m: f"rendu de l'écran {m['r']} (marqueur de contenu attendu)"),
-    (re.compile(r"^element:(?P<x>\S+)$"), lambda m: f"élément d'interface « {m['x']} »"),
-    (re.compile(r"^route:(?P<r>\S+)$"), lambda m: f"route {m['r']}"),
-    (re.compile(r"^endpoint:(?P<v>[A-Z]+) (?P<p>\S+)$"), lambda m: f"API {m['v']} {m['p']}"),
-    (re.compile(r"^code:(?P<v>[A-Z]+) (?P<p>[^=]+)=(?P<c>\d+)$"),
-     lambda m: f"API {m['v']} {m['p']} — réponse {m['c']} attendue"),
-    (re.compile(r"^divergence:(?:code|endpoint):(?P<v>[A-Z]+) (?P<p>\S+)"),
-     lambda m: f"API {m['v']} {m['p']} — déclaré ≠ constaté"),
-    (re.compile(r"^contrainte:(?P<x>\S+?)\.not_null$"),
-     lambda m: f"colonne obligatoire « {m['x']} » (NOT NULL)"),
-    (re.compile(r"^contrainte:(?P<x>\S+)$"), lambda m: f"contrainte de données « {m['x']} »"),
-    (re.compile(r"^(?P<k>index|trigger):(?P<x>\S+)$"), lambda m: f"{m['k']} « {m['x']} »"),
-    (re.compile(r"^migration:(?P<x>[^:]+):retour$"),
-     lambda m: f"migration {m['x']} — retour arrière"),
-    (re.compile(r"^migration:(?P<x>[^:]+):rejeu$"), lambda m: f"migration {m['x']} — rejeu"),
-    (re.compile(r"^divergence:migration:(?P<x>[^:]+)"),
-     lambda m: f"migration {m['x']} — défait la précédente"),
-    (re.compile(r"^branche:(?P<f>[^:]+):(?P<l>\d+)$"),
-     lambda m: f"branche de traitement {m['f']} ligne {m['l']}"),
-    (re.compile(r"^chemin:(?P<f>[^:]+):(?P<l>\d+)$"),
-     lambda m: f"chemin de lecture {m['f']} ligne {m['l']}"),
-    (re.compile(r"^mutant:(?P<f>[^:]+):(?P<l>\d+):(?P<mut>\S+)$"),
-     lambda m: f"robustesse : mutation {m['f']} ligne {m['l']} ({m['mut'].replace('->', ' → ')})"),
-    (re.compile(r"^module(?:-non-exerce)?:(?P<x>\S+)$"), lambda m: f"module source {m['x']}"),
-    (re.compile(r"^seuil:mutation-module:(?P<x>\S+)$"),
-     lambda m: f"seuil de mutation du module {m['x']}"),
-    (re.compile(r"^securite:sast:(?P<p>.+):(?P<l>\d+)$"),
-     lambda m: f"analyse sécurité — {Path(m['p']).name} ligne {m['l']}"),
-    (re.compile(r"^a11y:(?P<r>[^:]+)"), lambda m: f"accessibilité de l'écran {m['r']}"),
-    (re.compile(r"^visuel:(?P<r>\S+)"), lambda m: f"rendu visuel de l'écran {m['r']}"),
-    (re.compile(r"^interface:(?P<f>[^:]+):(?P<l>\d+):(?P<t>\w+)$"),
-     lambda m: f"{_TAGS_FR.get(m['t'], m['t'])} ligne {m['l']} de {m['f']}"),
-    (re.compile(r"^rejet:"), lambda m: "codes de rejet du traitement par lot"),
-    (re.compile(r"^seuil:(?P<x>\S+)$"), lambda m: f"seuil opposable « {m['x']} »"),
-)
+# « qualif:effet:/:0:form » n'explique rien à un lecteur (retour humain n°5). Le libellé et
+# l'OBJECTIF du test sont DÉRIVÉS de la forme de l'identifiant — jamais inventés : le module
+# partagé `libelles.py` (dashboard + cahiers, retour humain du 14/08) porte les deux tables ;
+# forme inconnue → pas de libellé, l'id technique reste toujours affiché.
 
 
-def _libelle_element(identifiant: str) -> str:
-    for motif, gabarit in _LIBELLES:
-        m = motif.match(identifiant)
-        if m:
-            return gabarit(m)
-    return ""
+def _cellule_objectif(identifiant: str) -> str:
+    """Colonne « objectif du test » (retour humain du 14/08) : le périmètre précis de la
+    ligne, dérivé de la forme de l'élément. Forme inconnue → un tiret QUI LE DIT."""
+    objectif = _objectif_element(identifiant)
+    if objectif:
+        return f'<span class="objectif">{_e(objectif)}</span>'
+    return (
+        '<span class="discret" title="forme d identifiant inconnue du glossaire des '
+        'objectifs — l objectif reste celui du chapitre">—</span>'
+    )
 
 
 def _cellule_element(identifiant: str) -> str:
@@ -1517,6 +1718,10 @@ def construire(
                 ]
                 for n in (rapport.get("non_testables") or [])
             ],
+            identifiant="table-non-testables",
+            # Retour humain du 14/08 : recherche, tri et filtres sur CET onglet aussi,
+            # quel que soit le volume — on y cherche un pan ou un champ précis.
+            outille_force=True,
         ),
         '<h3 id="pans-non-couverts">Pans non couverts — motif ET chemin de couverture</h3>',
         _tableau(
@@ -1526,6 +1731,8 @@ def construire(
                 for p in (rapport.get("pans_non_couverts") or [])
                 if isinstance(p, dict)
             ],
+            identifiant="table-pans-non-couverts",
+            outille_force=True,
         ),
     ]
 
@@ -1630,13 +1837,15 @@ def construire(
     # ancre vers un panneau masqué serait une affordance morte.
     annonces = {
         "synthese": "verdict, résultats par pan, état des seuils opposables et tendance",
-        "fonctionnels": "chapitres fonctionnels dérivés de la surface, élément par élément, "
-        "cas dépliables",
-        "techniques": "chapitres techniques dérivés de la surface, élément par élément, "
-        "cas dépliables",
+        "fonctionnels": "synthèse des pans fonctionnels, puis chapitres repliables — "
+        "objectif, résultat, constat expliqué et cas dépliable par élément",
+        "techniques": "synthèse des pans techniques, puis chapitres repliables — "
+        "objectif, résultat, constat expliqué et cas dépliable par élément",
         "echecs": "chaque constat rattaché à un élément nommé, trié par risque décroissant",
-        "non-joues": "non testables (configuration absente) et pans non couverts, motivés",
-        "actions": "synthèse des suites à donner, puis liste filtrable par catégorie et étape",
+        "non-joues": "non testables (configuration absente) et pans non couverts, motivés — "
+        "tables outillées",
+        "actions": "suites à donner structurées (quoi, pourquoi, résultat), plan de boucle "
+        "IA, puis liste filtrable par catégorie et étape",
     }
     toc = "".join(
         f'<a href="#{identifiant}"><strong>{rang + 1} · {_e(libelle)}</strong> '
@@ -1653,16 +1862,18 @@ def construire(
     # LECTURE — la première ligne déchiffrée en français, pour amorcer le parcours.
     exemples = {
         "synthese": "un pan testé, ses passés/KO en chiffres et en %, puis un seuil opposable, "
-        "sa valeur, sa sévérité déclarée et l état constaté",
-        "fonctionnels": "un élément nommé de l inventaire, son résultat (✓ ✕ ○), le type et la "
-        "preuve de son constat éventuel, son risque, et son cas dépliable",
-        "techniques": "un élément nommé de l inventaire, son résultat (✓ ✕ ○), le type et la "
-        "preuve de son constat éventuel, son risque, et son cas dépliable",
-        "echecs": "le constat au risque le plus élevé d abord : sa sévérité, son pan, "
-        "l élément auquel il est rattaché, la raison mesurée et sa localisation",
+        "sa valeur, sa sévérité déclarée et l'état constaté",
+        "fonctionnels": "un élément nommé de l'inventaire, l'objectif précis de son test, son "
+        "résultat (✓ ✕ ○), le type et la preuve de son constat — ou le pourquoi de son "
+        "non-joué —, son risque, et son cas dépliable",
+        "techniques": "un élément nommé de l'inventaire, l'objectif précis de son test, son "
+        "résultat (✓ ✕ ○), le type et la preuve de son constat — ou le pourquoi de son "
+        "non-joué —, son risque, et son cas dépliable",
+        "echecs": "le constat au risque le plus élevé d'abord : sa sévérité, son pan, "
+        "l'élément auquel il est rattaché, la raison mesurée et sa localisation",
         "non-joues": "un élément injouable ICI, les noms des champs de configuration requis "
         "(jamais leurs valeurs) et le motif",
-        "actions": "une action, sa catégorie ternaire, l étape cible où la jouer et le "
+        "actions": "une action, sa catégorie ternaire, l'étape cible où la jouer et le "
         "résultat attendu",
     }
     corps = "".join(
@@ -1696,7 +1907,7 @@ def construire(
 <body>
 <div class="wrap">
 <header class="doc">
-  <p class="eyebrow">Digit-AI · Forge Tests · Dashboard d exécution</p>
+  <p class="eyebrow">Digit-AI · Forge Tests · Dashboard d'exécution</p>
   <h1>{_e(contexte['produit'])} — Dashboard tests</h1>
   <p class="discret">Audit du {_e(contexte['date'])} · source unique : le rapport
      <code>{_e(contexte['rapport_nom'])}</code> · page autonome, aucun appel réseau.
@@ -1756,6 +1967,24 @@ _REGLES_PREGENERATION: tuple[tuple[str, str], ...] = (
     (
         "H3-kpi-cliquable",
         r'<button type="button" class="tuile"',
+    ),
+    # Retours humains du 14/08 : chapitres repliables, KPIs d'état par chapitre, colonne
+    # « objectif du test », actions structurées — un gabarit qui les perdrait dériverait.
+    (
+        "H-chapitres-repliables",
+        r'<details class="pli"',
+    ),
+    (
+        "H3-kpi-chapitre",
+        r'class="kpi-etat',
+    ),
+    (
+        "H4-objectif-du-test",
+        r"Objectif du test",
+    ),
+    (
+        "H4-actions-structurees",
+        r'class="a-quoi"',
     ),
     (
         "print-clair-force",
