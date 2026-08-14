@@ -32,14 +32,17 @@ CHAPITRE_SANS_DECLARATION = {
 
 # Axe de sous-chapitrage -> règles de rattachement, essayées dans l ordre. Chaque règle est un
 # couple (motif, gabarit) : le premier motif qui reconnaît l identifiant donne le sous-chapitre.
+# `entree` (TF-0223) rejoint les axes qualif : la porte d entrée est un écran et un parcours au
+# même titre qu une route — sans elle, `qualif:entree:/` tombait en « éléments non rattachés ».
+_AXES_QUALIF = r"^qualif:(?:route|effet|console|marqueur|entree):(?P<v>/[^:]*)"
 _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
     "ecran": (
-        (re.compile(r"^qualif:(?:route|effet|console|marqueur):(?P<v>/[^:]*)"), "écran {v}"),
+        (re.compile(_AXES_QUALIF), "écran {v}"),
         (re.compile(r"^route:(?P<v>/\S*)$"), "écran {v}"),
         (re.compile(r"^(?:a11y|visuel):(?P<v>\S+)$"), "écran {v}"),
     ),
     "parcours": (
-        (re.compile(r"^qualif:(?:route|effet|console|marqueur):(?P<v>/[^:]*)"), "parcours {v}"),
+        (re.compile(_AXES_QUALIF), "parcours {v}"),
         (re.compile(r"^route:(?P<v>/\S*)$"), "parcours {v}"),
     ),
     "routeur": (
