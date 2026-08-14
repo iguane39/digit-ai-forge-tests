@@ -128,6 +128,13 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "sinon corriger le rendu. Aucun agent ne peut décider à la place de l'humain si un "
         "écran est conforme à l'intention ({message})",
     ),
+    "modele-non-epingle": (
+        "manuelle_dev",
+        "development",
+        "épingler « {id} » sur une version datée (`nom-AAAAMMJJ`) là où le projet la désigne : "
+        "un alias change le système sous test sans qu'aucun commit ne bouge, et la régression "
+        "arrive un matin sans auteur ({message})",
+    ),
     "sonde-muette": (
         "manuelle_utilisateur",
         "mep-config",

@@ -61,6 +61,11 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (re.compile(r"^rejet:"), "codes de rejet"),
     ),
     "format": ((re.compile(r"^chemin:(?P<v>[^:]+):"), "format lu par {v}"),),
+    "prompt": (
+        (re.compile(r"^prompt:(?P<v>[^:]+)"), "prompt {v}"),
+        (re.compile(r"^modele:(?P<v>\S+)$"), "modèle {v}"),
+        (re.compile(r"^corpus:(?P<v>\S+)$"), "corpus {v}"),
+    ),
     "module": (
         (re.compile(r"^mutant:(?P<v>[^:]+):"), "module {v}"),
         (re.compile(r"^seuil:mutation-module:(?P<v>\S+)$"), "module {v}"),

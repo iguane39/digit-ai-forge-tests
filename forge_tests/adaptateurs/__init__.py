@@ -10,6 +10,7 @@ from forge_tests.adaptateurs import (
     interface,
     migrations,
     mutation,
+    prompts,
     qualif,
     securite,
     visuel,
@@ -24,6 +25,7 @@ REGISTRE = {
     "batch-python": batch,
     "fichiers-python": fichiers,
     "mutation-python": mutation,
+    "prompts-statique": prompts,
     "qualif-navigateur": qualif,
     "securite-oracles": securite,
     "accessibilite-a11y": accessibilite,
@@ -32,5 +34,5 @@ REGISTRE = {
 
 PANS_ATTENDUS = [
     "front", "interface", "api", "data", "migrations", "batch", "fichiers", "back", "securite",
-    "accessibilite", "visuel", "qualif",
+    "accessibilite", "visuel", "qualif", "prompts",
 ]

@@ -325,6 +325,41 @@
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : jeu d opérateurs et échantillonnage déclarés au rapport ; exercé ≠ vérifié est précisément le rôle du score. Réévaluer si un run réel prouve que la limite coûte."
     },
     {
+      "id": "prompts-statique-002",
+      "domaine": "prompts-statique",
+      "enonce": "prompts : la QUALITE d un prompt n est pas jugee ici — ce pan dit ou vivent les prompts, s ils sont exerces et si le modele est epingle, jamais si le prompt est bon (cela releve de `prompt-analyzer-l99` et de la revue humaine)",
+      "statut": "assume",
+      "note": "Hors perimetre par conception (14/08/2026, TF-0200) : juger la qualite d un prompt est le verbe de prompt-analyzer-l99 (cat-agt-07) et de la revue humaine, pas d un pan d audit."
+    },
+    {
+      "id": "prompts-statique-003",
+      "domaine": "prompts-statique",
+      "enonce": "prompts : la decouverte est bornee aux formes ADRESSABLES reconnues (suffixe `.prompt`, dossier `prompts/` ou `gabarits/`, `SKILL.md`, constante Python nommee `*PROMPT*` / `*INSTRUCTIONS*`) — un prompt assemble a l execution par concatenation, ou stocke en base, n est pas inventoriable statiquement et le deviner serait mentir",
+      "statut": "assume",
+      "note": "Limite de l analyse STATIQUE, assumee a la v0 (14/08/2026) : un prompt assemble a l execution n a pas d adresse ; l inventer serait une surface fausse."
+    },
+    {
+      "id": "prompts-statique-004",
+      "domaine": "prompts-statique",
+      "enonce": "prompts : l epinglage juge la FORME du nom (suffixe date `-AAAAMMJJ`, `-AAAA-MM-JJ` ou `-AAMM`), pas la disponibilite reelle du modele — aucun appel reseau n est fait et aucun calendrier de depreciation fournisseur n est consulte ici",
+      "statut": "assume",
+      "note": "Choix de la v0 GRATUITE (14/08/2026) : consulter un calendrier de depreciation fournisseur exige un appel reseau. La forme datee du nom est le signal disponible sans depense ; la sonde de cadence est deleguee a forge-observability (etude O2, candidature 3)."
+    },
+    {
+      "id": "prompts-statique-005",
+      "domaine": "prompts-statique",
+      "enonce": "prompts : les noms de modeles sont reconnus par FAMILLE declaree et seulement dans une chaine litterale ou une cle `modele:`/`model:` — un fournisseur absent de la table, un nom construit par concatenation ou lu d une variable d environnement n est pas vu",
+      "statut": "assume",
+      "note": "Table de familles DECLAREE donc contestable (14/08/2026) : un fournisseur absent s ajoute en une ligne. Le filtre << chaine litterale ou cle modele: >> est ce qui evite de confondre une mention en prose avec un usage."
+    },
+    {
+      "id": "prompts-statique-006",
+      "domaine": "prompts-statique",
+      "enonce": "prompts : le corpus est LU, jamais joue — qu un cas soit pertinent, que sa reponse attendue soit juste, et que le jeu couvre les cas limites, restent des jugements humains (l execution du corpus est deleguee a `oracle-agent-evals`, cat-agt-05)",
+      "statut": "assume",
+      "note": "Delegation assumee (14/08/2026, etude O2) : l execution du corpus et le jugement semantique appartiennent a oracle-agent-evals (cat-agt-05, juge distinct de l executant, fail-closed) — les reimplementer ici violerait R3."
+    },
+    {
       "id": "qualif-navigateur-001",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : le pan LIT les ecouteurs attaches a chaque affordance, il ne CLIQUE jamais — sur une instance peuplee un clic ecrit vraiment (suppression, envoi, appel tiers facture). Un gestionnaire attache mais dont le corps ne fait rien passerait donc pour un effet",
@@ -628,6 +663,13 @@
       "domaine": "generateur",
       "enonce": "generateur : pans API et Data generes ; Front, Batch et Fichiers ne le sont pas — leurs cas exigent un scenario, pas une seule requete",
       "statut": "todo"
+    },
+    {
+      "id": "prompts-statique-001",
+      "domaine": "prompts-statique",
+      "enonce": "prompts : la v0 est STATIQUE et GRATUITE — le volet execute (rejeu N fois pour mesurer la stabilite d une reponse, jugement semantique par un juge) est HORS PERIMETRE : il depense des jetons, donc il releve d un mandat humain (regle 29). `mesure_d_instabilite` en porte la mesure, testee sur donnees figees et JAMAIS appelee par l audit",
+      "statut": "todo",
+      "note": "Reste-a-faire NOMME (TF-0201) : le volet execute est un mandat de DEPENSE (regle 29), pas une omission. La mesure existe et est testee sur donnees figees ; seul son declenchement attend un mandat humain."
     },
     {
       "id": "qualif-navigateur-002",

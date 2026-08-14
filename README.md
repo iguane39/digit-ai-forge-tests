@@ -68,7 +68,7 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 | Option | Effet |
 |---|---|
 | `--json` | rapport complet en JSON sur stdout (sinon résumé lisible) |
-| `--pans <pan> [...]` | restreint l'audit à ces pans (`front interface api data migrations batch fichiers back securite accessibilite visuel qualif`) |
+| `--pans <pan> [...]` | restreint l'audit à ces pans (`front interface api data migrations batch fichiers back securite accessibilite visuel qualif prompts`) |
 | `--generer <dossier>` | dépose les cas de test générés dans ce dossier de **proposition** — jamais dans le projet analysé. Les messages partent sur stderr : `--generer --json` produit un stdout JSON pur |
 | `--sortie <fichier>` | persiste le rapport dans ce fichier, **à l'identique** de stdout (le dossier parent est créé au besoin) |
 | `--reprendre <rapport.json>` | relit un rapport antérieur et **ne rejoue que ce qui n'était pas vert** ; le rapport produit fusionne l'ancien et le neuf avec la provenance de chaque élément — voir « Audit de qualification avec reprise » |
@@ -187,11 +187,11 @@ chapitre sans qu'une ligne soit touchée ; un pan qui n'en déclare aucun reçoi
 chapitre, nommé « pan sans chapitre déclaré » — visible, jamais absent. Un axe de découpe ou de
 génération de cas inconnu ne casse rien : il retombe sur un repli, **déclaré dans le cahier**.
 
-Les douze pans donnent aujourd'hui : `F1` parcours bout en bout, `F2` écrans × états, `F3`
+Les treize pans donnent aujourd'hui : `F1` parcours bout en bout, `F2` écrans × états, `F3`
 affordances, `F4` accessibilité, `F5` rendu visuel (goldens × thèmes × largeurs, déclarés par le
 pan `visuel` lui-même) ; `T1` API par routeur, `T2` données par table, `T3` migrations par
 fichier (aller / retour / rejeu), `T4` batch par job, `T5` fichiers par format, `T6` robustesse
-de la suite par module, `T7` sécurité.
+de la suite par module, `T7` sécurité, `T8` prompts & modèles.
 
 ### Sceau — une édition manuelle est un défaut, et ça se voit
 
@@ -747,6 +747,7 @@ de migrations tôt ne suffit pas ; c'est le volume qui SUIT qui décide.
 | `back` | mutation réelle : altération de **tous** les modules de `backend/app` (récursif, `services/` et `fournisseurs/` compris), relance de `tests`, échantillon de 3 mutants par module (paramétrable, déclaré au rapport) ; inventaire `modules[]` | 70 % global **et** 50 % par module métier |
 | `qualif` | instance **servie et peuplée** déclarée par `FORGE_TESTS_QUALIF_URL` ; routes découvertes par les liens depuis la racine — voir « Pan `qualif` » | 100 % |
 | `securite` | oracles `quality-oracles` présents sur la machine ; leurs `non_juge` sont repris tels quels | — |
+| `prompts` | **statique et gratuit — aucun appel modèle, aucun réseau** : prompts adressables (`*.prompt`, dossiers `prompts/`, `gabarits/`, `SKILL.md`, constantes Python `*PROMPT*`), modèles nommés dans une chaîne littérale ou une clé `modele:`, corpus de cas (`evals/`, `*.eval.jsonl`, `cas.json`). « Exercé » = **cité par au moins un cas versionné** ; un modèle désigné par un alias mouvant (`*-latest`, `gpt-4o`) au lieu d'une version épinglée `nom-AAAAMMJJ` est un finding `modele-non-epingle` ; un corpus déclaré mais introuvable rend son prompt `non_testable` | 100 % |
 | `accessibilite`, `visuel` | front **servi** : `FORGE_TESTS_BASE_URL`, ou build local présent dans `frontend/dist` plus `npx` et un navigateur Playwright ; un golden absent produit un SKIP motivé, jamais une référence créée pendant le run | — |
 
 La suite backend est lancée depuis `<projet>/backend` avec `coverage run --branch
@@ -766,6 +767,7 @@ journalisé). Modèle : `.env.exemple`.
 | `FORGE_TESTS_LOGIN_PATH` | point d'authentification si le projet s'écarte de la convention FastAPI |
 | `FORGE_TESTS_SANS_EXECUTION=1` | inventaire seul, sans exécuter la suite du projet — la non-mesure est déclarée |
 | `FORGE_TESTS_ORACLES` | racine des scripts d'oracles |
+| `FORGE_TESTS_PROMPTS_CORPUS` | racine d'un corpus de cas (questions / réponses attendues) qui vit **hors** du dépôt audité — champ publié par le pan `prompts` quand un prompt déclare un corpus introuvable |
 | `FORGE_TESTS_MUTANTS_PAR_MODULE` | profondeur de mutation par module (défaut `3`) — le **périmètre** reste total, seule la profondeur est échantillonnée, et le taux est publié au rapport |
 | `FORGE_TESTS_MUTATION_PLAFOND` | garde-fou global du nombre de mutants joués (défaut `400`) ; s'il mord, il est déclaré |
 | `FORGE_TESTS_MUTATION_EXCLUT` | motifs `fnmatch` de modules à exclure du périmètre (`app/fournisseurs/*`) — chaque exclusion est **nommée avec son motif** dans `modules[]`, jamais silencieuse |
@@ -807,7 +809,7 @@ exercer : le lecteur SQL (`;` dans un commentaire, en fin de ligne commentée, d
 dans un littéral — RT-8) ; la qualification des non-testables (variable absente citée par une
 trace, refus de compter une variable pourtant fournie — RT-6) ; l'analyse des divergences
 (garde déportée dans un helper local, montage `StaticFiles` exclu — RT-9 / RT-10) ; les
-chemins de couverture des pans non couverts (A-5), qu'aucun banc n'exerce puisque les douze
+chemins de couverture des pans non couverts (A-5), qu'aucun banc n'exerce puisque tous les
 pans y sont couverts ; la relecture des rapports **antérieurs** à A-5 par `--reprendre` ; et la
 restauration byte-exacte après mutation (G-1, fichier en LF et en CRLF). Sans elles, ces
 mécanismes pourraient pourrir sans que rien ne le dise. La recette empreinte en outre les

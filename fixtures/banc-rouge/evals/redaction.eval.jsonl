@@ -1,0 +1,2 @@
+{"cas": "confirmation-nominale", "prompt": "prompts/redaction.prompt", "modele": "claude-3-5-sonnet-latest", "question": "Commande C-1042, 149,90 EUR, livraison prevue le 12 du mois prochain.", "attendu": "C-1042"}
+{"cas": "confirmation-sans-date", "prompt": "prompts/redaction.prompt", "modele": "claude-3-5-sonnet-latest", "question": "Commande C-1043, 24,00 EUR, aucune date de livraison connue.", "attendu": "date de livraison inconnue"}

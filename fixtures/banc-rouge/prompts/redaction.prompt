@@ -1,0 +1,9 @@
+# Prompt de rédaction — banc ROUGE
+# Défaut planté (H-14) : le modèle est désigné par un ALIAS mouvant, pas par une version
+# épinglée. L'alias change le système sous test sans qu'aucun commit ne bouge.
+modele: claude-3-5-sonnet-latest
+corpus: evals/redaction.eval.jsonl
+
+Tu rédiges la confirmation d'une commande. Reprends le numéro de commande, le montant total
+et la date de livraison prévue. Une phrase par information, ton neutre, aucune promesse
+commerciale qui ne figure pas dans les données fournies.

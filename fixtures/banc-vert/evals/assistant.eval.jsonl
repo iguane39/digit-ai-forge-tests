@@ -1,0 +1,2 @@
+{"cas": "commande-connue", "prompt": "prompts/assistant.prompt", "modele": "claude-sonnet-4-5-20250929", "question": "Ou en est la commande C-2001 ?", "attendu": "C-2001"}
+{"cas": "commande-inconnue", "prompt": "prompts/assistant.prompt", "modele": "claude-sonnet-4-5-20250929", "question": "Ou en est la commande C-9999 ?", "attendu": "commande inconnue"}

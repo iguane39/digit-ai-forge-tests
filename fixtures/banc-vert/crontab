@@ -1,0 +1,4 @@
+# Banc VERT — le traitement de nuit EST enclenché : déclencheur versionné, cadence lisible
+# (5 champs POSIX), cible présente dans le dépôt. Sens sain de TF-0203, sans lequel le banc
+# vert portait un `job-sans-declencheur` bloquant : un lot que rien ne fait tourner.
+0 3 * * * python backend/app/batch.py
