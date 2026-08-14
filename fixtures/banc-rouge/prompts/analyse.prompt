@@ -1,0 +1,7 @@
+# Prompt d'analyse — banc ROUGE
+# Défaut planté (H-15) : ce prompt est adressable, versionné... et AUCUN cas du corpus ne le
+# cite. Il part en production sans qu'une seule question de référence ne l'ait jamais exercé.
+
+Tu analyses une commande rejetée par le traitement par lot. Rends le code de rejet, la ligne
+fautive du fichier d'entrée, et la correction attendue. Si le code de rejet est inconnu du
+référentiel, dis-le au lieu d'en inventer un.
