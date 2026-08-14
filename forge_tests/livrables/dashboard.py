@@ -2038,12 +2038,21 @@ _REGLES_PREGENERATION: tuple[tuple[str, str], ...] = (
         r"Objectif du test",
     ),
     (
-        "H4-actions-structurees",
-        r'class="a-quoi"',
-    ),
-    (
         "print-clair-force",
         r"@media print",
+    ),
+)
+
+# Règles CONDITIONNELLES : (nom, motif attendu, motif de déclenchement). Une règle qui exige un
+# marqueur que la page n'a aucune raison de porter est un faux positif — et le contrôle §2 bis,
+# qui écrit une candidature TODO à chaque écart, se met à crier au loup. Constaté en recette le
+# 14/08 : « H4-actions-structurees » sortait DÉRIVE sur les bancs d'essai, dont le rapport ne
+# porte aucune action « à vous » — donc aucun bloc Quoi/Pourquoi à rendre.
+_REGLES_CONDITIONNELLES: tuple[tuple[str, str, str], ...] = (
+    (
+        "H4-actions-structurees",
+        r'class="a-quoi"',
+        r"<strong>Vos \d+ action",
     ),
 )
 
@@ -2061,6 +2070,13 @@ def controle_pregeneration(page: str) -> list[str]:
             ecarts.append(
                 f"règle « {nom} » : motif attendu absent de la page rendue — le gabarit a "
                 "probablement dérivé des règles du socle (BEST-PRACTICES E4/G1/H du pilot)"
+            )
+    for nom, motif, declencheur in _REGLES_CONDITIONNELLES:
+        # La règle ne se prononce QUE si la page avait de quoi porter le marqueur.
+        if re.search(declencheur, page) and not re.search(motif, page):
+            ecarts.append(
+                f"règle « {nom} » : la page porte le bloc attendu mais pas sa forme structurée "
+                "— le gabarit a dérivé des règles du socle (BEST-PRACTICES §H du pilot)"
             )
     if re.search(r"\.wrap\s*\{[^}]*max-width:\s*\d+px", page):
         ecarts.append(
