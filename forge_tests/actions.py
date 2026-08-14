@@ -110,6 +110,17 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "development",
         "corriger la route « {id} » : {message}",
     ),
+    # TF-0223 : la porte d'entrée, et rien d'autre. Sans règle propre, la classe tombait au
+    # « défaut d'auditeur » et repartait vers la forge — alors que le défaut qui l'a fait naître
+    # (login de production en impasse, 303 puis 404, mort depuis le premier déploiement) était
+    # un défaut de DÉPLOIEMENT du produit. Le mauvais destinataire, sur le constat le plus grave.
+    "chaine-authentification-en-impasse": (
+        "manuelle_dev",
+        "development",
+        "rétablir la chaîne d'authentification de « {id} » : la porte d'entrée doit aboutir à "
+        "une mire identifiable (2xx + marqueur de contenu), pas à une erreur ni à une boucle "
+        "({message})",
+    ),
     "securite": (
         "manuelle_dev",
         "development",
@@ -183,6 +194,31 @@ def _action(finding: dict, pans_generables: set[str]) -> dict:
     }
 
 
+def _action_configuration(
+    reference: str, portee: str, elements: set[str], champs: tuple[str, ...]
+) -> dict:
+    """Le geste « renseigner de la configuration », qu'il vaille pour un pan ou pour tous.
+
+    Retour humain du 14/08 : la phrase précédente était incompréhensible (liste de 20
+    variables en tête, grammaire cassée). Structure fixe : quoi faire → pourquoi → ce qu'on
+    obtient. Les CHAMPS restent nommés (jamais leurs valeurs), mais en fin de phrase.
+    """
+    return {
+        "finding_ref": reference,
+        "categorie": "manuelle_utilisateur",
+        "etape_cible": "mep-config",
+        "attendu": (
+            f"renseigner la configuration d'audit {portee} dans `<projet>/.env.forge-tests`, "
+            "puis relancer avec `--reprendre <rapport.json>`. Pourquoi : "
+            f"{len(elements)} élément(s) sont inventoriés mais aucune exécution ne pouvait "
+            "les atteindre ici — manque de configuration, pas trou de couverture du projet. "
+            "Vous obtiendrez : ces éléments mesurés au prochain audit, et le verdict PARTIEL "
+            f"pourra se prononcer. Champs à fournir ({len(champs)}) : "
+            f"{', '.join(champs) or 'la configuration manquante'}"
+        ),
+    }
+
+
 def classifier(
     findings: list[dict],
     non_testables: list[dict] | None = None,
@@ -196,34 +232,54 @@ def classifier(
     generables = _pans_generables()
     actions = [_action(f, generables) for f in findings]
 
-    # Configuration absente : regroupée par (pan, champs requis). Une action par ÉLÉMENT
-    # produirait des centaines de lignes identiques pour un seul geste humain.
-    groupes: dict[tuple[str, tuple[str, ...]], list[str]] = {}
+    # Configuration absente : une action par ÉLÉMENT produirait des centaines de lignes
+    # identiques pour un seul geste humain. Deux regroupements, et le second n'est pas un
+    # confort de lecture.
+    #
+    # RT-8 (lot COMPTA du 14/08) : regrouper par pan ne suffit pas. Un élément de
+    # configuration PARTAGÉ — typiquement une variable de `.env.example` que personne ne
+    # revendique — est publié par CHACUN des pans qui l'a vu : 33 variables × 12 pans ont
+    # donné 12 actions quasi identiques, qui noyaient l'onglet Actions du dashboard. Or
+    # c'est UN geste : renseigner la variable une fois la sert partout. On agrège donc ce
+    # qu'au moins deux pans réclament, en NOMMANT les pans concernés — sans quoi
+    # l'agrégation ferait disparaître à qui le manque profite. Le détail par pan reste
+    # intact au rapport (`non_testables`) : c'est la présentation du travail qui change,
+    # jamais la mesure.
+    vu_par: dict[tuple[str, tuple[str, ...]], set[str]] = {}
     for entree in non_testables or []:
-        cle = (str(entree.get("pan") or ""), tuple(entree.get("champs_requis") or []))
-        groupes.setdefault(cle, []).append(str(entree.get("element") or ""))
-    pans_non_testables = {pan for pan, _ in groupes}
-    for (pan, champs), elements in sorted(groupes.items()):
+        cle = (str(entree.get("element") or ""), tuple(entree.get("champs_requis") or []))
+        vu_par.setdefault(cle, set()).add(str(entree.get("pan") or ""))
+    pans_non_testables = {pan for pans in vu_par.values() for pan in pans}
+
+    partages: dict[tuple[str, ...], tuple[set[str], set[str]]] = {}
+    propres: dict[tuple[str, tuple[str, ...]], set[str]] = {}
+    for (element, champs), pans in vu_par.items():
+        if len(pans) > 1:
+            elements_vus, pans_vus = partages.setdefault(champs, (set(), set()))
+            elements_vus.add(element)
+            pans_vus |= pans
+        else:
+            propres.setdefault((next(iter(pans)), champs), set()).add(element)
+
+    for champs, (elements, pans) in sorted(partages.items()):
+        portee = (
+            f"partagée par {len(pans)} pans ({', '.join(sorted(pans))})"
+            if len(pans) > 3
+            else f"partagée par les pans {', '.join(sorted(pans))}"
+        )
         actions.append(
-            {
-                "finding_ref": f"{PREFIXE_NON_TESTABLE}{pan}:{'+'.join(champs)}",
-                "categorie": "manuelle_utilisateur",
-                "etape_cible": "mep-config",
-                "attendu": (
-                    # Retour humain du 14/08 : la phrase précédente était incompréhensible
-                    # (liste de 20 variables en tête, grammaire cassée). Structure fixe :
-                    # quoi faire → pourquoi → ce qu'on obtient. Les CHAMPS restent nommés
-                    # (jamais leurs valeurs), mais en fin de phrase, pas en ouverture.
-                    f"renseigner la configuration d'audit du pan « {pan} » dans "
-                    f"`<projet>/.env.forge-tests`, puis relancer avec `--reprendre "
-                    f"<rapport.json>`. Pourquoi : {len(elements)} élément(s) de ce pan sont "
-                    "inventoriés mais aucune exécution ne pouvait les atteindre ici — manque "
-                    "de configuration, pas trou de couverture du projet. Vous obtiendrez : "
-                    "ces éléments mesurés au prochain audit, et le verdict PARTIEL pourra se "
-                    f"prononcer. Champs à fournir ({len(champs)}) : "
-                    f"{', '.join(champs) or 'la configuration manquante'}"
-                ),
-            }
+            _action_configuration(
+                f"{PREFIXE_NON_TESTABLE}partages:{'+'.join(champs)}", portee, elements, champs
+            )
+        )
+    for (pan, champs), elements in sorted(propres.items()):
+        actions.append(
+            _action_configuration(
+                f"{PREFIXE_NON_TESTABLE}{pan}:{'+'.join(champs)}",
+                f"du pan « {pan} »",
+                elements,
+                champs,
+            )
         )
 
     for entree in pans_non_couverts or []:

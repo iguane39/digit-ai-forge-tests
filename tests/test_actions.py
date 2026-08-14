@@ -131,3 +131,49 @@ def test_la_repartition_d_une_liste_vide_est_nulle_partout() -> None:
     compte = repartition([])
     assert set(compte["par_categorie"].values()) == {0}
     assert set(compte["par_etape"].values()) == {0}
+
+# --- RT-8 : un manque de configuration PARTAGE est un seul geste, pas douze -------------------
+def test_un_champ_reclame_par_plusieurs_pans_ne_donne_qu_une_action() -> None:
+    """Cas reel du lot COMPTA du 14/08 : 33 variables non revendiquees vues par 12 pans.
+
+    Douze actions quasi identiques noyaient l onglet Actions du dashboard, pour UN geste :
+    renseigner la variable une fois la sert partout.
+    """
+    pans = [f"pan{i}" for i in range(12)]
+    non_testables = [{"pan": p, "element": f"VAR_{i}", "champs_requis": ["secrets"]}
+                     for p in pans for i in range(33)]
+    actions = classifier([], non_testables)
+    assert len(actions) == 1, [a["finding_ref"] for a in actions]
+    assert actions[0]["etape_cible"] == "mep-config"
+
+
+def test_l_agregation_nomme_les_pans_concernes() -> None:
+    """Agreger sans nommer ferait disparaitre A QUI le manque profite : le lecteur ne saurait
+    plus ce que la configuration debloque."""
+    non_testables = [{"pan": p, "element": "JETON", "champs_requis": ["secrets"]}
+                     for p in ("api", "batch")]
+    attendu = classifier([], non_testables)[0]["attendu"]
+    assert "api" in attendu and "batch" in attendu
+
+
+def test_un_manque_propre_a_un_pan_survit_a_l_agregation() -> None:
+    """L agregation ne doit pas avaler ce qu un seul pan reclame : le geste y est different."""
+    non_testables = [{"pan": p, "element": "JETON", "champs_requis": ["secrets"]}
+                     for p in ("api", "batch")]
+    non_testables.append({"pan": "qualif", "element": "MIRE",
+                          "champs_requis": ["url", "identifiants"]})
+    refs = {a["finding_ref"] for a in classifier([], non_testables)}
+    assert refs == {f"{PREFIXE_NON_TESTABLE}partages:secrets",
+                    f"{PREFIXE_NON_TESTABLE}qualif:url+identifiants"}
+
+
+def test_le_pan_agrege_reste_un_geste_d_exploitant_pour_son_pan_non_couvert() -> None:
+    """Le routage manuelle_utilisateur/mep-config repose sur pans_non_testables : l agregation
+    ne doit pas faire perdre l appartenance des pans, sinon le travail repart au mauvais
+    destinataire (forge au lieu d exploitant)."""
+    non_testables = [{"pan": p, "element": "JETON", "champs_requis": ["secrets"]}
+                     for p in ("api", "batch")]
+    pans = [{"pan": "batch", "motif": "config absente", "pour_couvrir": "fournir le jeton"}]
+    action = next(a for a in classifier([], non_testables, pans)
+                  if a["finding_ref"] == f"{PREFIXE_PAN_NON_COUVERT}batch")
+    assert (action["categorie"], action["etape_cible"]) == ("manuelle_utilisateur", "mep-config")

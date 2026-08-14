@@ -43,10 +43,41 @@ un inventaire VIDE et zéro constat ; ce pan fait désormais de même.
 Le critère est écrit dans `precondition_absente` et ne se déclenche QUE si la précondition est
 manifestement absente pour TOUT le pan : une seule route en 401 parmi des routes saines reste
 un défaut de cette route, et elle est conservée.
+
+**Parcours d ENTRÉE, sans session (RT-7 / TF-0223).** Ce pan parcourait l instance AUTHENTIFIÉ,
+et lui seul. Payé en production le 14/08 : `GET /` répondait 303 vers `/.auth/login/aad`, qui
+rendait un **404 JSON de FastAPI** — Easy Auth n avait jamais été activée. Le login était mort
+depuis le premier déploiement ; aucun test ne l a vu (le smoke du pipeline ne regarde que
+`/health`, public), et c est l humain qui l a découvert EN CLIQUANT, quelques minutes après un
+run conclu « boucle close, pans au vert ». Le pan joue donc AUSSI, dans un contexte de navigateur
+VIERGE et AVANT toute session, la chaîne de redirections depuis la racine, et exige qu elle
+aboutisse à une **mire identifiable** (2xx + marqueur de contenu). Trois règles, toutes prouvées
+dans les deux sens :
+
+  - le contrôle tourne **même quand aucune session n est fournie** — c est précisément son
+    intérêt : la porte d entrée est ce que tout visiteur voit, session ou pas ;
+  - il ne se déclenche **pas** sur une instance publique : sans saut d authentification dans la
+    chaîne, il n y a rien à vérifier de ce côté, et le pan le DIT au lieu d accuser ;
+  - il **survit à la garde de précondition** ci-dessous : un pan aveugle sur le contenu
+    authentifié doit quand même pouvoir dire « et en plus, votre porte d entrée est murée ».
+    L y soumettre reconstruirait, un étage plus bas, le silence que la garde vient de corriger.
+
+**Session FOURNIE (RT-6 / TF-0222).** Le pan ne savait s authentifier que par mire formulaire ;
+toute instance derrière un IdP d entreprise (Easy Auth Entra : redirections vers
+`login.microsoftonline.com`, MFA, accès conditionnel) lui était inauditable — or c est là que
+vivent les défauts de frontière. Il accepte désormais une session capturée ailleurs :
+`FORGE_TESTS_QUALIF_STORAGE_STATE` (storage state Playwright, chargé dans le contexte) et/ou
+`FORGE_TESTS_QUALIF_BEARER` (en-tête `Authorization` ajouté aux requêtes). La **provenance** de
+la session est publiée au rapport à chaque exécution : un audit mené sous une session capturée
+ne se confond pas avec un audit qui s est authentifié lui-même. Limite déclarée, et détectée
+quand elle mord : une session capturée **périme** — sous session expirée, le pan mesure une
+redirection, pas un produit. Ni le jeton ni le chemin complet du storage state ne sont publiés :
+seuls le NOM du fichier et la NATURE de la session, parce que le rapport circule.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -67,7 +98,11 @@ POUR_COUVRIR = (
     "FORGE_TESTS_QUALIF_LOGIN / FORGE_TESTS_QUALIF_PASSWORD si les routes sont protégées. "
     "Options : FORGE_TESTS_QUALIF_ROUTES (routes d'amorce, virgule), "
     "FORGE_TESTS_QUALIF_MARQUEURS (JSON route -> marqueur de contenu), "
-    "FORGE_TESTS_QUALIF_CONNEXION (route de la mire), FORGE_TESTS_QUALIF_PLAFOND (routes max)"
+    "FORGE_TESTS_QUALIF_CONNEXION (route de la mire), FORGE_TESTS_QUALIF_PLAFOND (routes max). "
+    "Instance derriere un IdP d entreprise (Entra, Okta, MFA) que la forge ne peut pas rejouer : "
+    "fournir une session DEJA OUVERTE par FORGE_TESTS_QUALIF_STORAGE_STATE (storageState.json "
+    "Playwright) et/ou FORGE_TESTS_QUALIF_BEARER (en-tete Authorization) — la provenance de la "
+    "session est publiee au rapport, et une session capturee perime"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
@@ -82,7 +117,22 @@ CHAPITRES = (
 )
 
 
-CHAMPS_REQUIS = ("FORGE_TESTS_QUALIF_URL",)
+# RT-13 : les champs qui débloquent CE pan, et eux seuls — sans revendication, ils restent dans
+# le sac partagé du domaine « acces » et sont réclamés à tous les pans en SKIP.
+# TF-0222 : les deux champs de session FOURNIE y entrent, sinon ils seraient réclamés au nom du
+# pan `data` (qui n en ferait rien) et jamais au nom de celui qu ils débloquent.
+CHAMPS_REQUIS = (
+    "FORGE_TESTS_QUALIF_URL",
+    "FORGE_TESTS_QUALIF_LOGIN",
+    "FORGE_TESTS_QUALIF_PASSWORD",
+    "FORGE_TESTS_QUALIF_STORAGE_STATE",
+    "FORGE_TESTS_QUALIF_BEARER",
+)
+
+# Ce qu il faut pour que le pan ait seulement un SUJET : une instance servie. Distinct de
+# `CHAMPS_REQUIS` (ce qu il REVENDIQUE) — réclamer un compte à qui n a pas encore d URL serait
+# demander deux gestes quand un seul est bloquant.
+CHAMPS_REQUIS_INSTANCE = ("FORGE_TESTS_QUALIF_URL",)
 
 NON_JUGE = [
     "qualif : le pan LIT les ecouteurs attaches a chaque affordance, il ne CLIQUE jamais — sur "
@@ -117,6 +167,116 @@ _TRACES = (
     "django.core.exceptions",
 )
 _PLAFOND_DEFAUT = 40
+
+
+# --- Session FOURNIE, et sa PROVENANCE (RT-6 / TF-0222) ---------------------------------------
+# Une instance derrière un IdP d entreprise (Entra + MFA + accès conditionnel) ne s ouvre pas en
+# remplissant un formulaire : la forge ne peut pas rejouer un second facteur. Elle accepte donc
+# une session ouverte AILLEURS — c est l artefact que le produit produit déjà pour ses propres
+# tests Azure (storage state Playwright, cookie `AppServiceAuthSession`).
+#
+# TF-0222 : quand la session a été FOURNIE et qu elle n a pas ouvert l instance, ce ne sont pas
+# des identifiants qui manquent — c est la session capturée qu il faut RENOUVELER.
+CHAMPS_REQUIS_SESSION_FOURNIE = (
+    "FORGE_TESTS_QUALIF_STORAGE_STATE",
+    "FORGE_TESTS_QUALIF_BEARER",
+)
+# En-têtes déjà porteurs de leur schéma : on ne les préfixe pas une seconde fois.
+_SCHEMAS_AUTORISATION = ("bearer ", "basic ", "negotiate ", "digest ", "token ")
+
+
+def session_fournie(config: dict) -> bool:
+    """Une session capturée ailleurs a-t-elle été fournie à ce pan ?"""
+    return bool(config.get("storage_state") or config.get("bearer"))
+
+
+def _entete_autorisation(valeur: str) -> str:
+    """En-tête `Authorization` à poser. Un jeton nu est un jeton `Bearer` — le cas courant."""
+    valeur = (valeur or "").strip()
+    if valeur.lower().startswith(_SCHEMAS_AUTORISATION):
+        return valeur
+    return f"Bearer {valeur}"
+
+
+def provenance_session(config: dict) -> str:
+    """Sous QUELLE identité l audit a été mené — publié au rapport, à chaque exécution.
+
+    TF-0222 : un audit fait sous une session CAPTURÉE ne se confond pas avec un audit qui s est
+    authentifié lui-même. Le premier hérite des droits de l opérateur qui a capturé la session
+    (souvent plus larges que ceux du compte d audit nominal) et il périme sans prévenir ; le
+    second rejoue la mire à chaque run. Lire un rapport sans savoir lequel des deux on tient,
+    c est ignorer ce que « exercé » veut dire dedans.
+
+    Ni le jeton ni le chemin complet du storage state n apparaissent : le rapport CIRCULE, et
+    ces deux valeurs portent une identité. Seuls la nature de la session et le NOM du fichier.
+    """
+    natures: list[str] = []
+    if config.get("storage_state"):
+        natures.append(
+            f"storage state Playwright « {Path(str(config['storage_state'])).name} » "
+            "(cookies et stockage local injectes dans le contexte)"
+        )
+    if config.get("bearer"):
+        natures.append("en-tete Authorization fourni (valeur JAMAIS publiee)")
+    if natures:
+        rejouee = (
+            " La mire formulaire n a PAS ete rejouee, meme si un compte est configure : la "
+            "session fournie prime."
+            if (config.get("login") and config.get("mdp"))
+            else ""
+        )
+        return (
+            "qualif : PROVENANCE DE SESSION — audit mene sous une session CAPTUREE AILLEURS et "
+            "fournie a la forge (" + " · ".join(natures) + ")." + rejouee + " Ce qui est mesure "
+            "l est donc sous l identite de l operateur qui a capture la session, et une session "
+            "capturee PERIME : sous session expiree, le pan mesure une redirection, pas un "
+            "produit. A ne pas confondre avec un audit qui s est authentifie lui-meme"
+        )
+    if config.get("login") and config.get("mdp"):
+        return (
+            "qualif : PROVENANCE DE SESSION — session ouverte PAR LA FORGE elle-meme, en "
+            "rejouant la mire formulaire avec FORGE_TESTS_QUALIF_LOGIN ; ce que le pan voit est "
+            "exactement ce que ce compte voit"
+        )
+    return (
+        "qualif : PROVENANCE DE SESSION — AUCUNE session : l instance a ete parcourue en "
+        "ANONYME. Tout contenu place derriere une authentification est hors de portee de ce "
+        "relevé — fournir un compte (FORGE_TESTS_QUALIF_LOGIN / _PASSWORD) ou une session deja "
+        "ouverte (FORGE_TESTS_QUALIF_STORAGE_STATE / _BEARER)"
+    )
+
+
+def _options_contexte(config: dict) -> tuple[dict, list[str]]:
+    """Options du contexte Playwright AUTHENTIFIÉ, et ce qu il a fallu écarter en le disant.
+
+    Un storage state introuvable ou illisible ne fait pas tomber le pan : il est ÉCARTÉ, la
+    configuration est corrigée en mémoire pour que la provenance publiée dise la vérité (pas
+    « audit sous session capturée » alors que le fichier n a jamais été lu), et l écart est
+    déclaré. Un audit qui se croit authentifié est plus dangereux qu un audit anonyme.
+    """
+    alertes: list[str] = []
+    options: dict = {}
+    chemin = str(config.get("storage_state") or "").strip()
+    if chemin:
+        fichier = Path(chemin)
+        motif = None
+        if not fichier.is_file():
+            motif = "fichier introuvable"
+        else:
+            try:
+                json.loads(fichier.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as erreur:
+                motif = f"illisible ({type(erreur).__name__})"
+        if motif is None:
+            options["storage_state"] = str(fichier)
+        else:
+            config["storage_state"] = ""
+            alertes.append(
+                f"qualif : FORGE_TESTS_QUALIF_STORAGE_STATE ecarte — « {fichier.name} » {motif} ; "
+                "le parcours se poursuit SANS cette session, et la provenance publiee le dit"
+            )
+    return options, alertes
+
 
 # --- Précondition du pan : une session ouverte (RT-16 / TF-0211) -------------------------------
 # Ce qui DÉBLOQUE le pan quand sa précondition manque — publié en `non_testables[].champs_requis`.
@@ -193,17 +353,238 @@ def precondition_absente(releve: list[dict], config: dict) -> str | None:
         if signal is None:
             return None
         signaux.append(f"{page_vue['route']} ({signal})")
+    # TF-0222 : une session FOURNIE et pourtant refusee partout, c est le cas de peremption —
+    # le geste de reparation n est alors pas « fournir un compte » mais « recapturer la session ».
+    a_reparer = (
+        CHAMPS_REQUIS_SESSION_FOURNIE if session_fournie(config) else CHAMPS_REQUIS_SESSION
+    )
+    peremption = (
+        " La session FOURNIE n a donc PAS ete acceptee par l instance : une session capturee "
+        "PERIME (cookie expire, acces conditionnel rejoue), et un audit sous session expiree "
+        "mesure une redirection, pas un produit — la recapturer avant de rejouer."
+        if session_fournie(config)
+        else ""
+    )
     return (
         f"qualif : PRECONDITION NON ETABLIE — le pan exige une session ouverte sur l instance, "
         f"et les {len(releve)} route(s) parcourue(s) sur {config['base']} l attestent toutes "
         f"absente : " + " · ".join(signaux) + ". Le pan a donc photographie le meme ecran "
         "autant de fois qu il a visite de routes : son inventaire est declare NON MESURABLE et "
-        "il n emet AUCUN constat produit. Fournir ou corriger "
-        + ", ".join(CHAMPS_REQUIS_SESSION)
+        "il n emet AUCUN constat produit." + peremption + " Fournir ou corriger "
+        + ", ".join(a_reparer)
         + " (et FORGE_TESTS_QUALIF_CONNEXION si la mire n est pas sur /connexion ou /login), "
         "puis `--reprendre` le rapport. Un pan aveugle qui se tait est utile ; un pan aveugle "
         "qui accuse coute un audit entier a dementir"
     )
+
+
+# --- Parcours d ENTRÉE, sans session (RT-7 / TF-0223) -----------------------------------------
+# Le pan regardait l instance de l INTÉRIEUR. La porte d entrée — ce que voit quiconque arrive
+# sans rien — n était vue par personne : ni par ce pan (authentifié), ni par le smoke du pipeline
+# (qui n interroge que `/health`, public). Résultat mesuré : un login mort depuis le premier
+# déploiement, découvert par un humain qui a cliqué.
+IDENT_ENTREE = "qualif:entree:/"
+CLASSE_ENTREE = "chaine-authentification-en-impasse"
+
+# Ce qui fait d un maillon un SAUT D AUTHENTIFICATION. Sans un seul de ces sauts dans la chaîne,
+# l instance ne demande rien à l entrée : il n y a pas de porte, donc pas de porte murée, et le
+# contrôle se tait. C est la moitié du critère, et elle est aussi importante que l autre.
+# Le chemin se lit par SEGMENTS, jamais par sous-chaîne : `/loginfo` contient « login » sans
+# être une mire, et une page publique `/aide/se-connecter` n est pas une porte d entrée.
+_SEGMENTS_AUTH = frozenset(
+    {
+        ".auth", "auth", "oauth", "oauth2", "authorize", "authorization", "saml", "saml2",
+        "sso", "signin", "sign-in", "login", "log-in", "logon", "connexion", "adfs", "openid",
+        "openid-connect", "idp",
+    }
+)
+_HOTES_IDP = (
+    "login.microsoftonline.com", "login.microsoft.com", "login.windows.net", "sts.windows.net",
+    "accounts.google.com", "okta.com", "auth0.com", "onelogin.com", "pingidentity.com",
+    "keycloak", "cas.", "idp.",
+)
+_CHAMP_MOTDEPASSE = re.compile(r"type\s*=\s*[\"']?password", re.IGNORECASE)
+# Un titre d un ou deux caractères n identifie rien ; c est le seuil déjà retenu par `_JS_TITRE`.
+_LONGUEUR_TITRE_MIN = 3
+
+
+def _sans_secret(url: str) -> str:
+    """URL réduite à `schéma://hôte/chemin` — la requête d un IdP porte `code`, `state`, `nonce`.
+
+    Ces paramètres sont des fragments de session : les recopier au rapport, c est publier au
+    rapport ce que le garde-fou anti-fuite existe pour retenir.
+    """
+    decoupe = urlparse(url or "")
+    if not decoupe.scheme:
+        # Une URL RELATIVE porte sa requête elle aussi (`/callback?code=…`) : la rendre telle
+        # quelle republierait exactement ce que la branche absolue prend soin d ôter.
+        return (decoupe.path or url or "")[:120]
+    return f"{decoupe.scheme}://{decoupe.netloc}{decoupe.path}"[:120]
+
+
+def _est_saut_auth(url: str) -> bool:
+    """Ce maillon de la chaîne est-il un saut d authentification ?"""
+    decoupe = urlparse((url or "").lower())
+    if any(hote in decoupe.netloc for hote in _HOTES_IDP):
+        return True
+    return bool(set(decoupe.path.split("/")) & _SEGMENTS_AUTH)
+
+
+def _marqueur_mire(entree: dict, config: dict) -> str | None:
+    """Le marqueur de contenu qui fait de la page d arrivée une MIRE IDENTIFIABLE, ou None.
+
+    Trois sources, de la plus opposable à la plus indulgente :
+      - le marqueur DÉCLARÉ par le projet pour la route d arrivée (`FORGE_TESTS_QUALIF_MARQUEURS`)
+        — s il est déclaré, il est le seul juge : une page qui ne le porte pas n est pas la mire
+        attendue, même si elle affiche autre chose ;
+      - un champ de mot de passe : une mire de connexion, quel qu en soit le titre ;
+      - un titre non vide (premier `h1`, sinon `title`) : la page a RENDU quelque chose
+        d identifiable. C est ce dernier point que le 404 JSON de production ne franchissait pas.
+    """
+    corps = entree.get("corps") or ""
+    chaine = entree.get("chaine") or []
+    url_finale = str(chaine[-1].get("url") or "") if chaine else ""
+    route = _route(url_finale, config.get("base") or "") if config.get("base") else None
+    declare = (config.get("marqueurs") or {}).get(route) if route else None
+    if declare:
+        return declare if declare.lower() in corps.lower() else None
+    if _CHAMP_MOTDEPASSE.search(corps):
+        return "champ de mot de passe"
+    titre = (entree.get("titre") or "").strip()
+    if len(titre) >= _LONGUEUR_TITRE_MIN:
+        return f"titre « {titre[:60]} »"
+    return None
+
+
+def diagnostiquer_entree(entree: dict | None, config: dict) -> str | None:
+    """Motif d impasse du parcours d entrée NON AUTHENTIFIÉ, ou None s il n y a rien à reprocher.
+
+    **Critère, et rien d autre** : la chaîne de redirections partie de la racine comporte au
+    moins un saut d authentification, et elle N ABOUTIT PAS à une mire identifiable — c est-à-dire
+    à une réponse 2xx portant un marqueur de contenu. Les trois façons de ne rien dire :
+
+      - aucun relevé, ou un relevé dont la navigation a échoué → le pan ne SAIT rien, et une
+        ignorance n accuse jamais (même règle que la garde de précondition) ;
+      - aucun saut d authentification → instance publique : il n y a pas de porte à vérifier ;
+      - une arrivée en 2xx avec marqueur → chaîne SAINE, y compris quand elle passe par un IdP
+        externe. Traverser `login.microsoftonline.com` est le fonctionnement NORMAL d Entra, pas
+        un défaut : ce qui est jugé est le point d arrivée, jamais l itinéraire.
+    """
+    if not entree or entree.get("erreur"):
+        return None
+    chaine = [m for m in (entree.get("chaine") or []) if m]
+    if not chaine:
+        return None
+    if not any(_est_saut_auth(str(m.get("url") or "")) for m in chaine):
+        return None
+    trace = " -> ".join(
+        f"{_sans_secret(str(m.get('url') or ''))} ({m.get('statut') or 'sans statut'})"
+        for m in chaine
+    )
+    statut = chaine[-1].get("statut")
+    if statut is None or not 200 <= int(statut) < 300:
+        return (
+            f"la chaine d authentification depuis la racine n aboutit a AUCUNE mire : {trace}. "
+            f"Le dernier maillon rend {statut if statut is not None else 'aucune reponse'} la ou "
+            "un visiteur doit trouver un ecran de connexion — la porte d entree de l instance "
+            "est muree, et aucun parcours authentifie ne peut le voir"
+        )
+    if _marqueur_mire(entree, config) is None:
+        return (
+            f"la chaine d authentification depuis la racine aboutit a un {statut} SANS marqueur "
+            f"de contenu : {trace}. La page ne rend ni titre, ni champ de mot de passe, ni le "
+            "marqueur declare pour cette route — elle repond, mais elle n affiche pas de mire "
+            "identifiable, ce qu un controle de code HTTP seul declarerait vert"
+        )
+    return None
+
+
+def mentions_entree(entree: dict | None, config: dict) -> list[str]:
+    """Ce que le parcours d entrée a vu — publié MÊME quand il n a rien à reprocher.
+
+    Un contrôle qui ne parle que lorsqu il accuse est indiscernable d un contrôle qui n a pas
+    tourné : c est exactement le silence qui a coûté le login de production.
+    """
+    if not entree:
+        return [
+            "qualif : parcours d ENTREE non joue — la chaine de redirections depuis la racine n a "
+            "pas ete relevee ; ce que voit un visiteur SANS session reste inconnu de cet audit"
+        ]
+    if entree.get("erreur"):
+        return [
+            "qualif : parcours d ENTREE non concluant sur "
+            f"{config.get('base') or 'l instance'} ({entree['erreur']}) — la chaine n est pas "
+            "jugee : une ignorance n accuse jamais"
+        ]
+    chaine = [m for m in (entree.get("chaine") or []) if m]
+    trace = " -> ".join(
+        f"{_sans_secret(str(m.get('url') or ''))} ({m.get('statut') or 'sans statut'})"
+        for m in chaine
+    ) or "aucun maillon"
+    limite = (
+        "qualif : le parcours d ENTREE suit les redirections HTTP et le rendu INITIAL de la page "
+        "d arrivee ; une bascule d authentification operee en JavaScript apres chargement (ou une "
+        "mire rendue derriere un second clic) n est pas suivie"
+    )
+    if not any(_est_saut_auth(str(m.get("url") or "")) for m in chaine):
+        return [
+            "qualif : parcours d ENTREE joue SANS session — la racine ne redirige vers aucune "
+            f"authentification ({trace}) : instance publique de ce point de vue, il n y a pas de "
+            "porte d entree a verifier et le pan n en invente pas",
+            limite,
+        ]
+    marqueur = _marqueur_mire(entree, config)
+    if diagnostiquer_entree(entree, config) is None:
+        return [
+            "qualif : parcours d ENTREE joue SANS session — la chaine aboutit a une mire "
+            f"IDENTIFIABLE ({marqueur}) : {trace}. Un itineraire passant par un IdP externe est "
+            "sain des lors qu il arrive quelque part",
+            limite,
+        ]
+    return [limite]
+
+
+def _relever_entree(navigateur, config: dict) -> dict:  # noqa: ANN001
+    """Relève la chaîne de redirections depuis la racine, dans un contexte VIERGE.
+
+    Contexte neuf et sans storage state : c est la condition du contrôle, pas un détail
+    d implémentation. Rejouer cette navigation dans le contexte authentifié mesurerait ce que
+    voit quelqu un qui est déjà entré — précisément la mesure qui n a rien vu.
+    """
+    contexte = navigateur.new_context()
+    vide = {"chaine": [], "corps": "", "titre": "", "erreur": None}
+    try:
+        page = contexte.new_page()
+        reponse = page.goto(config["base"] + "/", wait_until="domcontentloaded", timeout=45000)
+        if reponse is None:
+            return {**vide, "erreur": "aucune reponse HTTP observee sur la racine"}
+        chaine: list[dict] = []
+        requete = reponse.request
+        while requete is not None:
+            reponse_maillon = requete.response()
+            chaine.append(
+                {
+                    "url": requete.url,
+                    "statut": reponse_maillon.status if reponse_maillon is not None else None,
+                }
+            )
+            requete = requete.redirected_from
+        chaine.reverse()
+        try:
+            titre = page.evaluate(_JS_TITRE) or ""
+        except Exception:  # noqa: BLE001
+            titre = ""
+        try:
+            corps = page.content()[:20000]
+        except Exception:  # noqa: BLE001
+            corps = ""
+        return {"chaine": chaine, "corps": corps, "titre": titre, "erreur": None}
+    except Exception as erreur:  # noqa: BLE001 — une entree injoignable se DECLARE, sans accuser
+        return {**vide, "erreur": f"{type(erreur).__name__}: {erreur}"}
+    finally:
+        with contextlib.suppress(Exception):
+            contexte.close()
+
 
 # Descripteur de chaque affordance, lu dans le DOM RENDU (et non dans le gabarit source).
 _JS_AFFORDANCES = """
@@ -274,6 +655,10 @@ def _config(cible: Path) -> dict:
         "mdp": (os.environ.get("FORGE_TESTS_QUALIF_PASSWORD") or os.environ.get(
             "FORGE_TESTS_PASSWORD"
         ) or "").strip(),
+        # TF-0222 : session ouverte AILLEURS. Aucun repli sur une variable non préfixée : ces
+        # deux valeurs portent une identité, elles ne se ramassent pas par accident.
+        "storage_state": (os.environ.get("FORGE_TESTS_QUALIF_STORAGE_STATE") or "").strip(),
+        "bearer": (os.environ.get("FORGE_TESTS_QUALIF_BEARER") or "").strip(),
         "plafond": int(plafond) if plafond.isdigit() else _PLAFOND_DEFAUT,
     }
 
@@ -517,7 +902,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
 
     config = _config(cible)
     if not config["base"]:
-        declarer(cible, "acces", CHAMPS_REQUIS)
+        declarer(cible, "acces", CHAMPS_REQUIS_INSTANCE)
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
             non_juge=[
@@ -536,24 +921,47 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 *NON_JUGE,
                 "qualif : Playwright absent de l environnement de Forge Tests — "
                 "`uv sync` puis `uv run playwright install chromium`",
+                # Y compris le parcours d entree : sans navigateur, la porte n est pas regardee
+                # non plus, et le taire ferait croire qu elle l a ete.
+                *mentions_entree(None, config),
             ],
         )
 
     non_juge = list(NON_JUGE)
+    entree: dict | None = None
     try:
         with sync_playwright() as pw:
             navigateur = pw.chromium.launch()
-            page = navigateur.new_page()
-            echec = _connecter(page, config)
-            if echec:
-                non_juge.append(f"qualif : {echec}")
+            # TF-0223 — la porte d entree D ABORD, dans un contexte VIERGE : toute session ouverte
+            # ensuite (mire rejouee ou storage state charge) rendrait ce releve aveugle a ce qu il
+            # existe pour voir. L ordre n est pas un confort, c est le controle lui-meme.
+            entree = _relever_entree(navigateur, config)
+            options, alertes = _options_contexte(config)
+            non_juge.extend(alertes)
+            contexte = navigateur.new_context(**options)
+            if config["bearer"]:
+                contexte.set_extra_http_headers(
+                    {"Authorization": _entete_autorisation(config["bearer"])}
+                )
+            page = contexte.new_page()
+            # Une session FOURNIE prime : rejouer la mire par-dessus ecraserait l identite qu on
+            # nous a confiee, et le rapport annoncerait une provenance qui n est plus la bonne.
+            if not session_fournie(config):
+                echec = _connecter(page, config)
+                if echec:
+                    non_juge.append(f"qualif : {echec}")
             releve, avertissements = _visiter(page, config)
             navigateur.close()
     except Exception as erreur:  # noqa: BLE001 — un pan qui ne peut pas voir le DECLARE
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
+            # TF-0223 : le constat d entree survit MEME ici. Une instance dont l interieur est
+            # inaccessible est justement celle dont la porte merite d etre regardee.
+            findings=[f for f in (finding_entree(entree, config, cible),) if f is not None],
             non_juge=[
                 *non_juge,
+                provenance_session(config),
+                *mentions_entree(entree, config),
                 f"qualif : instance {config['base']} non parcourable "
                 f"({type(erreur).__name__}: {erreur})",
             ],
@@ -561,37 +969,81 @@ def analyser(cible: Path) -> SortieAdaptateur:
     if not releve:
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
-            non_juge=[*non_juge, f"qualif : aucune route atteinte sur {config['base']}"],
+            findings=[f for f in (finding_entree(entree, config, cible),) if f is not None],
+            non_juge=[
+                *non_juge,
+                provenance_session(config),
+                *mentions_entree(entree, config),
+                f"qualif : aucune route atteinte sur {config['base']}",
+            ],
         )
     non_juge.extend(sorted(set(avertissements)))
-    return conclure(cible, config, releve, non_juge)
+    return conclure(cible, config, releve, non_juge, entree)
+
+
+def finding_entree(entree: dict | None, config: dict, cible: Path) -> Finding | None:
+    """Le constat d impasse de la porte d entrée, ou None. Un seul point de fabrication."""
+    motif = diagnostiquer_entree(entree, config)
+    if motif is None:
+        return None
+    return Finding(
+        id=IDENT_ENTREE,
+        classe=CLASSE_ENTREE,
+        localisation=f"{config.get('base') or ''}/",
+        message=f"parcours d entree SANS session — {motif}",
+        risque=coter(PAN, IDENT_ENTREE, str(cible)),
+    )
 
 
 def conclure(
-    cible: Path, config: dict, releve: list[dict], non_juge: list[str]
+    cible: Path,
+    config: dict,
+    releve: list[dict],
+    non_juge: list[str],
+    entree: dict | None = None,
 ) -> SortieAdaptateur:
     """Traduit le relevé de parcours en verdict — SEUL endroit où ce pan accuse le produit.
 
     Séparé de `analyser` pour que la garde de précondition et les constats qu elle retient
-    soient prouvables sans navigateur : c est le relevé qui décide, et un relevé s écrit.
+    soient prouvables sans navigateur : c est le relevé qui décide, et un relevé s écrit. Il en
+    va de même du parcours d entrée (`entree`, TF-0223) : une chaîne de redirections est une
+    donnée, et son jugement se prouve sans Chromium.
     """
     from forge_tests.noyau import NonTestable
     from forge_tests.qualification import declarer, detecter
 
-    # RT-16 : AVANT tout constat. Un pan qui n a pas pu établir l état qu il exige ne mesure pas
-    # le produit, il mesure son propre échec — le publier comme un défaut du produit fabrique un
-    # bloc de findings identiques, tous au même risque, qu il faut un audit entier pour démentir.
+    non_juge = [*non_juge, provenance_session(config), *mentions_entree(entree, config)]
+    # TF-0223 — fabriqué AVANT la garde, et volontairement pas soumis à elle : la garde dit que
+    # le pan n a pas vu l INTÉRIEUR de l instance ; le parcours d entrée, lui, s est joué sans
+    # session et n avait rien à établir. Le taire ici reconstruirait un étage plus bas le silence
+    # que la garde vient de corriger — un pan aveugle au contenu authentifié doit quand même
+    # pouvoir dire « et en plus, votre porte d entrée est murée ».
+    constat_entree = finding_entree(entree, config, cible)
+
+    # RT-16 : AVANT tout constat TIRÉ DU PARCOURS AUTHENTIFIÉ. Un pan qui n a pas pu établir
+    # l état qu il exige ne mesure pas le produit, il mesure son propre échec — le publier comme
+    # un défaut du produit fabrique un bloc de findings identiques, tous au même risque, qu il
+    # faut un audit entier pour démentir.
     motif = precondition_absente(releve, config)
     if motif is not None:
-        declarer(cible, "acces", CHAMPS_REQUIS_SESSION)
+        declarer(
+            cible,
+            "acces",
+            CHAMPS_REQUIS_SESSION_FOURNIE if session_fournie(config) else CHAMPS_REQUIS_SESSION,
+        )
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
+            findings=[constat_entree] if constat_entree is not None else [],
             non_juge=[*non_juge, motif],
             # L inventaire est NOMMÉ route par route — non mesurable, jamais « rien à voir ici ».
             non_testables=[
                 NonTestable(
                     element=f"qualif:route:{page_vue['route']}",
-                    champs_requis=list(CHAMPS_REQUIS_SESSION),
+                    champs_requis=list(
+                        CHAMPS_REQUIS_SESSION_FOURNIE
+                        if session_fournie(config)
+                        else CHAMPS_REQUIS_SESSION
+                    ),
                     pan=PAN,
                     motif=(
                         f"qualif : {page_vue['route']} non mesurable — precondition du pan "
@@ -606,6 +1058,16 @@ def conclure(
     exerces: list[str] = []
     findings: list[Finding] = []
     non_testables: list = []
+
+    # TF-0223 — la porte d entrée est un ÉLÉMENT DE SURFACE comme une route : inventoriée quand
+    # elle a été relevée, exercée quand elle aboutit à une mire. Hors inventaire, un contrôle qui
+    # se tait redevient indiscernable d un contrôle qui n a pas tourné.
+    if entree is not None and not entree.get("erreur"):
+        inventaire.append(IDENT_ENTREE)
+        if constat_entree is None:
+            exerces.append(IDENT_ENTREE)
+        else:
+            findings.append(constat_entree)
 
     for page_vue in releve:
         route = page_vue["route"]

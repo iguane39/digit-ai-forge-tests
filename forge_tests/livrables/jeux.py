@@ -78,11 +78,22 @@ _SECRETS = (
 #
 # Confondre les deux menait à l impasse : soit on laissait fuir des jetons, soit on refusait de
 # publier un audit d instance servie.
+# TF-0222 (14/08) — `BEARER` et `STORAGE_STATE` ajoutés le jour où le pan qualif a su consommer
+# une session fournie. L écart avait été MESURÉ avant d être corrigé : `FORGE_TESTS_QUALIF_BEARER`
+# sortait du corpus interdit (le nom est bien authentifiant au sens des SEGMENTS, mais aucun motif
+# ne le reconnaissait), et `FORGE_TESTS_QUALIF_STORAGE_STATE` échouait les deux conditions. Un
+# jeton d audit pouvait donc être recopié dans un livrable qui circule.
+# Deux niveaux distincts, et la nuance tient : un jeton porteur EST un secret (jamais nulle part) ;
+# le CHEMIN d une session capturée n est qu une donnée d exploitation — interdite dans un jeu de
+# données fabriqué, admise dans un rapport, comme l URL de l instance auditée. `STORAGE_STATE` est
+# cité en PAIRE, jamais `STORAGE` seul : `STORAGE_BUCKET` d un produit n a rien à faire ici, et la
+# surcorrection coûterait plus cher que le défaut (leçon TF-0215).
 _NOM_SECRET = re.compile(
-    r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|MDP|CRED|AUTH|JETON|CLE)", re.IGNORECASE
+    r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|MDP|CRED|AUTH|JETON|CLE|BEARER)", re.IGNORECASE
 )
 _NOM_CONFIG = re.compile(
-    r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|MDP|CRED|AUTH|JETON|CLE|API|DSN|URL|LOGIN|MAIL|USER)",
+    r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|MDP|CRED|AUTH|JETON|CLE|BEARER"
+    r"|STORAGE_STATE|API|DSN|URL|LOGIN|MAIL|USER)",
     re.IGNORECASE,
 )
 _LONGUEUR_COMPARABLE = 8
@@ -115,6 +126,9 @@ _SEGMENTS_AUTHENTIFIANTS = frozenset(
         "MDP", "MOTDEPASSE", "CRED", "CREDS", "CREDENTIAL", "CREDENTIALS", "AUTH", "CLE",
         "CLEF", "LOGIN", "USER", "USERNAME", "UTILISATEUR", "COMPTE", "IDENTIFIANT",
         "IDENTIFIANTS", "MAIL", "EMAIL", "COURRIEL", "SESSION", "COOKIE", "BEARER",
+        # TF-0222 : le chemin d une session capturée désigne un porteur d identité — il ne
+        # NOMME pas ce qui est audité, il ouvre une porte. Il reste donc dans le corpus.
+        "STORAGE",
     }
 )
 
