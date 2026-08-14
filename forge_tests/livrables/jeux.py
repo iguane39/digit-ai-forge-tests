@@ -29,6 +29,10 @@ NON_JUGE = [
     "jeux de donnees : le garde-fou compare aux valeurs de configuration LISIBLES (env "
     "sensibles, `.env*` du projet) — une donnee reelle recopiee a la main qui ne figure dans "
     "aucune de ces sources ne serait pas reconnue ; la synthese, elle, est integrale",
+    "jeux de donnees : les variables `FORGE_TESTS_*` qui NOMMENT (PRODUIT, SOURCES, APP, "
+    "BASE_URL, QUALIF_*, ORACLES...) configurent l AUDITEUR et sont hors du corpus interdit — "
+    "une valeur du jeu qui reprendrait l une d elles n est PAS signalee ; celles qui "
+    "AUTHENTIFIENT (LOGIN, PASSWORD, TOKEN, SECRET, KEY, CRED...) y restent (TF-0215)",
     "jeux de donnees : les valeurs sont derivees de l IDENTIFIANT de l element, pas de son "
     "type metier — un jeu couvre la FORME du cas (nominal, vide, erreur), pas la semantique "
     "d un domaine que le rapport ne connait pas",
@@ -83,6 +87,54 @@ _NOM_CONFIG = re.compile(
 )
 _LONGUEUR_COMPARABLE = 8
 
+# TF-0215 (lot COMPTA, 14/08) — PÉRIMÈTRE du garde-fou, et non sa sévérité.
+#
+# Fait mesuré : `FORGE_TESTS_PRODUIT=…` déclaré dans `<projet>/.env.forge-tests` — l emplacement
+# que le README DOCUMENTE — entrait au corpus des valeurs interdites ; le champ `.produit` du jeu,
+# qui reprend légitimement ce nom, était alors refusé (`DonneeNonSynthetique`, exit 2, quatre
+# livrables non produits). Suivre la documentation rendait donc l audit impossible.
+#
+# La cause n est pas le garde-fou — il a attrapé de vraies fuites (courriels réels, jetons,
+# empreintes) et il ne bouge pas. La cause est que les variables `FORGE_TESTS_*` ne sont PAS des
+# secrets du produit audité : elles configurent l AUDITEUR. Un nom de produit, une URL d instance,
+# un chemin de sources ne fuitent rien — le produit les publie lui-même.
+#
+# Mais toutes ne se valent pas, et la surcorrection serait pire que le défaut : `FORGE_TESTS_*`
+# porte AUSSI le compte de test réel. La règle, en un mot :
+#
+#     ce qui NOMME sort du corpus (PRODUIT, SOURCES, APP, BASE_URL, QUALIF_ROUTES, ORACLES…) ;
+#     ce qui AUTHENTIFIE y reste (PASSWORD, LOGIN, TOKEN, SECRET, KEY, CRED…).
+#
+# La distinction se lit sur les SEGMENTS du nom (`FORGE_TESTS_QUALIF_LOGIN` → {FORGE, TESTS,
+# QUALIF, LOGIN}), comparés à un vocabulaire fermé — et non par sous-chaîne, qui ferait passer
+# `FORGE_TESTS_ORACLES` pour un secret au seul motif qu il contient « CLE » (oraCLEs).
+_PREFIXE_AUDITEUR = "FORGE_TESTS_"
+_SEGMENTS_AUTHENTIFIANTS = frozenset(
+    {
+        "KEY", "APIKEY", "TOKEN", "JETON", "SECRET", "SECRETS", "PASSWORD", "PASSWD", "PWD",
+        "MDP", "MOTDEPASSE", "CRED", "CREDS", "CREDENTIAL", "CREDENTIALS", "AUTH", "CLE",
+        "CLEF", "LOGIN", "USER", "USERNAME", "UTILISATEUR", "COMPTE", "IDENTIFIANT",
+        "IDENTIFIANTS", "MAIL", "EMAIL", "COURRIEL", "SESSION", "COOKIE", "BEARER",
+    }
+)
+
+
+def configure_l_auditeur(nom: str) -> bool:
+    """Vrai si `nom` configure Forge Tests SANS porter d identifiant d accès (TF-0215).
+
+    Deux sens, tous deux voulus :
+      - `FORGE_TESTS_PRODUIT`, `FORGE_TESTS_BASE_URL`, `FORGE_TESTS_QUALIF_ROUTES` → vrai :
+        ces valeurs NOMMENT ce qui est audité, elles sortent du corpus interdit ;
+      - `FORGE_TESTS_PASSWORD`, `FORGE_TESTS_QUALIF_LOGIN`, `FORGE_TESTS_API_KEY` → faux :
+        elles AUTHENTIFIENT un compte de test réel et restent interdites, comme avant.
+    Une variable hors préfixe (celles du PRODUIT : `DATABASE_URL`, `STRIPE_SECRET`…) n est
+    jamais concernée — le périmètre corrigé est celui de l auditeur, pas celui de l audité.
+    """
+    nom = (nom or "").strip().upper()
+    if not nom.startswith(_PREFIXE_AUDITEUR):
+        return False
+    return not (set(nom.split("_")) & _SEGMENTS_AUTHENTIFIANTS)
+
 # Vocabulaire fermé — écrit ici, donc opposable, donc jamais issu d un produit.
 _PRENOMS = ("Alix", "Camille", "Dominique", "Élie", "Fabien", "Gaëlle", "Hakim", "Inès")
 _NOMS = ("Dupont", "Martel", "Nguyen", "Ostrowski", "Perrin", "Quintard", "Rossi", "Sanchez")
@@ -100,6 +152,10 @@ def _valeurs_de_configuration(cible: Path | None, secrets_seulement: bool = Fals
     valeurs: set[str] = set()
     for nom, valeur in os.environ.items():
         valeur = (valeur or "").strip()
+        # TF-0215 : une variable qui configure l auditeur sans authentifier n est pas une valeur
+        # sensible du PROJET — elle ne peut pas rendre un jeu « non synthétique ».
+        if configure_l_auditeur(nom):
+            continue
         if len(valeur) >= _LONGUEUR_COMPARABLE and motif.search(nom):
             valeurs.add(valeur)
     if cible is not None:
@@ -114,6 +170,11 @@ def _valeurs_de_configuration(cible: Path | None, secrets_seulement: bool = Fals
                     continue
                 nom, _, valeur = ligne.partition("=")
                 valeur = valeur.strip().strip('"').strip("'")
+                # TF-0215 : le cas CONSTATÉ. `<projet>/.env.forge-tests` est l emplacement
+                # DOCUMENTÉ de la configuration de l auditeur ; y lire `FORGE_TESTS_PRODUIT` puis
+                # refuser le jeu qui porte ce nom revenait à interdire la configuration publiée.
+                if configure_l_auditeur(nom):
+                    continue
                 if secrets_seulement and not _NOM_SECRET.search(nom):
                     continue
                 if len(valeur) >= _LONGUEUR_COMPARABLE:
