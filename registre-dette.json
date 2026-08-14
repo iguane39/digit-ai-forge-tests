@@ -10,6 +10,20 @@
       "note": "limite propre de oracle-a11y, reprise telle quelle : audit axe-core complet, contraste et navigation clavier sortent de son contrat."
     },
     {
+      "id": "actions-001",
+      "domaine": "actions",
+      "enonce": "actions : la categorie et l etape sont derivees de la CLASSE du finding, pas de son contenu — deux findings de meme classe recoivent la meme suite, meme si l un est trivial et l autre profond ; l attendu, lui, cite l element",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : classification par CLASSE = doctrine du module (déterminisme opposable, jq du DOSSIER-MEP). Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "actions-002",
+      "domaine": "actions",
+      "enonce": "actions : `auto_ia` signifie « derivable d une source qui fait foi », pas « sans relecture » — un cas genere reste une PROPOSITION soumise a relecture (loi du generateur)",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : classification par CLASSE = doctrine du module (déterminisme opposable, jq du DOSSIER-MEP). Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
       "id": "api-fastapi-001",
       "domaine": "api-fastapi",
       "enonce": "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une ASSERTION porte sur lui — c est le role du second contre-oracle",
@@ -29,6 +43,34 @@
       "enonce": "batch : une branche dont le corps tient sur la MEME ligne que son test (`if x: y`) n est pas distinguable — les arcs de coverage.py vont de ligne a ligne, il n en existe aucun entre une ligne et elle-meme. Repli sur la couverture de ligne, moins precis",
       "statut": "assume",
       "note": "non levable par les arcs : coverage.py les emet de ligne a ligne, il n en existe aucun entre une ligne et elle-meme. Exigerait une instrumentation AST du code teste."
+    },
+    {
+      "id": "cahiers-001",
+      "domaine": "cahiers",
+      "enonce": "cahiers : un cas derive dit ce qu il faut VERIFIER, pas comment le produit l implemente — les etapes sont exprimees sur la surface (route, endpoint, contrainte), un scenario metier reste a ecrire par qui connait le metier",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : dérivation par la forme et la surface = définition opposable de l exhaustivité — un cas dit QUOI vérifier, jamais COMMENT. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "cahiers-002",
+      "domaine": "cahiers",
+      "enonce": "cahiers : les etats vide, erreur et chargement sont des DEGRADATIONS generiques ; un ecran dont l etat vide a une semantique propre (premiere utilisation, filtre trop restrictif) reclame un cas supplementaire que la seule surface ne permet pas de deriver",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : dérivation par la forme et la surface = définition opposable de l exhaustivité — un cas dit QUOI vérifier, jamais COMMENT. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "cahiers-003",
+      "domaine": "cahiers",
+      "enonce": "cahiers : l exhaustivite est verifiee sur les elements que le RAPPORT porte — un element qu aucun adaptateur n a su enumerer n est ni couvert ni declare non couvert, il est absent des deux, et c est la limite de l inventaire, pas celle du cahier",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : dérivation par la forme et la surface = définition opposable de l exhaustivité — un cas dit QUOI vérifier, jamais COMMENT. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "cahiers-004",
+      "domaine": "cahiers",
+      "enonce": "cahiers : les gestes d un cas unitaire sont derives de la FORME de l identifiant (`code:METHODE /chemin=NNN`, `contrainte:x`, `mutant:...`) ; un identifiant de forme inconnue recoit un geste GENERIQUE, nomme comme tel dans le cas, a preciser par qui connait le pan",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : dérivation par la forme et la surface = définition opposable de l exhaustivité — un cas dit QUOI vérifier, jamais COMMENT. Réévaluer si un run réel prouve que la limite coûte."
     },
     {
       "id": "dashboard-001",
@@ -52,6 +94,13 @@
       "note": "limite par CONCEPTION, declaree au contrat NON_JUGE de forge_tests/livrables/dashboard.py (la page rend, ne juge pas) — requalifiee todo->assume le 2026-08-11 (TF-0078) : un enonce du contrat permanent n est pas un travail en attente"
     },
     {
+      "id": "dashboard-004",
+      "domaine": "dashboard",
+      "enonce": "dashboard : le detail d un cas est la derivation des cahiers (memes references stables) — sa pertinence pedagogique est celle du cahier, la page ne l ameliore pas",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : le dashboard REND, il ne recalcule ni ne juge — conception délibérée (TF-0153/0175). Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
       "id": "data-sql-001",
       "domaine": "data-sql",
       "enonce": "data : sur SQLite les clés étrangères restent non attribuables (le moteur ne nomme pas la contrainte violée) ; l attribution complète exige un moteur qui les nomme, comme PostgreSQL",
@@ -66,11 +115,39 @@
       "note": "l effet d un index (performance) ou d un trigger sort du contrat d un oracle de couverture ; son existence et son application sont, elles, verifiees."
     },
     {
+      "id": "data-sql-003",
+      "domaine": "data-sql",
+      "enonce": "data : le repli `sqlite3` relève les INSTRUCTIONS envoyées au pilote, pas les violations de contrainte ; sur un projet sans SQLAlchemy les contraintes restent donc non attribuables — tables, index et triggers, eux, sont mesurés",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : repli sqlite3 déclaré comme repli — il relève ce qu il peut relever. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "execution-001",
+      "domaine": "execution",
+      "enonce": "exécution : la couverture combine lignes et ARCS de branchement ; une branche implicite (ternaire, court-circuit booléen) reste hors de portée de coverage.py",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : arcs implicites hors couverture : limite de l outil amont (coverage.py), déclarée. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
       "id": "execution-002",
       "domaine": "execution",
       "enonce": "exécution : une ligne atteinte n implique pas qu elle soit ASSERTÉE — c est le rôle du second contre-oracle (mutation)",
       "statut": "assume",
       "note": "par conception : la faiblesse d assertion est mesuree par la mutation, jamais par la couverture. Deux contre-oracles, deux roles."
+    },
+    {
+      "id": "exigences-001",
+      "domaine": "exigences",
+      "enonce": "exigences : sans cle technique au referentiel, le rattachement d un cas a une exigence est LEXICAL (deux racines de 5 caracteres communes au minimum) — il est publie avec sa provenance et doit etre valide par un humain, jamais lu comme un fait",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : rattachement lexical = repli DÉCLARÉ quand le référentiel n apporte pas de clé technique — la clé reste la voie noble. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "exigences-002",
+      "domaine": "exigences",
+      "enonce": "exigences : la reciproque (exigence sans aucun cas rattache) est calculee sur le meme rattachement lexical — une exigence declaree « sans cas » peut en avoir un que le vocabulaire n a pas rapproche",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : rattachement lexical = repli DÉCLARÉ quand le référentiel n apporte pas de clé technique — la clé reste la voie noble. Réévaluer si un run réel prouve que la limite coûte."
     },
     {
       "id": "fichiers-python-001",
@@ -115,11 +192,179 @@
       "note": "une contrainte CHECK a expression arbitraire demande un solveur ; hors contrat, la contrainte est signalee non generable plutot que generee a tort."
     },
     {
+      "id": "interface-statique-001",
+      "domaine": "interface-statique",
+      "enonce": "interface : controle STATIQUE — un gestionnaire pose a l execution par un framework (React, Vue, delegation d evenement sur un ancetre, composant compile) est INVISIBLE ici ; un element declare inerte doit etre lu comme « aucun cablage lisible dans les sources »",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : contrôle STATIQUE par nature : le dynamique appartient au pan qualif et aux tests d interactions (deux étages voulus). Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "interface-statique-002",
+      "domaine": "interface-statique",
+      "enonce": "interface : un element juge cable ne l est que par PRESUMPTION — son identifiant, sa classe ou son attribut de donnees est cite dans le JS du projet. La coincidence de chaine suffit a le blanchir : le pan attrape l inerte flagrant, il ne certifie pas le cable",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : contrôle STATIQUE par nature : le dynamique appartient au pan qualif et aux tests d interactions (deux étages voulus). Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "interface-statique-003",
+      "domaine": "interface-statique",
+      "enonce": "interface : le cablage prouve l existence d un gestionnaire, jamais que son effet soit OBSERVABLE par l utilisateur — un handler vide passerait pour cable",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : contrôle STATIQUE par nature : le dynamique appartient au pan qualif et aux tests d interactions (deux étages voulus). Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "interface-statique-004",
+      "domaine": "interface-statique",
+      "enonce": "interface : les composants de framework (.jsx, .tsx, .vue, .svelte) ne sont pas analyses comme gabarits ; leur surface est inventoriee par le pan front via `data-testid`",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : contrôle STATIQUE par nature : le dynamique appartient au pan qualif et aux tests d interactions (deux étages voulus). Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "interface-statique-005",
+      "domaine": "interface-statique",
+      "enonce": "interface : une ancre `#nom` dont la cible n existe pas dans le document n est pas jugee morte — la cible peut etre injectee au rendu",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : contrôle STATIQUE par nature : le dynamique appartient au pan qualif et aux tests d interactions (deux étages voulus). Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "invariants-001",
+      "domaine": "invariants",
+      "enonce": "invariants : extraits des gardes du code — donc l invariant TEL QU IMPLEMENTE, pas tel que voulu. Une garde fausse produit un cas qui confirme le bug au lieu de le reveler",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : les gardes sont lues TELLES QU IMPLÉMENTÉES, résolution bornée documentée (TF-0135) — dépasser serait interpréter. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "invariants-002",
+      "domaine": "invariants",
+      "enonce": "invariants : seules les gardes de forme simple sont lues (comparaison, appartenance, negation) ; une garde composee ou deportee dans une fonction n est pas extraite",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : les gardes sont lues TELLES QU IMPLÉMENTÉES, résolution bornée documentée (TF-0135) — dépasser serait interpréter. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "invariants-003",
+      "domaine": "invariants",
+      "enonce": "invariants : la resolution des gardes deportees s arrete a UN niveau d appel, par nom simple, cherche dans TOUS les modules de l application (RT-9 / TF-0135). Un helper qui en appelle un autre, un appel par attribut (`service.refuser()`) ou un status_code calcule restent invisibles — le code declare paraitra alors « jamais leve »",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : les gardes sont lues TELLES QU IMPLÉMENTÉES, résolution bornée documentée (TF-0135) — dépasser serait interpréter. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "invariants-004",
+      "domaine": "invariants",
+      "enonce": "invariants : la resolution par nom n est PAS qualifiee par module (TF-0135) — deux fonctions de meme nom dans deux fichiers distincts de l application voient leurs codes fusionnes, ce qui peut masquer ou inventer une garde",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : les gardes sont lues TELLES QU IMPLÉMENTÉES, résolution bornée documentée (TF-0135) — dépasser serait interpréter. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "jeux-de-donnees-001",
+      "domaine": "jeux-de-donnees",
+      "enonce": "jeux de donnees : le garde-fou compare aux valeurs de configuration LISIBLES (env sensibles, `.env*` du projet) — une donnee reelle recopiee a la main qui ne figure dans aucune de ces sources ne serait pas reconnue ; la synthese, elle, est integrale",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : les jeux couvrent la FORME du cas ; garde-fou borné au LISIBLE — au-delà, il promettrait ce qu il ne peut tenir. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "jeux-de-donnees-002",
+      "domaine": "jeux-de-donnees",
+      "enonce": "jeux de donnees : les valeurs sont derivees de l IDENTIFIANT de l element, pas de son type metier — un jeu couvre la FORME du cas (nominal, vide, erreur), pas la semantique d un domaine que le rapport ne connait pas",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : les jeux couvrent la FORME du cas ; garde-fou borné au LISIBLE — au-delà, il promettrait ce qu il ne peut tenir. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "migrations-sql-001",
+      "domaine": "migrations-sql",
+      "enonce": "migrations : l effet verifie est l EXISTENCE des objets nommes (tables, contraintes, index) apres application ; ni leur definition exacte, ni les donnees migrees",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : l effet vérifié est l existence des objets nommés ; le rejeu est une seconde exécution — périmètre déclaré. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "migrations-sql-002",
+      "domaine": "migrations-sql",
+      "enonce": "migrations : le rejeu est déduit d une seconde exécution de TOUTES les instructions de la section ; deux migrations rigoureusement identiques resteraient indiscernables",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : l effet vérifié est l existence des objets nommés ; le rejeu est une seconde exécution — périmètre déclaré. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
       "id": "mutation-python-001",
       "domaine": "mutation-python",
       "enonce": "mutation : les mutants équivalents ne sont pas détectés — un survivant peut être un mutant sémantiquement identique à l original",
       "statut": "assume",
       "note": "indécidable en général : aucune version future ne les éliminera. Triage humain des survivants."
+    },
+    {
+      "id": "mutation-python-002",
+      "domaine": "mutation-python",
+      "enonce": "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance, bornes numériques et suppression d instruction ; ni permutation d arguments, ni littéraux non numériques",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : jeu d opérateurs et échantillonnage déclarés au rapport ; exercé ≠ vérifié est précisément le rôle du score. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "mutation-python-003",
+      "domaine": "mutation-python",
+      "enonce": "mutation : la profondeur est ECHANTILLONNEE par module (voir `mutation.taux_echantillon` au rapport) — un score de module porte sur les mutants JOUES, pas sur tous les mutants possibles ; le perimetre, lui, est total et ses exclusions sont nommees",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : jeu d opérateurs et échantillonnage déclarés au rapport ; exercé ≠ vérifié est précisément le rôle du score. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "mutation-python-004",
+      "domaine": "mutation-python",
+      "enonce": "modules : un module est dit « exerce » des qu une ligne en est couverte — l etre ne dit pas qu il soit VERIFIE, c est le role du score de mutation qui l accompagne",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : jeu d opérateurs et échantillonnage déclarés au rapport ; exercé ≠ vérifié est précisément le rôle du score. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "qualif-navigateur-001",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : le pan LIT les ecouteurs attaches a chaque affordance, il ne CLIQUE jamais — sur une instance peuplee un clic ecrit vraiment (suppression, envoi, appel tiers facture). Un gestionnaire attache mais dont le corps ne fait rien passerait donc pour un effet",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : le pan LIT et ne clique jamais (G-1 : cliquer écrirait chez l audité) ; marqueur/délégation = limites dites. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "qualif-navigateur-003",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : le marqueur de contenu par defaut est le titre de la page (premier `h1` non vide, sinon `title`) ; il atteste qu une page a RENDU quelque chose, pas qu elle ait rendu les BONNES donnees — un marqueur metier se declare par FORGE_TESTS_QUALIF_MARQUEURS",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : le pan LIT et ne clique jamais (G-1 : cliquer écrirait chez l audité) ; marqueur/délégation = limites dites. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "qualif-navigateur-004",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : quand une delegation d evenement est posee sur `document` ou `body`, aucun element ne peut plus etre declare inerte avec certitude — les elements concernes sont NOMMES en non_juge au lieu d etre accuses",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : le pan LIT et ne clique jamais (G-1 : cliquer écrirait chez l audité) ; marqueur/délégation = limites dites. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "qualification-001",
+      "domaine": "qualification",
+      "enonce": "qualification : un manque de configuration n est reconnu que s il se DIT — variable citee par une trace d execution, declaration d adaptateur, ou cle d un `.env.example` du projet. Un service tiers injoignable sans jamais nommer sa cle reste un pan non mesure ordinaire",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : un manque n est reconnu que s il SE DIT — prouvé RT-6a/RT-13 ; présomption .env.example déclarée. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "qualification-002",
+      "domaine": "qualification",
+      "enonce": "qualification : les champs tires d un `.env.example` sont PRESUMES requis (le fichier ne dit pas quel pan depend de quelle cle) — la provenance de chaque entree le declare",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : un manque n est reconnu que s il SE DIT — prouvé RT-6a/RT-13 ; présomption .env.example déclarée. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "qualification-003",
+      "domaine": "qualification",
+      "enonce": "qualification : un champ qu AUCUN adaptateur ne revendique dans son `CHAMPS_REQUIS` reste partage par les pans de son domaine (cas des variables PROPRES AU PROJET citees par une trace) — l attribution par pan ne vaut que pour les champs de la forge elle-meme",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : un manque n est reconnu que s il SE DIT — prouvé RT-6a/RT-13 ; présomption .env.example déclarée. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "reprise-001",
+      "domaine": "reprise",
+      "enonce": "reprise : la re-execution a la granularite du PAN — un pan qui doit etre rejoue l est en entier. La provenance, elle, est donnee element par element",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : granularité au pan et mesure passée : la provenance est déclarée au rapport et rendue à l écran. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "reprise-002",
+      "domaine": "reprise",
+      "enonce": "reprise : un element repris d un rapport anterieur atteste d une mesure PASSEE, pas de l etat courant du projet — si le code a change entre les deux passes, seule une passe complete fait foi",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : granularité au pan et mesure passée : la provenance est déclarée au rapport et rendue à l écran. Réévaluer si un run réel prouve que la limite coûte."
     },
     {
       "id": "risque-001",
@@ -148,6 +393,27 @@
       "enonce": "securite : aucun test d intrusion ni d authentification/autorisation au niveau metier",
       "statut": "assume",
       "note": "hors du contrat d un oracle statique : un test d intrusion releve d une demarche offensive, pas d une mesure de couverture."
+    },
+    {
+      "id": "securite-oracles-004",
+      "domaine": "securite-oracles",
+      "enonce": "securite : le scan est BORNE aux sources du produit (dependances exclues — .venv, node_modules, dist, build…) ; un secret commis DANS une dependance versionnee ne serait pas vu ici, ce n est pas le meme risque ni le meme destinataire qu un secret du produit",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : scan borné aux sources du produit — les dépendances relèvent d un autre outil, le périmètre est dit. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "sql-001",
+      "domaine": "sql",
+      "enonce": "sql : le decoupage reconnait les litteraux `'...'` (echappement `''`) et les identifiants entre guillemets ; un `;` ou un `--` place dans un litteral DOLLAR-QUOTE (`$$...$$`, corps de fonction PL/pgSQL) ou dans une chaine a echappement backslash (`E'...\\'...'`) reste hors de portee — l instruction serait coupee au mauvais endroit",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : lecture textuelle assumée, limites prouvées par RT-8 sur fixtures. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "sql-002",
+      "domaine": "sql",
+      "enonce": "sql : ce module lit le TEXTE des migrations, il ne l analyse pas grammaticalement — une instruction syntaxiquement invalide est rendue telle quelle, sans jugement",
+      "statut": "assume",
+      "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : lecture textuelle assumée, limites prouvées par RT-8 sur fixtures. Réévaluer si un run réel prouve que la limite coûte."
     },
     {
       "id": "visuel-golden-001",
@@ -338,75 +604,9 @@
       "statut": "todo"
     },
     {
-      "id": "actions-001",
-      "domaine": "actions",
-      "enonce": "actions : la categorie et l etape sont derivees de la CLASSE du finding, pas de son contenu — deux findings de meme classe recoivent la meme suite, meme si l un est trivial et l autre profond ; l attendu, lui, cite l element",
-      "statut": "todo"
-    },
-    {
-      "id": "actions-002",
-      "domaine": "actions",
-      "enonce": "actions : `auto_ia` signifie « derivable d une source qui fait foi », pas « sans relecture » — un cas genere reste une PROPOSITION soumise a relecture (loi du generateur)",
-      "statut": "todo"
-    },
-    {
-      "id": "cahiers-001",
-      "domaine": "cahiers",
-      "enonce": "cahiers : un cas derive dit ce qu il faut VERIFIER, pas comment le produit l implemente — les etapes sont exprimees sur la surface (route, endpoint, contrainte), un scenario metier reste a ecrire par qui connait le metier",
-      "statut": "todo"
-    },
-    {
-      "id": "cahiers-002",
-      "domaine": "cahiers",
-      "enonce": "cahiers : les etats vide, erreur et chargement sont des DEGRADATIONS generiques ; un ecran dont l etat vide a une semantique propre (premiere utilisation, filtre trop restrictif) reclame un cas supplementaire que la seule surface ne permet pas de deriver",
-      "statut": "todo"
-    },
-    {
-      "id": "cahiers-003",
-      "domaine": "cahiers",
-      "enonce": "cahiers : l exhaustivite est verifiee sur les elements que le RAPPORT porte — un element qu aucun adaptateur n a su enumerer n est ni couvert ni declare non couvert, il est absent des deux, et c est la limite de l inventaire, pas celle du cahier",
-      "statut": "todo"
-    },
-    {
-      "id": "cahiers-004",
-      "domaine": "cahiers",
-      "enonce": "cahiers : les gestes d un cas unitaire sont derives de la FORME de l identifiant (`code:METHODE /chemin=NNN`, `contrainte:x`, `mutant:...`) ; un identifiant de forme inconnue recoit un geste GENERIQUE, nomme comme tel dans le cas, a preciser par qui connait le pan",
-      "statut": "todo"
-    },
-    {
-      "id": "dashboard-004",
-      "domaine": "dashboard",
-      "enonce": "dashboard : le detail d un cas est la derivation des cahiers (memes references stables) — sa pertinence pedagogique est celle du cahier, la page ne l ameliore pas",
-      "statut": "todo"
-    },
-    {
-      "id": "data-sql-003",
-      "domaine": "data-sql",
-      "enonce": "data : le repli `sqlite3` relève les INSTRUCTIONS envoyées au pilote, pas les violations de contrainte ; sur un projet sans SQLAlchemy les contraintes restent donc non attribuables — tables, index et triggers, eux, sont mesurés",
-      "statut": "todo"
-    },
-    {
-      "id": "execution-001",
-      "domaine": "execution",
-      "enonce": "exécution : la couverture combine lignes et ARCS de branchement ; une branche implicite (ternaire, court-circuit booléen) reste hors de portée de coverage.py",
-      "statut": "todo"
-    },
-    {
       "id": "execution-003",
       "domaine": "execution",
       "enonce": "exécution : la configuration Playwright du projet peut démarrer son propre webServer, qui ÉCRIT dans l arbre analysé (build, code généré) — hors de portée du garde-fou lecture seule ; seuls les artefacts produits par Forge Tests sont routés hors du projet",
-      "statut": "todo"
-    },
-    {
-      "id": "exigences-001",
-      "domaine": "exigences",
-      "enonce": "exigences : sans cle technique au referentiel, le rattachement d un cas a une exigence est LEXICAL (deux racines de 5 caracteres communes au minimum) — il est publie avec sa provenance et doit etre valide par un humain, jamais lu comme un fait",
-      "statut": "todo"
-    },
-    {
-      "id": "exigences-002",
-      "domaine": "exigences",
-      "enonce": "exigences : la reciproque (exigence sans aucun cas rattache) est calculee sur le meme rattachement lexical — une exigence declaree « sans cas » peut en avoir un que le vocabulaire n a pas rapproche",
       "statut": "todo"
     },
     {
@@ -416,171 +616,9 @@
       "statut": "todo"
     },
     {
-      "id": "interface-statique-001",
-      "domaine": "interface-statique",
-      "enonce": "interface : controle STATIQUE — un gestionnaire pose a l execution par un framework (React, Vue, delegation d evenement sur un ancetre, composant compile) est INVISIBLE ici ; un element declare inerte doit etre lu comme « aucun cablage lisible dans les sources »",
-      "statut": "todo"
-    },
-    {
-      "id": "interface-statique-002",
-      "domaine": "interface-statique",
-      "enonce": "interface : un element juge cable ne l est que par PRESUMPTION — son identifiant, sa classe ou son attribut de donnees est cite dans le JS du projet. La coincidence de chaine suffit a le blanchir : le pan attrape l inerte flagrant, il ne certifie pas le cable",
-      "statut": "todo"
-    },
-    {
-      "id": "interface-statique-003",
-      "domaine": "interface-statique",
-      "enonce": "interface : le cablage prouve l existence d un gestionnaire, jamais que son effet soit OBSERVABLE par l utilisateur — un handler vide passerait pour cable",
-      "statut": "todo"
-    },
-    {
-      "id": "interface-statique-004",
-      "domaine": "interface-statique",
-      "enonce": "interface : les composants de framework (.jsx, .tsx, .vue, .svelte) ne sont pas analyses comme gabarits ; leur surface est inventoriee par le pan front via `data-testid`",
-      "statut": "todo"
-    },
-    {
-      "id": "interface-statique-005",
-      "domaine": "interface-statique",
-      "enonce": "interface : une ancre `#nom` dont la cible n existe pas dans le document n est pas jugee morte — la cible peut etre injectee au rendu",
-      "statut": "todo"
-    },
-    {
-      "id": "invariants-001",
-      "domaine": "invariants",
-      "enonce": "invariants : extraits des gardes du code — donc l invariant TEL QU IMPLEMENTE, pas tel que voulu. Une garde fausse produit un cas qui confirme le bug au lieu de le reveler",
-      "statut": "todo"
-    },
-    {
-      "id": "invariants-002",
-      "domaine": "invariants",
-      "enonce": "invariants : seules les gardes de forme simple sont lues (comparaison, appartenance, negation) ; une garde composee ou deportee dans une fonction n est pas extraite",
-      "statut": "todo"
-    },
-    {
-      "id": "invariants-003",
-      "domaine": "invariants",
-      "enonce": "invariants : la resolution des gardes deportees s arrete a UN niveau d appel, par nom simple, cherche dans TOUS les modules de l application (RT-9 / TF-0135). Un helper qui en appelle un autre, un appel par attribut (`service.refuser()`) ou un status_code calcule restent invisibles — le code declare paraitra alors « jamais leve »",
-      "statut": "todo"
-    },
-    {
-      "id": "invariants-004",
-      "domaine": "invariants",
-      "enonce": "invariants : la resolution par nom n est PAS qualifiee par module (TF-0135) — deux fonctions de meme nom dans deux fichiers distincts de l application voient leurs codes fusionnes, ce qui peut masquer ou inventer une garde",
-      "statut": "todo"
-    },
-    {
-      "id": "jeux-de-donnees-001",
-      "domaine": "jeux-de-donnees",
-      "enonce": "jeux de donnees : le garde-fou compare aux valeurs de configuration LISIBLES (env sensibles, `.env*` du projet) — une donnee reelle recopiee a la main qui ne figure dans aucune de ces sources ne serait pas reconnue ; la synthese, elle, est integrale",
-      "statut": "todo"
-    },
-    {
-      "id": "jeux-de-donnees-002",
-      "domaine": "jeux-de-donnees",
-      "enonce": "jeux de donnees : les valeurs sont derivees de l IDENTIFIANT de l element, pas de son type metier — un jeu couvre la FORME du cas (nominal, vide, erreur), pas la semantique d un domaine que le rapport ne connait pas",
-      "statut": "todo"
-    },
-    {
-      "id": "migrations-sql-001",
-      "domaine": "migrations-sql",
-      "enonce": "migrations : l effet verifie est l EXISTENCE des objets nommes (tables, contraintes, index) apres application ; ni leur definition exacte, ni les donnees migrees",
-      "statut": "todo"
-    },
-    {
-      "id": "migrations-sql-002",
-      "domaine": "migrations-sql",
-      "enonce": "migrations : le rejeu est déduit d une seconde exécution de TOUTES les instructions de la section ; deux migrations rigoureusement identiques resteraient indiscernables",
-      "statut": "todo"
-    },
-    {
-      "id": "mutation-python-002",
-      "domaine": "mutation-python",
-      "enonce": "mutation : opérateurs arithmétiques, de comparaison, booléens, d appartenance, bornes numériques et suppression d instruction ; ni permutation d arguments, ni littéraux non numériques",
-      "statut": "todo"
-    },
-    {
-      "id": "mutation-python-003",
-      "domaine": "mutation-python",
-      "enonce": "mutation : la profondeur est ECHANTILLONNEE par module (voir `mutation.taux_echantillon` au rapport) — un score de module porte sur les mutants JOUES, pas sur tous les mutants possibles ; le perimetre, lui, est total et ses exclusions sont nommees",
-      "statut": "todo"
-    },
-    {
-      "id": "mutation-python-004",
-      "domaine": "mutation-python",
-      "enonce": "modules : un module est dit « exerce » des qu une ligne en est couverte — l etre ne dit pas qu il soit VERIFIE, c est le role du score de mutation qui l accompagne",
-      "statut": "todo"
-    },
-    {
-      "id": "qualif-navigateur-001",
-      "domaine": "qualif-navigateur",
-      "enonce": "qualif : le pan LIT les ecouteurs attaches a chaque affordance, il ne CLIQUE jamais — sur une instance peuplee un clic ecrit vraiment (suppression, envoi, appel tiers facture). Un gestionnaire attache mais dont le corps ne fait rien passerait donc pour un effet",
-      "statut": "todo"
-    },
-    {
       "id": "qualif-navigateur-002",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",
-      "statut": "todo"
-    },
-    {
-      "id": "qualif-navigateur-003",
-      "domaine": "qualif-navigateur",
-      "enonce": "qualif : le marqueur de contenu par defaut est le titre de la page (premier `h1` non vide, sinon `title`) ; il atteste qu une page a RENDU quelque chose, pas qu elle ait rendu les BONNES donnees — un marqueur metier se declare par FORGE_TESTS_QUALIF_MARQUEURS",
-      "statut": "todo"
-    },
-    {
-      "id": "qualif-navigateur-004",
-      "domaine": "qualif-navigateur",
-      "enonce": "qualif : quand une delegation d evenement est posee sur `document` ou `body`, aucun element ne peut plus etre declare inerte avec certitude — les elements concernes sont NOMMES en non_juge au lieu d etre accuses",
-      "statut": "todo"
-    },
-    {
-      "id": "qualification-001",
-      "domaine": "qualification",
-      "enonce": "qualification : un manque de configuration n est reconnu que s il se DIT — variable citee par une trace d execution, declaration d adaptateur, ou cle d un `.env.example` du projet. Un service tiers injoignable sans jamais nommer sa cle reste un pan non mesure ordinaire",
-      "statut": "todo"
-    },
-    {
-      "id": "qualification-002",
-      "domaine": "qualification",
-      "enonce": "qualification : les champs tires d un `.env.example` sont PRESUMES requis (le fichier ne dit pas quel pan depend de quelle cle) — la provenance de chaque entree le declare",
-      "statut": "todo"
-    },
-    {
-      "id": "qualification-003",
-      "domaine": "qualification",
-      "enonce": "qualification : un champ qu AUCUN adaptateur ne revendique dans son `CHAMPS_REQUIS` reste partage par les pans de son domaine (cas des variables PROPRES AU PROJET citees par une trace) — l attribution par pan ne vaut que pour les champs de la forge elle-meme",
-      "statut": "todo"
-    },
-    {
-      "id": "reprise-001",
-      "domaine": "reprise",
-      "enonce": "reprise : la re-execution a la granularite du PAN — un pan qui doit etre rejoue l est en entier. La provenance, elle, est donnee element par element",
-      "statut": "todo"
-    },
-    {
-      "id": "reprise-002",
-      "domaine": "reprise",
-      "enonce": "reprise : un element repris d un rapport anterieur atteste d une mesure PASSEE, pas de l etat courant du projet — si le code a change entre les deux passes, seule une passe complete fait foi",
-      "statut": "todo"
-    },
-    {
-      "id": "securite-oracles-004",
-      "domaine": "securite-oracles",
-      "enonce": "securite : le scan est BORNE aux sources du produit (dependances exclues — .venv, node_modules, dist, build…) ; un secret commis DANS une dependance versionnee ne serait pas vu ici, ce n est pas le meme risque ni le meme destinataire qu un secret du produit",
-      "statut": "todo"
-    },
-    {
-      "id": "sql-001",
-      "domaine": "sql",
-      "enonce": "sql : le decoupage reconnait les litteraux `'...'` (echappement `''`) et les identifiants entre guillemets ; un `;` ou un `--` place dans un litteral DOLLAR-QUOTE (`$$...$$`, corps de fonction PL/pgSQL) ou dans une chaine a echappement backslash (`E'...\\'...'`) reste hors de portee — l instruction serait coupee au mauvais endroit",
-      "statut": "todo"
-    },
-    {
-      "id": "sql-002",
-      "domaine": "sql",
-      "enonce": "sql : ce module lit le TEXTE des migrations, il ne l analyse pas grammaticalement — une instruction syntaxiquement invalide est rendue telle quelle, sans jugement",
       "statut": "todo"
     }
   ]
