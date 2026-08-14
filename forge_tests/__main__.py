@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import sys
 from pathlib import Path
@@ -46,8 +47,24 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     return rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins)
 
 
+_DEBUT = _dt.datetime.now().astimezone()
+
+
 def _resume(rap: dict) -> str:
-    lignes = [f"verdict global : {rap['verdict']}", ""]
+    # Forme DÉGRADÉE du message de fin (gabarits\\RESTITUTION.md v2, 14/08) : un outil qui
+    # imprime au terminal doit au minimum porter son HORODATAGE et son verdict. Sans l heure,
+    # deux sorties du meme jour ne s ordonnent pas — et il en tombe plusieurs par jour sur un
+    # meme produit. La duree, elle, dit si le traitement a ete tronque.
+    fin = _dt.datetime.now().astimezone()
+    duree = fin - _DEBUT
+    lignes = [
+        f"forge-tests · {rap.get('cible') or ''}".rstrip(" ·"),
+        f"termine le {fin.strftime('%Y-%m-%d a %Hh%M')} ({fin.tzname()}) "
+        f"· duree {int(duree.total_seconds() // 60)} min {int(duree.total_seconds() % 60)} s",
+        "",
+        f"verdict global : {rap['verdict']}",
+        "",
+    ]
     lignes.append("couverture de surface par pan")
     for pan, surface in sorted(rap["couverture_par_pan"].items()):
         etat = "OK" if surface["ratio"] >= surface["seuil"] else "SOUS SEUIL"
