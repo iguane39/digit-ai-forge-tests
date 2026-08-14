@@ -33,7 +33,7 @@ NOM, PAN, SEUIL = "interface-statique", "interface", 1.0
 POUR_COUVRIR = (
     "fournir au moins un gabarit servi (.html, .jinja, .twig...) hors artefacts de "
     "construction : le pan lit les affordances du GABARIT, les composants de framework "
-    "(.jsx/.vue) relevent du pan front"
+    "(.jsx/.vue) relèvent du pan front"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
@@ -227,13 +227,13 @@ def _juger(entree: dict, corpus: str) -> str | None:
         if cible.lower() in _HREF_MORTS or cible.lower().startswith("javascript:void"):
             if _cite_par_le_code(table, corpus):
                 return None
-            return f"lien dont href vaut « {cible or '(vide)'} » : aucune destination reelle"
+            return f"lien dont href vaut « {cible or '(vide)'} » : aucune destination réelle"
         return None
 
     if entree["tag"] == "form":
         if _formulaire_cable(entree, corpus):
             return None
-        return "formulaire sans action ni gestionnaire de soumission : rien n est envoye"
+        return "formulaire sans action ni gestionnaire de soumission : rien n'est envoyé"
 
     # button et input[type=submit|button|reset|image]
     type_ = table.get("type", "").lower()
@@ -246,19 +246,19 @@ def _juger(entree: dict, corpus: str) -> str | None:
         if _formulaire_cable(entree["formulaire"], corpus):
             return None
         return (
-            "bouton de soumission d un formulaire lui-meme sans action ni gestionnaire : "
-            "le clic n envoie rien"
+            "bouton de soumission d'un formulaire lui-même sans action ni gestionnaire : "
+            "le clic n'envoie rien"
         )
     if soumet and table.get("form"):
         return None  # rattache a un formulaire nomme ailleurs : hors de portee, non accuse
     if _cite_par_le_code(entree["attributs"], corpus):
         return None
-    return "bouton sans type submit, sans gestionnaire et jamais reference par le code"
+    return "bouton sans type submit, sans gestionnaire et jamais référencé par le code"
 
 
 def _libelle(entree: dict) -> str:
     texte = " ".join((entree["libelle"] or "").split())
-    return texte[:60] or f"<{entree['tag']}> sans libelle"
+    return texte[:60] or f"<{entree['tag']}> sans libellé"
 
 
 def _relever(cible: Path) -> tuple[list[dict], bool]:

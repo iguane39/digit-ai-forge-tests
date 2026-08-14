@@ -45,7 +45,7 @@ def test_une_classe_inconnue_sort_un_defaut_d_AUDITEUR() -> None:
     """Sans cette branche, une classe nouvelle sortirait au rapport SANS suite : muette."""
     action = classifier([_finding("classe-inventee-demain")])[0]
     assert action["etape_cible"] == "forge"
-    assert "DÉFAUT D AUDITEUR" in action["attendu"]
+    assert "DÉFAUT D'AUDITEUR" in action["attendu"]
 
 
 def test_toute_action_reste_dans_le_vocabulaire() -> None:

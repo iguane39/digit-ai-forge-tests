@@ -16,9 +16,9 @@ NOM, PAN, SEUIL = "api-fastapi", "api", 1.0
 
 # A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
 POUR_COUVRIR = (
-    "declarer l application ASGI du projet dans `<projet>/.env.forge-tests` "
+    "déclarer l'application ASGI du projet dans `<projet>/.env.forge-tests` "
     "(FORGE_TESTS_APP=« module:attribut ») et rendre la suite backend verte sous `coverage` — "
-    "voir la section « Contrat du projet audite » du README"
+    "voir la section « Contrat du projet audité » du README"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
@@ -232,8 +232,8 @@ def _divergences_gardes(
                     classe="divergence",
                     localisation=str(source),
                     message=(
-                        f"code {code} declare pour {signature} mais aucune garde de "
-                        f"{fonction}() ne le leve"
+                        f"code {code} déclaré pour {signature} mais aucune garde de "
+                        f"{fonction}() ne le lève"
                     ),
                     risque=coter(PAN, element.id, str(source)),
                 )
@@ -320,7 +320,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 id=identifiant,
                 classe="divergence",
                 localisation=str(cible / "backend" / "app" / "main.py"),
-                message="code emis par l application mais absent de sa declaration responses=",
+                message="code émis par l'application mais absent de sa déclaration responses=",
                 severite="signale",
                 risque=coter(PAN, identifiant, str(cible / "backend" / "app" / "main.py")),
             )

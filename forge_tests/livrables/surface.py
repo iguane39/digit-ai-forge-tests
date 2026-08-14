@@ -162,6 +162,10 @@ def inventaire(rapport: dict) -> dict[str, list[dict]]:
             poser(pan, _element(str(finding.get("id")), "defaut", **constat))
         else:
             element.update(constat)
+            # Retour humain du 14/08 : un élément avec un constat rattaché affichait « Non
+            # joué » (ou « Passé ») — illisible. Un finding NOMME un défaut : l'état suit.
+            if constat.get("classe"):
+                element["etat"] = "defaut"
 
     for entree in rapport.get("non_testables") or []:
         poser(

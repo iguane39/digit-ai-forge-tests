@@ -47,7 +47,7 @@ SUITE = "tests"
 POUR_COUVRIR = (
     "fournir un environnement Python du projet (`backend/.venv` ou `.venv`) avec sa suite "
     "verte, et un paquet de sources sous `backend/` — la mutation altère la source puis "
-    "rejoue la suite, elle ne peut rien mesurer sans l une ni l autre"
+    "rejoue la suite, elle ne peut rien mesurer sans l'une ni l'autre"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les

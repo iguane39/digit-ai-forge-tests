@@ -21,7 +21,7 @@ NOM, PAN, SEUIL = "batch-python", "batch", 0.90
 # A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
 POUR_COUVRIR = (
     "exposer un traitement par lot sous `backend/app/batch.py` (ou un module dont le nom "
-    "porte `batch`/`traitement`) avec ses branches de rejet et de reprise, et l exercer par "
+    "porte `batch`/`traitement`) avec ses branches de rejet et de reprise, et l'exercer par "
     "la suite"
 )
 

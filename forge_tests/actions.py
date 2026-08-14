@@ -1,4 +1,4 @@
-"""Classification TERNAIRE des suites à donner — au RAPPORT d abord, jamais au seul affichage.
+"""Classification TERNAIRE des suites à donner — au RAPPORT d'abord, jamais au seul affichage.
 
 Un rapport d audit nomme des défauts ; il ne dit pas QUI les répare. Trois destinataires
 existent réellement et se confondent tout le temps :
@@ -67,7 +67,7 @@ _REGLES: dict[str, tuple[str, str, str]] = {
     "element-non-exerce": (
         "manuelle_dev",
         "tests-suite",
-        "ajouter à la suite un cas qui exerce « {id} » et affirme son résultat ; l élément est "
+        "ajouter à la suite un cas qui exerce « {id} » et affirme son résultat ; l'élément est "
         "inventorié et jamais atteint ({message})",
     ),
     "seuil-non-tenu": (
@@ -79,25 +79,25 @@ _REGLES: dict[str, tuple[str, str, str]] = {
     "mutant-survivant": (
         "auto_ia",
         "tests-suite",
-        "renforcer l assertion qui laisse survivre le mutant « {id} » : le test passe avec le "
-        "code muté, il n affirme donc pas ce qu il prétend ({message})",
+        "renforcer l'assertion qui laisse survivre le mutant « {id} » : le test passe avec le "
+        "code muté, il n'affirme donc pas ce qu'il prétend ({message})",
     ),
     "module-non-exerce": (
         "manuelle_dev",
         "tests-suite",
-        "importer et exercer le module « {id} », ou déclarer pourquoi il n a pas à l être ; "
-        "aucun test ne le charge aujourd hui ({message})",
+        "importer et exercer le module « {id} », ou déclarer pourquoi il n'a pas à l'être ; "
+        "aucun test ne le charge aujourd'hui ({message})",
     ),
     "affordance-inerte": (
         "manuelle_dev",
         "development",
-        "câbler l affordance « {id} » ou la retirer du gabarit — une affordance est câblée ou "
-        "elle n existe pas ({message})",
+        "câbler l'affordance « {id} » ou la retirer du gabarit — une affordance est câblée ou "
+        "elle n'existe pas ({message})",
     ),
     "affordance-sans-effet": (
         "manuelle_dev",
         "development",
-        "attacher un effet à « {id} » sur l instance servie, ou retirer l affordance "
+        "attacher un effet à « {id} » sur l'instance servie, ou retirer l'affordance "
         "({message})",
     ),
     "divergence": (
@@ -118,15 +118,15 @@ _REGLES: dict[str, tuple[str, str, str]] = {
     "accessibilite": (
         "manuelle_dev",
         "design",
-        "corriger l accessibilité de « {id} » (nom accessible, contraste, ordre de titres) : "
+        "corriger l'accessibilité de « {id} » (nom accessible, contraste, ordre de titres) : "
         "{message}",
     ),
     "regression-visuelle": (
         "manuelle_utilisateur",
         "design",
         "ARBITRER le rendu de « {id} » : valider le nouveau golden si le changement est voulu, "
-        "sinon corriger le rendu. Aucun agent ne peut décider à la place de l humain si un "
-        "écran est conforme à l intention ({message})",
+        "sinon corriger le rendu. Aucun agent ne peut décider à la place de l'humain si un "
+        "écran est conforme à l'intention ({message})",
     ),
     "sonde-muette": (
         "manuelle_utilisateur",
@@ -139,7 +139,7 @@ _REGLES: dict[str, tuple[str, str, str]] = {
 
 
 def _defaut_auditeur(classe: str) -> tuple[str, str, str]:
-    """Suite d une classe de finding que la forge ne sait PAS classer — un défaut d auditeur.
+    """Suite d'une classe de finding que la forge ne sait PAS classer — un défaut d'auditeur.
 
     Sans cette branche, une classe nouvelle sortirait sans action : elle disparaîtrait de la
     liste des travaux tout en restant au rapport, c est-à-dire l absence silencieuse d un
@@ -148,9 +148,9 @@ def _defaut_auditeur(classe: str) -> tuple[str, str, str]:
     return (
         "manuelle_dev",
         "forge",
-        f"DÉFAUT D AUDITEUR : la classe de finding « {classe} » n a pas de règle de "
+        f"DÉFAUT D'AUDITEUR : la classe de finding « {classe} » n'a pas de règle de "
         "classification. Déclarer sa suite dans `forge_tests/actions.py` (_REGLES), puis "
-        "rejouer l audit — le constat est mesuré, seule sa suite manque",
+        "rejouer l'audit — le constat est mesuré, seule sa suite manque",
     )
 
 
@@ -163,8 +163,8 @@ def _action(finding: dict, pans_generables: set[str]) -> dict:
         if classe == "element-non-exerce" and pan in pans_generables:
             categorie = "auto_ia"
             gabarit = (
-                "générer le cas qui exerce « {id} » (`--generer`) puis le relire et l adopter : "
-                "la source qui fait foi (schéma, contrainte) dit comment l atteindre ({message})"
+                "générer le cas qui exerce « {id} » (`--generer`) puis le relire et l'adopter : "
+                "la source qui fait foi (schéma, contrainte) dit comment l'atteindre ({message})"
             )
     else:
         categorie, etape, gabarit = _defaut_auditeur(classe)
@@ -203,11 +203,18 @@ def classifier(
                 "categorie": "manuelle_utilisateur",
                 "etape_cible": "mep-config",
                 "attendu": (
-                    f"fournir {', '.join(champs) or 'la configuration manquante'} à "
-                    f"l environnement d audit, puis `--reprendre` le rapport : "
-                    f"{len(elements)} élément(s) du pan « {pan} » sont inventoriés et "
-                    "qu AUCUNE exécution ne pouvait atteindre ici — c est un manque de "
-                    "configuration, pas un trou de couverture du projet"
+                    # Retour humain du 14/08 : la phrase précédente était incompréhensible
+                    # (liste de 20 variables en tête, grammaire cassée). Structure fixe :
+                    # quoi faire → pourquoi → ce qu'on obtient. Les CHAMPS restent nommés
+                    # (jamais leurs valeurs), mais en fin de phrase, pas en ouverture.
+                    f"renseigner la configuration d'audit du pan « {pan} » dans "
+                    f"`<projet>/.env.forge-tests`, puis relancer avec `--reprendre "
+                    f"<rapport.json>`. Pourquoi : {len(elements)} élément(s) de ce pan sont "
+                    "inventoriés mais aucune exécution ne pouvait les atteindre ici — manque "
+                    "de configuration, pas trou de couverture du projet. Vous obtiendrez : "
+                    "ces éléments mesurés au prochain audit, et le verdict PARTIEL pourra se "
+                    f"prononcer. Champs à fournir ({len(champs)}) : "
+                    f"{', '.join(champs) or 'la configuration manquante'}"
                 ),
             }
         )
@@ -228,8 +235,9 @@ def classifier(
                 "categorie": categorie,
                 "etape_cible": etape,
                 "attendu": (
-                    f"pan « {pan} » NON MESURÉ — {entree.get('motif') or 'sans motif'}. "
-                    f"Pour couvrir : {chemin}"
+                    f"couvrir le pan « {pan} », aujourd'hui NON MESURÉ. Pourquoi : "
+                    f"{entree.get('motif') or 'sans motif'}. Comment (vous obtiendrez le pan "
+                    f"mesuré au prochain audit) : {chemin}"
                 ),
             }
         )
