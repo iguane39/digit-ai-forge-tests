@@ -64,7 +64,15 @@ COMPTEURS: dict[str, tuple[str, str]] = {
 ETATS: dict[str, tuple[str, str, str, str]] = {
     "exerce": ("✓", "Passé", "b-pass", "exercé par la suite, aucun constat d échec"),
     "defaut": ("✕", "KO", "b-fail", "un constat d échec mesuré est rattaché à cet élément"),
-    "non_exerce": ("○", "Non joué", "b-part", "inventorié mais jamais atteint par la suite"),
+    # RT-12 : « Non joué » se lisait comme « un test que l audit a sauté ». L état mesuré est
+    # autre : l élément existe et AUCUN test de la suite du projet ne l atteint.
+    "non_exerce": (
+        "○",
+        "Non exercé",
+        "b-part",
+        "élément inventorié qu aucun test de la suite du projet n atteint — l audit mesure "
+        "la suite existante, il ne joue pas de cas à sa place",
+    ),
     "non_testable": (
         "⊘",
         "Non testable ici",
@@ -82,7 +90,12 @@ ENTETES: dict[str, tuple[str, str]] = {
         "ce que le test vérifie exactement — son périmètre précis, dérivé de la forme de "
         "l élément (retour humain du 14/08)",
     ),
-    "état": ("Résultat", "état mesuré : ✓ Passé · ✕ KO · ○ Non joué · ⊘ Non testable · – Exclu"),
+    "état": (
+        "Résultat",
+        "état mesuré de l ÉLÉMENT : ✓ Passé · ✕ KO · ○ Non exercé (aucun test de la suite ne "
+        "l atteint) · ⊘ Non testable ici (configuration absente) · – Exclu. À ne pas confondre "
+        "avec le statut des CAS dépliés, qui sont des propositions à adopter",
+    ),
     "classe": ("Type de constat", "famille du défaut mesuré ; vide = passé, sans objet"),
     "constat mesuré": (
         "Constat mesuré — pourquoi",

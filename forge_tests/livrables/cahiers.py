@@ -28,6 +28,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from forge_tests import adoption as _adoption
 from forge_tests.livrables import exigences as _exigences
 from forge_tests.livrables import jeux as _jeux
 from forge_tests.livrables import libelles as _libelles
@@ -405,14 +406,23 @@ _FABRIQUES = {
 }
 
 
-def cas_du_chapitre(chapitre: dict, referentiel: dict | None) -> dict:
-    """Cas et non-couverts d un chapitre. Chaque élément va dans l un ou dans l autre."""
+def cas_du_chapitre(
+    chapitre: dict, referentiel: dict | None, adoptions: dict[str, dict] | None = None
+) -> dict:
+    """Cas et non-couverts d un chapitre. Chaque élément va dans l un ou dans l autre.
+
+    `adoptions` (RT-13) : déclarations du projet lues par `forge_tests.adoption`. Chaque cas
+    porte alors son statut — proposition, adopté (avec son test), ou adoption refusée avec son
+    motif. C'est ce qui fait descendre le solde des propositions au lieu de le figer.
+    """
+    adoptions = adoptions or {}
     fabrique = _FABRIQUES.get(chapitre.get("axe_cas", "unitaire"), _cas_unitaire)
     repli = chapitre.get("axe_cas", "unitaire") not in _FABRIQUES
     sous_chapitres: list[dict] = []
     non_couverts: list[dict] = []
     rattachements: dict[str, list[dict]] = {}
     total_cas = 0
+    total_adoptes = 0
     for sous in chapitre["sous_chapitres"]:
         cle_jeu = f"JD-{chapitre['code']}-{sous['libelle']}"
         entrees = []
@@ -435,6 +445,10 @@ def cas_du_chapitre(chapitre: dict, referentiel: dict | None) -> dict:
                 unite["ref"] = f"{chapitre['code']}-{rang_stable:04d}-{rang}"
                 unite["element"] = element["id"]
                 unite["exigences"] = liens
+                # RT-13 : le cas n'est plus une proposition éternelle — le projet peut le
+                # déclarer adopté, et la déclaration est vérifiée (test existant).
+                unite["adoption"] = _adoption.statut(adoptions, unite["ref"])
+                total_adoptes += unite["adoption"]["statut"] == "adopte"
             total_cas += len(cas)
             entrees.append({"element": element, "cas": cas})
         sous_chapitres.append({"libelle": sous["libelle"], "entrees": entrees, "cle_jeu": cle_jeu})
@@ -444,6 +458,7 @@ def cas_du_chapitre(chapitre: dict, referentiel: dict | None) -> dict:
         "non_couverts": non_couverts,
         "rattachements": rattachements,
         "total_cas": total_cas,
+        "total_adoptes": total_adoptes,
         "axe_repli": repli,
     }
 
@@ -463,6 +478,22 @@ def _rendre_exigences(liens: list[dict], referentiel: dict | None) -> str:
             morceaux.append(f"{lien['id']} (lexical : {racines} — À VALIDER)")
     reste = f" … et {len(liens) - 6} autre(s)" if len(liens) > 6 else ""
     return ", ".join(morceaux) + reste
+
+
+def _libelle_adoption(adoption: dict | None) -> str:
+    """Statut d'un cas en une ligne (RT-13). « Proposition » n'est pas « non joué » : c'est
+    l'état structurel d'un cas que le projet n'a pas encore adopté — la forge n'audite jamais
+    ses propres cas."""
+    entree = adoption or {"statut": "proposition"}
+    if entree["statut"] == "adopte":
+        return f"**ADOPTÉ** par le projet — test : `{entree['test']}`"
+    if entree["statut"] == "refuse":
+        return f"**adoption REFUSÉE** — {entree['motif']}"
+    return (
+        "**Proposition (non adoptée)** — ce cas n'est pas « non joué » : il n'appartient pas "
+        f"encore à la suite du projet. Pour l'adopter, l'écrire puis le déclarer dans "
+        f"`{_adoption.FICHIER}`"
+    )
 
 
 def _rendre_chapitre(chapitre: dict, referentiel: dict | None) -> list[str]:
@@ -520,6 +551,7 @@ def _rendre_chapitre(chapitre: dict, referentiel: dict | None) -> list[str]:
             for unite in entree["cas"]:
                 lignes.append(f"**{unite['ref']} — {unite['titre']}**")
                 lignes.append("")
+                lignes.append(f"- Statut : {_libelle_adoption(unite.get('adoption'))}")
                 lignes.append(f"- Préconditions : {unite['preconditions']}")
                 lignes.append(f"- Jeu de données : `{unite['jeu']}`")
                 liens = _rendre_exigences(unite["exigences"], referentiel)
@@ -558,6 +590,7 @@ def _entete(titre: str, contexte: dict, chapitres: list[dict]) -> list[str]:
     declares = {e["id"] for c in chapitres for e in c["non_couverts"]}
     non_couverts = len(declares)
     elements = len(avec_cas | declares)
+    adoptes = sum(c.get("total_adoptes", 0) for c in chapitres)
     lignes = [
         f"# {titre}",
         "",
@@ -592,13 +625,21 @@ def _entete(titre: str, contexte: dict, chapitres: list[dict]) -> list[str]:
         "> Chaque élément de surface inventorié porte **au moins un cas**, ou figure en "
         "**« non couvert » avec sa raison**. Aucune absence silencieuse.",
         "",
-        "| éléments inventoriés | cas dérivés | éléments non couverts (déclarés) |",
-        "| --- | --- | --- |",
-        f"| {elements} | {couverts} | {non_couverts} |",
+        "| éléments inventoriés | cas dérivés | cas adoptés par le projet | éléments non "
+        "couverts (déclarés) |",
+        "| --- | --- | --- | --- |",
+        f"| {elements} | {couverts} | {adoptes} | {non_couverts} |",
         "",
         "Ces cas sont des **PROPOSITIONS** déposées hors du projet audité (garde-fou G-1). Tant "
         "que le produit ne les a pas adoptés, ils ne comptent pour rien dans la couverture "
         "mesurée : la forge n audite jamais ses propres cas.",
+        "",
+        "**Adoption (RT-13).** Un cas écrit dans la suite du projet se déclare dans "
+        f"`{_adoption.FICHIER}` — une ligne `{{\"cas\": \"<référence>\", \"test\": \"<chemin>\"}}`. "
+        "La déclaration est vérifiée (le test cité doit exister, sinon l adoption est refusée "
+        "avec son motif) et la colonne « cas adoptés » ci-dessus devient un solde qui descend. "
+        "Les références de cas sont stables d un audit à l autre : elles sont citables depuis "
+        "du code.",
         "",
     ]
     return lignes

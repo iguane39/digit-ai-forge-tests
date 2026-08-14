@@ -17,6 +17,7 @@ import json
 import os
 from pathlib import Path
 
+from forge_tests import adoption as _adoption
 from forge_tests.adaptateurs import REGISTRE
 from forge_tests.livrables import cahiers as _cahiers
 from forge_tests.livrables import dashboard as _dashboard
@@ -107,7 +108,10 @@ def produire(
 
     # 2. Cahiers — un chapitre par déclaration d adaptateur, un cas ou un « non couvert » par
     #    élément. L exhaustivité est une propriété vérifiable, pas une intention.
-    chapitres = [_cahiers.cas_du_chapitre(c, referentiel) for c in chapitres_bruts]
+    # RT-13 : les adoptions déclarées par le PROJET (lecture seule, G-1) — un cas adopté cesse
+    # d'être une proposition, et le solde du cahier descend au lieu de rester figé.
+    adoptions = _adoption.charger(cible)
+    chapitres = [_cahiers.cas_du_chapitre(c, referentiel, adoptions) for c in chapitres_bruts]
     chemins: dict[str, Path] = {"jeu": chemin_jeu}
     for famille, nature in (
         ("fonctionnel", "Cahier de tests fonctionnels"),
