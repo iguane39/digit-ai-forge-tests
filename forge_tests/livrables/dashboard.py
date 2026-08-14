@@ -47,6 +47,7 @@ import html as _html
 import re
 from pathlib import Path
 
+from forge_tests import declarations as _declarations
 from forge_tests.actions import (
     CATEGORIES,
     ETAPES,
@@ -70,6 +71,9 @@ NON_JUGE = [
     "sont les memes elements qui ont bouge",
     "dashboard : le detail d un cas est la derivation des cahiers (memes references stables) — "
     "sa pertinence pedagogique est celle du cahier, la page ne l ameliore pas",
+    "dashboard : un constat DECLARE par le projet (RT-18) sort du compteur « Constats d echec » "
+    "et reste integralement affiche, avec son motif type et sa contre-preuve — la page rend la "
+    "declaration, elle ne la valide pas",
 ]
 
 
@@ -82,13 +86,19 @@ def totaux(rapport: dict) -> dict[str, int]:
     """Compteurs publiés par la page. Une seule définition, pour le rendu ET pour le contrôle."""
     inventaire = _surface.inventaire(rapport)
     elements = [e for liste in inventaire.values() for e in liste]
-    findings = rapport.get("findings") or []
+    # RT-18 : un constat que le PROJET a déclaré (contesté avec contre-preuve, bloqué par
+    # configuration absente ou par du code supplanté) sort du décompte principal — jamais de la
+    # page : il reste dans l inventaire, dans la table des échecs, et dans son propre compteur.
+    tous = rapport.get("findings") or []
+    findings = [f for f in tous if not _declarations.est_ecarte(f)]
+    declares = [f for f in tous if _declarations.est_ecarte(f)]
     actions = rapport.get("actions") or []
     compte = repartition(actions)
     valeurs = {
         "elements": len(elements),
         "passes": sum(1 for e in elements if e["etat"] == "exerce"),
         "echecs": len(findings),
+        "declares": len(declares),
         "echecs_bloquants": sum(1 for f in findings if f.get("severite") == "bloquant"),
         "non_testables": len(rapport.get("non_testables") or []),
         "pans_non_couverts": len(rapport.get("pans_non_couverts") or []),
@@ -1184,6 +1194,50 @@ def _badge_adoption(adoption: dict) -> str:
     )
 
 
+def _badge_declaration(declaration: dict | None) -> str:
+    """État d un constat DÉCLARÉ par le projet (RT-18) — jamais un masquage, un état de plus.
+
+    Trois rendus, tous visibles : la déclaration retenue (le constat sort du décompte, sa
+    contre-preuve est citée en regard, avec qui l a signée et quand), la déclaration REFUSÉE
+    (le constat reste au décompte, et le motif du refus est dit — sans quoi le mécanisme
+    deviendrait un bouton « faire taire ») et la déclaration PÉRIMÉE.
+    """
+    if not declaration:
+        return ""
+    statut = declaration.get("statut")
+    signature = (
+        f'<span class="discret"> — déclaré par {_e(declaration.get("par"))} le '
+        f'{_e(declaration.get("date"))}'
+        + (f", terme {_e(declaration.get('expire_le'))}" if declaration.get("expire_le") else "")
+        + "</span>"
+    )
+    if statut == _declarations.RETENUE:
+        libelle = _e(declaration.get("libelle_motif") or declaration.get("motif"))
+        explication = (
+            f'<span class="discret"> {_e(declaration.get("explication"))}</span>'
+            if declaration.get("explication")
+            else ""
+        )
+        return (
+            '<p><span class="badge b-info" title="le projet a DÉCLARÉ ce constat et la preuve '
+            'citée existe : il reste mesuré et affiché, hors du décompte principal">'
+            f"⚖ Déclaré par le projet — {libelle}</span> "
+            f'contre-preuve <code>{_e(declaration.get("preuve"))}</code>'
+            f"{signature}{explication}</p>"
+        )
+    if statut == _declarations.PERIMEE:
+        return (
+            '<p><span class="badge b-part" title="déclaration expirée : le constat revient au '
+            'décompte principal tant qu elle n est pas renouvelée">⏳ Déclaration périmée</span> '
+            f'<span class="discret">{_e(declaration.get("motif_du_refus"))}</span>{signature}</p>'
+        )
+    return (
+        '<p><span class="badge b-fail" title="déclaration non vérifiable : le constat reste au '
+        'décompte principal">✕ Déclaration refusée</span> '
+        f'<span class="discret">{_e(declaration.get("motif_du_refus"))}</span>{signature}</p>'
+    )
+
+
 def _constat_cellule(element: dict) -> str:
     """La colonne « constat mesuré — pourquoi » ne se tait JAMAIS (retour humain du 13/08 :
     une cellule vide est indistinguable d un bug d affichage), et pour un élément NON JOUÉ
@@ -1261,9 +1315,16 @@ def _kpis_chapitre(chapitre: dict) -> str:
 
 
 def _panneau_chapitres(
-    chapitres: list[dict], famille: str, details: dict[tuple[str, str], dict] | None = None
+    chapitres: list[dict],
+    famille: str,
+    details: dict[tuple[str, str], dict] | None = None,
+    declarations: dict[tuple[str, str], dict] | None = None,
 ) -> str:
+    """`declarations` (RT-18) : (pan, id élément) -> déclaration du projet portée par le
+    finding. L état de l élément reste celui que le rapport mesure ; la déclaration s affiche
+    EN REGARD du constat, elle ne le remplace pas."""
     details = details or {}
+    declarations = declarations or {}
     retenus = [c for c in chapitres if c["famille"] == famille]
     # Retour humain du 14/08 : l'onglet ouvre sur SA synthèse (mêmes colonnes que l'onglet
     # Synthèse, restreinte à la famille) + les commandes de repli global des chapitres.
@@ -1352,7 +1413,10 @@ def _panneau_chapitres(
                         _e(element.get("classe") or "")
                         or '<span class="discret" title="élément passé : aucun constat, '
                         'donc pas de type">—</span>',
-                        _constat_cellule(element),
+                        _constat_cellule(element)
+                        + _badge_declaration(
+                            declarations.get((str(element.get("pan") or ""), element["id"]))
+                        ),
                         _e(element.get("risque"))
                         if element.get("risque") is not None
                         else '<span class="discret" title="pas de constat, donc pas de score '
@@ -1375,6 +1439,113 @@ def _panneau_chapitres(
             )
         morceaux.append("</details></section>")
     return "\n".join(morceaux) or '<p class="discret">Aucun chapitre de cette famille.</p>'
+
+
+# --- Constats déclarés par le projet (RT-18) ----------------------------------------------------
+def _section_declarations(rapport: dict, valeurs: dict[str, int]) -> str:
+    """Le canal de réponse du projet, rendu en clair — retenues ET refusées.
+
+    Rendre les seules déclarations RETENUES ferait de ce canal un bouton « faire taire » : ce
+    qui rend la mesure opposable, c est que le refus se lise autant que l acceptation, avec le
+    motif de l un comme la contre-preuve de l autre.
+    """
+    section = rapport.get("declarations") or {}
+    entrees = section.get("entrees") or []
+    compte = section.get("compte") or {}
+    titre = '<h3 id="constats-declares">Constats déclarés par le projet</h3>'
+    vocabulaire = (
+        '<p class="discret">Motifs typés admis : '
+        + " · ".join(
+            f"<code>{_e(cle)}</code> ({_e(libelle)})"
+            for cle, libelle in sorted((section.get("motifs") or {}).items())
+        )
+        + ".</p>"
+        if section.get("motifs")
+        else ""
+    )
+    if not section:
+        return (
+            titre
+            + '<p class="discret">Ce rapport n a pas traversé le point d application des '
+            "déclarations : aucune section <code>declarations</code>. Le canal existe "
+            "néanmoins — voir <code>forge_tests/declarations.py</code>.</p>"
+        )
+    if not entrees:
+        return (
+            titre
+            + '<p class="discret">Aucune déclaration : le projet n a écarté aucun constat. '
+            f"Le canal existe et reste ouvert — {_e(section.get('pour_declarer'))}.</p>"
+            + vocabulaire
+        )
+    lignes = []
+    for entree in entrees:
+        statut = str(entree.get("statut") or "")
+        badge = {
+            _declarations.RETENUE: (
+                "b-info",
+                "⚖ Retenue",
+                "la preuve citée existe : le constat sort du décompte principal",
+            ),
+            _declarations.PERIMEE: (
+                "b-part",
+                "⏳ Périmée",
+                "le terme est passé : le constat est revenu au décompte principal",
+            ),
+        }.get(
+            statut,
+            (
+                "b-fail",
+                "✕ Refusée",
+                "déclaration non vérifiable : le constat reste au décompte principal",
+            ),
+        )
+        lignes.append(
+            [
+                f"<code>{_e(entree.get('constat') or '—')}</code>",
+                f'<span class="badge {badge[0]}" title="{_e(badge[2])}">{_e(badge[1])}</span>',
+                _e(
+                    (section.get("motifs") or {}).get(entree.get("motif"), entree.get("motif"))
+                    or "—"
+                ),
+                f"<code>{_e(entree.get('preuve') or '—')}</code>",
+                f"{_e(entree.get('par') or '—')}<br>"
+                f'<span class="discret">{_e(entree.get("date") or "sans date")}'
+                + (f" → {_e(entree.get('expire_le'))}" if entree.get("expire_le") else "")
+                + "</span>",
+                _texte_libre(entree.get("motif_du_refus") or entree.get("explication") or "—"),
+            ]
+        )
+    inconnues = section.get("inconnues") or []
+    note_inconnues = (
+        '<p class="discret">Déclarations qui ne visent aucun constat de CE rapport : '
+        + " · ".join(f"<code>{_e(cle)}</code>" for cle in inconnues)
+        + ". Le constat a pu disparaître (bonne nouvelle) ou l identifiant changer — "
+        "elles sont dites, jamais silencieuses.</p>"
+        if inconnues
+        else ""
+    )
+    return (
+        titre
+        + '<p class="discret">Le projet répond ici aux constats de l audit : contestation avec '
+        "contre-preuve, élément bloqué par une configuration absente, ou code supplanté par le "
+        "point d entrée réellement déployé. Chaque déclaration est vérifiée — la preuve citée "
+        "doit exister —, datée et signée. Un constat déclaré reste mesuré et affiché ; il sort "
+        f"du seul décompte principal ({valeurs['declares']} sur "
+        f"{valeurs['declares'] + valeurs['echecs']} constats mesurés).</p>"
+        + f'<p><strong>{compte.get(_declarations.RETENUE, 0)} retenue(s)</strong> · '
+        f"{compte.get(_declarations.REFUSEE, 0)} refusée(s) · "
+        f"{compte.get(_declarations.PERIMEE, 0)} périmée(s) · "
+        f"{compte.get('inconnues', 0)} sans constat correspondant — source "
+        f"<code>{_e(section.get('fichier'))}</code>, lue en LECTURE SEULE dans le projet.</p>"
+        + vocabulaire
+        + _tableau(
+            ["constat", "état", "motif typé", "preuve citée", "déclaré par", "explication"],
+            lignes,
+            identifiant="table-declarations",
+            outille_force=True,
+        )
+        + note_inconnues
+    )
 
 
 # --- Actions (R8) -------------------------------------------------------------------------------
@@ -1623,6 +1794,16 @@ def construire(
                 "exigences": element.get("exigences"),
             }
 
+    # RT-18 : index (pan, id élément) -> déclaration du projet, lue sur les findings eux-mêmes.
+    # La page ne relit pas `forge/constats-contestes.jsonl` : c est le rapport qui porte le
+    # verdict de vérification, sans quoi deux lecteurs du même audit auraient deux vérités.
+    declarations_par_element: dict[tuple[str, str], dict] = {}
+    for finding in rapport.get("findings") or []:
+        if finding.get("declaration"):
+            declarations_par_element[
+                (str(finding.get("pan") or ""), str(finding.get("id") or ""))
+            ] = finding["declaration"]
+
     def pct(part: int, tout: int) -> str:
         return f"{round(100 * part / tout)} % " if tout else ""
 
@@ -1684,6 +1865,19 @@ def construire(
             ancre="table-echecs",
             filtre_severite="bloquant",
         ),
+        _tuile(
+            "declares",
+            valeurs["declares"],
+            delta=deltas.get("declares"),
+            part=pct(valeurs["declares"], valeurs["declares"] + valeurs["echecs"])
+            + "des constats mesurés",
+            cible="echecs",
+            ancre="constats-declares",
+            libelle="Constats déclarés par le projet",
+            descriptif="constats mesurés que le projet a déclarés — contestés avec "
+            "contre-preuve, ou bloqués par une configuration absente ou du code supplanté. "
+            "Hors du décompte principal, jamais retirés du rapport",
+        ),
         _tuile("non_joues", valeurs["non_joues"], delta=deltas.get("non_joues"), cible="non-joues"),
         _tuile(
             "actions",
@@ -1733,7 +1927,10 @@ def construire(
     echecs = [
         "<h2>4 · Échecs — raisons mesurées</h2>",
         '<p class="discret">Chaque ligne est un constat RATTACHÉ à un élément nommé, trié '
-        "par risque décroissant. Un défaut sans élément n existe pas dans ce framework.</p>",
+        "par risque décroissant. Un défaut sans élément n existe pas dans ce framework. "
+        "Un constat que le projet a DÉCLARÉ (contesté, ou bloqué par configuration ou code "
+        "supplanté) reste dans cette table, avec sa contre-preuve : il sort du décompte, "
+        "jamais du rapport.</p>",
         _tableau(
             ["risque", "sévérité", "pan", "élément", "classe", "raison mesurée", "localisation"],
             [
@@ -1743,17 +1940,23 @@ def construire(
                     _e(f.get("pan")),
                     f"<code>{_e(f.get('id'))}</code>",
                     _e(f.get("classe")),
-                    _texte_libre(f.get("message")),
+                    _texte_libre(f.get("message")) + _badge_declaration(f.get("declaration")),
                     f'<span class="discret">{_e(f.get("localisation"))}</span>',
                 ]
                 for f in (rapport.get("findings") or [])
             ],
             attributs=[
                 f' data-severite="{_e(f.get("severite"))}"'
+                + (
+                    f' data-declaration="{_e((f.get("declaration") or {}).get("statut"))}"'
+                    if f.get("declaration")
+                    else ""
+                )
                 for f in (rapport.get("findings") or [])
             ],
             identifiant="table-echecs",
         ),
+        _section_declarations(rapport, valeurs),
     ]
 
     non_joues = [
@@ -1875,13 +2078,18 @@ def construire(
             "Fonctionnels",
             [
                 "<h2>2 · Fonctionnels</h2>",
-                _panneau_chapitres(chapitres, "fonctionnel", details),
+                _panneau_chapitres(
+                    chapitres, "fonctionnel", details, declarations_par_element
+                ),
             ],
         ),
         (
             "techniques",
             "Techniques",
-            ["<h2>3 · Techniques</h2>", _panneau_chapitres(chapitres, "technique", details)],
+            [
+                "<h2>3 · Techniques</h2>",
+                _panneau_chapitres(chapitres, "technique", details, declarations_par_element),
+            ],
         ),
         ("echecs", "Échecs", echecs),
         ("non-joues", "Non joués", non_joues),
@@ -1896,7 +2104,8 @@ def construire(
         "objectif, résultat, constat expliqué et cas dépliable par élément",
         "techniques": "synthèse des pans techniques, puis chapitres repliables — "
         "objectif, résultat, constat expliqué et cas dépliable par élément",
-        "echecs": "chaque constat rattaché à un élément nommé, trié par risque décroissant",
+        "echecs": "chaque constat rattaché à un élément nommé, trié par risque décroissant, "
+        "puis les constats déclarés par le projet avec leur contre-preuve",
         "non-joues": "non testables (configuration absente) et pans non couverts, motivés — "
         "tables outillées",
         "actions": "suites à donner structurées (quoi, pourquoi, résultat), plan de boucle "

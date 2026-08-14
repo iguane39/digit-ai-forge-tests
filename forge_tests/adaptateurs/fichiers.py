@@ -101,4 +101,22 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 ),
             ],
         )
-    return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)
+    return evaluer_surface(
+        NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE,
+        sans_objet=sans_objet(cible),
+    )
+
+
+def sans_objet(cible: Path) -> str | None:
+    """PREUVE d absence de lecture de fichiers (NA, 14/08) — pas une supposition.
+
+    Un produit qui n importe ni ne parse aucun fichier n a pas de chemins de lecture à couvrir.
+    La preuve est positive : le module que ce pan déclare lire n existe pas.
+    """
+    src = _src(cible)
+    if src.exists():
+        return None
+    return (
+        f"aucun module d import/parsing (`{src.name}`) dans les sources : ce projet ne lit "
+        "aucun fichier entrant"
+    )

@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 
 from forge_tests import adoption as _adoption
+from forge_tests import declarations as _declarations
 from forge_tests.adaptateurs import REGISTRE
 from forge_tests.livrables import cahiers as _cahiers
 from forge_tests.livrables import dashboard as _dashboard
@@ -78,6 +79,13 @@ def produire(
     cible, dossier = Path(cible).resolve(), Path(dossier).resolve()
     _verifier_hors_projet(dossier, cible)
     dossier.mkdir(parents=True, exist_ok=True)
+
+    # RT-18 : les déclarations du projet s appliquent AUSSI quand on passe par `produire()`
+    # sans le CLI — sinon deux chemins d appel donneraient deux rapports. Appliquées ICI, AVANT
+    # le sceau : placées plus bas, elles mutaient le rapport APRÈS son empreinte, et deux runs
+    # du même audit ne scellaient plus le même document — le déterminisme des cahiers, vérifié
+    # en recette, tombait. `appliquer` est idempotent : l appeler après le CLI ne double rien.
+    _declarations.appliquer(rapport, cible)
 
     referentiel = _exigences.charger(_exigences.chemin_declare(cible))
     produit = nom_du_produit(cible, referentiel)
