@@ -46,10 +46,10 @@ NOM, PAN = "qualif-navigateur", "qualif"
 SEUIL = seuils.valeur("couverture_surface_qualif")
 
 POUR_COUVRIR = (
-    "servir une instance PEUPLEE du produit (jeu de demonstration injecte, traitements joues) "
-    "et declarer son URL dans FORGE_TESTS_QUALIF_URL ; fournir un compte par "
-    "FORGE_TESTS_QUALIF_LOGIN / FORGE_TESTS_QUALIF_PASSWORD si les routes sont protegees. "
-    "Options : FORGE_TESTS_QUALIF_ROUTES (routes d amorce, virgule), "
+    "servir une instance PEUPLÉE du produit (jeu de démonstration injecté, traitements joués) "
+    "et déclarer son URL dans FORGE_TESTS_QUALIF_URL ; fournir un compte par "
+    "FORGE_TESTS_QUALIF_LOGIN / FORGE_TESTS_QUALIF_PASSWORD si les routes sont protégées. "
+    "Options : FORGE_TESTS_QUALIF_ROUTES (routes d'amorce, virgule), "
     "FORGE_TESTS_QUALIF_MARQUEURS (JSON route -> marqueur de contenu), "
     "FORGE_TESTS_QUALIF_CONNEXION (route de la mire), FORGE_TESTS_QUALIF_PLAFOND (routes max)"
 )
@@ -241,12 +241,12 @@ def _a_un_effet(descripteur: dict, types: set[str] | None) -> str | None:
         if href is None:
             return "lien sans attribut href : aucune destination, aucun effet"
         if href.strip().lower() in _HREF_MORTS:
-            return f"lien dont href vaut « {href.strip() or '(vide)'} » et sans ecouteur attache"
+            return f"lien dont href vaut « {href.strip() or '(vide)'} » et sans écouteur attaché"
         return None
     if tag == "form":
         if (table.get("action") or "").strip() not in ("", "#"):
             return None
-        return "formulaire sans action ni ecouteur de soumission : rien n est envoye"
+        return "formulaire sans action ni écouteur de soumission : rien n'est envoyé"
 
     type_ = table.get("type", "").lower()
     if type_ == "reset":
@@ -257,11 +257,11 @@ def _a_un_effet(descripteur: dict, types: set[str] | None) -> str | None:
         if action not in ("", "#") or descripteur.get("handler_formulaire"):
             return None
         return (
-            "bouton de soumission d un formulaire sans action ni ecouteur : le clic n envoie rien"
+            "bouton de soumission d'un formulaire sans action ni écouteur : le clic n'envoie rien"
         )
     if soumet and table.get("form"):
         return None  # rattaché à un formulaire nommé ailleurs
-    return "element interactif sans ecouteur attache, sans destination et sans soumission"
+    return "élément interactif sans écouteur attaché, sans destination et sans soumission"
 
 
 # --- Parcours ---------------------------------------------------------------------------------
@@ -332,7 +332,7 @@ def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN00
             continue
         corps = page.content()
         if statut is None:
-            problemes.append("aucune reponse HTTP observee")
+            problemes.append("aucune réponse HTTP observée")
         elif statut >= 500:
             problemes.append(f"erreur serveur HTTP {statut}")
         elif statut >= 400:
@@ -340,7 +340,7 @@ def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN00
         minuscule = corps.lower()
         for trace in _TRACES:
             if trace in minuscule:
-                problemes.append(f"trace d exception rendue dans la page (« {trace} »)")
+                problemes.append(f"trace d'exception rendue dans la page (« {trace} »)")
                 break
         marqueur = config["marqueurs"].get(route)
         if marqueur is None:
@@ -350,8 +350,8 @@ def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN00
                 marqueur = ""
             if not marqueur.strip():
                 problemes.append(
-                    "aucun marqueur de contenu : ni `h1` ni `title` non vide — la page repond "
-                    "mais n affiche rien d identifiable"
+                    "aucun marqueur de contenu : ni `h1` ni `title` non vide — la page répond "
+                    "mais n'affiche rien d'identifiable"
                 )
         elif marqueur.lower() not in minuscule:
             problemes.append(f"marqueur de contenu absent : {marqueur!r}")
@@ -484,7 +484,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     champs_requis=sorted(manquants),
                     pan=PAN,
                     motif=(
-                        f"qualif : {route} echoue en citant une configuration absente — "
+                        f"qualif : {route} échoue en citant une configuration absente — "
                         f"fournir {', '.join(sorted(manquants))}, puis `--reprendre` le rapport"
                     ),
                 )
@@ -521,7 +521,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                         classe="affordance-sans-effet",
                         localisation=f"{config['base']}{route}",
                         message=(
-                            f"{affordance['tag']} « {affordance['libelle'] or 'sans libelle'} » "
+                            f"{affordance['tag']} « {affordance['libelle'] or 'sans libellé'} » "
                             f"sur {route} — {affordance['motif']}"
                         ),
                         risque=coter(PAN, cle, str(cible)),
@@ -539,7 +539,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 localisation=config["base"],
                 message=(
                     f"qualification {ratio:.0%} sous le seuil {SEUIL:.0%} — "
-                    f"{total - len(exerces)} element(s) en defaut sur {total}"
+                    f"{total - len(exerces)} élément(s) en défaut sur {total}"
                 ),
                 severite=seuils.severite("couverture_surface_qualif"),
                 risque=coter(PAN, f"seuil:{PAN}", str(cible)),

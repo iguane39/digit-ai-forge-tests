@@ -28,9 +28,9 @@ NOM, PAN = "accessibilite-a11y", "accessibilite"
 
 # A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
 POUR_COUVRIR = (
-    "servir le front (build present et `npm`/navigateur disponibles) ou declarer l instance "
-    "SERVIE dans FORGE_TESTS_BASE_URL : le pan juge le DOM RENDU de chaque route, il n a rien "
-    "a lire tant qu aucune page n est rendue"
+    "servir le front (build présent et `npm`/navigateur disponibles) ou déclarer l'instance "
+    "SERVIE dans FORGE_TESTS_BASE_URL : le pan juge le DOM RENDU de chaque route, il n'a rien "
+    "à lire tant qu'aucune page n'est rendue"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les

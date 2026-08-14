@@ -29,8 +29,8 @@ NOM, PAN = "visuel-golden", "visuel"
 # A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
 POUR_COUVRIR = (
     "servir le front pour que chaque route soit capturable, puis ACCEPTER les goldens hors "
-    "boucle (`--accepter`) : aucun golden n est cree pendant un run, un rendu qui vient d "
-    "echouer ne s enterine pas tout seul"
+    "boucle (`--accepter`) : aucun golden n'est créé pendant un run, un rendu qui vient "
+    "d'échouer ne s'entérine pas tout seul"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les

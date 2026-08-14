@@ -21,8 +21,8 @@ NOM, PAN, SEUIL = "data-sql", "data", 1.0
 # A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
 POUR_COUVRIR = (
     "nommer les contraintes de la base `<type>_<table>_<colonne>` dans les migrations, et "
-    "exercer chaque contrainte PAR VIOLATION dans la suite — la sonde data releve les "
-    "violations reellement levees par le moteur (SQLAlchemy ou sqlite3)"
+    "exercer chaque contrainte PAR VIOLATION dans la suite — la sonde data relève les "
+    "violations réellement levées par le moteur (SQLAlchemy ou sqlite3)"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
@@ -305,8 +305,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     classe="divergence",
                     localisation=str(modeles),
                     message=(
-                        f"contrainte {nom} declaree au modele mais absente des migrations : "
-                        "la base ne l applique pas"
+                        f"contrainte {nom} déclarée au modèle mais absente des migrations : "
+                        "la base ne l'applique pas"
                     ),
                     risque=coter(PAN, f"contrainte:{nom}", str(modeles)),
                 )

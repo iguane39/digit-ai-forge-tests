@@ -18,8 +18,8 @@ NOM, PAN, SEUIL = "fichiers-python", "fichiers", 1.0
 
 # A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
 POUR_COUVRIR = (
-    "exposer le module d import/parsing sous `backend/app/importer.py` (ou un nom portant "
-    "`import`/`parse`/`fichier`) et exercer chacun de ses chemins d erreur"
+    "exposer le module d'import/parsing sous `backend/app/importer.py` (ou un nom portant "
+    "`import`/`parse`/`fichier`) et exercer chacun de ses chemins d'erreur"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les

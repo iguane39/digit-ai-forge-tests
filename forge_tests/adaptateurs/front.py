@@ -16,9 +16,9 @@ NOM, PAN, SEUIL = "front-react", "front", 0.90
 
 # A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
 POUR_COUVRIR = (
-    "installer les dependances du front (`frontend/node_modules`), rendre la suite Playwright "
-    "du projet verte, et marquer les elements manipules par `data-testid` — la trace "
-    "Playwright est la source de ce qui a ete REELLEMENT atteint"
+    "installer les dépendances du front (`frontend/node_modules`), rendre la suite Playwright "
+    "du projet verte, et marquer les éléments manipulés par `data-testid` — la trace "
+    "Playwright est la source de ce qui a été RÉELLEMENT atteint"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les

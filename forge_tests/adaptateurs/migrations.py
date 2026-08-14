@@ -20,9 +20,9 @@ NOM, PAN, SEUIL = "migrations-sql", "migrations", 1.0
 
 # A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
 POUR_COUVRIR = (
-    "deposer les migrations sous `backend/migrations/*.sql` avec les marqueurs `-- +migrate "
+    "déposer les migrations sous `backend/migrations/*.sql` avec les marqueurs `-- +migrate "
     "Up` / `-- +migrate Down`, et laisser le projet rejouable sur base neuve — le pan "
-    "applique REELLEMENT le DDL, il ne le lit pas"
+    "applique RÉELLEMENT le DDL, il ne le lit pas"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
@@ -240,7 +240,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     id=f"divergence:migration:{fichier.stem}:retour",
                     classe="divergence",
                     localisation=str(fichier),
-                    message="downgrade vide : la migration ne peut pas etre inversee",
+                    message="downgrade vide : la migration ne peut pas être inversée",
                     risque=coter(PAN, f"migration:{fichier.stem}", str(fichier)),
                 )
             )
@@ -274,7 +274,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 id=f"divergence:migration:{fichier.stem}:retour",
                 classe="divergence",
                 localisation=str(fichier),
-                message="downgrade vide : la migration ne peut pas etre inversee",
+                message="downgrade vide : la migration ne peut pas être inversée",
                 risque=coter(PAN, f"migration:{fichier.stem}", str(fichier)),
             )
         )
@@ -301,8 +301,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     classe="divergence",
                     localisation=str(fichier),
                     message=(
-                        f"{nom} annonce par la migration mais absent du schema obtenu : "
-                        "l instruction s execute sans produire son objet"
+                        f"{nom} annoncé par la migration mais absent du schéma obtenu : "
+                        "l'instruction s'exécute sans produire son objet"
                     ),
                     risque=coter(PAN, f"migration:{nom}", str(fichier)),
                 )

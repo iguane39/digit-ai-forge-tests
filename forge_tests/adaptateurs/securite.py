@@ -25,8 +25,8 @@ NOM, PAN = "securite-oracles", "securite"
 
 # A-5 : ce qu il FAUDRAIT pour couvrir ce pan — publie tel quel au rapport.
 POUR_COUVRIR = (
-    "fournir des sources Python lisibles sous `backend/` : le pan est un controle statique, "
-    "il n a besoin d aucune execution mais il lui faut du code a lire"
+    "fournir des sources Python lisibles sous `backend/` : le pan est un contrôle statique, "
+    "il n'a besoin d'aucune exécution mais il lui faut du code à lire"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les

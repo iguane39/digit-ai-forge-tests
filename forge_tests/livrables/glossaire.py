@@ -77,6 +77,11 @@ ETATS: dict[str, tuple[str, str, str, str]] = {
 # --- En-têtes de colonnes : libellé affiché + tooltip (l id de colonne reste data-label) -------
 ENTETES: dict[str, tuple[str, str]] = {
     "élément": ("Élément testé", "identifiant de l élément dans l inventaire de surface"),
+    "objectif": (
+        "Objectif du test",
+        "ce que le test vérifie exactement — son périmètre précis, dérivé de la forme de "
+        "l élément (retour humain du 14/08)",
+    ),
     "état": ("Résultat", "état mesuré : ✓ Passé · ✕ KO · ○ Non joué · ⊘ Non testable · – Exclu"),
     "classe": ("Type de constat", "famille du défaut mesuré ; vide = passé, sans objet"),
     "constat mesuré": (
