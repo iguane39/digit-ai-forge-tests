@@ -69,6 +69,19 @@ CORPUS = [
     # rendue, marqueur de contenu absent, erreur console, affordance sans le moindre ecouteur.
     ("A-4", "qualif", "instance servie : route en defaut et affordance sans effet",
      ("qualif:",)),
+    # TF-0200 (verdict O2 de l etude du 14/08) : le pan `prompts`, v0 STATIQUE et GRATUITE.
+    # H-14 — un modele designe par un ALIAS mouvant : le systeme sous test change sans qu un
+    # seul commit ne bouge (`claude-opus-4-1-20250805` retire le 2026-08-05, alias `-latest`
+    # de Google remappes a dates fixes). H-15 — un prompt adressable qu AUCUN cas n exerce.
+    ("H-14", "prompts", "modele designe par un alias mouvant, jamais epingle", ("modele:",)),
+    ("H-15", "prompts", "prompt adressable sans aucun cas au corpus", ("prompt:",)),
+    # TF-0203 (precision humaine du 14/08 : « un produit trigger, l enclenchement de batch »).
+    # Le pan `batch` mesurait l INTERIEUR du traitement en supposant qu il demarre. Le banc
+    # rouge porte un lot qu aucun declencheur n atteint : le constat sortait bien du pan, mais
+    # n etait declare dans AUCUNE entree de ce corpus — un defaut detecte hors contrat n est
+    # pas un defaut couvert.
+    ("H-16", "batch", "traitement par lot qu aucun declencheur n enclenche",
+     ("job-sans-declencheur", "trigger:")),
 ]
 
 # RT-8 — le lecteur SQL, verifie sur pieces. Ces cas ne passent par aucun banc : ils portent
@@ -467,7 +480,7 @@ def verifier_lecture_seule() -> int:
 def verifier_chemins_de_couverture() -> int:
     """A-5 — tout pan non couvert sort un CHEMIN, pas seulement un motif.
 
-    Aux bancs, les douze pans sont couverts : le mécanisme n y est donc jamais exercé. Il l est
+    Aux bancs, TOUS les pans attendus sont couverts : le mécanisme n y est jamais exercé. Il l est
     ici sur un rapport sans aucune sortie d adaptateur — le cas où TOUS les pans manquent — car
     un chemin de couverture qui pourrit en silence rendrait la sortie d un audit partiel aussi
     inexploitable qu avant : une liste de manques au lieu d une liste de travaux.
@@ -487,7 +500,8 @@ def verifier_chemins_de_couverture() -> int:
     vide = rapport([], PANS_ATTENDUS, pour_couvrir=chemins)
     entrees = vide["pans_non_couverts"]
     cas = [
-        ("les douze pans attendus sortent non couverts", len(entrees) == len(PANS_ATTENDUS)),
+        (f"les {len(PANS_ATTENDUS)} pans attendus sortent non couverts",
+         len(entrees) == len(PANS_ATTENDUS)),
         ("chaque entree porte {pan, motif, pour_couvrir}",
          all({"pan", "motif", "pour_couvrir"} <= set(e) for e in entrees)),
         ("aucun chemin n est vide", all(e["pour_couvrir"].strip() for e in entrees)),
@@ -605,7 +619,7 @@ def verifier_champs_par_pan() -> int:
     `data` reclamait `FORGE_TESTS_QUALIF_URL`, qui ne l aurait jamais debloque. Cout mesure :
     16 actions `manuelle_utilisateur` fausses au rapport ASD du 07/08.
 
-    Aucun banc ne peut l exercer : aux bancs, les douze pans sont couverts. Le cas est donc
+    Aucun banc ne peut l exercer : aux bancs, tous les pans sont couverts. Le cas est donc
     verifie sur pieces, avec sa contrepartie ROUGE — le champ EST bien dans le sac partage,
     faute de quoi le controle serait vide et ne prouverait rien.
     """
@@ -1249,7 +1263,7 @@ def verifier_dashboard(rouge: dict) -> int:
 def verifier_corpus_des_bancs(
     rouge: dict, vert: dict, alteres: list[str], empreintes_avant: dict
 ) -> int:
-    """Le cœur historique : les 16 défauts plantés au banc rouge, le banc vert sans bloquant."""
+    """Le cœur historique : les défauts plantés au banc rouge, le banc vert sans bloquant."""
     detectes = 0
     for code, pan, libelle, prefixes in CORPUS:
         trouves = _findings(rouge, prefixes)
@@ -1321,7 +1335,9 @@ def verifier_corpus_des_bancs(
 SECTIONS: dict[str, dict] = {
     "corpus": {
         "bancs": ("rouge", "vert"),
-        "titre": "16 défauts du banc rouge, banc vert sans bloquant, empreintes G-1",
+        # Le compte est DÉRIVÉ du corpus : écrit en dur, il aurait menti au premier défaut
+        # ajouté — c est arrivé au 17e (TF-0200, pan `prompts`).
+        "titre": f"{len(CORPUS)} défauts du banc rouge, banc vert sans bloquant, empreintes G-1",
     },
     "unitaire": {"bancs": (), "titre": "TF-0006 — suite unitaire du dépôt (pytest)"},
     "sql": {"bancs": (), "titre": "RT-8 — lecture SQL"},

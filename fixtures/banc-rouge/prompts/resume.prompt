@@ -1,0 +1,8 @@
+# Prompt de résumé — banc ROUGE
+# Défaut planté : le corpus est DÉCLARÉ mais introuvable. Personne ne POUVAIT exercer ce
+# prompt ici — c'est un manque de configuration (non_testable, RT-6), jamais un trou de
+# couverture imputable au projet.
+corpus: evals/resume.eval.jsonl
+
+Tu résumes l'historique d'une commande en trois lignes au plus : ce qui a été commandé, où en
+est la livraison, ce qui reste à faire. Aucune donnée qui ne figure pas dans l'historique.

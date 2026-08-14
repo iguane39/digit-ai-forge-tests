@@ -60,6 +60,24 @@ def resultats_par_test(sortie: str) -> dict[str, str]:
     return releves
 
 
+def variations(releves: list[dict[str, str]]) -> dict[str, list[str]]:
+    """Identifiants dont la VALEUR a varié entre deux relevés — le cœur de la détection.
+
+    Extraite de `rejouer` (TF-0201) pour être réutilisable sans rejouer quoi que ce soit : le
+    pan `prompts` mesure la stabilité de réponses DÉJÀ obtenues et doit appliquer exactement la
+    même règle, pas une copie qui dériverait. Un identifiant absent d un relevé vaut `absent` :
+    une mesure manquante EST une variation, la taire serait un vert offert.
+    """
+    tous_ids: set[str] = set()
+    for releve in releves:
+        tous_ids |= set(releve)
+    return {
+        identifiant: [releve.get(identifiant, "absent") for releve in releves]
+        for identifiant in sorted(tous_ids)
+        if len({releve.get(identifiant, "absent") for releve in releves}) > 1
+    }
+
+
 def rejouer(
     commande: list[str], cwd: Path, repetitions: int = 3, **kwargs: object
 ) -> dict:
@@ -86,13 +104,8 @@ def rejouer(
     tous_ids: set[str] = set()
     for releve in releves:
         tous_ids |= set(releve)
-    instables = {
-        identifiant: [releve.get(identifiant, "absent") for releve in releves]
-        for identifiant in sorted(tous_ids)
-        if len({releve.get(identifiant, "absent") for releve in releves}) > 1
-    }
     return {
         "repetitions": repetitions,
-        "tests_instables": instables,
+        "tests_instables": variations(releves),
         "tous_ids": sorted(tous_ids),
     }
