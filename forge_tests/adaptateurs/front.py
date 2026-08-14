@@ -127,23 +127,65 @@ def inventaire(cible: Path) -> list[Element]:
     return elements
 
 
-def exerces(cible: Path) -> set[str] | None:
-    """Routes visitees et elements manipules REELLEMENT, lus dans la trace du navigateur."""
+def motif_de_route(chemin: str) -> re.Pattern[str]:
+    """Motif de route DÉCLARÉ -> expression qui apparie une URL, comme le routeur lui-même.
+
+    RT-11 (lot bourse-aux-vacants 20260814a) : une route déclarée est un MOTIF, pas une URL.
+    Comparer `/login/reset-password/:token/:email` à l'URL réellement visitée sans le templater
+    ne rapproche jamais rien — toute route paramétrée d'une SPA sortait « inventoriée, jamais
+    exercée » alors que la suite la visitait, jeton réel en main. Un `:param` capte un segment,
+    un `*` capte le reste ; tout autre segment est littéral.
+    """
+    morceaux = []
+    for segment in [s for s in chemin.split("/") if s]:
+        if segment.startswith(":"):
+            morceaux.append(r"[^/]+")
+        elif segment == "*":
+            morceaux.append(r".*")
+        else:
+            morceaux.append(re.escape(segment))
+    return re.compile("^/" + "/".join(morceaux) + "$")
+
+
+def _routes_appariees(inventaire_elements: list[Element], urls: list[str]) -> set[str]:
+    """Ids de routes DÉCLARÉES qu'au moins une URL visitée apparie (RT-11)."""
+    couvert: set[str] = set()
+    for element in inventaire_elements:
+        if not element.id.startswith("route:"):
+            continue
+        motif = motif_de_route(element.id.split(":", 1)[1])
+        if any(motif.match(url) for url in urls):
+            couvert.add(element.id)
+    return couvert
+
+
+def exerces(cible: Path, inventaire_elements: list[Element] | None = None) -> set[str] | None:
+    """Routes visitees et elements manipules REELLEMENT, lus dans la trace du navigateur.
+
+    `inventaire_elements` (RT-11) : quand l'inventaire est fourni, les routes DÉCLARÉES y sont
+    appariées aux URL visitées par leur motif. Sans lui, seul le repli historique joue.
+    """
     mesure = front_execute(str(cible))
     if mesure is None:
         return None
     couvert = {f"element:{tid}" for tid in mesure["testids"]}
+    # Une URL porte parfois une requête ou une ancre : ni l'une ni l'autre n'est la route.
+    urls = [str(url).split("?")[0].split("#")[0] or "/" for url in mesure["routes"]]
     # motif hors f-string : un backslash dans une f-string est invalide en 3.11
     # (requires-python >= 3.11) — la syntaxe n'arrive qu'en 3.12
     motif_id = r"/\d+"
-    couvert |= {f"route:{re.sub(motif_id, '/:id', url)}" for url in mesure["routes"]}
+    # Repli historique conservé : il apparie les identifiants numériques quand l'inventaire
+    # n'est pas fourni. L'appariement par motif ci-dessous le couvre et va plus loin.
+    couvert |= {f"route:{re.sub(motif_id, '/:id', url)}" for url in urls}
+    if inventaire_elements:
+        couvert |= _routes_appariees(inventaire_elements, urls)
     return couvert
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
-    couvert = exerces(cible)
+    inv = inventaire(cible)
+    couvert = exerces(cible, inv)
     if couvert is None:
-        inv = inventaire(cible)
         routes = sum(1 for e in inv if e.id.startswith("route:"))
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
@@ -154,4 +196,4 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 + motif_indisponibilite(cible, "front", "suite e2e non executee"),
             ],
         )
-    return evaluer_surface(NOM, PAN, str(cible), inventaire(cible), couvert, SEUIL, NON_JUGE)
+    return evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)

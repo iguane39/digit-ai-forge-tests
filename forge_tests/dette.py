@@ -61,6 +61,7 @@ def collecter() -> list[dict]:
     """Rassemble les non_juge déclarés par le noyau, le risque, l exécution et les adaptateurs."""
     from forge_tests import (
         actions,
+        adoption,
         execution,
         generateur,
         generateur_data,
@@ -86,6 +87,7 @@ def collecter() -> list[dict]:
         ("qualification", list(qualification.NON_JUGE)),
         ("reprise", list(reprise.NON_JUGE)),
         ("actions", list(actions.NON_JUGE)),
+        ("adoption", list(adoption.NON_JUGE)),
         ("cahiers", list(cahiers.NON_JUGE)),
         ("jeux-de-donnees", list(jeux.NON_JUGE)),
         ("exigences", list(exigences.NON_JUGE)),
