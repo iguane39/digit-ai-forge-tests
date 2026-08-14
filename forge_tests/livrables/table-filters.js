@@ -1,7 +1,7 @@
 /* Copie verbatim D-12 du composant filtres du socle digit-ai-page-html
    (assets/table-filters.js, skill installé) — provenance : forge-agents, resynchronisée le
-   2026-08-13 (TF-0175 : lignes [data-detail] ignorées). Le chargeur préfère l'asset du
-   skill installé ; cette copie est le repli pour un poste sans skill. */
+   2026-08-14 (RA-5 : tri opt-in ; TF-0175 : lignes [data-detail]). Le chargeur préfère
+   l'asset du skill installé ; cette copie est le repli pour un poste sans skill. */
 /* Digit-AI — Filtres de colonne sur tableaux de données.
    Socle commun : voir references/composant-filtres-tableau.md (checklist G1-G6).
    Viewer-only : le JS ne s'exécute pas à l'export WeasyPrint, la regle @media print
@@ -99,9 +99,52 @@
     return { panneau: p, recherche: rech, tous: tous, aucun: aucun, options: opts };
   }
 
-  function init(table) {
+  /* RA-5 (14/08) : tri OPT-IN — la règle L4 exige « filtre, tri et recherche », le composant
+     fournit désormais le tri sur demande : init(table, { tri: true }). Défaut false : aucun
+     changement pour les pages qui ont déjà leur tri. Les clics sur .tf-btn/.tf-panel sont
+     ignorés, les lignes [data-detail] voyagent avec leur ligne mère. */
+  function armerTri(table) {
+    var ths = table.tHead ? Array.prototype.slice.call(table.tHead.rows[0].cells) : [];
+    corps(table).forEach(function (tr) {
+      var d = tr.nextElementSibling;
+      tr.__tfDetail = (d && d.hasAttribute('data-detail')) ? d : null;
+    });
+    ths.forEach(function (th, i) {
+      if (!th.style.cursor) th.style.cursor = 'pointer';
+      th.addEventListener('click', function (ev) {
+        if (ev.target.closest && ev.target.closest('.tf-btn, .tf-panel')) return;
+        var sens = th.getAttribute('aria-sort') === 'ascending' ? -1 : 1;
+        ths.forEach(function (t) {
+          t.removeAttribute('aria-sort');
+          var m = t.querySelector('.tf-tri'); if (m) m.remove();
+        });
+        th.setAttribute('aria-sort', sens === 1 ? 'ascending' : 'descending');
+        var marque = document.createElement('span');
+        marque.className = 'tf-tri';
+        marque.textContent = sens === 1 ? ' ↑' : ' ↓';
+        th.appendChild(marque);
+        var tb = table.tBodies[0];
+        var tris = corps(table).slice();
+        tris.sort(function (a, b) {
+          var va = valeur(a, i), vb = valeur(b, i);
+          var na = parseFloat(String(va).replace(',', '.').replace('%', ''));
+          var nb = parseFloat(String(vb).replace(',', '.').replace('%', ''));
+          if (!isNaN(na) && !isNaN(nb)) return (na - nb) * sens;
+          return norm(va) < norm(vb) ? -sens : (norm(va) > norm(vb) ? sens : 0);
+        });
+        tris.forEach(function (tr) {
+          tb.appendChild(tr);
+          if (tr.__tfDetail) tb.appendChild(tr.__tfDetail);
+        });
+      });
+    });
+  }
+
+  function init(table, opts) {
+    opts = opts || {};
     if (!table || table.getAttribute('data-tf-ready') === '1') return null;
     if (table.getAttribute('data-filterable') === 'off') return null;
+    if (opts.tri) armerTri(table);
 
     var lignes = corps(table);
     var cols = colonnesFiltrables(table, lignes);
@@ -205,11 +248,11 @@
     return { appliquer: appliquer, fermerTout: fermerTout };
   }
 
-  function initAll(racine) {
+  function initAll(racine, opts) {
     var scope = racine || document;
     return Array.prototype.map.call(
       scope.querySelectorAll('table[data-filterable]'),
-      function (t) { return init(t); }
+      function (t) { return init(t, opts); }
     );
   }
 
