@@ -47,7 +47,7 @@ def test_script_location_lu_dans_alembic_ini(tmp_path: Path) -> None:
 
 
 def test_conventions_codees_en_dur_restent_un_repli(tmp_path: Path) -> None:
-    """Sans alembic.ini, les trois chemins conventionnels continuent de fonctionner (non-régression)."""
+    """Sans alembic.ini, les trois chemins conventionnels fonctionnent (non-régression)."""
     dossier = tmp_path / "backend" / "alembic" / "versions"
     dossier.mkdir(parents=True)
     (dossier / "0001_x.py").write_text("def upgrade(): pass\n", encoding="utf-8")
@@ -229,7 +229,7 @@ def test_front_react_router_ne_double_compte_pas_avec_routes_jsx(tmp_path: Path)
 def test_visuel_aucune_route_nest_pas_confondu_avec_front_non_servi(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """0 route inventoriée : le motif dit « aucune route », pas « build absent / npm / navigateur »."""
+    """0 route inventoriée : le motif dit « aucune route », pas « build absent / npm »."""
     monkeypatch.setattr(visuel, "_routes", lambda cible: [])
 
     sortie = visuel.analyser(tmp_path)

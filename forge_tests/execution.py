@@ -170,7 +170,9 @@ def mesurer(banc_str: str) -> dict | None:
     # pour une suite qui n exerce rien. Voir `forge_tests.disposition`.
     paquet = nom_paquet_sources(banc)
     if paquet is None:
-        _declarer(banc, "backend", f"sources du projet non localisables — {motif_indetermine(banc)}")
+        _declarer(
+            banc, "backend", f"sources du projet non localisables — {motif_indetermine(banc)}"
+        )
         return None
     # TF-0216 : la suite se lance depuis la racine DÉCOUVERTE, pas depuis `<cible>/backend`
     # supposé. Sur un produit à racine plate, ce `cwd` en dur pointait un dossier inexistant et

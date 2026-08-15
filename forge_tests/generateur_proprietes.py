@@ -153,7 +153,9 @@ def squelette(candidat: Candidate) -> str:
 
 
 def proposer(cible: Path, racine_relative: str = "backend/app") -> str:
-    """Fichier de squelettes PROPOSÉS — jamais écrit dans le projet audité (G-1, comme `generateur`).
+    """Fichier de squelettes PROPOSÉS — jamais écrit dans le projet audité.
+
+    G-1, exactement comme `generateur`.
 
     Chaîne vide si aucun candidat : l appelant décide alors de ne rien déposer, plutôt que de
     déposer un fichier d en-tête seul qui se ferait passer pour un livrable.
