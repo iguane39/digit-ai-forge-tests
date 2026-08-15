@@ -95,6 +95,35 @@ SEUILS: dict[str, dict] = {
             "tenue n a pas de fraction acceptable"
         ),
     },
+    # TF-0284 — les deux seuils du pan i18n. Le premier est une exigence, le second est le
+    # réglage d une HEURISTIQUE : les distinguer est le seul moyen qu un lecteur sache lequel
+    # se conteste sur le fond et lequel se conteste sur la mesure.
+    "couverture_surface_i18n": {
+        "valeur": 1.0,
+        "severite": "bloquant",
+        "porte_sur": "routes servies dans chaque locale, et servies dans la bonne langue",
+        "justification": (
+            "une locale publiée est une promesse faite au visiteur : une route qui manque dans "
+            "sa langue est une impasse, une route servie dans une autre langue est un mensonge. "
+            "Ni l une ni l autre n a de fraction acceptable — mesuré le 15/08/2026 : 1 route "
+            "manquante sur 201, et 9 pages sur 200 servies en français sous `/en`"
+        ),
+    },
+    "densite_mots_outils_francais": {
+        "valeur": 0.08,
+        "severite": "bloquant",
+        "porte_sur": (
+            "part de mots-outils français dans le texte visible d une page servie sous une "
+            "locale non française (heuristique du pan i18n)"
+        ),
+        "justification": (
+            "la marge est ce qui rend ce seuil opposable malgré son caractère heuristique : un "
+            "texte français mesure 0,25 à 0,40 sur ce lexique, un texte anglais reste sous "
+            "0,02 — le lexique exclut délibérément les mots ambigus (`on`, `en`, `a`, `plus`, "
+            "`car`). `bloquant` et non `signale` : le défaut mesuré est franc, et un constat "
+            "contesté se déclare (`.forge-tests-declarations.json`), il ne s adoucit pas"
+        ),
+    },
     "couverture_surface_qualif": {
         "valeur": 1.0,
         "severite": "bloquant",
