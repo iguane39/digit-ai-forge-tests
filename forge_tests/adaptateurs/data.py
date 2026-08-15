@@ -210,31 +210,15 @@ def inventaire(cible: Path) -> list[Element]:
     return elements
 
 
-def blocs_de_test(texte: str) -> list[str]:
-    """Découpe en blocs de test, commentaires de tête RATTACHÉS à leur def.
-
-    Sans ce rattachement, un test annoté du nom de la contrainte qu il exerce passerait pour
-    ne pas la couvrir : le commentaire tomberait dans le bloc précédent.
-    """
-    blocs: list[str] = []
-    report = ""
-    for morceau in re.split(r"\n(?=def )", texte):
-        lignes = morceau.splitlines()
-        fin = len(lignes)
-        while fin > 0 and (lignes[fin - 1].strip().startswith("#") or not lignes[fin - 1].strip()):
-            fin -= 1
-        blocs.append(report + "\n".join(lignes[:fin]))
-        report = "\n".join(lignes[fin:]) + "\n"
-    if report.strip():
-        blocs.append(report)
-    return blocs
-
-
 def exerces(cible: Path) -> set[str] | None:
     """Contraintes RÉELLEMENT violées pendant la suite, lues dans les erreurs de la base.
 
-    Repli textuel assumé et déclaré pour les tables et les clés étrangères : SQLite ne nomme
-    pas la contrainte de clé étrangère violée, donc aucune attribution n est possible.
+    TF-0270 : aucun repli TEXTUEL ici, pour aucune classe. Il en existait un — lecture des
+    blocs de `backend/tests` à la recherche du nom de l élément — débranché le 02/08 quand la
+    sonde SQL a rendu l exécution mesurable (« l exécution tranche pour toutes les classes »),
+    puis resté en place sans appelant jusqu au 15/08. Ce qu un test NOMME ne prouve rien : ce
+    qu il fait LEVER par le moteur, si. Une clé étrangère que SQLite ne nomme pas reste donc
+    non attribuable — c est déclaré en `NON_JUGE`, pas rattrapé par une ressemblance de nom.
     """
     violations = violations_levees(cible)
     if violations is None:
@@ -275,23 +259,6 @@ def exerces(cible: Path) -> set[str] | None:
         classe, nom = element.id.split(":", 1)
         if classe in ("table", "index", "trigger") and nom.lower() in corpus:
             couvert.add(element.id)
-    return couvert
-
-
-def _repli_textuel(cible: Path, elements: list[Element]) -> set[str]:
-    couvert: set[str] = set()
-    for fichier in sorted((cible / "backend" / "tests").glob("test_*.py")):
-        for bloc in blocs_de_test(fichier.read_text(encoding="utf-8")):
-            rejet_attendu = "raises" in bloc
-            for element in elements:
-                cle = element.id.split(":", 1)[1]
-                if element.id.startswith("table:"):
-                    if cle in bloc.lower():
-                        couvert.add(element.id)
-                    continue
-                colonne = cle.replace(".not_null", "")
-                if rejet_attendu and (cle in bloc or colonne in bloc):
-                    couvert.add(element.id)
     return couvert
 
 
