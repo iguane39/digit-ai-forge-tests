@@ -764,6 +764,48 @@
       "statut": "todo"
     },
     {
+      "id": "i18n-build-servi-001",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : le pan lit un BUILD SERVI (dossier de pages), jamais un site distant ni le code source — une locale declaree dans la configuration mais jamais construite est invisible ici, et c est voulu : ce qui n est pas servi n est pas ce que le visiteur recoit",
+      "statut": "todo"
+    },
+    {
+      "id": "i18n-build-servi-002",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : la parite de ROUTES se mesure contre l UNION des routes de toutes les locales — une route servie dans une seule langue manque donc dans les autres. Sur un produit ou la traduction est en cours PAR CHOIX, l ecart mesure est reel mais il peut etre voulu : il se conteste alors par declaration, il ne se devine pas",
+      "statut": "todo"
+    },
+    {
+      "id": "i18n-build-servi-003",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : la parite de NAVIGATION compare le NOMBRE d entrees du menu de la page d accueil de chaque locale au menu le PLUS RICHE ; deux menus de meme taille aux entrees differentes passent le controle, et un sous-menu qui ne s ouvre qu au clic (non rendu dans le HTML servi) n est pas compte",
+      "statut": "todo"
+    },
+    {
+      "id": "i18n-build-servi-004",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : la langue du contenu est jugee par HEURISTIQUE — densite de mots-outils francais sur le texte visible de la page. Le lexique est FRANCAIS et lui seul : le pan detecte du francais servi sous une locale non francaise, jamais l inverse ni un autre couple de langues",
+      "statut": "todo"
+    },
+    {
+      "id": "i18n-build-servi-005",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : une page de moins de 40 mots visibles n est pas jugee sur sa langue — sous ce volume, la densite de mots-outils n est plus un signal, c est du bruit",
+      "statut": "todo"
+    },
+    {
+      "id": "i18n-build-servi-006",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : l attribut `lang` du document n est pas oppose au contenu — un `lang=\"en\"` pose sur du francais est precisement le defaut, le croire reviendrait a interroger le suspect",
+      "statut": "todo"
+    },
+    {
+      "id": "i18n-build-servi-007",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : les pages conventionnelles de service (`404`, `500`, et tout segment commencant par `_`) sont hors comptage de parite : elles ne sont pas des routes du produit",
+      "statut": "todo"
+    },
+    {
       "id": "interface-statique-006",
       "domaine": "interface-statique",
       "enonce": "interface/liens : une destination EXPRIMEE (`href={chemin}`, template avec `${...}`, constante importee) n est pas resolue — elle est comptee et declaree NON JUGEE, jamais supposee bonne ni mauvaise",

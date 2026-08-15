@@ -468,6 +468,8 @@ sévère lit pourquoi sans ouvrir le code.
 | `couverture_surface_api` | **1,00** | bloquant | endpoints × codes de retour | un code d'erreur déclaré que la suite n'émet jamais est un chemin non vérifié : sur la surface d'API, l'exhaustivité est le standard maison |
 | `couverture_surface_interface` | **1,00** | bloquant | affordances câblées | « une affordance est câblée ou elle n'existe pas » n'a pas de fraction acceptable |
 | `couverture_surface_qualif` | **1,00** | bloquant | routes UI parcourues sans erreur | une route qui rend une erreur est vue par le premier utilisateur |
+| `couverture_surface_i18n` | **1,00** | bloquant | routes servies dans chaque locale, et dans la bonne langue | une locale publiée est une promesse : une route qui manque dans sa langue est une impasse, une route servie dans une autre langue est un mensonge. Mesuré le 15/08/2026 sur un produit en production : 1 route manquante sur 201, 9 pages sur 200 servies en français sous `/en` |
+| `densite_mots_outils_francais` | **0,08** | bloquant | part de mots-outils français dans une page servie sous une locale non française (**heuristique**) | la marge est ce qui rend ce seuil opposable malgré sa nature : un texte français mesure 0,25 à 0,40 sur ce lexique, un texte anglais reste sous 0,02 — et le lexique exclut délibérément les mots ambigus (`on`, `en`, `a`, `plus`, `car`) |
 
 **Ce qui est « logique métier ».** Le défaut est *oui* : l'exemption se déclare, jamais
 l'exigence. Sont réputés infrastructure les modules nommés `main`, `db`, `database`, `migrate`,
@@ -582,6 +584,44 @@ Sans instance servie, le pan **ne devine rien** : `SKIP` avec son motif, ses cha
 | `FORGE_TESTS_QUALIF_ROUTES` | routes d'amorce (virgule) — celles qu'aucun lien n'atteint |
 | `FORGE_TESTS_QUALIF_MARQUEURS` | JSON `{"/route": "marqueur métier"}` ; à défaut le titre de la page (premier `h1` non vide, sinon `title`) |
 | `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
+
+## Pan `i18n` — la parité entre locales, sur le build servi
+
+**Aucun oracle de l'écosystème ne jugeait le multilingue** — ni cette forge, ni
+`quality-oracles`, ni les gates de forge-development. Étude du 15/08/2026, sur un produit en
+production : une route française sur 201 sans équivalent anglais ; un menu anglais à **4
+entrées** quand le français en portait **9**, non détecté depuis juin ; **9 pages sur 200**
+servies sous `/en` avec du contenu **français** (câblage de données qui renvoyait la langue par
+défaut quelle que soit la locale demandée). Les trois ont été trouvés à la main en quelques
+minutes, et les trois sont scriptables sans le moindre modèle de langage.
+
+Le pan lit le **build servi** — l'arborescence de pages telle que le visiteur la reçoit —
+déclaré par `FORGE_TESTS_I18N_BUILD` ou découvert sous la racine. Ni le code source (une locale
+peut être déclarée et jamais construite), ni un site distant : **aucun réseau, aucun
+navigateur**.
+
+| Contrôle | Nature | Constat |
+|---|---|---|
+| **parité de routes** — chaque route est servie dans chaque locale | comparaison exacte | `route « /en/tarifs » absente du build : servie dans 1 locale(s) sur 2` |
+| **parité de navigation** — le menu de la page d'accueil de chaque locale | comparaison exacte | `menu de la locale « en » : 2 entree(s) contre 4 en « defaut »` |
+| **langue du contenu** — densité de mots-outils français sous une locale non française | **heuristique**, seuil `densite_mots_outils_francais` | `page servie sous « /en » dont le contenu est FRANÇAIS : 30 % de mots-outils français sur 89 mots (seuil 8 %)` |
+
+**Ce que le pan ne juge pas** (repris tels quels en `non_juge`) : une locale déclarée mais
+jamais construite ; deux menus de même taille aux entrées différentes ; un sous-menu qui ne
+s'ouvre qu'au clic ; une page de moins de 40 mots visibles (sous ce volume la densité est du
+bruit, pas un signal) ; tout couple de langues autre que « français servi sous une locale non
+française » — le lexique est français, et lui seul. L'attribut `lang` du document n'est
+**jamais** opposé au contenu : un `lang="en"` posé sur du français *est* le défaut, le croire
+reviendrait à interroger le suspect.
+
+**Ce qui n'est pas un défaut** : ne pas être multilingue. Un produit sans build servi **et**
+sans signe d'internationalisation (dépendance `next-intl`/`i18next`, dossier de traductions,
+segment de route `[locale]`) sort en **NA** avec sa preuve. Un produit qui *se dit* multilingue
+mais dont le build est absent sort en **SKIP** : le manque est le dossier, pas le sujet, et il
+se répare en le fournissant.
+
+Bancs d'essai : `fixtures/i18n-rouge` (les trois défauts) et `fixtures/i18n-vert` (les mêmes
+pages corrigées), joués de bout en bout par `tests/test_tf_0284_i18n.py`.
 
 ## Lecture du SQL — filtrer avant de découper
 
@@ -790,6 +830,7 @@ de migrations tôt ne suffit pas ; c'est le volume qui SUIT qui décide.
 | `securite` | oracles `quality-oracles` présents sur la machine ; leurs `non_juge` sont repris tels quels | — |
 | `prompts` | **statique et gratuit — aucun appel modèle, aucun réseau** : prompts adressables (`*.prompt`, dossiers `prompts/`, `gabarits/`, `SKILL.md`, constantes Python `*PROMPT*`), modèles nommés dans une chaîne littérale ou une clé `modele:`, corpus de cas (`evals/`, `*.eval.jsonl`, `cas.json`). « Exercé » = **cité par au moins un cas versionné** ; un modèle désigné par un alias mouvant (`*-latest`, `gpt-4o`) au lieu d'une version épinglée `nom-AAAAMMJJ` est un finding `modele-non-epingle` ; un corpus déclaré mais introuvable rend son prompt `non_testable` | 100 % |
 | `accessibilite`, `visuel` | front **servi** : `FORGE_TESTS_BASE_URL`, ou build local présent dans `frontend/dist` plus `npx` et un navigateur Playwright ; un golden absent produit un SKIP motivé, jamais une référence créée pendant le run | — |
+| `i18n` | **build servi** (dossier de pages) déclaré par `FORGE_TESTS_I18N_BUILD` ou découvert (`out/`, `dist/`, `_site/`…) ; locales = préfixes de route ISO 639-1 réellement servis — voir « Pan `i18n` » | 100 % |
 
 La suite backend est lancée depuis `<projet>/backend` avec `coverage run --branch
 --source=app,tests` : le paquet `app` doit être importable depuis ce dossier.
@@ -818,6 +859,7 @@ journalisé). Modèle : `.env.exemple`.
 | `FORGE_TESTS_QUALIF_ROUTES` | routes d'amorce du parcours (virgule) — celles qu'aucun lien n'atteint |
 | `FORGE_TESTS_QUALIF_MARQUEURS` | JSON `{"/route": "marqueur métier"}` ; à défaut le titre de la page |
 | `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
+| `FORGE_TESTS_I18N_BUILD` | dossier du **build servi** lu par le pan `i18n` (l'arborescence de pages telle que le visiteur la reçoit). À défaut, le pan cherche `out/`, `dist/`, `build/`, `_site/`, `site/`, `www/`, `public/` sous la racine, puis un `index.html` à la racine elle-même. Aucun réseau, aucun navigateur |
 | `FORGE_TESTS_EXIGENCES` | chemin d'un `EXIGENCES.json` : les cas des cahiers y sont rattachés, **avec leur provenance** (`declare` ou `lexical`). Absent, le cahier le déclare en tête et dérive de la seule surface. Un chemin qui n'existe pas est un **refus**, pas un silence |
 | `FORGE_TESTS_PRODUIT` | nom du produit dans les noms de fichiers des livrables. À défaut : le champ `projet` du référentiel d'exigences, puis le nom du dossier audité |
 | `FORGE_TESTS_PLAYWRIGHT_TRACE` | mode `--trace` imposé à la suite e2e (`on`, `off`, `retain-on-failure`…) — à défaut, le mode déjà réglé dans le `playwright.config` du projet est respecté (rien n'est passé en ligne de commande), sinon replié sur `on`. Utile pour désactiver la trace si son écriture bloque sur un poste (TF-0132) — la couverture front devient alors non mesurable, déclarée telle |

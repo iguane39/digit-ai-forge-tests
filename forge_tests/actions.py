@@ -135,6 +135,15 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "development",
         "traiter le signalement de sécurité sur « {id} » : {message}",
     ),
+    # TF-0284 — parité entre locales. Le destinataire est le développeur : une route manquante
+    # se construit, un menu incomplet se complète, un contenu servi dans la mauvaise langue est
+    # un câblage de données à corriger. Aucun des trois ne se règle par un test de plus.
+    "i18n": (
+        "manuelle_dev",
+        "development",
+        "rétablir la parité entre locales sur « {id} » : {message}. Une locale publiée est une "
+        "promesse faite au visiteur",
+    ),
     "accessibilite": (
         "manuelle_dev",
         "design",
