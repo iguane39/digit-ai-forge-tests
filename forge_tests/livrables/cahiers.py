@@ -188,7 +188,10 @@ def _cas_etats(element: dict, chapitre: dict, cle_jeu: str) -> list[dict]:
         # Le constat DÉJÀ mesuré par l'audit est rappelé au cas nominal : le testeur sait
         # qu'il vérifiera d'abord la correction d'un défaut connu, pas une hypothèse.
         if etat == "nominal" and element.get("message"):
-            attendu += f" (constat mesuré lors de l'audit, à corriger d'abord : {element['message']})"
+            attendu += (
+                f" (constat mesuré lors de l'audit, à corriger d'abord :"
+                f" {element['message']})"
+            )
         cas.append(
             {
                 "suffixe": etat,
@@ -635,7 +638,8 @@ def _entete(titre: str, contexte: dict, chapitres: list[dict]) -> list[str]:
         "mesurée : la forge n audite jamais ses propres cas.",
         "",
         "**Adoption (RT-13).** Un cas écrit dans la suite du projet se déclare dans "
-        f"`{_adoption.FICHIER}` — une ligne `{{\"cas\": \"<référence>\", \"test\": \"<chemin>\"}}`. "
+        f"`{_adoption.FICHIER}` — une ligne "
+        f"`{{\"cas\": \"<référence>\", \"test\": \"<chemin>\"}}`. "
         "La déclaration est vérifiée (le test cité doit exister, sinon l adoption est refusée "
         "avec son motif) et la colonne « cas adoptés » ci-dessus devient un solde qui descend. "
         "Les références de cas sont stables d un audit à l autre : elles sont citables depuis "

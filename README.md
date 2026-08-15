@@ -3,11 +3,16 @@
 > Rendre la qualité d'un projet vérifiable, reproductible et enrichissable dans le temps —
 > sans dépendre de la mémoire d'un humain sur ce qu'il faut penser à vérifier.
 
-**État : outil en service.** Le noyau, douze adaptateurs, le générateur de cas, le registre de
-dette et la recette du corpus sont écrits et exécutables. La recette officielle
-(`recette/verifier_corpus.py`) détecte **16/16** des défauts plantés au banc rouge, ne lève
-**aucun finding bloquant** au banc vert, et vérifie sur pièces le lecteur SQL (RT-8), la
-qualification des non-testables (RT-6) et l'analyse statique des divergences (RT-9 / RT-10).
+**État : outil en service.** Le noyau, treize adaptateurs, le générateur de cas, le registre
+de dette et la recette du corpus sont écrits et exécutables. La recette officielle
+(`recette/verifier_corpus.py`) détecte **19/19** des défauts plantés au banc rouge, ne lève
+**aucun finding bloquant** au banc vert, et vérifie sur pièces — en treize sections — le
+lecteur SQL (RT-8), la qualification des non-testables (RT-6), l'analyse statique des
+divergences (RT-9 / RT-10), la suite unitaire (TF-0006) et le linter (TF-0226).
+
+*Ces deux derniers pas existent pour la même raison : un contrôle que rien ne joue n'est pas
+un garde-fou. `pytest` puis `ruff` étaient configurés sans qu'aucune vérification ne les
+appelle ; ils sont désormais des sections comme les autres, et leur échec fait tomber S-01.*
 
 ## Catalogue de services
 

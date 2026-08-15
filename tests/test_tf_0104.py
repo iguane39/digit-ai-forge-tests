@@ -14,9 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from forge_tests import flaky, impact
+from forge_tests import flaky, impact, risque
 from forge_tests import generateur_proprietes as gp
-from forge_tests import risque
 
 
 # --- 1/4 — sélection par impact de diff ---------------------------------------------------
@@ -147,7 +146,9 @@ def test_candidats_retient_une_fonction_pure_a_deux_parametres(tmp_path: Path) -
 def test_squelette_ne_devine_jamais_la_propriete(tmp_path: Path) -> None:
     module = tmp_path / "backend" / "app" / "calcul.py"
     module.parent.mkdir(parents=True)
-    module.write_text("def additionner(a: int, b: int) -> int:\n    return a + b\n", encoding="utf-8")
+    module.write_text(
+        "def additionner(a: int, b: int) -> int:\n    return a + b\n", encoding="utf-8"
+    )
 
     contenu = gp.proposer(tmp_path)
 

@@ -192,6 +192,19 @@ _TOKENS_CLAIRS = """
       --amber-ink:#92400E; --teal-ink:#115E59; --green-ink:#14532D; --red-ink:#991B1B;
 """
 
+# Favicon-lettre en `data:` URI — coupée en deux constantes, non par coquetterie : la ligne
+# entière fait 398 caractères et un `data:` URI ne se replie pas (le retour à la ligne
+# entrerait dans la valeur de l attribut). L assemblage rend une sortie identique au
+# caractère près, ce que prouve l empreinte du dashboard en recette.
+_FAVICON_AVANT = (
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'"
+    "%3E%3Crect width='64' height='64' rx='14' fill='%232563EB'/%3E%3Ctext x='32' y='44'"
+    " font-family='Segoe UI,Roboto,sans-serif' font-size='38' font-weight='700'"
+    " fill='white' text-anchor='middle'%3E"
+)
+_FAVICON_APRES = "%3C/text%3E%3C/svg%3E"
+
+
 _STYLE = f"""
     /* CLAIR PAR DÉFAUT, STRICTEMENT (TF-0153, retour humain du 13/08). L auto-sombre hérité
        de l OS (`prefers-color-scheme`) est retiré : un livrable d audit circule et doit
@@ -379,7 +392,9 @@ _STYLE = f"""
          et les détails de cas sont tous dépliés. */
       tr[data-tf-hidden], tr[hidden], tr[data-detail] {{ display:table-row !important; }}
       .btn-detail {{ display:none; }}
-      @media (max-width:640px) {{ tr[data-tf-hidden], tr[hidden], tr[data-detail] {{ display:block !important; }} }}
+      @media (max-width:640px) {{
+        tr[data-tf-hidden], tr[hidden], tr[data-detail] {{ display:block !important; }}
+      }}
     }}
 """
 
@@ -416,7 +431,8 @@ _SCRIPT = """
       var ok = Object.keys(choix).every(function (axe) {
         return tr.dataset[axe] === choix[axe];
       });
-      if (ok) { tr.removeAttribute('data-axe-cache'); } else { tr.setAttribute('data-axe-cache', ''); }
+      if (ok) { tr.removeAttribute('data-axe-cache'); }
+      else { tr.setAttribute('data-axe-cache', ''); }
       majVisibilite(tr);
     });
     recompterTout();
@@ -476,7 +492,10 @@ _SCRIPT = """
     var d = detailDe(tr);
     if (d) { d.hidden = true; }
     var b = tr.querySelector('.btn-detail');
-    if (b) { b.setAttribute('aria-expanded', 'false'); b.textContent = b.textContent.replace('▾', '▸'); }
+    if (b) {
+      b.setAttribute('aria-expanded', 'false');
+      b.textContent = b.textContent.replace('▾', '▸');
+    }
   }
   function visible(tr) {
     return !tr.hidden && tr.style.display !== 'none' && !tr.hasAttribute('data-rech-cache');
@@ -486,7 +505,8 @@ _SCRIPT = """
     if (!compte) return;
     var lignes = lignesDe(bloc), vues = 0;
     lignes.forEach(function (tr) { if (visible(tr)) vues++; });
-    var unite = bloc.hasAttribute('data-outille') ? 'élément(s) affiché(s)' : 'ligne(s) affichée(s)';
+    var unite = bloc.hasAttribute('data-outille')
+      ? 'élément(s) affiché(s)' : 'ligne(s) affichée(s)';
     compte.textContent = vues + ' / ' + lignes.length + ' ' + unite;
   }
   function recompterTout() {
@@ -930,7 +950,8 @@ def _synthese_par_pan(chapitres: list[dict], identifiant: str = "table-par-pan")
                 _e(chapitre["famille"]),
                 str(total),
                 f"{passes} ({pct} %)",
-                str(ko) + (f' <span class="discret">dont {bloquants} bloq.</span>' if bloquants else ""),
+                str(ko)
+                + (f' <span class="discret">dont {bloquants} bloq.</span>' if bloquants else ""),
                 str(non_joues) if non_joues else "0",
                 str(non_testables) if non_testables else "0",
                 f'<span class="badge {badge}" title="passés = éléments exercés sans constat, '
@@ -1142,7 +1163,8 @@ def _detail_element(detail: dict | None) -> tuple[str, str]:
         adoptes += adoption.get("statut") == "adopte"
         cartes.append(
             '<div class="cas-carte">'
-            f'<p class="cas-ref"><code>{_e(cas.get("ref"))}</code> · {_e(cas.get("titre") or "")}</p>'
+            f'<p class="cas-ref"><code>{_e(cas.get("ref"))}</code> · '
+            f'{_e(cas.get("titre") or "")}</p>'
             + _badge_adoption(adoption)
             + f"<p><strong>Préconditions</strong> — {_e(cas.get('preconditions'))}</p>"
             f"<p><strong>Jeu de données</strong> — <code>{_e(cas.get('jeu'))}</code></p>"
@@ -1330,7 +1352,8 @@ def _panneau_chapitres(
     # Synthèse, restreinte à la famille) + les commandes de repli global des chapitres.
     morceaux: list[str] = [
         '<section class="card">',
-        f"<h3>Synthèse des chapitres {('fonctionnels' if famille == 'fonctionnel' else 'techniques')}</h3>",
+        f"<h3>Synthèse des chapitres "
+        f"{('fonctionnels' if famille == 'fonctionnel' else 'techniques')}</h3>",
         '<p class="discret">La même dérivation que l\'onglet Synthèse, restreinte à cette '
         "famille — le lien ouvre le chapitre détaillé ci-dessous.</p>",
         _synthese_par_pan(retenus, identifiant=f"table-par-pan-{famille}"),
@@ -2163,7 +2186,8 @@ def construire(
 <meta name="theme-color" content="#2563EB">
 <meta name="color-scheme" content="light dark">
 <!-- Favicon-lettre (13/08, loi transverse n°3) : première lettre du produit audité. -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563EB'/%3E%3Ctext x='32' y='44' font-family='Segoe UI,Roboto,sans-serif' font-size='38' font-weight='700' fill='white' text-anchor='middle'%3E{_e(str(contexte["produit"] or "D").strip()[:1].upper())}%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml"
+ href="{_FAVICON_AVANT}{_e(str(contexte["produit"] or "D").strip()[:1].upper())}{_FAVICON_APRES}">
 <style>{_STYLE}
 /* Habillage du composant filtres — CSS jumeau (TF-0176/H5), chargé avec le JS. */
 {_composant_filtres_css()}</style>

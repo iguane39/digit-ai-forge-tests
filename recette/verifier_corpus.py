@@ -286,7 +286,8 @@ def verifier_gardes_multi_modules() -> int:
 
     echecs = 0
     print("-" * 78)
-    print("  TF-0135 — gardes d une route a routeurs : lues sur tous les modules, jamais main.py seul")
+    print("  TF-0135 — gardes d une route a routeurs : lues sur tous les modules,"
+          " jamais main.py seul")
 
     main_py = (
         "from fastapi import FastAPI\n"
@@ -823,6 +824,49 @@ def verifier_suite_unitaire() -> int:
     return 0 if ok else 1
 
 
+def verifier_lint() -> int:
+    """Le linter du dépôt, joué PAR la recette — TF-0226.
+
+    Même raison que la suite unitaire ci-dessus, et le constat qui l a imposée est du même
+    genre : `ruff` était configuré dans `pyproject.toml`, rendait 21 erreurs, et aucun des
+    pas de cette recette ne l appelait. Un linter que rien ne joue n est pas un garde-fou,
+    c est une décoration — la même classe de défaut qu une consigne citée par aucun run.
+
+    Le pas est armé APRÈS avoir soldé les 21 : un pas qui naît rouge est un pas qu on
+    désarme au premier run pressé, et il aurait valu mieux ne pas l écrire.
+
+    Le périmètre suit celui de la configuration : le code, les tests, et la recette
+    elle-même — s en exclure serait juger les autres sans se juger soi.
+    """
+    import subprocess
+
+    print("-" * 78)
+    print("  TF-0226 — linter du depot (ruff)")
+    try:
+        resultat = subprocess.run(
+            [sys.executable, "-m", "ruff", "check", "forge_tests", "tests", "recette",
+             "--output-format", "concise"],
+            cwd=RACINE,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
+        )
+    except (OSError, subprocess.SubprocessError) as erreur:
+        # DÉCLARÉ, jamais silencieux : un linter absent du poste n est pas un dépôt propre.
+        print(f"  [ECHEC  ] ruff non lancable : {type(erreur).__name__}: {erreur}")
+        return 1
+    lignes = [ligne.strip() for ligne in resultat.stdout.splitlines() if ligne.strip()]
+    ok = resultat.returncode == 0
+    resume = (lignes[-1] if lignes else "aucune sortie")[:80]
+    print(f"  [{'OK     ' if ok else 'ECHEC  '}] ruff : {resume}")
+    if not ok:
+        for ligne in lignes[:15]:
+            print(f"             {ligne}")
+    return 0 if ok else 1
+
+
 def verifier_lecture_sql() -> int:
     """Nombre de cas de lecture SQL en echec. Zero attendu."""
     from forge_tests.sql import decouper
@@ -1184,7 +1228,7 @@ def verifier_dashboard(rouge: dict) -> int:
         # en data: URI est licite, tout autre <link (stylesheet, preconnect…) reste interdit.
         liens = re.findall(r"<link\b[^>]*>", page)
         cas.append(("aucun <link> autre que le favicon data: (contrôle affiné, pas affaibli)",
-                    all('rel="icon"' in l and 'href="data:' in l for l in liens)
+                    all('rel="icon"' in lien and 'href="data:' in lien for lien in liens)
                     and len(liens) == 1))
         cas.append(("un repli systeme est declare pour chaque police",
                     "system-ui" in page and "Syne" not in page))
@@ -1340,6 +1384,7 @@ SECTIONS: dict[str, dict] = {
         "titre": f"{len(CORPUS)} défauts du banc rouge, banc vert sans bloquant, empreintes G-1",
     },
     "unitaire": {"bancs": (), "titre": "TF-0006 — suite unitaire du dépôt (pytest)"},
+    "lint": {"bancs": (), "titre": "TF-0226 — linter du dépôt (ruff)"},
     "sql": {"bancs": (), "titre": "RT-8 — lecture SQL"},
     "qualification": {"bancs": (), "titre": "RT-6a / RT-13 — configuration absente"},
     "dette": {"bancs": (), "titre": "TF-0002 / TF-0004 — registre de dette"},
@@ -1360,6 +1405,8 @@ def _jouer(nom: str, rouge: dict | None, vert: dict | None, contexte: dict) -> i
         )
     if nom == "unitaire":
         return verifier_suite_unitaire()
+    if nom == "lint":
+        return verifier_lint()
     if nom == "sql":
         return verifier_lecture_sql()
     if nom == "qualification":

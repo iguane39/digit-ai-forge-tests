@@ -12,7 +12,6 @@ sur données figées, et l'audit ne l'invoque nulle part.
 from __future__ import annotations
 
 import socket
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -351,7 +350,7 @@ def test_les_elements_du_pan_sont_rattaches_a_un_sous_chapitre() -> None:
 
 
 def test_un_modele_non_epingle_recoit_une_suite_classee() -> None:
-    """Sans règle, le constat sortirait en « défaut d'auditeur » : mesuré, mais sans destinataire."""
+    """Sans règle, le constat sortirait en « défaut d'auditeur » : mesuré, sans destinataire."""
     from forge_tests.actions import classifier
 
     action = classifier(
