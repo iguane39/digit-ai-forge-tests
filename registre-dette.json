@@ -458,6 +458,13 @@
       "note": "Delegation assumee (14/08/2026, etude O2) : l execution du corpus et le jugement semantique appartiennent a oracle-agent-evals (cat-agt-05, juge distinct de l executant, fail-closed) — les reimplementer ici violerait R3."
     },
     {
+      "id": "prompts-statique-007",
+      "domaine": "prompts-statique",
+      "enonce": "prompts : les artefacts de l AUDITEUR sont exclus de l inventaire de l AUDITE (TF-0257) — le dossier de convention `forge\\` du pilot (ledger, contestations, rapports d etape), les rapports forge-tests persistes (reconnus a leurs cles de premier niveau) et les livrables scelles par la forge. Un projet qui nommerait `forge\\` un dossier de SON produit le verrait donc ignore ici : la convention du pilot prime, et elle est declaree",
+      "statut": "assume",
+      "note": "Limite ACCEPTEE et DECLAREE (TF-0272, decision humaine du 15/08/2026) : l exclusion de `forge\\` a ete posee a la campagne TF-0257 comme un choix de perimetre — les artefacts de l auditeur ne sont pas la surface de l audite. L entree etait entree en `todo` par le seul defaut du regenerateur, jamais sur un constat de manque : rien n est a outiller ici. Le cout residuel est nomme : un produit qui nommerait `forge\\` un dossier a lui perdrait ses prompts de l inventaire ; il le recupere en renommant ce dossier, la convention du pilot primant."
+    },
+    {
       "id": "qualif-navigateur-001",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : le pan LIT les ecouteurs attaches a chaque affordance, il ne CLIQUE jamais — sur une instance peuplee un clic ecrit vraiment (suppression, envoi, appel tiers facture). Un gestionnaire attache mais dont le corps ne fait rien passerait donc pour un effet",
@@ -754,12 +761,6 @@
       "id": "generateur-002",
       "domaine": "generateur",
       "enonce": "generateur : pans API et Data generes ; Front, Batch et Fichiers ne le sont pas — leurs cas exigent un scenario, pas une seule requete",
-      "statut": "todo"
-    },
-    {
-      "id": "prompts-statique-007",
-      "domaine": "prompts-statique",
-      "enonce": "prompts : les artefacts de l AUDITEUR sont exclus de l inventaire de l AUDITE (TF-0257) — le dossier de convention `forge\\` du pilot (ledger, contestations, rapports d etape), les rapports forge-tests persistes (reconnus a leurs cles de premier niveau) et les livrables scelles par la forge. Un projet qui nommerait `forge\\` un dossier de SON produit le verrait donc ignore ici : la convention du pilot prime, et elle est declaree",
       "statut": "todo"
     },
     {
