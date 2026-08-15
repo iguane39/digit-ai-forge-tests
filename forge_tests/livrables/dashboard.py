@@ -71,6 +71,7 @@ tables et leurs lignes restent) :
 
 from __future__ import annotations
 
+import hashlib
 import html as _html
 import re
 from pathlib import Path
@@ -340,6 +341,10 @@ _STYLE = f"""
       background:var(--surface); color:var(--ink); border-radius:var(--r-sm); padding:6px 12px;
       cursor:pointer; }}
     .outillage .outil-compte {{ color:var(--muted); font-size:.82rem; }}
+    /* Compte PAR TABLE (G5) : la barre du chapitre agrège toutes ses sous-listes — ce compte-ci
+       dit laquelle un filtre vient de vider. Discret : c'est un repère, pas un titre. */
+    .compte-table {{ color:var(--muted); font-size:.78rem; margin:4px 0 16px; text-align:right; }}
+    .compte-table.zero {{ color:var(--red); font-weight:600; }}
     /* TF-0175 — libellés d'éléments : le lisible d'abord, l'id technique en second. */
     .lib {{ font-weight:600; }}
     /* TF-0175 — détail de cas en LIGNE PLEINE LARGEUR (retour n°6) : cartes côte à côte. */
@@ -585,7 +590,26 @@ _SCRIPT = """
   function visible(tr) {
     return !tr.hidden && tr.style.display !== 'none' && !tr.hasAttribute('data-rech-cache');
   }
+  // Compteurs NOMMÉS (data-tf-count-for) : le rattachement d'une table à son compte, que le
+  // composant D-12 lit pour savoir où annoncer les lignes masquées. Ils restent écrits ICI et
+  // nulle part ailleurs — le composant ne connaît que SES propres filtres de colonne, si bien
+  // que son compte serait faux dès qu'une recherche ou un KPI d'état filtre aussi. Le
+  // `.outil-compte` d'un bloc garde son écrivain d'origine (juste en dessous) : l'attribut n'y
+  // est qu'un marqueur.
+  function majComptesMarques(bloc) {
+    bloc.querySelectorAll('[data-tf-count-for]:not(.outil-compte)').forEach(function (cpt) {
+      var table = document.getElementById(cpt.getAttribute('data-tf-count-for'));
+      if (!table) return;
+      var lignes = Array.prototype.slice.call(table.querySelectorAll('tbody tr'))
+        .filter(function (tr) { return !tr.hasAttribute('data-detail'); });
+      var vues = 0;
+      lignes.forEach(function (tr) { if (visible(tr)) vues++; });
+      cpt.textContent = vues + ' / ' + lignes.length + ' ligne(s) affichée(s)';
+      cpt.classList.toggle('zero', vues === 0);
+    });
+  }
   function recompter(bloc) {
+    majComptesMarques(bloc);
     var compte = bloc.querySelector('.outil-compte');
     if (!compte) return;
     var lignes = lignesDe(bloc), vues = 0;
@@ -1287,21 +1311,42 @@ def _tableau(
                 f'<tr data-detail hidden><td colspan="{len(entetes)}" '
                 f'data-label="détail">{detail}</td></tr>'
             )
+    filtre = outille or (chapitre and len(lignes) >= 4)
+    # G4/G5 du composant D-12 : une table filtrable SANS id ne peut être ni initialisée ni
+    # reliée à son compteur. L identifiant explicite prime ; à défaut il se DÉRIVE du contenu,
+    # donc il est stable d un audit à l autre — un id tiré au hasard aurait fait diverger deux
+    # rendus du même rapport, et le déterminisme des livrables est vérifié en recette.
+    if filtre and not identifiant:
+        graine = " ".join([*entetes, *(c for ligne in lignes for c in ligne)])
+        identifiant = "table-" + hashlib.sha256(graine.encode("utf-8")).hexdigest()[:10]
     marque = f' id="{identifiant}"' if identifiant else ""
-    filtrable = " data-filterable" if (outille or (chapitre and len(lignes) >= 4)) else ""
+    filtrable = " data-filterable" if filtre else ""
     table = (
         f'<div class="zone-tableau"><table{marque}{filtrable}><thead><tr>{tete}</tr></thead>'
         f"<tbody>{corps}</tbody></table></div>"
     )
     if not outille:
+        # Mode CHAPITRE : la barre d outils (recherche, réinitialisation, compteur) vit au
+        # niveau du chapitre et son compteur AGRÈGE toutes les tables (TF-0175). Un agrégat ne
+        # dit pas laquelle des sous-listes un filtre vient de vider : chaque table filtrable
+        # porte donc son propre compte, discret, et c est lui que le composant D-12 nomme
+        # (`data-tf-count-for`). Il reste écrit par le script maison — voir `majComptesMarques`.
+        if filtre:
+            table += (
+                f'<p class="compte-table" data-tf-count-for="{identifiant}" aria-live="polite">'
+                f"{len(lignes)} / {len(lignes)} ligne(s) affichée(s)</p>"
+            )
         return table
     outillage = (
         '<div class="outillage" role="search">'
         '<input type="search" class="outil-recherche" placeholder="Rechercher…" '
         'aria-label="Rechercher dans ce tableau (insensible aux accents)">'
         '<button type="button" class="outil-reinit">Réinitialiser les filtres</button>'
-        f'<span class="outil-compte" aria-live="polite">{len(lignes)} / {len(lignes)} '
-        "ligne(s) affichée(s)</span></div>"
+        # Le compteur EXISTANT devient le compteur nommé de sa table : un bloc outillé ne porte
+        # qu une table, l agrégat et le compte par table y sont le même nombre. L attribut est
+        # un MARQUEUR de rattachement — l écriture reste celle de `recompter`.
+        f'<span class="outil-compte" data-tf-count-for="{identifiant}" aria-live="polite">'
+        f"{len(lignes)} / {len(lignes)} ligne(s) affichée(s)</span></div>"
     )
     return f'<div class="bloc-tableau">{outillage}{table}</div>'
 
@@ -1860,7 +1905,7 @@ def _panneau_chapitres(
                 "inventorié. Il reste affiché — un chapitre absent laisserait croire que "
                 "le sujet n existe pas dans le produit.</p>"
             )
-        for sous in chapitre["sous_chapitres"]:
+        for rang, sous in enumerate(chapitre["sous_chapitres"]):
             morceaux.append(f"<h4>{_e(sous['libelle'])} — {len(sous['elements'])} élément(s)</h4>")
             # Retour humain du 13/08 : cette section existait sans définition — 51 éléments
             # que le lecteur ne savait pas lire. Le chapeau est désormais obligatoire.
@@ -1906,6 +1951,9 @@ def _panneau_chapitres(
                 _tableau(
                     colonnes, lignes, attributs=attributs, chapitre=True,
                     details_lignes=details_lignes,
+                    # Identifiant PARLANT et stable : c'est lui que le compte par table nomme
+                    # (G5), et le rang du sous-chapitre suffit à le rendre unique dans la page.
+                    identifiant=f"table-chap-{_e(chapitre['code'])}-{rang}",
                 )
             )
         morceaux.append("</details></section>")
@@ -2731,8 +2779,26 @@ def construire(
 <script>/* Composant filtres du socle — asset du skill installé ou copie D-12 du dépôt. */
 {_composant_filtres()}</script>
 <script>/* Initialisation D-12 : l API n auto-démarre pas — sans cet appel, les filtres de
-   colonne n existent pas (affordance morte constatée sur le dashboard BAV2 du 13/08). */
-if (window.DigitAITableFilters) {{ DigitAITableFilters.initAll(); }}</script>
+   colonne n existent pas (affordance morte constatée sur le dashboard BAV2 du 13/08).
+
+   `data-tf-count-for` rattache chaque table à son compte : c est le contrat que l oracle
+   G5 vérifie, et le composant s en sert pour annoncer les lignes masquées. Mais il ne
+   connaît QUE ses filtres de colonne : dès qu une recherche ou un KPI d état filtre aussi,
+   son compte serait faux, et il écraserait le nôtre. Le composant capture sa référence au
+   compteur à l INITIALISATION : l attribut lui est donc retiré le temps de cet appel, et
+   remis aussitôt. La page garde son marquage, le script maison garde la plume. */
+(function () {{
+  var marques = Array.prototype.slice.call(document.querySelectorAll('[data-tf-count-for]'));
+  marques.forEach(function (c) {{
+    c.setAttribute('data-tf-compte-de', c.getAttribute('data-tf-count-for'));
+    c.removeAttribute('data-tf-count-for');
+  }});
+  if (window.DigitAITableFilters) {{ DigitAITableFilters.initAll(); }}
+  marques.forEach(function (c) {{
+    c.setAttribute('data-tf-count-for', c.getAttribute('data-tf-compte-de'));
+    c.removeAttribute('data-tf-compte-de');
+  }});
+}})();</script>
 </body>
 </html>
 """
@@ -2867,6 +2933,43 @@ def controle_pregeneration(page: str) -> list[str]:
             "règle « E4-largeur » : plafond px nu sur le conteneur — interdit (75-100 % de la "
             "fenêtre, token clamp(75vw,1680px,92vw))"
         )
+    ecarts.extend(_ecarts_comptes_de_table(page))
+    return ecarts
+
+
+def _ecarts_comptes_de_table(page: str) -> list[str]:
+    """G4/G5 du composant D-12 : toute table filtrable a un `id`, et ce `id` a son compteur.
+
+    La règle ne se déduit pas d un motif de présence : elle CROISE deux marquages, et c est
+    précisément ce croisement qui manquait. Trois tables du dashboard portaient `data-filterable`
+    sans qu aucun élément ne porte leur `data-tf-count-for` : le composant masquait des lignes
+    sans que rien ne dise combien, et un lecteur d écran n en était pas averti du tout. Le
+    contrôle vit ici pour que la forge le constate à CHAQUE génération, sans dépendre d un
+    oracle externe installé sur le poste.
+    """
+    ecarts: list[str] = []
+    for balise in re.findall(r"<table\b[^>]*\bdata-filterable(?![-=])[^>]*>", page):
+        identifiant = re.search(r'\bid="([^"]+)"', balise)
+        if not identifiant:
+            ecarts.append(
+                "règle « G4-table-identifiee » : une table `data-filterable` est rendue sans "
+                "`id` — le composant ne peut ni l initialiser ni la relier à son compteur"
+            )
+            continue
+        compteur = re.search(
+            rf'<[^>]+data-tf-count-for="{re.escape(identifiant.group(1))}"[^>]*>', page
+        )
+        if not compteur:
+            ecarts.append(
+                f"règle « G5-compteur-nomme » : la table « {identifiant.group(1)} » est "
+                "filtrable mais aucun élément ne porte son `data-tf-count-for` — le lecteur ne "
+                "peut pas savoir combien de lignes un filtre vient de masquer"
+            )
+        elif 'aria-live="polite"' not in compteur.group(0):
+            ecarts.append(
+                f"règle « G5-compteur-nomme » : le compteur de « {identifiant.group(1)} » n est "
+                'pas `aria-live="polite"` — le changement n est pas annoncé aux lecteurs d écran'
+            )
     return ecarts
 
 
