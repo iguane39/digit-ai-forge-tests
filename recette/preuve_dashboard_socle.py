@@ -5,12 +5,20 @@ Construit une page depuis un rapport SYNTHÉTIQUE qui arme les règles en cause 
 La page est ensuite jugée par les oracles du socle — check_html et render_page —
 exactement comme M2 de la recette S-01 le fait sur les bancs.
 
+TF-0235 (15/08/2026) — l ÉTAGE AU-DESSUS du socle est jugé ici aussi : `oracle-restitution`
+de forge-design vérifie que la page fait son travail auprès de ses lecteurs (famille déclarée,
+verdict, KPI complets, figures à question, chemins de lecteur, manifeste d écarts). Le socle
+dit « la page est-elle bien construite ? » ; celui-là dit « sert-elle son lecteur ? ». Les deux
+sont dus, donc les deux sont prouvés au même endroit.
+
 Usage : uv run python recette/preuve_dashboard_socle.py   (exit 0 = preuve tenue)
 """
 
 from __future__ import annotations
 
 import contextlib
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -35,6 +43,16 @@ def _python_du_poste() -> list[str] | None:
             if essai.returncode == 0:
                 return list(candidat)
     return None
+
+def _oracle_restitution() -> Path | None:
+    """`oracle-restitution.mjs` de forge-design, résolu comme le pilot résout les forges :
+    `FORGE_ROOT` s il est posé, sinon le dossier PARENT de ce dépôt. Absent du poste : SKIP
+    motivé — la preuve se dégrade, elle ne ment pas."""
+    racine = os.environ.get("FORGE_ROOT")
+    base = Path(racine) if racine else Path(__file__).resolve().parent.parent.parent
+    chemin = base / "digit-ai-forge-design" / "oracles" / "oracle-restitution.mjs"
+    return chemin if chemin.exists() else None
+
 
 from forge_tests.livrables import dashboard as dash  # noqa: E402
 
@@ -99,7 +117,12 @@ CHAPITRES = [
                 "elements": [
                     {
                         "id": f"code:GET /api/x{i}=200",
-                        "etat": "echec",
+                        # État du VOCABULAIRE de `surface.ETATS` — « echec » n en fait pas
+                        # partie : le glossaire le rendait alors en badge sans descriptif, et
+                        # la preuve sortait rouge sur dix `title=""` (règle L3 du socle). Une
+                        # fixture qui parle une langue que la forge ne connaît pas ne prouve
+                        # rien sur la forge.
+                        "etat": "defaut",
                         "classe": "assertion-fausse",
                         "message": f"constat {i}",
                         "risque": 20 - i,
@@ -145,6 +168,28 @@ def main() -> int:
         print(f"[{'PASS' if resultat.returncode == 0 else 'FAIL'}] {script}")
         if resultat.returncode != 0:
             print(((resultat.stdout or "") + (resultat.stderr or ""))[-1400:])
+
+    # TF-0235 — l étage « restitution » : la page sert-elle ses lecteurs ? Exit 2 = SKIP motivé
+    # de l oracle (page hors périmètre déclaré) : c est un ÉCHEC ici, puisque ce dashboard, lui,
+    # doit déclarer sa famille « suivi ».
+    restitution = _oracle_restitution()
+    node = shutil.which("node")
+    if restitution is None:
+        print("[SKIP] oracle-restitution — forge-design absente du poste (preuve partielle)")
+    elif node is None:
+        print("[SKIP] oracle-restitution — node absent du poste (preuve partielle)")
+    else:
+        resultat = subprocess.run(
+            [node, str(restitution), str(sortie), "--json-only"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        verdicts.append(("oracle-restitution", resultat.returncode))
+        print(f"[{'PASS' if resultat.returncode == 0 else 'FAIL'}] oracle-restitution")
+        if resultat.returncode != 0:
+            print(((resultat.stdout or "") + (resultat.stderr or ""))[-1400:])
+
     return 1 if any(code != 0 for _, code in verdicts) else 0
 
 
