@@ -39,6 +39,34 @@ Socle graphique : boilerplate `digit-ai-page-html` (tokens `:root`, Roboto pour 
 DM Sans pour le corps, `@media print`). Les liens Google Fonts du boilerplate sont retirés —
 ils sont incompatibles avec la contrainte « zéro réseau ». Le repli système est explicite dans
 chaque `font-family`, ce que le contrôle de charte exige.
+
+Campagne TF-0235 (15/08/2026, volet P4) — la page se conçoit pour SES lecteurs, référentiel
+`REFERENTIEL-RESTITUTION.md` de forge-design. Ce dashboard est de la famille **« suivi »**
+(`<body data-restitution="suivi">`) : il est revisité d un audit à l autre, et ses deux
+lecteurs types y entrent par des questions opposées —
+
+  - le **pilote** : « est-ce que ça dérive ? où, depuis quand, de combien ? » ;
+  - l **opérateur** : « qu y a-t-il dans la file, que traiter d abord ? ».
+
+Ce que la doctrine change ici, sans rien retirer (iso-contenu strict — les six panneaux, leurs
+tables et leurs lignes restent) :
+
+  - **vue d ensemble qui conclut** : un `.verdict` explicite (au lieu d un verdict noyé dans
+    une phrase), les compteurs devenus des KPI COMPLETS (valeur, définition, repère de lecture,
+    action) — un chiffre sans repère ne se lit pas, il se devine ;
+  - **figures à question** : chaque graphique porte en `figcaption` la question à laquelle il
+    répond, et ne naît QUE si la donnée existe. Pas de rapport précédent fourni ⇒ pas de
+    graphique de tendance : un écart déclaré au manifeste, jamais une courbe inventée. La piste
+    d une barre est le FOND CSS du `svg`, jamais un second `rect` — deux rects superposés sont
+    un chevauchement au sens du contrôle de rendu du socle ;
+  - **chemins d entrée par lecteur** (`.chemins`) : « vous êtes le pilote / l opérateur,
+    commencez ici » — chaque chemin est un bouton câblé vers sa vue, jamais un texte mort ;
+  - **manifeste d écarts** (`.ecarts`) : ce que cette page ne fait pas se DÉCLARE, calculé sur
+    l état réel du rapport — « aucun écart » se déclare aussi. Les limites de mesure déjà
+    portées par `NON_JUGE` y entrent : elles vivaient dans le registre de dette, pas sous les
+    yeux du lecteur ;
+  - **routeur à ancres** : une ancre qui pointe dans un panneau masqué OUVRE le panneau avant
+    d y défiler — sans quoi la moitié des renvois de la page seraient des affordances mortes.
 """
 
 from __future__ import annotations
@@ -74,6 +102,8 @@ NON_JUGE = [
     "dashboard : un constat DECLARE par le projet (RT-18) sort du compteur « Constats d echec » "
     "et reste integralement affiche, avec son motif type et sa contre-preuve — la page rend la "
     "declaration, elle ne la valide pas",
+    "dashboard : une figure n existe que si la donnee existe — une figure ABSENTE signale une "
+    "donnee absente du rapport, jamais une donnee nulle ou un choix de mise en page",
 ]
 
 
@@ -357,6 +387,56 @@ _STYLE = f"""
     .actions-vous .a-pourquoi, .actions-vous .a-obtenu {{ color:var(--muted);
       font-size:.92em; }}
     .discret {{ color:var(--muted); font-size:.86rem; }}
+    /* --- Restitution lisible (TF-0235, famille « suivi ») ---------------------------------
+       Composants du référentiel, habillés sur les tokens DÉJÀ posés : pas une couleur de plus,
+       pas une police de plus. Le verdict conclut, le KPI porte sa lecture, la figure pose sa
+       question, le chemin nomme son lecteur, le manifeste déclare ce que la page ne fait pas. */
+    .verdict {{ background:var(--surface); border:1px solid var(--line);
+      border-left:4px solid var(--blue); border-radius:var(--r); padding:14px 18px;
+      margin:0 0 16px; }}
+    .verdict p {{ margin:0 0 .45em; }}
+    .verdict p:last-child {{ margin:0; }}
+    .verdict .v-lecture {{ color:var(--muted); font-size:.9rem; }}
+    /* Un KPI complet (RL-3) : la valeur porte `aria-describedby` vers son repère — le chiffre
+       n est jamais annoncé seul, ni à l œil ni au lecteur d écran. */
+    .tuile .k-repere {{ display:block; font-size:.78rem; color:var(--ink);
+      background:var(--bg); border:1px solid var(--line); border-radius:var(--r-sm);
+      padding:6px 8px; margin:6px 0 0; }}
+    figure.graphe {{ background:var(--surface); border:1px solid var(--line);
+      border-radius:var(--r); padding:14px 18px; margin:16px 0; }}
+    figure.graphe figcaption {{ font-family:var(--head); font-weight:700; font-size:1rem;
+      margin:0 0 4px; }}
+    figure.graphe .g-sous {{ color:var(--muted); font-size:.84rem; margin:0 0 12px; }}
+    .g-ligne {{ display:grid; grid-template-columns:minmax(110px, 30%) 1fr auto; gap:10px;
+      align-items:center; margin:0 0 7px; font-size:.84rem; }}
+    .g-nom {{ overflow-wrap:anywhere; }}
+    /* La PISTE est le fond du svg (CSS), jamais un second rect : deux rects superposés dans
+       un même svg sont un chevauchement, et le contrôle de rendu du socle le refuse. */
+    .g-piste {{ display:block; width:100%; height:10px; background:var(--line);
+      border-radius:3px; }}
+    .g-empile {{ display:block; width:100%; height:14px; background:var(--line);
+      border-radius:4px; }}
+    .g-val {{ color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }}
+    .g-legende {{ list-style:none; display:flex; flex-wrap:wrap; gap:6px 18px;
+      margin:12px 0 0; padding:0; font-size:.82rem; }}
+    .g-puce {{ display:inline-block; width:10px; height:10px; border-radius:3px;
+      margin-right:6px; vertical-align:baseline; }}
+    .chemins {{ list-style:none; display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:12px;
+      margin:12px 0 0; padding:0; }}
+    .chemin {{ background:var(--surface); border:1px solid var(--line);
+      border-left:3px solid var(--blue); border-radius:var(--r-sm); padding:12px 14px;
+      font-size:.88rem; }}
+    .chemin b {{ display:block; font-family:var(--head); margin:0 0 3px; }}
+    .chemin .c-question {{ display:block; color:var(--muted); margin:0 0 7px; }}
+    .chemin .c-va {{ display:block; margin:8px 0 0; text-decoration:none; }}
+    .chemin .c-va:hover {{ text-decoration:underline; }}
+    footer.ecarts {{ margin-top:32px; background:var(--surface); border:1px solid var(--line);
+      border-radius:var(--r); padding:16px 20px; font-size:.86rem; }}
+    footer.ecarts h2 {{ font-size:1.05rem; margin:0 0 .4em; }}
+    footer.ecarts h3 {{ font-size:.92rem; margin:1em 0 .3em; }}
+    footer.ecarts ul {{ margin:0; padding-left:1.2em; }}
+    footer.ecarts li {{ margin:0 0 6px; color:var(--muted); }}
     .lien-chapitre {{ font:inherit; color:var(--blue); background:none; border:none;
       cursor:pointer; text-align:left; padding:0; text-decoration:underline; }}
     footer.doc {{ margin-top:44px; padding-top:14px; border-top:1px solid var(--line);
@@ -387,7 +467,12 @@ _STYLE = f"""
       nav.onglets, .filtres, .theme-toggle, .outillage, .tuile-va,
       .kpis-chapitre {{ display:none; }}
       .panneau {{ display:block !important; page-break-before:always; }}
-      .card, .tuile, tr {{ break-inside:avoid; page-break-inside:avoid; }}
+      .card, .tuile, tr, figure.graphe, .chemin {{ break-inside:avoid;
+        page-break-inside:avoid; }}
+      /* Les pistes et les puces des figures sont des FONDS : sans cette demande explicite,
+         le papier rend des barres sans échelle et une légende sans couleur. */
+      .g-piste, .g-empile, .g-puce {{ -webkit-print-color-adjust:exact;
+        print-color-adjust:exact; }}
       /* Le papier montre tout : aucun filtre écran ne masque une ligne à l impression,
          et les détails de cas sont tous dépliés. */
       tr[data-tf-hidden], tr[hidden], tr[data-detail] {{ display:table-row !important; }}
@@ -683,6 +768,33 @@ _SCRIPT = """
     });
   });
 
+  // --- Routeur à ancres (TF-0235) : une ancre qui pointe DANS un panneau masqué ouvre le
+  //     panneau avant d y défiler. Sans lui, la moitié des renvois de la page — chemins de
+  //     lecteur, repères de KPI, liens du sommaire — seraient des affordances mortes.
+  function vueDe(element) {
+    var panneau = element && element.closest ? element.closest('.panneau') : null;
+    if (panneau) return panneau.id;
+    return (element && element.classList && element.classList.contains('panneau'))
+      ? element.id : '';
+  }
+  function ouvrirAncre(id) {
+    var cible = document.getElementById(id);
+    if (!cible) return false;
+    var vue = vueDe(cible);
+    if (vue) montrer(vue);
+    setTimeout(function () { defiler(id); }, 0);
+    return true;
+  }
+  document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+    a.addEventListener('click', function (ev) {
+      var id = a.getAttribute('href').slice(1);
+      if (id && ouvrirAncre(id)) ev.preventDefault();
+    });
+  });
+  if (location.hash.length > 1) {
+    ouvrirAncre(decodeURIComponent(location.hash.slice(1)));
+  }
+
   // À l impression navigateur, tout détail se déplie : le papier ne cache rien — les
   // chapitres repliés aussi.
   var etatDetails = [];
@@ -722,18 +834,32 @@ def _tuile(
     libelle: str = "",
     descriptif: str = "",
     hors_page: str = "",
+    repere: str = "",
 ) -> str:
     """Tuile-KPI. Cliquable (bouton) dès qu une cible existe — H3 : jamais un nombre seul.
 
     `hors_page` : un KPI dont les éléments ne sont PAS affichés dans la page ne se rend pas
     cliquable ; il dit où ils vivent (c est son descriptif de repli).
+
+    `repere` (TF-0235, règle RL-3) : le REPÈRE DE LECTURE — ce à quoi le chiffre se compare
+    pour vouloir dire quelque chose. Une tuile qui en porte un devient un KPI complet au sens
+    du référentiel de restitution : valeur (`.k-valeur`), définition (`.kpi-d`), repère
+    (`.k-repere`, désigné par `aria-describedby` — le chiffre n est jamais annoncé seul) et
+    action (le lien « voir la liste » quand la tuile est cliquable). Le repère est DÉRIVÉ du
+    rapport par l appelant : « 12 sur 40 » est un fait, « en progrès » serait un jugement.
     """
     if not libelle or not descriptif:
         libelle_g, descriptif_g = _glossaire.compteur(cle)
         libelle = libelle or libelle_g
         descriptif = descriptif or descriptif_g
+    kpi = " kpi" if repere else ""
+    ancre_repere = f"repere-{cle}"
     interieur = [
-        f'<span class="chiffre" data-total="{cle}">{valeur}</span>',
+        # `data-total` reste le DERNIER attribut, collé au nombre : c est sous cette forme
+        # que le contrôle de fidélité et la recette lisent les totaux affichés depuis TF-0063.
+        f'<span class="chiffre{" k-valeur" if repere else ""}"'
+        + (f' aria-describedby="{ancre_repere}"' if repere else "")
+        + f' data-total="{cle}">{valeur}</span>',
         f'<span class="quoi">{_e(libelle)}</span>',
     ]
     if part:
@@ -744,13 +870,21 @@ def _tuile(
         interieur.append(
             f'<span class="delta {sens}">{delta:+d} vs rapport précédent</span>'
         )
-    interieur.append(f'<span class="tuile-d">{_e(descriptif)}</span>')
+    interieur.append(
+        f'<span class="tuile-d{" kpi-d" if repere else ""}">{_e(descriptif)}</span>'
+    )
+    if repere:
+        interieur.append(
+            f'<span class="k-repere" id="{ancre_repere}">{_e(repere)}</span>'
+        )
     if hors_page:
         interieur.append(f'<span class="tuile-d">{_e(hors_page)}</span>')
-        return f'<div class="tuile">{"".join(interieur)}</div>'
+        return f'<div class="tuile{kpi}">{"".join(interieur)}</div>'
     if not cible and not ancre:
-        return f'<div class="tuile">{"".join(interieur)}</div>'
-    interieur.append('<span class="tuile-va" aria-hidden="true">→ voir la liste</span>')
+        return f'<div class="tuile{kpi}">{"".join(interieur)}</div>'
+    interieur.append(
+        '<span class="tuile-va k-action" aria-hidden="true">→ voir la liste</span>'
+    )
     attributs = ""
     if cible:
         attributs += f' data-cible="{_e(cible)}"'
@@ -761,7 +895,7 @@ def _tuile(
     if filtre_severite:
         attributs += f' data-filtre-severite="{_e(filtre_severite)}"'
     return (
-        f'<button type="button" class="tuile"{attributs} '
+        f'<button type="button" class="tuile{kpi}"{attributs} '
         f'title="{_e(descriptif)} — cliquer : afficher la liste">{"".join(interieur)}</button>'
     )
 
@@ -774,6 +908,320 @@ def _badge_verdict(verdict: str) -> str:
         "PARTIEL": "des pans n ont pas pu être joués dans cet environnement",
     }.get(verdict, "verdict global porté par le rapport JSON")
     return f'<span class="badge {classe}" title="{_e(sens)}">{_e(verdict)}</span>'
+
+
+# --- Restitution lisible — composants du référentiel (TF-0235, famille « suivi ») --------------
+# Tout ce qui suit se NOURRIT du rapport : pas un chiffre, pas une part, pas une tendance qui ne
+# soit dérivée de ce que la page affiche déjà par ailleurs. Une donnée absente ne produit pas un
+# graphique vide ni une estimation : elle produit un écart, déclaré au manifeste.
+
+
+def _elements_de(chapitres: list[dict]) -> list[dict]:
+    """Tous les éléments inventoriés, à plat — la MÊME dérivation que les tables et les KPI."""
+    return [e for c in chapitres for s in c["sous_chapitres"] for e in s["elements"]]
+
+
+def _verdict_bloc(rapport: dict, contexte: dict, valeurs: dict[str, int],
+                  seuils_non_tenus: list[str], nb_seuils: int) -> str:
+    """RL-1 — la vue d ensemble CONCLUT. Le verdict est celui du rapport ; la phrase qui le
+    justifie est dérivée des mêmes compteurs que les KPI, jamais d une appréciation.
+    """
+    verdict = str(rapport.get("verdict"))
+    elements, passes = valeurs["elements"], valeurs["passes"]
+    part = f"{round(100 * passes / elements)} %" if elements else "sans objet"
+    if nb_seuils and seuils_non_tenus:
+        etat_seuils = (
+            f"{len(seuils_non_tenus)} seuil(s) opposable(s) non tenu(s) sur {nb_seuils}"
+        )
+    elif nb_seuils:
+        etat_seuils = f"les {nb_seuils} seuils opposables sont tenus"
+    else:
+        etat_seuils = "aucun seuil opposable n est déclaré au rapport"
+    return (
+        f'<div class="verdict" data-verdict="{_e(verdict)}">'
+        f"<p><strong>Verdict de la campagne :</strong> {_badge_verdict(verdict)} — "
+        f"{etat_seuils}.</p>"
+        f'<p class="v-lecture">{passes} élément(s) passés sur {elements} inventoriés '
+        f"({part}). {valeurs['echecs']} constat(s) au décompte, dont "
+        f"{valeurs['echecs_bloquants']} bloquant(s). {valeurs['non_joues']} élément(s) "
+        f"n ont pas pu être joués ici, et {valeurs['actions']} action(s) sont proposées "
+        "en suite.</p>"
+        f'<p class="v-lecture">Rapport source <code>{_e(contexte["rapport_nom"])}</code> '
+        f"(sha256, 16 premiers hex : <code>{_e(contexte['rapport_sha'][:16])}</code>) — "
+        "la page rend ce rapport, elle ne le juge pas.</p>"
+        "</div>"
+    )
+
+
+def _figure_empilee(question: str, sous_titre: str,
+                    segments: list[tuple[str, int, str]]) -> str:
+    """RL-4 — barre empilée. `segments` = (libellé, valeur, jeton de couleur du thème).
+
+    Les segments sont JUXTAPOSÉS dans un seul `svg` : aucun rect n en recouvre un autre. La
+    piste vide est le fond CSS du `svg`. La légende est en HTML, pas dans le SVG — elle doit
+    rester lisible quand la figure est réduite, et se retrouver à la recherche de la page.
+    """
+    total = sum(max(0, v) for _, v, _ in segments)
+    if not total:
+        return ""
+    portions, depart = [], 0.0
+    for libelle, valeur, jeton in segments:
+        largeur = 100.0 * max(0, valeur) / total
+        portions.append((libelle, valeur, jeton, depart, largeur))
+        depart += largeur
+    rects = "".join(
+        f'<rect x="{x:.2f}" y="0" width="{max(0.0, w):.2f}" height="8" '
+        f'fill="var(--{jeton})"></rect>'
+        for _, _, jeton, x, w in portions
+    )
+    aria = ", ".join(f"{libelle} : {valeur}" for libelle, valeur, _, _, _ in portions)
+    legende = "".join(
+        f'<li><span class="g-puce" style="background:var(--{jeton})" aria-hidden="true">'
+        f"</span><strong>{valeur}</strong> {_e(libelle)}</li>"
+        for libelle, valeur, jeton, _, _ in portions
+    )
+    return (
+        f'<figure class="graphe"><figcaption>{_e(question)}</figcaption>'
+        f'<p class="g-sous">{_e(sous_titre)}</p>'
+        f'<svg class="g-empile" viewBox="0 0 100 8" preserveAspectRatio="none" role="img" '
+        f'aria-label="{_e(aria)}">{rects}</svg>'
+        f'<ul class="g-legende">{legende}</ul></figure>'
+    )
+
+
+def _figure_barres(question: str, sous_titre: str,
+                   lignes: list[tuple[str, str, float]]) -> str:
+    """RL-4 — barres horizontales. `lignes` = (nom, valeur affichée, part de 0 à 1).
+
+    Un seul `rect` par `svg`, pour la même raison que ci-dessus : la piste est le fond CSS.
+    """
+    if not lignes:
+        return ""
+    corps = "".join(
+        f'<div class="g-ligne"><span class="g-nom">{_e(nom)}</span>'
+        f'<svg class="g-piste" viewBox="0 0 100 8" preserveAspectRatio="none" role="img" '
+        f'aria-label="{_e(nom)} : {_e(val)}">'
+        f'<rect x="0" y="0" width="{max(0.0, min(100.0, part * 100)):.1f}" height="8" '
+        f'rx="1" fill="var(--blue)"></rect></svg>'
+        f'<span class="g-val">{_e(val)}</span></div>'
+        for nom, val, part in lignes
+    )
+    return (
+        f'<figure class="graphe"><figcaption>{_e(question)}</figcaption>'
+        f'<p class="g-sous">{_e(sous_titre)}</p>{corps}</figure>'
+    )
+
+
+def _figure_etats(chapitres: list[dict]) -> str:
+    """« Où en sont les éléments inventoriés ? » — la répartition par état MESURÉ.
+
+    Mêmes états, mêmes pictos et mêmes libellés que les badges des tables : la figure et les
+    lignes disent la même chose, sinon le lecteur arbitrerait entre deux vérités.
+    """
+    elements = _elements_de(chapitres)
+    if not elements:
+        return ""
+    comptes: dict[str, int] = {}
+    for element in elements:
+        comptes[element["etat"]] = comptes.get(element["etat"], 0) + 1
+    jetons = {
+        "exerce": "green", "defaut": "red", "non_exerce": "amber",
+        "non_testable": "teal", "exclu": "faint",
+    }
+    segments = []
+    for etat, jeton in jetons.items():
+        n = comptes.get(etat, 0)
+        if not n:
+            continue
+        picto, libelle, _, _ = _glossaire.etat(etat)
+        segments.append((f"{picto} {libelle}", n, jeton))
+    return _figure_empilee(
+        f"Où en sont les {len(elements)} éléments inventoriés ?",
+        "Répartition par état mesuré. La somme des segments fait l inventaire entier — "
+        "aucun état n est regroupé ni écarté de la figure.",
+        segments,
+    )
+
+
+def _figure_pans(chapitres: list[dict]) -> str:
+    """« Quels pans tirent le taux de réussite vers le bas ? » — un pan, sa part de passés.
+
+    Ne rend que les pans MESURÉS : un pan sans élément n a pas de taux, et une barre à zéro
+    se lirait comme un échec au lieu d une absence de mesure. Les pans non mesurés restent
+    intégralement dans la table « Résultats par pan testé », avec leur motif.
+    """
+    lignes = []
+    for chapitre in chapitres:
+        elements = [e for s in chapitre["sous_chapitres"] for e in s["elements"]]
+        if not elements:
+            continue
+        passes = sum(1 for e in elements if e["etat"] == "exerce")
+        lignes.append(
+            (
+                f"{chapitre['code']} — {chapitre['titre']}",
+                f"{passes}/{len(elements)} ({round(100 * passes / len(elements))} %)",
+                passes / len(elements),
+            )
+        )
+    if not lignes:
+        return ""
+    lignes.sort(key=lambda ligne: ligne[2])
+    return _figure_barres(
+        "Quels pans tirent le taux de passés vers le bas ?",
+        f"{len(lignes)} pan(s) mesuré(s), du moins au mieux servi. Un pan sans élément "
+        "inventorié n a pas de taux : il est dit dans la table ci-dessous, avec sa raison.",
+        lignes,
+    )
+
+
+def _figure_tendance(rapport: dict, precedent: dict | list[dict] | None) -> str:
+    """« Le taux de passés dérive-t-il d un rapport à l autre ? » — un point par rapport.
+
+    Aucune donnée de tendance sans rapport précédent FOURNI : la figure n existe alors pas, et
+    l absence est déclarée au manifeste d écarts. Une courbe à un seul point serait une courbe
+    inventée.
+    """
+    if not precedent:
+        return ""
+    serie = (precedent if isinstance(precedent, list) else [precedent]) + [rapport]
+    lignes = []
+    for rang, point in enumerate(serie):
+        compte = totaux(point)
+        elements, passes = compte["elements"], compte["passes"]
+        if not elements:
+            continue
+        nom = "ce rapport" if rang == len(serie) - 1 else f"R-{len(serie) - 1 - rang}"
+        lignes.append(
+            (nom, f"{passes}/{elements} ({round(100 * passes / elements)} %)",
+             passes / elements)
+        )
+    if len(lignes) < 2:
+        return ""
+    return _figure_barres(
+        "Le taux de passés dérive-t-il d un rapport à l autre ?",
+        "Un point par rapport fourni, du plus ancien au plus récent. Chaque point compare "
+        "des TOTAUX : il ne dit pas si ce sont les mêmes éléments qui ont bougé.",
+        lignes,
+    )
+
+
+def _chemins() -> str:
+    """RL-9 — « vous êtes X, commencez ici », pour les deux lecteurs de la famille « suivi ».
+
+    Chaque chemin est un BOUTON câblé vers sa vue (loi transverse n° 1 : une affordance sans
+    effet observable est un défaut) — pas une phrase qui décrit un parcours que le lecteur
+    devrait refaire à la main.
+    """
+    def va(libelle: str, cible: str, ancre: str = "") -> str:
+        # Le bouton porte une phrase ENTIÈRE : un lien posé au milieu d une phrase coupe le
+        # texte en deux blocs, et la seconde moitié s ouvre sur une ponctuation orpheline
+        # (règle L1 du socle, constatée sur ce même bloc à la génération).
+        return (
+            f'<button type="button" class="lien-chapitre c-va" data-cible="{_e(cible)}"'
+            + (f' data-ancre="{_e(ancre)}"' if ancre else "")
+            + f">→ {_e(libelle)}</button>"
+        )
+
+    entrees = [
+        (
+            "Vous pilotez",
+            "Est-ce que ça dérive ? où, depuis quand, de combien ?",
+            "Restez sur cette vue : le verdict conclut, et chaque indicateur porte le repère "
+            "auquel il se compare.",
+            [
+                va("Voir la tendance, compteur par compteur", "synthese", "tendance"),
+                va("Voir les résultats par pan testé", "synthese", "table-par-pan"),
+            ],
+        ),
+        (
+            "Vous opérez",
+            "Qu y a-t-il dans la file, que traiter d abord ?",
+            "La file est déjà ordonnée : la configuration d abord, parce qu elle débloque la "
+            "mesure, puis les arbitrages par risque décroissant.",
+            [
+                va("Voir les suites à donner, quoi et pourquoi", "actions",
+                   "synthese-actions"),
+                va("Voir les constats par risque décroissant", "echecs", "table-echecs"),
+            ],
+        ),
+    ]
+    return (
+        "<h3>Par où commencer, selon qui vous êtes</h3>"
+        '<ul class="chemins">'
+        + "".join(
+            f'<li class="chemin"><b>{_e(qui)}</b>'
+            f'<span class="c-question">{_e(question)}</span>'
+            f"<span>{_e(conduite)}</span>{''.join(liens)}</li>"
+            for qui, question, conduite, liens in entrees
+        )
+        + "</ul>"
+    )
+
+
+def _ecarts_declares(rapport: dict, valeurs: dict[str, int], chapitres: list[dict],
+                     precedent: dict | list[dict] | None, nb_seuils: int) -> list[str]:
+    """Les écarts RÉELS de CETTE page, calculés sur l état du rapport — jamais une liste figée.
+
+    Un écart n est pas un aveu de faiblesse du gabarit : c est le refus d afficher une figure
+    ou un repère que la donnée ne porte pas. La liste vide veut dire « aucun écart », et se
+    déclare comme telle.
+    """
+    ecarts: list[str] = []
+    if not precedent:
+        ecarts.append(
+            "Aucun rapport précédent n a été fourni (option --precedent) : la dérive n est "
+            "pas mesurable sur ce run. La page n affiche donc ni graphique ni écart de "
+            "tendance — la question « depuis quand ? » du pilote reste sans réponse ici, "
+            "faute de donnée, jamais par choix de mise en page."
+        )
+    if not nb_seuils:
+        ecarts.append(
+            "Aucun seuil opposable n est déclaré au rapport : les indicateurs se situent par "
+            "rapport à l inventaire, pas par rapport à un engagement chiffré. Le repère de "
+            "lecture des chiffres en est d autant plus faible."
+        )
+    if not _elements_de(chapitres):
+        ecarts.append(
+            "Aucun élément inventorié : la figure de répartition par état et celle des pans "
+            "n existent pas sur ce rapport. Les chapitres restent affichés avec leur motif "
+            "de non-mesure."
+        )
+    if not (rapport.get("findings") or []):
+        ecarts.append(
+            "Aucun constat mesuré sur ce rapport : la vue « Échecs » est vide de lignes. "
+            "Elle reste ouverte — une vue retirée laisserait croire que la question n a pas "
+            "été posée."
+        )
+    if not valeurs["actions"]:
+        ecarts.append(
+            "Aucune action proposée par le rapport : la file de travail de l opérateur est "
+            "vide sur ce run. Le chemin de lecture « vous opérez » mène donc à une vue sans "
+            "entrée, et le dit."
+        )
+    return ecarts
+
+
+def _manifeste_ecarts(ecarts: list[str]) -> str:
+    """RL-10 — le manifeste. « Aucun écart » se déclare aussi ; l absence, elle, se tairait.
+
+    Deux registres, tous deux dus au lecteur : ce que la page N A PAS PU faire sur CE rapport
+    (écarts calculés), et ce qu elle ne juge JAMAIS par construction (`NON_JUGE`, jusqu ici
+    visible du seul registre de dette de la forge — donc de personne, côté lecteur).
+    """
+    items = ecarts or [
+        "Aucun écart déclaré : sur les données de ce rapport, la vue d ensemble conclut, "
+        "les indicateurs portent leur repère, les figures ont leur donnée et les vues sont "
+        "toutes accessibles."
+    ]
+    return (
+        '<footer class="ecarts">'
+        "<h2>Ce que cette page ne fait pas — manifeste d écarts</h2>"
+        "<h3>Sur ce rapport</h3><ul>"
+        + "".join(f"<li>{_e(x)}</li>" for x in items)
+        + "</ul><h3>Par construction, quel que soit le rapport</h3><ul>"
+        + "".join(f"<li>{_e(x)}</li>" for x in NON_JUGE)
+        + "</ul></footer>"
+    )
 
 
 # L3 du socle : un en-tête qui annonce une valeur classante (« sévérité ») renvoie à son
@@ -1830,6 +2278,22 @@ def construire(
     def pct(part: int, tout: int) -> str:
         return f"{round(100 * part / tout)} % " if tout else ""
 
+    # RL-3 (TF-0235) — le repère de lecture d un compteur de SUIVI, c est d abord son point
+    # précédent. Absent, il se dit : « pas mesurable ici » est une information, pas un blanc.
+    avant_totaux = totaux(dernier_precedent) if dernier_precedent else {}
+
+    def derive(cle: str) -> str:
+        if cle not in avant_totaux:
+            return (
+                " Aucun rapport précédent n a été fourni : la dérive de ce compteur n est "
+                "pas mesurable sur ce run."
+            )
+        avant = avant_totaux[cle]
+        ecart = valeurs[cle] - avant
+        if ecart == 0:
+            return f" Le rapport précédent en comptait {avant}, soit un écart nul."
+        return f" Le rapport précédent en comptait {avant}, soit un écart de {ecart:+d}."
+
     lignes_seuils, seuils_non_tenus, nb_seuils = _etat_des_seuils(rapport)
     if nb_seuils and seuils_non_tenus:
         synthese_seuils = (
@@ -1853,9 +2317,7 @@ def construire(
         '<p id="note-pour-couvrir" class="discret">« Pour couvrir » = le geste qui rendrait un '
         "pan non couvert mesurable au prochain audit — champ <code>pour_couvrir</code> du "
         "rapport, jamais inventé par la page.</p>",
-        f"<p>Verdict du rapport : {_badge_verdict(str(rapport.get('verdict')))} · "
-        f"rapport source <code>{_e(contexte['rapport_nom'])}</code> "
-        f"(sha256, 16 premiers hex : <code>{_e(contexte['rapport_sha'][:16])}</code>).</p>",
+        _verdict_bloc(rapport, contexte, valeurs, seuils_non_tenus, nb_seuils),
         '<div class="grille">',
         _tuile(
             "elements",
@@ -1863,6 +2325,8 @@ def construire(
             delta=deltas.get("elements"),
             cible="synthese",
             ancre="table-par-pan",
+            repere="Base de tous les pourcentages de cette page : ce que l audit a trouvé "
+            "à tester dans le produit." + derive("elements"),
         ),
         _tuile(
             "passes",
@@ -1871,6 +2335,10 @@ def construire(
             part=pct(valeurs["passes"], valeurs["elements"]) + "des éléments",
             cible="synthese",
             ancre="table-par-pan",
+            repere=f"{valeurs['passes']} sur {valeurs['elements']} élément(s) inventoriés. "
+            f"Le complément, soit {valeurs['elements'] - valeurs['passes']} élément(s), se "
+            "répartit entre constats mesurés, non joués et non testables."
+            + derive("passes"),
         ),
         _tuile(
             "echecs",
@@ -1878,6 +2346,9 @@ def construire(
             delta=deltas.get("echecs"),
             cible="echecs",
             ancre="table-echecs",
+            repere=f"{valeurs['echecs']} constat(s) au décompte opposable, quand "
+            f"{valeurs['declares']} autre(s) sont déclarés par le projet. Un seul constat "
+            "bloquant suffit à faire basculer le verdict en FAIL." + derive("echecs"),
         ),
         _tuile(
             "echecs_bloquants",
@@ -1887,6 +2358,9 @@ def construire(
             cible="echecs",
             ancre="table-echecs",
             filtre_severite="bloquant",
+            repere=f"{valeurs['echecs_bloquants']} sur {valeurs['echecs']} constat(s) au "
+            "décompte : ce sont ceux qui se traitent avant toute mise en production."
+            + derive("echecs_bloquants"),
         ),
         _tuile(
             "declares",
@@ -1900,14 +2374,30 @@ def construire(
             descriptif="constats mesurés que le projet a déclarés — contestés avec "
             "contre-preuve, ou bloqués par une configuration absente ou du code supplanté. "
             "Hors du décompte principal, jamais retirés du rapport",
+            repere=f"{valeurs['declares']} sur "
+            f"{valeurs['declares'] + valeurs['echecs']} constat(s) mesurés sortent du "
+            "décompte opposable. Ils restent affichés avec leur contre-preuve, leur "
+            "signataire et leur date." + derive("declares"),
         ),
-        _tuile("non_joues", valeurs["non_joues"], delta=deltas.get("non_joues"), cible="non-joues"),
+        _tuile(
+            "non_joues",
+            valeurs["non_joues"],
+            delta=deltas.get("non_joues"),
+            cible="non-joues",
+            repere=f"{valeurs['non_testables']} élément(s) attendent une configuration "
+            f"absente et {valeurs['pans_non_couverts']} pan(s) n ont pas de banc d essai "
+            "ici. Personne ne POUVAIT les exercer dans cet environnement : ce n est pas un "
+            "trou de couverture du projet." + derive("non_joues"),
+        ),
         _tuile(
             "actions",
             valeurs["actions"],
             delta=deltas.get("actions"),
             cible="actions",
             ancre="synthese-actions",
+            repere=f"{valeurs['actions']} suite(s) à donner portées par le rapport, "
+            "réparties entre l IA, le développeur et vous. C est la file de travail de "
+            "l opérateur, filtrable par catégorie et par étape." + derive("actions"),
         ),
         "</div>",
         '<div class="grille">',
@@ -1916,14 +2406,24 @@ def construire(
             valeurs["non_testables"],
             cible="non-joues",
             ancre="non-testables-ici",
+            repere=f"{valeurs['non_testables']} sur {valeurs['non_joues']} élément(s) non "
+            "joués tiennent à une configuration absente de cet environnement. Fournir les "
+            "champs, puis reprendre le rapport, les rend mesurables au prochain audit."
+            + derive("non_testables"),
         ),
         _tuile(
             "pans_non_couverts",
             valeurs["pans_non_couverts"],
             cible="non-joues",
             ancre="pans-non-couverts",
+            repere=f"{valeurs['pans_non_couverts']} domaine(s) entiers sans banc d essai. "
+            "Chacun porte son motif et le geste qui le rendrait mesurable au prochain audit."
+            + derive("pans_non_couverts"),
         ),
         "</div>",
+        _figure_etats(chapitres),
+        _figure_pans(chapitres),
+        _chemins(),
         "<h3>Résultats par pan testé</h3>",
         '<p class="discret">Un chapitre = un domaine testé (pan). Chaque ligne dit combien '
         "d éléments sont passés, combien sont KO et pourquoi lire plus loin — le lien ouvre le "
@@ -1943,7 +2443,8 @@ def construire(
         '<p class="discret">L état est dérivé des findings <code>seuil-non-tenu</code> qui '
         "citent la valeur du seuil. Deux seuils de même valeur ne sont pas discernables par ce "
         "rapprochement : ils seraient alors marqués « non tenu » tous les deux.</p>",
-        "<h3>Tendance</h3>",
+        '<h3 id="tendance">Tendance</h3>',
+        _figure_tendance(rapport, precedent),
         _tendance(rapport, precedent),
     ]
 
@@ -2066,6 +2567,9 @@ def construire(
                 filtre_valeur=c,
                 libelle=_glossaire.categorie_action(c)[0],
                 descriptif=_glossaire.categorie_action(c)[1],
+                repere=f"{valeurs[f'actions_{c}']} action(s) de cette catégorie sur les "
+                f"{valeurs['actions']} que porte le rapport. La classification est portée "
+                "par le rapport JSON, la page ne fait que la rendre.",
             )
             for c in CATEGORIES
         ],
@@ -2081,6 +2585,9 @@ def construire(
                 filtre_valeur=etape,
                 libelle=f"Étape : {_glossaire.etape_action(etape)}",
                 descriptif="actions à jouer à cette étape du cycle",
+                repere=f"{valeurs['etape_' + etape.replace('-', '_')]} action(s) se jouent "
+                f"à cette étape, sur les {valeurs['actions']} que porte le rapport. "
+                "L étape cible est déclarée par le rapport, jamais devinée par la page.",
             )
             for etape in ETAPES
         ],
@@ -2134,13 +2641,18 @@ def construire(
         "actions": "suites à donner structurées (quoi, pourquoi, résultat), plan de boucle "
         "IA, puis liste filtrable par catégorie et étape",
     }
+    # TF-0235 : `data-vue` sur CHAQUE entrée de navigation — c est le marqueur que le
+    # référentiel de restitution lit pour vérifier qu une page s organise en vues naviguées
+    # (RL-1). Les deux barres en portent : le sommaire annoté (L6 du socle) et les onglets.
     toc = "".join(
-        f'<a href="#{identifiant}"><strong>{rang + 1} · {_e(libelle)}</strong> '
+        f'<a href="#{identifiant}" data-vue="{identifiant}">'
+        f"<strong>{rang + 1} · {_e(libelle)}</strong> "
         f'<span class="toc-d">{_e(annonces[identifiant])}</span></a>'
         for rang, (identifiant, libelle, _) in enumerate(panneaux)
     )
     nav = "".join(
         f'<button type="button" role="tab" data-cible="{identifiant}" '
+        f'data-vue="{identifiant}" '
         f'aria-selected="{"true" if rang == 0 else "false"}" '
         f'aria-controls="{identifiant}">{rang + 1} · {_e(libelle)}</button>'
         for rang, (identifiant, libelle, _) in enumerate(panneaux)
@@ -2192,7 +2704,10 @@ def construire(
 /* Habillage du composant filtres — CSS jumeau (TF-0176/H5), chargé avec le JS. */
 {_composant_filtres_css()}</style>
 </head>
-<body>
+<!-- TF-0235 — famille de restitution DÉCLARÉE : « suivi ». Ce dashboard est revisité d un
+     audit à l autre ; ses lecteurs sont le pilote (« est-ce que ça dérive ? ») et l opérateur
+     (« que traiter d abord ? »). C est ce marqueur que l oracle de restitution consomme. -->
+<body data-restitution="suivi">
 <div class="wrap">
 <header class="doc">
   <p class="eyebrow">Digit-AI · Forge Tests · Dashboard d'exécution</p>
@@ -2210,6 +2725,7 @@ def construire(
   recalcul : tout chiffre se conteste sur le rapport JSON. Aucune valeur d environnement
   n entre dans cette page. À l impression, tout est déplié et le thème est toujours clair.
 </footer>
+{_manifeste_ecarts(_ecarts_declares(rapport, valeurs, chapitres, precedent, nb_seuils))}
 </div>
 <script>{_SCRIPT}</script>
 <script>/* Composant filtres du socle — asset du skill installé ou copie D-12 du dépôt. */
@@ -2254,7 +2770,7 @@ _REGLES_PREGENERATION: tuple[tuple[str, str], ...] = (
     ),
     (
         "H3-kpi-cliquable",
-        r'<button type="button" class="tuile"',
+        r'<button type="button" class="tuile',
     ),
     # Retours humains du 14/08 : chapitres repliables, KPIs d'état par chapitre, colonne
     # « objectif du test », actions structurées — un gabarit qui les perdrait dériverait.
@@ -2274,6 +2790,33 @@ _REGLES_PREGENERATION: tuple[tuple[str, str], ...] = (
         "print-clair-force",
         r"@media print",
     ),
+    # TF-0235 — contrat de marquage du référentiel de restitution (famille « suivi »). Chaque
+    # motif est le SEUL crochet que l oracle `oracle-restitution` sait lire : le perdre ne
+    # dégraderait pas l apparence de la page, il la sortirait du périmètre contrôlé en silence.
+    (
+        "RL-famille-declaree",
+        r'<body data-restitution="suivi">',
+    ),
+    (
+        "RL-1-verdict",
+        r'<div class="verdict" data-verdict=',
+    ),
+    (
+        "RL-1-vues-naviguees",
+        r"data-vue=",
+    ),
+    (
+        "RL-3-kpi-complet",
+        r'class="k-repere" id="repere-',
+    ),
+    (
+        "RL-9-chemins-de-lecteur",
+        r'<ul class="chemins">',
+    ),
+    (
+        "RL-10-manifeste-ecarts",
+        r'<footer class="ecarts">',
+    ),
 )
 
 # Règles CONDITIONNELLES : (nom, motif attendu, motif de déclenchement). Une règle qui exige un
@@ -2286,6 +2829,14 @@ _REGLES_CONDITIONNELLES: tuple[tuple[str, str, str], ...] = (
         "H4-actions-structurees",
         r'class="a-quoi"',
         r"<strong>Vos \d+ action",
+    ),
+    # TF-0235 / RL-4 : une figure n existe que si la donnée existe. La règle ne se prononce
+    # donc QUE sur un rapport qui a inventorié au moins un élément — sur un rapport vide,
+    # exiger un graphique reviendrait à demander une courbe inventée.
+    (
+        "RL-4-figure-a-question",
+        r'<figure class="graphe"><figcaption>[^<]+\?</figcaption>',
+        r'data-total="elements"[^>]*>[1-9]',
     ),
 )
 
