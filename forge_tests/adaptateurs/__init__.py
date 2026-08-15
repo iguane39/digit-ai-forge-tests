@@ -7,6 +7,7 @@ from forge_tests.adaptateurs import (
     data,
     fichiers,
     front,
+    i18n,
     interface,
     migrations,
     mutation,
@@ -30,9 +31,10 @@ REGISTRE = {
     "securite-oracles": securite,
     "accessibilite-a11y": accessibilite,
     "visuel-golden": visuel,
+    "i18n-build-servi": i18n,
 }
 
 PANS_ATTENDUS = [
     "front", "interface", "api", "data", "migrations", "batch", "fichiers", "back", "securite",
-    "accessibilite", "visuel", "qualif", "prompts",
+    "accessibilite", "visuel", "qualif", "prompts", "i18n",
 ]

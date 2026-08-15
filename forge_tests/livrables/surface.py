@@ -54,6 +54,12 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (re.compile(r"^(?:contrainte|index|trigger):(?P<v>\w+?)_\w+$"), "table {v}"),
         (re.compile(r"^contrainte:(?P<v>\w+)\.not_null$"), "colonne {v}"),
     ),
+    # TF-0284 : le pan i18n range par LOCALE — c est le seul axe où l on veut lire, d un coup
+    # d oeil, tout ce qui manque à l anglais. Ranger ses constats par écran les aurait dispersés
+    # sur deux cents lignes, exactement là où ils étaient déjà invisibles.
+    "locale": (
+        (re.compile(r"^i18n:(?:route|navigation|langue):(?P<v>[^:]+)"), "locale {v}"),
+    ),
     "fichier": (
         (re.compile(r"^migration:(?P<v>[^:]+):"), "migration {v}"),
         (re.compile(r"^divergence:migration:(?P<v>[^:]+)"), "migration {v}"),
