@@ -385,8 +385,9 @@ libellé).
 
 Périmètre : les gabarits rendus tels quels — `.html`, `.htm`, `.jinja`, `.jinja2`, `.j2`,
 `.twig`, `.ejs`, `.hbs` — hors `node_modules`, `.venv`, `dist`, `build`, `.visuel` et autres
-artefacts. Aucune exécution, aucun navigateur : le pan est disponible là où Playwright ne l'est
-pas (projet non constructible, front servi par le backend, gabarit rendu côté serveur).
+artefacts, **et les destinations littérales des liens des composants React** (`.jsx`, `.tsx`).
+Aucune exécution, aucun navigateur : le pan est disponible là où Playwright ne l'est pas (projet
+non constructible, front servi par le backend, gabarit rendu côté serveur).
 
 Est déclaré **inerte** :
 
@@ -403,6 +404,29 @@ Sont réputés câblés : tout attribut de gestionnaire (`onclick`, `@click`, `v
 ligne du document compris. Un élément `disabled` ou `aria-disabled="true"` n'est pas accusé :
 son inertie est **voulue et déclarée**.
 
+### Liens des composants React — la destination, pas le câblage (TF-0283)
+
+Les composants `.jsx`/`.tsx` étaient **entièrement** hors périmètre : « leur câblage est une
+expression du langage, pas un attribut du gabarit ». C'est vrai du **câblage** ; c'était faux de
+la **destination**. Le 15/08/2026, sur un produit legacy en production, quatre liens faux
+vivaient dans des `.tsx` — logo anglais vers `/en/blog`, « Contact » de l'en-tête **et** du pied
+de page anglais vers la page *française*, bascule « Français » vers `/blog`. Vrais `href`, pages
+cibles existantes, aucune suite qui clique : invisibles à tout oracle, livrés, signalés deux fois
+par l'humain.
+
+Le pan lit donc aussi les `href`/`to` **littéraux** des `<a>`, `<Link>` et `<NavLink>` des
+composants, et juge quatre choses :
+
+| Contrôle | Constat |
+|---|---|
+| la destination existe dans l'arborescence (routes Next `app/` et `pages/`, tables react-router et TanStack, gabarits, fichiers de `public/`) | `destination absente de l'arborescence` |
+| un composant qui sert une locale ne renvoie pas vers une autre **quand sa contrepartie existe** | `composant de la locale « en » pointant vers « /contact » alors que « /en/contact » existe` |
+| le **logo** mène à l'accueil de sa locale — sa cible est connue d'avance | `lien du logo vers « /en/blog » au lieu de l'accueil « /en »` |
+| la **bascule de langue** mène à l'accueil de la langue visée | `bascule de langue « Français » vers « /blog » au lieu de « / »` |
+
+Classe de finding propre — `lien-casse`, jamais `affordance-inerte` : un lien qui pointe à côté
+**a** un effet, et c'est le mauvais. Il n'y a rien à câbler, il y a une destination à corriger.
+
 **Limites déclarées** (reprises telles quelles en `non_juge`) :
 
 - contrôle **statique** : un gestionnaire posé à l'exécution par un framework, ou une
@@ -412,8 +436,19 @@ son inertie est **voulue et déclarée**.
   blanchir. Le pan attrape l'inerte flagrant, il ne certifie pas le câblé ;
 - le câblage prouve l'existence d'un gestionnaire, jamais que son **effet soit observable** —
   un handler vide passerait pour câblé ;
-- les composants de framework (`.jsx`, `.tsx`, `.vue`, `.svelte`) ne sont pas analysés comme
-  gabarits ; leur surface est inventoriée par le pan `front` via `data-testid` ;
+- le **câblage** des composants (`.jsx`, `.tsx`, `.vue`, `.svelte`) n'est pas analysé comme celui
+  d'un gabarit ; leur surface interactive est inventoriée par le pan `front` via `data-testid`.
+  Seule la **destination** de leurs liens est jugée, et pour React seulement (`.jsx`/`.tsx`) :
+  les dialectes de Vue et Svelte ont leur propre grammaire d'attributs ;
+- une destination **exprimée** (`href={chemin}`, template avec `${…}`, constante importée) n'est
+  pas résolue : elle est **comptée** et déclarée non jugée. Un lien **relatif** (sans `/`
+  initial) non plus — sa résolution dépend de l'URL de rendu ;
+- si **aucune** route n'est énumérable, le contrôle d'existence est **désactivé** plutôt que
+  deviné : accuser tous les liens d'un projet dont on n'a pas su lire les routes serait un faux
+  positif massif ;
+- « logo » et « bascule de langue » sont reconnus par **heuristique** (mention de `logo` dans le
+  contenu du lien, libellé égal à un nom de langue, attribut `hrefLang`) — un constat ainsi
+  produit se conteste comme tout autre (`.forge-tests-declarations.json`) ;
 - une ancre `#nom` dont la cible n'existe pas dans le document n'est pas jugée morte : la cible
   peut être injectée au rendu.
 
