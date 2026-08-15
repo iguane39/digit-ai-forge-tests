@@ -568,8 +568,15 @@ def _pages_statiques(cible: Path) -> list[str]:
             chemins.append("/" + parent if parent != "." else "/")
         else:
             chemins.append("/" + relatif.rsplit(".", 1)[0])
-    for dossier in sorted(cible.rglob("public")):
-        if not dossier.is_dir() or any(partie in _EXCLUS for partie in dossier.parts):
+    # `public/` est cherché à la racine et un niveau dessous (`frontend/public`, `apps/web/public`)
+    # — pas par un `rglob` sur tout l arbre : `node_modules` contient des centaines de `public/`
+    # qu il faudrait traverser pour tous les écarter.
+    candidats = [cible / "public"]
+    for enfant in sorted(cible.iterdir()) if cible.is_dir() else []:
+        if enfant.is_dir() and enfant.name not in _EXCLUS:
+            candidats.append(enfant / "public")
+    for dossier in candidats:
+        if not dossier.is_dir():
             continue
         for fichier in sorted(dossier.rglob("*")):
             if fichier.is_file():
