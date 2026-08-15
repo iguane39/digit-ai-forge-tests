@@ -745,6 +745,12 @@
       "statut": "todo"
     },
     {
+      "id": "dashboard-006",
+      "domaine": "dashboard",
+      "enonce": "dashboard : une figure n existe que si la donnee existe — une figure ABSENTE signale une donnee absente du rapport, jamais une donnee nulle ou un choix de mise en page",
+      "statut": "todo"
+    },
+    {
       "id": "generateur-002",
       "domaine": "generateur",
       "enonce": "generateur : pans API et Data generes ; Front, Batch et Fichiers ne le sont pas — leurs cas exigent un scenario, pas une seule requete",
