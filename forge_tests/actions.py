@@ -94,6 +94,15 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "câbler l'affordance « {id} » ou la retirer du gabarit — une affordance est câblée ou "
         "elle n'existe pas ({message})",
     ),
+    # TF-0283 — un lien de composant qui pointe à côté. Ce n est PAS une affordance inerte : il a
+    # un effet, et c est le mauvais. Il n y a rien à câbler, il y a une destination à corriger —
+    # et le destinataire est le développeur, jamais la forge.
+    "lien-casse": (
+        "manuelle_dev",
+        "development",
+        "corriger la destination du lien « {id} » : {message}. Un lien tient sa promesse ou il "
+        "trompe — il n'y a pas d'entre-deux pour l'utilisateur qui clique",
+    ),
     "affordance-sans-effet": (
         "manuelle_dev",
         "development",

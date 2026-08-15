@@ -313,7 +313,7 @@
     {
       "id": "interface-statique-004",
       "domaine": "interface-statique",
-      "enonce": "interface : les composants de framework (.jsx, .tsx, .vue, .svelte) ne sont pas analyses comme gabarits ; leur surface est inventoriee par le pan front via `data-testid`",
+      "enonce": "interface : les composants de framework (.jsx, .tsx, .vue, .svelte) ne sont pas analyses comme gabarits — seule la DESTINATION litterale des liens des composants React (.jsx, .tsx) est jugee (TF-0283) ; leur surface est inventoriee par le pan front via `data-testid`",
       "statut": "assume",
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : contrôle STATIQUE par nature : le dynamique appartient au pan qualif et aux tests d interactions (deux étages voulus). Réévaluer si un run réel prouve que la limite coûte."
     },
@@ -761,6 +761,42 @@
       "id": "generateur-002",
       "domaine": "generateur",
       "enonce": "generateur : pans API et Data generes ; Front, Batch et Fichiers ne le sont pas — leurs cas exigent un scenario, pas une seule requete",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-006",
+      "domaine": "interface-statique",
+      "enonce": "interface/liens : une destination EXPRIMEE (`href={chemin}`, template avec `${...}`, constante importee) n est pas resolue — elle est comptee et declaree NON JUGEE, jamais supposee bonne ni mauvaise",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-007",
+      "domaine": "interface-statique",
+      "enonce": "interface/liens : un lien RELATIF (sans `/` initial) n est pas juge — sa resolution depend de l URL de rendu, que l analyse statique ne connait pas",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-008",
+      "domaine": "interface-statique",
+      "enonce": "interface/liens : l existence d une destination se juge sur l arborescence ENUMEREE (routes Next `app/`+`pages/`, tables react-router et TanStack, gabarits et fichiers `public/`) ; une route posee a l execution ou par un proxy est invisible ici, et si aucune route n est enumerable le controle d existence est DESACTIVE plutot que devine",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-009",
+      "domaine": "interface-statique",
+      "enonce": "interface/liens : la locale d un composant est deduite de son arborescence ou de son nom (`.../en/Header.tsx`, `HeaderEn.tsx`) ; un composant qui rend PLUSIEURS locales selon une prop n a pas de locale propre et ses liens ne sont pas juges sur ce critere",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-010",
+      "domaine": "interface-statique",
+      "enonce": "interface/liens : « logo » et « bascule de langue » sont reconnus par HEURISTIQUE — mention de `logo` dans le contenu du lien, libelle egal a un nom de langue ou attribut `hrefLang`. Un logo sans le mot `logo` ni `hrefLang` echappe au controle, et le lien ainsi reconnu se conteste comme tout constat (`declarations`)",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-011",
+      "domaine": "interface-statique",
+      "enonce": "interface/liens : le libelle d un lien est lu jusqu a la premiere fermeture de meme balise ; un lien qui en imbrique un autre de meme nom verrait son libelle tronque",
       "statut": "todo"
     },
     {
