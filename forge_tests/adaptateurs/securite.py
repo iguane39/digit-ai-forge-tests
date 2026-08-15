@@ -106,8 +106,31 @@ def _relocaliser(texte: str, scan: Path, application: Path) -> str:
 
     Sans ce ré-étiquetage, chaque `localisation` publiée pointerait vers un dossier temporaire
     détruit à la fin de l analyse — illisible pour quiconque reçoit le rapport.
+
+    TF-0279 — DEUX formes à ré-étiqueter, pas une. Les oracles délégués ne publient pas leur
+    `where` dans le même repère : `oracle-secrets` donne un chemin ABSOLU (le remplacement de
+    préfixe ci-dessous suffit, et c est pourquoi ses 112 constats se contestaient sans mal),
+    `oracle-sast` donne `path.relative(process.cwd(), fichier)` — un chemin RELATIF où la copie
+    filtrée n apparaît que par son suffixe `<brouillon aléatoire>\\sources\\`. Le préfixe absolu
+    n y figurant nulle part, le remplacement échouait en silence et l identifiant du finding
+    embarquait le nom TIRÉ AU SORT du dossier de la passe : deux exécutions du même défaut sur
+    le même fichier produisaient deux identifiants distincts. Constaté sur trois passes
+    (lgvdcxei, qyoth9pg, ccnh5t5j) : aucune ligne de `constats-contestes.jsonl` ne pouvait plus
+    matcher, la contestation d un constat SAST était mécaniquement impossible.
+
+    L ancre est donc le chemin PROJET dans les deux cas. Réécrire l oracle aurait violé R3 ;
+    c est l appelant qui sait, lui, où il a copié quoi.
     """
-    return texte.replace(str(scan), str(application))
+    if str(scan) in texte:
+        return texte.replace(str(scan), str(application))
+    for separateur in ("\\", "/"):
+        marque = f"{scan.parent.name}{separateur}{scan.name}"
+        debut = texte.find(marque)
+        if debut == -1:
+            continue
+        reste = texte[debut + len(marque):].lstrip("\\/")
+        return str(application) + (os.sep + reste if reste else "")
+    return texte
 
 
 def _lancer(script: Path, cible: Path) -> dict | None:
