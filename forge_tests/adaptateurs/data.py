@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from forge_tests.disposition import paquet_sources, racine_execution
 from forge_tests.execution import (
     instructions_sql,
     motif_indisponibilite,
@@ -112,7 +113,14 @@ def _motif_surface_absente(cible: Path) -> str:
 
 
 def _sql(cible: Path) -> list[Path]:
-    return sorted((cible / "backend" / "migrations").glob("*.sql"))
+    """Migrations SQL, sous la racine DÉCOUVERTE — même ancre que le pan `migrations`.
+
+    TF-0256 : ce pan énumère sa surface DEPUIS les migrations. Ancré en dur sur
+    `<cible>/backend/migrations`, il rendait un inventaire VIDE sur toute racine plate, donc un
+    SKIP « aucune migration SQL ni contrainte ORM à inventorier » — et les tests de violation
+    de contrainte réellement joués par le projet n étaient crédités à rien.
+    """
+    return sorted((racine_execution(cible) / "migrations").glob("*.sql"))
 
 
 _EXCLUS_MODELES = {".venv", "venv", "node_modules", "__pycache__", "tests", "migrations", "alembic"}
@@ -124,15 +132,19 @@ def _fichiers_modeles(cible: Path) -> list[Path]:
     TF-0097 : l adaptateur ne regardait que `backend/app/models.py`. Un projet dont les modèles
     vivent sous `backend/app/db/models.py` (ou toute autre sous-arborescence) sortait « aucune
     contrainte ORM à inventorier », alors que les modèles existent bel et bien.
+
+    TF-0256 : le paquet est DÉCOUVERT (`disposition.paquet_sources`) au lieu d être supposé
+    `<cible>/backend/app`. Sur racine plate, les modèles vivent sous `<cible>/app` — invisibles
+    jusqu ici, donc aucune contrainte ORM inventoriée ni aucune divergence modèle/migration
+    détectable.
     """
-    conventionnels = [
-        cible / "backend" / "app" / "models.py",
-        cible / "backend" / "app" / "db" / "models.py",
-    ]
+    racine = paquet_sources(cible)
+    if racine is None:
+        return []
+    conventionnels = [racine / "models.py", racine / "db" / "models.py"]
     trouves = [p for p in conventionnels if p.is_file()]
     if trouves:
         return trouves
-    racine = cible / "backend" / "app"
     if not racine.is_dir():
         return []
     return sorted(

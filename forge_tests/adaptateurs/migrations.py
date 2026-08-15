@@ -6,6 +6,7 @@ import configparser
 import re
 from pathlib import Path
 
+from forge_tests.disposition import racine_execution
 from forge_tests.execution import (
     instructions_sql,
     motif_indisponibilite,
@@ -50,7 +51,16 @@ NON_JUGE = [
 
 
 def _fichiers(cible: Path) -> list[Path]:
-    return sorted((cible / "backend" / "migrations").glob("*.sql"))
+    """Migrations SQL du projet, sous la racine DÉCOUVERTE — jamais `<cible>/backend` supposé.
+
+    TF-0256 : TF-0216 avait doté la forge d une découverte de racine (`disposition.py`), mais
+    ce pan ne la consommait pas. Sur un produit à RACINE PLATE dont les migrations vivent en
+    `<cible>/migrations`, `_fichiers` rendait une liste vide : le pan sortait « aucune migration
+    à inventorier » et le pan `data`, ancré au même endroit, n a jamais crédité les 37 tests de
+    violation de contraintes qui existaient bel et bien. Un faux négatif de l auditeur, pas un
+    trou de l audité.
+    """
+    return sorted((racine_execution(cible) / "migrations").glob("*.sql"))
 
 
 def _script_location(cible: Path) -> Path | None:
@@ -61,7 +71,15 @@ def _script_location(cible: Path) -> Path | None:
     pointait vers `backend/migrations/versions/` — jamais essayé, alors que 9 migrations y
     vivaient et avaient été appliquées avec succès (`alembic upgrade head`).
     """
-    for ini in (cible / "backend" / "alembic.ini", cible / "alembic.ini"):
+    # TF-0256 : la racine DÉCOUVERTE d abord — elle couvre la racine plate comme la disposition
+    # déclarée par `FORGE_TESTS_SOURCES` absolu. Les deux ancres historiques restent en repli :
+    # sur la disposition `backend/` elles coïncident, aucun projet déjà mesuré ne bouge.
+    ancres = (racine_execution(cible), cible / "backend", cible)
+    vus: set[Path] = set()
+    for ini in (ancre / "alembic.ini" for ancre in ancres):
+        if ini in vus:
+            continue
+        vus.add(ini)
         if not ini.is_file():
             continue
         parseur = configparser.ConfigParser()
@@ -79,10 +97,21 @@ def _script_location(cible: Path) -> Path | None:
 
 def _versions_alembic(cible: Path) -> list[Path]:
     declare = _script_location(cible)
-    candidats = ([declare / "versions"] if declare else []) + [
-        cible / base
-        for base in ("backend/app/alembic/versions", "backend/alembic/versions", "alembic/versions")
-    ]
+    # TF-0256 : conventions ancrées sur la racine DÉCOUVERTE, puis les trois chemins historiques.
+    # Sur la disposition `backend/` les deux séries coïncident dans le même ordre ; sur racine
+    # plate, `app/alembic/versions` devient enfin atteignable.
+    candidats = (
+        ([declare / "versions"] if declare else [])
+        + [racine_execution(cible) / base for base in ("app/alembic/versions", "alembic/versions")]
+        + [
+            cible / base
+            for base in (
+                "backend/app/alembic/versions",
+                "backend/alembic/versions",
+                "alembic/versions",
+            )
+        ]
+    )
     for dossier in candidats:
         if dossier.is_dir():
             return sorted(p for p in dossier.glob("*.py") if p.name != "__init__.py")
@@ -120,9 +149,10 @@ def _motif_sans_migration(cible: Path) -> str:
         )
     envoyees = instructions_sql(cible) or []
     vues = sources_sql(cible) or []
+    dossier = racine_execution(cible) / "migrations"
     if envoyees:
         return (
-            f"migrations : aucune migration à inventorier — ni {cible / 'backend' / 'migrations'}"
+            f"migrations : aucune migration à inventorier — ni {dossier}"
             f"/*.sql ni versions Alembic, alors que {len(envoyees)} instructions SQL ont été "
             f"OBSERVÉES pendant la suite (relevé {', '.join(vues)}) : le schéma de ce projet "
             f"n est pas versionné par migrations"
