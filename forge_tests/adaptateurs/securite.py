@@ -67,6 +67,10 @@ def _racine_oracles() -> Path | None:
     return _DEFAUT if _DEFAUT.is_dir() else None
 
 
+# Nom conventionnel du dossier de code vendorise, partage par toute la chaine (voir TF-0280
+# ci-dessous) : `vendor` chez forge-development comme dans les pans `interface` et `prompts`.
+_VENDORISE = "vendor"
+
 # TF-0099 : constate le 11/08 — `oracle-secrets` complete son scanner integre par un appel a
 # `gitleaks detect -s <cible>` SANS aucune exclusion de repertoire (contrairement a son propre
 # scanner JS, qui exclut deja node_modules/.venv/dist/build). Le reecrire aurait viole la regle
@@ -86,18 +90,47 @@ _EXCLUS_DEPENDANCES = (
     # audite. Meme raisonnement que pour `.venv` : un dossier jamais copie ne peut pas produire
     # de finding.
     "forge", "output", "old", "Old", ".oracles",
+    # TF-0280 : le code VENDORISE — dependance tierce EPINGLEE, copiee dans le depot pour la
+    # figer, jamais servie ni modifiee par le produit. C est une dependance qui a change de
+    # dossier, pas du code du produit : meme risque, meme destinataire et meme remede que
+    # `.venv` (mettre a jour l epingle, pas corriger la ligne). Le contrat existait deja
+    # partout ailleurs — les gates de forge-development l excluent du lint
+    # (`extend-exclude = ["vendor"]`, « code tiers epingle »), les pans `interface` et
+    # `prompts` de cette forge aussi ; ce pan etait le SEUL a le tendre encore aux oracles.
+    # Cout mesure sur forge-tests elle-meme : `tests/vendor/axe.min.js` (axe-core epingle,
+    # jamais servi) produisait a lui seul 114 constats — 112 secrets, 2 SAST — soit un rapport
+    # dont le lecteur devait ecarter la quasi-totalite a la main avant d apercevoir le produit.
+    _VENDORISE,
 )
 
 
-def _sources_du_produit(application: Path, tmp: Path) -> Path:
+def _sources_du_produit(
+    application: Path, tmp: Path, vendorises: list[str] | None = None
+) -> Path:
     """Copie FILTRÉE de `application`, sans les dossiers de dépendances.
 
     Border ce que l oracle délégué reçoit est le seul levier qui ne réécrit pas gitleaks : un
     dossier qui ne contient jamais `.venv` ne peut pas produire de finding « dans » `.venv`,
     quel que soit le comportement interne de l outil invoqué.
+
+    `vendorises` recueille les dossiers vendorisés réellement écartés : une exclusion se DIT au
+    rapport, elle ne se pratique jamais en silence (TF-0280). Sans cette liste, un lecteur ne
+    pourrait pas distinguer « aucun secret dans le vendored » de « le vendored n a pas été lu ».
     """
     cible = tmp / "sources"
-    shutil.copytree(application, cible, ignore=shutil.ignore_patterns(*_EXCLUS_DEPENDANCES))
+    filtre = shutil.ignore_patterns(*_EXCLUS_DEPENDANCES)
+
+    def tracant(dossier: str, noms: list[str]) -> set[str]:
+        exclus = filtre(dossier, noms)
+        if vendorises is not None:
+            vendorises.extend(
+                os.path.relpath(Path(dossier, nom), application)
+                for nom in exclus
+                if nom == _VENDORISE
+            )
+        return exclus
+
+    shutil.copytree(application, cible, ignore=tracant)
     return cible
 
 
@@ -198,8 +231,22 @@ def analyser(cible: Path) -> SortieAdaptateur:
     echec = False
     joues: list[str] = []
 
+    vendorises: list[str] = []
     with tempfile.TemporaryDirectory(prefix="forge-tests-securite-") as brouillon:
-        scan = _sources_du_produit(application, Path(brouillon))
+        scan = _sources_du_produit(application, Path(brouillon), vendorises)
+        # TF-0280 : l exclusion se DIT, toujours, et elle NOMME ce qu elle a ecarte. Un pan qui
+        # borne son perimetre sans le publier transforme un choix defendable en angle mort : le
+        # lecteur d un rapport muet ne peut pas distinguer « rien a signaler dans le vendored »
+        # de « le vendored n a jamais ete lu ». La phrase n est emise que si quelque chose a
+        # reellement ete ecarte — declarer une exclusion qui n a rien exclu serait du bruit.
+        if vendorises:
+            non_juge.append(
+                "securite : code VENDORISE non scanne — "
+                + ", ".join(sorted(vendorises))
+                + " : dependance tierce EPINGLEE, copiee dans le depot et jamais servie ; meme "
+                "perimetre que `.venv` et que la gate `vendor/` de forge-development. Un secret "
+                "commis DANS un vendored se corrige en changeant l epingle, pas la ligne"
+            )
         for nom in ORACLES:
             script = racine / f"oracle-{nom}.mjs"
             if not script.exists():
