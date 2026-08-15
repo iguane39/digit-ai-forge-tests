@@ -824,6 +824,26 @@ def verifier_suite_unitaire() -> int:
     return 0 if ok else 1
 
 
+def _resoudre_ruff() -> tuple[list[str], str] | None:
+    """Localise ruff : module de l interpréteur courant SI disponible, sinon exécutable du PATH.
+
+    L appel figé `sys.executable -m ruff` supposait ruff installé dans l interpréteur qui joue
+    la recette. Lancée hors du venv canonique (`python recette/verifier_corpus.py` d un poste),
+    la section sortait « ruff : aucune sortie » — un ÉCHEC dont le motif réel (l outil n est pas
+    là) restait tu, indiscernable d un ruff cassé, sur un dépôt par ailleurs propre. La
+    résolution est donc explicite, et son origine est AFFICHÉE au verdict.
+    """
+    import importlib.util
+    import shutil
+
+    if importlib.util.find_spec("ruff") is not None:
+        return [sys.executable, "-m", "ruff"], "module de l interpreteur"
+    executable = shutil.which("ruff")
+    if executable:
+        return [executable], f"executable du PATH : {executable}"
+    return None
+
+
 def verifier_lint() -> int:
     """Le linter du dépôt, joué PAR la recette — TF-0226.
 
@@ -837,14 +857,27 @@ def verifier_lint() -> int:
 
     Le périmètre suit celui de la configuration : le code, les tests, et la recette
     elle-même — s en exclure serait juger les autres sans se juger soi.
+
+    Un ruff INTROUVABLE (ni module, ni PATH) se DIT avec son motif et reste un ÉCHEC :
+    « outil absent » n est jamais « dépôt propre » — c est la loi 3, l oubli n existe pas.
     """
     import subprocess
 
     print("-" * 78)
     print("  TF-0226 — linter du depot (ruff)")
+    resolution = _resoudre_ruff()
+    if resolution is None:
+        # DÉCLARÉ, jamais silencieux ni confondu avec un contrôle vert : l outil est ABSENT.
+        print("  [ECHEC  ] ruff INTROUVABLE : ni module de l interpreteur courant "
+              f"({sys.executable}), ni executable `ruff` sur le PATH.")
+        print("             Un linter absent du poste n est pas un depot propre — le controle")
+        print("             n a PAS eu lieu. Pour l installer : `uv sync` (groupe dev), ou")
+        print("             rejouer la recette via `uv run python recette/verifier_corpus.py`.")
+        return 1
+    commande, origine = resolution
     try:
         resultat = subprocess.run(
-            [sys.executable, "-m", "ruff", "check", "forge_tests", "tests", "recette",
+            [*commande, "check", "forge_tests", "tests", "recette",
              "--output-format", "concise"],
             cwd=RACINE,
             capture_output=True,
@@ -855,15 +888,17 @@ def verifier_lint() -> int:
         )
     except (OSError, subprocess.SubprocessError) as erreur:
         # DÉCLARÉ, jamais silencieux : un linter absent du poste n est pas un dépôt propre.
-        print(f"  [ECHEC  ] ruff non lancable : {type(erreur).__name__}: {erreur}")
+        print(f"  [ECHEC  ] ruff non lancable ({origine}) : {type(erreur).__name__}: {erreur}")
         return 1
     lignes = [ligne.strip() for ligne in resultat.stdout.splitlines() if ligne.strip()]
     ok = resultat.returncode == 0
     resume = (lignes[-1] if lignes else "aucune sortie")[:80]
-    print(f"  [{'OK     ' if ok else 'ECHEC  '}] ruff : {resume}")
+    print(f"  [{'OK     ' if ok else 'ECHEC  '}] ruff ({origine}) : {resume}")
     if not ok:
         for ligne in lignes[:15]:
             print(f"             {ligne}")
+        if resultat.stderr.strip():
+            print(f"             stderr : {resultat.stderr.strip().splitlines()[0][:80]}")
     return 0 if ok else 1
 
 
