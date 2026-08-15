@@ -98,7 +98,9 @@ POUR_COUVRIR = (
     "FORGE_TESTS_QUALIF_LOGIN / FORGE_TESTS_QUALIF_PASSWORD si les routes sont protégées. "
     "Options : FORGE_TESTS_QUALIF_ROUTES (routes d'amorce, virgule), "
     "FORGE_TESTS_QUALIF_MARQUEURS (JSON route -> marqueur de contenu), "
-    "FORGE_TESTS_QUALIF_CONNEXION (route de la mire), FORGE_TESTS_QUALIF_PLAFOND (routes max). "
+    "FORGE_TESTS_QUALIF_CONNEXION (route de la mire), FORGE_TESTS_QUALIF_PLAFOND (routes max), "
+    "FORGE_TESTS_QUALIF_ORIGINES (origines publiques declarees du produit, virgule — les URLs "
+    "auto-referentes des pages y sont admises en plus de celle de l instance auditee). "
     "Instance derriere un IdP d entreprise (Entra, Okta, MFA) que la forge ne peut pas rejouer : "
     "fournir une session DEJA OUVERTE par FORGE_TESTS_QUALIF_STORAGE_STATE (storageState.json "
     "Playwright) et/ou FORGE_TESTS_QUALIF_BEARER (en-tete Authorization) — la provenance de la "
@@ -385,6 +387,8 @@ def precondition_absente(releve: list[dict], config: dict) -> str | None:
 # déploiement, découvert par un humain qui a cliqué.
 IDENT_ENTREE = "qualif:entree:/"
 CLASSE_ENTREE = "chaine-authentification-en-impasse"
+# TF-0268 : une page qui annonce aux tiers une origine qui n est pas la sienne.
+CLASSE_URL_ETRANGERE = "url-auto-referente-etrangere"
 
 # Ce qui fait d un maillon un SAUT D AUTHENTIFICATION. Sans un seul de ces sauts dans la chaîne,
 # l instance ne demande rien à l entrée : il n y a pas de porte, donc pas de porte murée, et le
@@ -649,6 +653,14 @@ def _config(cible: Path) -> dict:
         ],
         "marqueurs": marqueurs,
         "connexion": (os.environ.get("FORGE_TESTS_QUALIF_CONNEXION") or "").strip(),
+        # TF-0268 : origines publiques DÉCLARÉES du produit — celles qu une URL auto-référente
+        # a le droit de porter en plus de celle de l instance auditée. Absente par défaut : le
+        # repère est alors l instance elle-même, et rien d autre.
+        "origines": [
+            o.strip()
+            for o in (os.environ.get("FORGE_TESTS_QUALIF_ORIGINES") or "").split(",")
+            if o.strip()
+        ],
         "login": (os.environ.get("FORGE_TESTS_QUALIF_LOGIN") or os.environ.get(
             "FORGE_TESTS_LOGIN"
         ) or "").strip(),
@@ -672,6 +684,108 @@ def _route(url: str, base: str) -> str | None:
     if (arrivee.scheme, arrivee.netloc) != (depart.scheme, depart.netloc):
         return None
     return (arrivee.path or "/").rstrip("/") or "/"
+
+
+# --- URLs auto-référentes : ce par quoi une page SERVIE se désigne elle-même (TF-0268) --------
+# Une page se nomme de quatre façons, toutes destinées à des TIERS (moteurs, réseaux sociaux,
+# agrégateurs, robots), toutes absolues par nature : la canonique, `og:url`, le `url`/`@id` du
+# JSON-LD, les `loc` d un sitemap. Aucun test unitaire ne peut les juger — un TestClient ne sert
+# aucune origine, il n a rien à quoi les comparer. Seul un auditeur d instance SERVIE tient les
+# deux termes : ce que la page ANNONCE, et où elle est RÉELLEMENT servie. C est donc ici, et
+# nulle part ailleurs, que le contrôle a un sens.
+#
+# Constaté le 15/08 : 184 routes sur 184 au vert sur une instance dont la canonique, les sept
+# `loc` du sitemap, le `url` du JSON-LD et `og:url` pointaient tous `http://localhost:8000` —
+# une valeur de développement figée dans les gabarits. Le produit était prêt à publier, à tout
+# tiers qui le lit, l adresse d une machine qui n existe pas ailleurs que sur le poste qui l a
+# construit. Le pan VOYAIT ces URLs dans le corps des pages ; il ne les confrontait à rien.
+_BALISE_CANONIQUE = re.compile(
+    r"<link\b[^>]*\brel\s*=\s*[\"']?canonical[\"']?[^>]*>", re.IGNORECASE
+)
+_BALISE_OG_URL = re.compile(
+    r"<meta\b[^>]*\b(?:property|name)\s*=\s*[\"']og:url[\"'][^>]*>", re.IGNORECASE
+)
+_BALISE_LOC = re.compile(r"<loc\b[^>]*>\s*([^<\s]+)\s*</loc>", re.IGNORECASE)
+_BLOC_JSONLD = re.compile(
+    r"<script\b[^>]*type\s*=\s*[\"']application/ld\+json[\"'][^>]*>(.*?)</script>",
+    re.IGNORECASE | re.DOTALL,
+)
+_ATTRIBUT_HREF = re.compile(r"\bhref\s*=\s*[\"']([^\"']+)[\"']", re.IGNORECASE)
+_ATTRIBUT_CONTENT = re.compile(r"\bcontent\s*=\s*[\"']([^\"']+)[\"']", re.IGNORECASE)
+# Les deux clés par lesquelles une entité JSON-LD donne SON adresse. `name`, `image` ou `logo`
+# désignent autre chose qu elle-même : les juger accuserait un produit pour l URL d un tiers.
+_CLES_JSONLD = ("url", "@id")
+
+
+def _urls_du_jsonld(bloc: str) -> list[str]:
+    """`url` et `@id` d un bloc JSON-LD, à toute profondeur. Un bloc illisible ne dit rien."""
+    try:
+        donnees = json.loads(bloc.strip())
+    except json.JSONDecodeError:
+        # Un JSON-LD malformé est un défaut d un AUTRE contrôle : ici il n atteste rien, et
+        # l inventer serait pire que le taire.
+        return []
+    trouvees: list[str] = []
+    restants: list = [donnees]
+    while restants:
+        noeud = restants.pop()
+        if isinstance(noeud, dict):
+            for cle, valeur in noeud.items():
+                if cle in _CLES_JSONLD and isinstance(valeur, str):
+                    trouvees.append(valeur)
+                else:
+                    restants.append(valeur)
+        elif isinstance(noeud, list):
+            restants.extend(noeud)
+    return trouvees
+
+
+def urls_auto_referentes(corps: str) -> list[tuple[str, str]]:
+    """(nature, URL) des URLs ABSOLUES par lesquelles la page se désigne elle-même.
+
+    Les URLs RELATIVES sont hors de ce contrôle, et c est voulu : elles ne portent aucune
+    origine, donc elles ne peuvent pas en annoncer une fausse. C est même la forme saine.
+    """
+    trouvees: list[tuple[str, str]] = []
+    for balise in _BALISE_CANONIQUE.findall(corps):
+        trouvees.extend(("canonical", url) for url in _ATTRIBUT_HREF.findall(balise))
+    for balise in _BALISE_OG_URL.findall(corps):
+        trouvees.extend(("og:url", url) for url in _ATTRIBUT_CONTENT.findall(balise))
+    for bloc in _BLOC_JSONLD.findall(corps):
+        trouvees.extend(("json-ld", url) for url in _urls_du_jsonld(bloc))
+    trouvees.extend(("sitemap-loc", url) for url in _BALISE_LOC.findall(corps))
+    return [
+        (nature, url)
+        for nature, url in trouvees
+        if url.lower().startswith(("http://", "https://"))
+    ]
+
+
+def _par_nature(corps: str) -> list[tuple[str, list[str]]]:
+    """Les URLs auto-référentes d une page, groupées par nature, dans l ordre de découverte."""
+    groupes: dict[str, list[str]] = {}
+    for nature, url in urls_auto_referentes(corps):
+        groupes.setdefault(nature, []).append(url)
+    return list(groupes.items())
+
+
+def _origine(url: str) -> str:
+    """`schéma://hôte:port` — l origine au sens strict, celle que le navigateur compare."""
+    morceaux = urlparse(url)
+    return f"{morceaux.scheme.lower()}://{morceaux.netloc.lower()}"
+
+
+def origines_admises(config: dict) -> set[str]:
+    """Les origines qu une URL auto-référente a le droit de porter.
+
+    Deux sources, aucune devinée : l instance RÉELLEMENT auditée (`FORGE_TESTS_QUALIF_URL`), et
+    les origines publiques que le produit DÉCLARE (`FORGE_TESTS_QUALIF_ORIGINES`). La seconde
+    existe pour le cas légitime — un produit audité en `http://…:8000` derrière un proxy TLS se
+    publie en `https://…` — mais elle se déclare : sans déclaration, l origine auditée est le
+    seul repère, et une URL qui s en écarte est un défaut.
+    """
+    candidates = [config.get("base") or "", *(config.get("origines") or [])]
+    return {_origine(url) for url in candidates if url} - {"://"}
 
 
 # --- Écouteurs réellement attachés, via le protocole DevTools ---------------------------------
@@ -1058,6 +1172,7 @@ def conclure(
     exerces: list[str] = []
     findings: list[Finding] = []
     non_testables: list = []
+    admises = origines_admises(config)
 
     # TF-0223 — la porte d entrée est un ÉLÉMENT DE SURFACE comme une route : inventoriée quand
     # elle a été relevée, exercée quand elle aboutit à une mire. Hors inventaire, un contrôle qui
@@ -1106,6 +1221,37 @@ def conclure(
             )
         else:
             exerces.append(identifiant)
+
+        # TF-0268 — chaque façon dont la page se NOMME est un élément de surface, confronté à
+        # l origine réellement servie. Groupé par nature : sept `loc` de sitemap figés sur la
+        # même mauvaise origine sont UN défaut de gabarit, pas sept ; les remonter en bloc
+        # rejouerait exactement RT-16 (des constats identiques au même risque, qu il faut un
+        # audit entier pour démentir).
+        for nature, urls in _par_nature(page_vue["corps"]):
+            cle = f"qualif:url:{route}:{nature}"
+            inventaire.append(cle)
+            etrangeres = sorted({url for url in urls if _origine(url) not in admises})
+            if not etrangeres:
+                exerces.append(cle)
+                continue
+            findings.append(
+                Finding(
+                    id=cle,
+                    classe=CLASSE_URL_ETRANGERE,
+                    localisation=f"{config['base']}{route}",
+                    message=(
+                        f"{route} — {nature} : {len(etrangeres)} URL(s) auto-référente(s) hors "
+                        f"de l origine servie ({', '.join(sorted(admises))}) — "
+                        f"{', '.join(_sans_secret(url) for url in etrangeres[:3])}"
+                        + (" …" if len(etrangeres) > 3 else "")
+                        + ". Publiée telle quelle à tout tiers qui la lit (moteur, réseau "
+                        "social, robot) ; déclarer l origine publique par "
+                        "FORGE_TESTS_QUALIF_ORIGINES si elle est légitime"
+                    ),
+                    risque=coter(PAN, cle, str(cible)),
+                )
+            )
+
         for affordance in page_vue["affordances"]:
             cle = (
                 f"qualif:effet:{route}:{affordance['rang']}:{affordance['tag']}"
@@ -1150,6 +1296,16 @@ def conclure(
     non_juge.append(
         f"qualif : {len(releve)} route(s) parcourue(s) sur {config['base']} — "
         f"{sum(len(p['affordances']) for p in releve)} affordance(s) lue(s) dans le DOM rendu"
+    )
+    # TF-0268 : le contrôle DIT ce qu il a confronté et à quoi, y compris quand il n a rien
+    # trouvé — « aucune URL auto-référente » et « URLs jamais regardées » ne sont pas le même
+    # rapport, et seul le premier se vérifie.
+    lues = sum(len(urls) for page_vue in releve for _, urls in _par_nature(page_vue["corps"]))
+    non_juge.append(
+        f"qualif : {lues} URL(s) auto-referente(s) confrontee(s) a l origine servie "
+        f"({', '.join(sorted(admises))}) — canonical, og:url, url/@id du JSON-LD et loc de "
+        "sitemap, sur les seules routes PARCOURUES et les 20 000 premiers caracteres de chaque "
+        "page ; les URLs RELATIVES ne portent pas d origine et ne sont pas jugees"
     )
     return SortieAdaptateur(
         adaptateur=NOM,
