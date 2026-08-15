@@ -277,6 +277,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # TF-0243 — l écart se DÉCLARE avant la mesure. Un opérateur qui a rempli le `.env` du
+    # dépôt au lieu de celui du projet verrait sinon des pans « sans objet » sans jamais
+    # apprendre que son URL a été volontairement écartée. Sur stderr : `--json` doit rendre
+    # un stdout parsable.
+    from forge_tests.authentification import ENV_PROJET, cles_instance_ignorees
+
+    ecartees = cles_instance_ignorees(args.cible.resolve())
+    if ecartees:
+        print(
+            "[TF-0243] "
+            + ", ".join(ecartees)
+            + " lue(s) dans le `.env` du dépôt forge-tests : IGNORÉE(S). Ces clés désignent "
+            "une instance déployée et ne valent que déclarées par le projet audité "
+            f"(`{args.cible}/{ENV_PROJET}`) — un audit ne part jamais sur l instance laissée "
+            "par le run précédent.",
+            file=sys.stderr,
+        )
+
     try:
         # Chemin ABSOLU : un adaptateur qui lance un sous-processus avec un `cwd` différent ne
         # peut pas résoudre un binaire donné en relatif. Le résoudre ici évite un SKIP silencieux.
