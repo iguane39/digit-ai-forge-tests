@@ -15,6 +15,17 @@ from forge_tests.noyau import RapportRefuse, rapport
 # 3 diagnostic partiel (un pan sans adaptateur, non bloquant par décision `s` de la spec).
 SORTIE_OK, SORTIE_FAIL, SORTIE_ERREUR, SORTIE_PARTIEL = 0, 1, 2, 3
 
+# TF-0259 — un `--livrables` pointé DANS le projet audité est refusé (G-1, comportement voulu).
+# Ce refus sortait en 2, confondu avec toute panne de génération : l opérateur ne pouvait pas
+# distinguer « j ai mal désigné le dossier » de « la génération a échoué ». Le code 4 est neuf,
+# et il l est sans risque — audit des consommateurs du 15/08/2026 : le contrat publié du pilot
+# ne documente que 0/1/3 (`references\ETAPES-RUN.md`, `INVENTAIRE.md`, son `CLAUDE.md`), le seul
+# consommateur EXÉCUTABLE de la CLI (`conductor/gates/affordances_gate.py` de forge-development)
+# ne lit jamais `returncode` mais le JSON de stdout, et aucun script, oracle ou CI de
+# l écosystème ne teste un code de sortie de forge-tests. Le 2 reste donc ce qu il était pour
+# tout le reste : personne ne perd un routage, l opérateur gagne une distinction.
+SORTIE_REFUS_G1 = 4
+
 
 def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     from forge_tests.avancement import Avancement
@@ -380,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         # apres un audit complet. Les livrables suivent donc TOUJOURS le rapport publie — une
         # reprise qui laisserait un dashboard perime serait pire qu aucun dashboard : on y
         # lirait des chiffres d avant en croyant lire ceux d apres.
-        from forge_tests.livrables import produire, resume
+        from forge_tests.livrables import DepotInterdit, produire, resume
 
         precedent = None
         if args.precedent:
@@ -398,7 +409,24 @@ def main(argv: list[str] | None = None) -> int:
                 precedent=precedent,
                 rapport_nom=(args.sortie.name if args.sortie else None),
             )
+        except DepotInterdit as refus:
+            # Le motif DOIT se lire en queue de sortie. Il y était déjà écrit, et pourtant
+            # illisible : stdout est bufferisé, stderr ne l est pas, si bien que le rapport se
+            # vidait APRÈS le message. Constaté le 15/08 sur BdL — le motif tombait ligne 24
+            # d une sortie de 69, l opérateur qui lit la fin ne voyait qu un exit 2 muet, et
+            # deux exécutions ont été perdues avant le diagnostic. Le `flush` remet l ordre.
+            sys.stdout.flush()
+            print(
+                f"\nG-1 : livrables HORS projet requis — chemin reçu : {args.livrables}\n"
+                f"{refus}\n"
+                "le rapport, lui, est publie : la mesure n est pas perdue",
+                file=sys.stderr,
+            )
+            return SORTIE_REFUS_G1
         except Exception as erreur:  # noqa: BLE001 — l echec se DECLARE, le rapport reste publie
+            # Même `flush` et pour la même raison : un motif de panne noyé au milieu de la
+            # sortie n est pas un motif publié.
+            sys.stdout.flush()
             print(
                 f"livrables NON PRODUITS — {type(erreur).__name__}: {erreur}\n"
                 "le rapport, lui, est publie : la mesure n est pas perdue",
