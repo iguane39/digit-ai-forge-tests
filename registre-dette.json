@@ -757,6 +757,12 @@
       "statut": "todo"
     },
     {
+      "id": "prompts-statique-007",
+      "domaine": "prompts-statique",
+      "enonce": "prompts : les artefacts de l AUDITEUR sont exclus de l inventaire de l AUDITE (TF-0257) — le dossier de convention `forge\\` du pilot (ledger, contestations, rapports d etape), les rapports forge-tests persistes (reconnus a leurs cles de premier niveau) et les livrables scelles par la forge. Un projet qui nommerait `forge\\` un dossier de SON produit le verrait donc ignore ici : la convention du pilot prime, et elle est declaree",
+      "statut": "todo"
+    },
+    {
       "id": "qualif-navigateur-002",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",
