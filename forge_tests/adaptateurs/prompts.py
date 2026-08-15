@@ -83,6 +83,11 @@ NON_JUGE = [
     "prompts : les noms de modeles sont reconnus par FAMILLE declaree et seulement dans une "
     "chaine litterale ou une cle `modele:`/`model:` — un fournisseur absent de la table, un nom "
     "construit par concatenation ou lu d une variable d environnement n est pas vu",
+    "prompts : les artefacts de l AUDITEUR sont exclus de l inventaire de l AUDITE (TF-0257) — "
+    "le dossier de convention `forge\\` du pilot (ledger, contestations, rapports d etape), les "
+    "rapports forge-tests persistes (reconnus a leurs cles de premier niveau) et les livrables "
+    "scelles par la forge. Un projet qui nommerait `forge\\` un dossier de SON produit le "
+    "verrait donc ignore ici : la convention du pilot prime, et elle est declaree",
     "prompts : le corpus est LU, jamais joue — qu un cas soit pertinent, que sa reponse "
     "attendue soit juste, et que le jeu couvre les cas limites, restent des jugements humains "
     "(l execution du corpus est deleguee a `oracle-agent-evals`, cat-agt-05)",
@@ -90,10 +95,19 @@ NON_JUGE = [
 
 # Dossiers hors périmètre : dépendances et artefacts (mêmes exclusions que les pans `interface`
 # et `declencheurs` — RT-9/RT-10 du lot bourse-aux-vacants, convention `output\`/`old\` du pilot).
+#
+# TF-0257, étage 1 — `forge\` est le dossier de convention du PILOT : le run y dépose le ledger,
+# les contestations, les rapports d étape, les dossiers de MEP. Ce sont les artefacts de
+# l ORCHESTRATEUR, pas du produit audité. Les fouiller a un effet mesuré : sur un produit
+# strictement sans LLM, quatre « modèles » fantômes ont été inventoriés — l alias de
+# l orchestrateur lui-même, cité dans son ledger — et il a fallu cinq contestations pour les
+# faire taire. `.forge` (le point) était exclu, `forge` ne l était pas : la convention réelle du
+# pilot est celle SANS point (`CLAUDE.md` : « artefacts sous `forge\` »).
 _EXCLUS = {
     "node_modules", ".venv", "venv", ".git", "__pycache__", "site-packages", "dist", "build",
     ".next", ".nuxt", ".svelte-kit", ".visuel", "htmlcov", "coverage", ".tox", ".mypy_cache",
-    ".ruff_cache", ".pytest_cache", "vendor", ".forge", "output", "old", "Old", ".oracles",
+    ".ruff_cache", ".pytest_cache", "vendor", ".forge", "forge", "output", "old", "Old",
+    ".oracles",
 }
 
 # Un fichier au-delà de ce volume n est pas un prompt ni une configuration : c est un artefact.
@@ -149,6 +163,47 @@ _EXTENSIONS_LUES = (
 # Fichiers de verrouillage de dépendances : ils citent des milliers de noms de paquets et
 # aucun modèle. Les lire produirait du bruit, jamais un fait.
 _NOMS_IGNORES = ("package-lock.json", "uv.lock", "poetry.lock", "yarn.lock", "pnpm-lock.yaml")
+
+# --- TF-0257, étage 2 — le LARSEN de l auditeur ------------------------------------------------
+# ETAPES-RUN EXIGE que le rapport d audit soit persisté dans le projet
+# (`forge\etapes\tests\rapport-forge-tests.json`). Ce rapport contient les MESSAGES du pan
+# prompts, qui citent nommément `claude-opus-4-1-20250805` et `gemini-flash-latest` pour
+# expliquer ce qu est un alias mouvant. Au run suivant, le pan relisait donc son propre rapport
+# et inventoriait ces noms comme des modèles DU PRODUIT : sur un produit strictement sans LLM,
+# quatre alias fantômes et cinq contestations nécessaires — et l audit ne convergeait jamais,
+# puisque chaque run recréait la matière du suivant.
+#
+# La reconnaissance se fait sur la SIGNATURE, pas sur le nom : un projet reste libre de nommer
+# ses fichiers comme il l entend, et un rapport renommé reste un rapport. Deux signatures :
+#
+#   - un rapport forge-tests — objet JSON portant ses clés de premier niveau ;
+#   - un livrable SCELLÉ par la forge (cahiers, dashboard) — son bloc de sceau en tête.
+_CLES_RAPPORT = ("adaptateurs", "couverture_par_pan", "pans_non_couverts", "verdict")
+# Littéral de `forge_tests.livrables.nommage.DEBUT_SCEAU`, recopié pour ne pas importer le
+# paquet `livrables` depuis un adaptateur (`livrables/__init__` importe le REGISTRE des
+# adaptateurs : l import serait circulaire). L égalité des deux est TESTÉE.
+_DEBUT_SCEAU = "<!-- SCEAU FORGE-TESTS"
+
+
+def est_un_artefact_d_auditeur(texte: str) -> bool:
+    """Ce fichier est-il un artefact produit par FORGE-TESTS elle-même ?
+
+    Un audit qui inventorie ses propres livrables mesure l auditeur, pas l audité — et il ne
+    converge pas : chaque run fabrique la matière que le suivant conteste (TF-0257).
+    """
+    debut = texte.lstrip()
+    if debut.startswith(_DEBUT_SCEAU):
+        return True
+    if not debut.startswith("{"):
+        return False
+    # Test bon marché AVANT l analyse : un JSON de projet n a aucune raison de porter ce mot.
+    if '"couverture_par_pan"' not in texte:
+        return False
+    try:
+        charge = json.loads(texte)
+    except (json.JSONDecodeError, RecursionError):
+        return False
+    return isinstance(charge, dict) and all(cle in charge for cle in _CLES_RAPPORT)
 
 
 # --- Parcours ---------------------------------------------------------------------------------
@@ -266,6 +321,10 @@ def _collecte(cible: Path) -> dict:
     for chemin in _fichiers(cible):
         texte = _texte(chemin)
         if not texte:
+            continue
+        # TF-0257 : ce que la forge a elle-même écrit ne fait pas partie de la surface de
+        # l audité — sans quoi l audit se mesure lui-même et ne converge jamais.
+        if est_un_artefact_d_auditeur(texte):
             continue
         relatif = _relatif(chemin, cible)
 
