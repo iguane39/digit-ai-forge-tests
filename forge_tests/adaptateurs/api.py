@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -54,6 +55,107 @@ AVERTISSEMENT_SONDE_MUETTE = (
     "fabrique). Voir « Contrat du projet audite » au README"
 )
 
+# TF-0244 — la lecture de secours, et ce qu elle ne sait PAS voir. Publiee au rapport dès qu on
+# y retombe : un constat de divergence produit sous ce régime peut être un défaut de la LECTURE
+# et non du projet, et le lecteur doit pouvoir le savoir avant d instruire.
+NON_JUGE_SANS_SCHEMA = (
+    "api : schema OpenAPI indisponible — les codes DECLARES ont ete lus par expression "
+    "reguliere sur les decorateurs `@app.<methode>(…)` du module principal (lecture de "
+    "SECOURS). Elle ne voit ni les routeurs (`@router.get`, `include_router`), ni un "
+    "`responses=` qu un argument multiligne referme avant lui : sous ce regime, « code emis "
+    "mais absent de responses= » peut denoncer la lecture plutot que le projet. Designer "
+    'l application avec FORGE_TESTS_APP="module:attribut" pour que le schema fasse foi'
+)
+
+# Ce que FastAPI ajoute D OFFICE a toute route validee : le 422 de validation de corps. Il n est
+# promis par personne — l exiger de la suite accuse d un trou qui n existe pas (voir plus bas).
+# Un 422 que le projet a, lui, ECRIT se reconnait a ce qu il s ecarte de cette forme.
+_422_CADRE_DESCRIPTION = "Validation Error"
+_422_CADRE_MODELE = "HTTPValidationError"
+
+NON_JUGE_422 = (
+    "api : un 422 declare a l identique du 422 automatique de FastAPI (description "
+    f"« {_422_CADRE_DESCRIPTION} » et modele {_422_CADRE_MODELE}) est indiscernable de celui du "
+    "cadre dans le schema — il est traite comme le cadre, donc NON exige de la suite"
+)
+
+
+def _module_principal(cible: Path) -> Path:
+    """Fichier où LOCALISER un constat de ce pan — DÉCOUVERT, jamais supposé (TF-0244).
+
+    `backend/app/main.py` était écrit en dur ici, en six endroits. Sur un projet à racine plate
+    (`app/` à la racine, disposition très répandue — TF-0216), chaque constat de ce pan
+    désignait donc un chemin INEXISTANT : le lecteur ouvrait un fichier absent pour vérifier un
+    constat, et le constat devenait invérifiable. Un audit dont on ne peut pas ouvrir la preuve
+    ne vaut pas mieux qu une opinion.
+
+    L ancre est celle que tout le reste du framework utilise déjà (`paquet_sources`), et les
+    noms de module d entrée sont essayés dans un ordre FIXE. Rien à découvrir : on rend le
+    dossier du paquet, qui existe, plutôt qu un fichier qui n existe pas.
+    """
+    paquet = paquet_sources(cible)
+    if paquet is None:
+        return cible / "backend" / "app" / "main.py"
+    for nom in ("main.py", "app.py", "asgi.py", "api.py", "__init__.py"):
+        if (paquet / nom).is_file():
+            return paquet / nom
+    return paquet
+
+
+def _localisation_par_route(sources: list[Path]) -> dict[tuple[str, str], str]:
+    """(METHODE, chemin normalisé) -> fichier qui porte le décorateur de cette route.
+
+    Le schéma OpenAPI déclare la surface mais ne dit pas OÙ elle est écrite. La table des
+    handlers (`invariants.handlers`) résout déjà le décorateur ; ici on retient le FICHIER,
+    pour qu un constat sur `POST /factures` pointe le module du routeur qui la déclare et non
+    un `main.py` générique qui ne la mentionne pas.
+    """
+    par_route: dict[tuple[str, str], str] = {}
+    for fichier in sources:
+        try:
+            arbre = ast.parse(fichier.read_text(encoding="utf-8"), filename=str(fichier))
+        except (SyntaxError, UnicodeDecodeError, OSError):
+            continue
+        for noeud in ast.walk(arbre):
+            if not isinstance(noeud, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for deco in noeud.decorator_list:
+                if not isinstance(deco, ast.Call) or not isinstance(deco.func, ast.Attribute):
+                    continue
+                methode = deco.func.attr.upper()
+                if methode not in ("GET", "POST", "PUT", "PATCH", "DELETE") or not deco.args:
+                    continue
+                premier = deco.args[0]
+                if isinstance(premier, ast.Constant) and isinstance(premier.value, str):
+                    par_route.setdefault((methode, _norm(premier.value)), str(fichier))
+    return par_route
+
+
+def _localiser(
+    methode: str, chemin: str, par_route: dict[tuple[str, str], str], defaut: str
+) -> str:
+    """Fichier où lire la route `<methode> <chemin>` telle que le schéma la PUBLIE.
+
+    Un routeur monté sous préfixe (`include_router(prefix="/api/v1")`) publie `/api/v1/factures`
+    là où son décorateur écrit `/factures` : la correspondance exacte échoue précisément sur la
+    disposition la plus répandue. Le chemin du décorateur est alors un SUFFIXE du chemin publié
+    — on retient le plus long, et seulement s il désigne un fichier UNIQUE. Deux fichiers en
+    concurrence ne se départagent pas sans deviner : on retombe sur le module principal, qui
+    existe, plutôt que de nommer le mauvais.
+    """
+    if (methode, chemin) in par_route:
+        return par_route[(methode, chemin)]
+    suffixes = [
+        (declare, fichier)
+        for (m, declare), fichier in par_route.items()
+        if m == methode and declare != "/" and chemin.endswith(declare)
+    ]
+    if not suffixes:
+        return defaut
+    plus_long = max(len(declare) for declare, _ in suffixes)
+    fichiers = {fichier for declare, fichier in suffixes if len(declare) == plus_long}
+    return fichiers.pop() if len(fichiers) == 1 else defaut
+
 
 def _montages(cible: Path) -> list[str]:
     """Préfixes montés par `app.mount(...)` — fichiers statiques et sous-applications.
@@ -64,25 +166,25 @@ def _montages(cible: Path) -> list[str]:
     incorrigeable côté produit — constaté sur `GET /static/app.js` d ASD Mail Manager. Un
     montage est réputé émettre 200 (fichier servi) et 404 (fichier absent) ; les deux sont le
     comportement documenté de Starlette, pas une promesse du projet.
-    """
-    src = cible / "backend" / "app" / "main.py"
-    if not src.exists():
-        return []
-    import ast
 
-    try:
-        arbre = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))
-    except SyntaxError:
-        return []
+    TF-0244 : lu dans TOUTES les sources découvertes, plus dans le seul `backend/app/main.py`.
+    Sur un projet à racine plate ce fichier n existe pas — l exemption RT-10 ne s appliquait
+    donc jamais, et les faux constats qu elle existe pour éteindre revenaient tous.
+    """
     prefixes: list[str] = []
-    for noeud in ast.walk(arbre):
-        if not isinstance(noeud, ast.Call) or not isinstance(noeud.func, ast.Attribute):
+    for src in _fichiers_sources(cible):
+        try:
+            arbre = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))
+        except (SyntaxError, UnicodeDecodeError, OSError):
             continue
-        if noeud.func.attr != "mount" or not noeud.args:
-            continue
-        premier = noeud.args[0]
-        if isinstance(premier, ast.Constant) and isinstance(premier.value, str):
-            prefixes.append(premier.value.rstrip("/") or "/")
+        for noeud in ast.walk(arbre):
+            if not isinstance(noeud, ast.Call) or not isinstance(noeud.func, ast.Attribute):
+                continue
+            if noeud.func.attr != "mount" or not noeud.args:
+                continue
+            premier = noeud.args[0]
+            if isinstance(premier, ast.Constant) and isinstance(premier.value, str):
+                prefixes.append(premier.value.rstrip("/") or "/")
     return sorted(set(prefixes))
 
 
@@ -101,38 +203,55 @@ def _norm(chemin: str) -> str:
     return re.sub(r"/\d+", "/{}", chemin)
 
 
-def _codes_declares(cible: Path) -> set[str]:
-    """Codes ecrits A LA MAIN dans `responses=`, par opposition a ceux ajoutes par le cadre."""
-    src = cible / "backend" / "app" / "main.py"
-    if not src.exists():
-        return set()
-    declares: set[str] = set()
-    for methode, chemin, reste in _ROUTE.findall(src.read_text(encoding="utf-8")):
-        for code in _CODE.findall(reste):
-            declares.add(f"{methode.upper()} {_norm(chemin)}={code}")
-    return declares
+def _422_du_cadre(reponse: dict) -> bool:
+    """Ce 422 est-il celui que FastAPI ajoute d office, ou un 422 que le projet a ÉCRIT ?
+
+    FastAPI attache à toute route validée une réponse 422 de forme FIXE : description
+    « Validation Error » et corps `HTTPValidationError`. Quand le projet déclare son propre 422
+    — `responses={422: {"description": "période invalide"}}` ou un modèle d erreur maison —,
+    le cadre fusionne la déclaration par-dessus la sienne : la description ou le `$ref` change,
+    et la promesse redevient discernable DANS LE SCHÉMA.
+
+    C est ce qui permet de faire foi à `app.openapi()` sans réintroduire une lecture de source :
+    le schéma porte, dans sa forme même, la trace de qui a écrit la réponse.
+    """
+    if (reponse.get("description") or "") != _422_CADRE_DESCRIPTION:
+        return False
+    contenu = (reponse.get("content") or {}).get("application/json") or {}
+    ref = (contenu.get("schema") or {}).get("$ref") or ""
+    return not ref or ref.rsplit("/", 1)[-1] == _422_CADRE_MODELE
 
 
 def _inventaire_openapi(cible: Path) -> list[Element]:
-    """Surface lue dans le schema que l application DECLARE — source primaire du CDC."""
+    """Surface lue dans le schema que l application DECLARE — source primaire du CDC.
+
+    TF-0244 : les codes DÉCLARÉS y sont lus aussi, `app.openapi()` faisant foi (règle R3). La
+    lecture de source qui les fournissait avant ratait toute application à routeurs et tout
+    `responses=` refermé par un argument multiligne — d où un 422 pourtant déclaré compté comme
+    « émis mais non déclaré », faux constat instruit au run du 15/08 (contestation RT-18
+    retenue).
+    """
     schema = schema_openapi(str(cible))
     if not schema:
         return []
     elements: list[Element] = []
-    source = str(cible / "backend" / "app" / "main.py")
+    defaut = str(_module_principal(cible))
+    par_route = _localisation_par_route(_fichiers_sources(cible))
     for chemin, operations in schema.get("paths", {}).items():
         c = _norm(chemin)
         for methode, operation in operations.items():
             if methode not in ("get", "post", "put", "patch", "delete"):
                 continue
             m = methode.upper()
+            # Le constat se localise LÀ OÙ la route est écrite (TF-0244), pas dans un `main.py`
+            # supposé : sur un projet à routeurs, ce fichier ne la mentionne même pas.
+            source = _localiser(m, c, par_route, defaut)
             elements.append(Element(f"endpoint:{m} {c}", PAN, f"{m} {c}", source))
-            declares_source = _codes_declares(cible)
-            for code in operation.get("responses", {}):
+            for code, reponse in (operation.get("responses") or {}).items():
                 # FastAPI ajoute un 422 a toute route validee, sans que personne l ait declare.
                 # Sur un GET sans corps il est inatteignable : l exiger accuse la suite d un
-                # trou qui n existe pas. Retenu SEULEMENT s il est declare a la main.
-                if code == "422" and f"{m} {c}=422" not in declares_source:
+                # trou qui n existe pas. Retenu SEULEMENT quand le projet l a ecrit lui-meme.
+                if code == "422" and _422_du_cadre(reponse if isinstance(reponse, dict) else {}):
                     continue
                 elements.append(
                     Element(f"code:{m} {c}={code}", PAN, f"{m} {c} -> {code}", source)
@@ -144,8 +263,8 @@ def inventaire(cible: Path) -> list[Element]:
     par_schema = _inventaire_openapi(cible)
     if par_schema:
         return par_schema
-    src = cible / "backend" / "app" / "main.py"
-    if not src.exists():
+    src = _module_principal(cible)
+    if not src.is_file():
         return []
     texte = src.read_text(encoding="utf-8")
     elements: list[Element] = []
@@ -226,16 +345,21 @@ def _divergences_gardes(
             continue
         gardes = par_fonction.get(fonction, set())
         if code not in gardes:
+            # TF-0244 — la localisation SUIT l élément, qui la tient du fichier où sa route est
+            # écrite. `source` (le module principal) ne sert plus que d ancre de dernier
+            # recours : un constat sur `POST /api/v1/factures` désignait `main.py`, qui ne
+            # mentionne même pas cette route sur un projet à routeurs.
+            ou = element.source or str(source)
             findings.append(
                 Finding(
                     id=f"divergence:{element.id}",
                     classe="divergence",
-                    localisation=str(source),
+                    localisation=ou,
                     message=(
                         f"code {code} déclaré pour {signature} mais aucune garde de "
                         f"{fonction}() ne le lève"
                     ),
-                    risque=coter(PAN, element.id, str(source)),
+                    risque=coter(PAN, element.id, ou),
                 )
             )
     return findings, non_juge
@@ -283,17 +407,25 @@ def analyser(cible: Path) -> SortieAdaptateur:
             Finding(
                 id="sonde-muette:api",
                 classe="sonde-muette",
-                localisation=str(cible / "backend" / "app" / "main.py"),
+                localisation=str(_module_principal(cible)),
                 message=AVERTISSEMENT_SONDE_MUETTE,
                 severite="signale",
             ),
         )
+    # TF-0244 — QUELLE source a fourni les declarations. Sans schema, le controle de divergence
+    # ci-dessous s appuie sur une lecture partielle : le dire est la condition pour qu un de ses
+    # constats puisse etre instruit sans faire perdre un cycle a qui le recoit.
+    if not schema_openapi(str(cible)):
+        sortie.non_juge.append(NON_JUGE_SANS_SCHEMA)
+    else:
+        sortie.non_juge.append(NON_JUGE_422)
     # Un code EMIS pendant la suite mais absent de `responses=` est une divergence entre ce que
     # la source declare et ce que le code fait. Ni un trou de couverture, ni un silence : un ecart.
     # Un code d invariant metier DECLARE mais qu aucune garde du code ne peut produire est une
     # divergence : la source promet une erreur que le comportement ne sait plus lever.
-    source = cible / "backend" / "app" / "main.py"
+    source = _module_principal(cible)
     sources = _fichiers_sources(cible)
+    localisations = _localisation_par_route(sources)
     par_fonction = codes_par_fonction(sources)
     table = handlers(sources)
     findings_gardes, non_juge_gardes = _divergences_gardes(inv, table, par_fonction, source)
@@ -315,14 +447,19 @@ def analyser(cible: Path) -> SortieAdaptateur:
             continue
         if _sous_montage(identifiant, prefixes):
             continue
+        # TF-0244 — le constat pointe le fichier qui declare la route, pas un `main.py` suppose :
+        # c est la que le lecteur ira ajouter le `responses=` manquant.
+        signature = identifiant[len("code:") :].rsplit("=", 1)[0]
+        methode, _, chemin = signature.partition(" ")
+        ou = _localiser(methode, chemin, localisations, str(source))
         sortie.findings.append(
             Finding(
                 id=identifiant,
                 classe="divergence",
-                localisation=str(cible / "backend" / "app" / "main.py"),
+                localisation=ou,
                 message="code émis par l'application mais absent de sa déclaration responses=",
                 severite="signale",
-                risque=coter(PAN, identifiant, str(cible / "backend" / "app" / "main.py")),
+                risque=coter(PAN, identifiant, ou),
             )
         )
     return sortie
