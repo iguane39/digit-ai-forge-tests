@@ -649,6 +649,9 @@ Sans instance servie, le pan **ne devine rien** : `SKIP` avec son motif, ses cha
 | `FORGE_TESTS_QUALIF_URL` | instance servie **et peuplée** à parcourir (à défaut, `FORGE_TESTS_BASE_URL`) |
 | `FORGE_TESTS_QUALIF_LOGIN` / `_PASSWORD` | compte de lecture (à défaut, `FORGE_TESTS_LOGIN` / `_PASSWORD`) |
 | `FORGE_TESTS_QUALIF_CONNEXION` | route de la mire, si elle n'est ni `/connexion` ni `/login` |
+| `FORGE_TESTS_QUALIF_STORAGE_STATE` | session **déjà ouverte** (`storageState.json` Playwright) quand la forge ne peut pas rejouer la mire — IdP d'entreprise, MFA, accès conditionnel. La **provenance** est publiée au rapport, et une session capturée périme |
+| `FORGE_TESTS_QUALIF_STORAGE_STATES` | **N sessions étiquetées** `role=chemin` (virgule) — un contexte navigateur par rôle, parcours rejoué par profil, **couverture par rôle** au rapport. L'étiquette est **déclarative** : la forge constate ce que la session VOIT, elle ne vérifie pas qu'elle EST ce rôle (dette déclarée au `non_juge`) |
+| `FORGE_TESTS_QUALIF_BEARER` | en-tête `Authorization` ajouté aux requêtes (valeur **jamais publiée**) ; posé sur toutes les sessions étiquetées, ce qui est déclaré |
 | `FORGE_TESTS_QUALIF_ROUTES` | routes d'amorce (virgule) — celles qu'aucun lien n'atteint |
 | `FORGE_TESTS_QUALIF_MARQUEURS` | JSON `{"/route": "marqueur métier"}` ; à défaut le titre de la page (premier `h1` non vide, sinon `title`) |
 | `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
@@ -941,6 +944,8 @@ journalisé). Modèle : `.env.exemple`.
 | `FORGE_TESTS_QUALIF_URL` | instance **servie et peuplée** parcourue par le pan `qualif` (à défaut, `FORGE_TESTS_BASE_URL` — donc à vérifier avant d'auditer un autre projet que celui que `.env` décrit) |
 | `FORGE_TESTS_QUALIF_LOGIN` / `_PASSWORD` | compte du pan `qualif` (à défaut `FORGE_TESTS_LOGIN` / `_PASSWORD`) |
 | `FORGE_TESTS_QUALIF_CONNEXION` | route de la mire si elle n'est ni `/connexion` ni `/login` |
+| `FORGE_TESTS_QUALIF_STORAGE_STATE` / `_BEARER` | session ouverte **ailleurs** (storage state Playwright, en-tête `Authorization`) pour une instance derrière un IdP d'entreprise |
+| `FORGE_TESTS_QUALIF_STORAGE_STATES` | `role=chemin` (virgule) : **N sessions étiquetées**, un contexte par rôle, couverture **par rôle** au rapport — voir « Pan `qualif` » |
 | `FORGE_TESTS_QUALIF_ROUTES` | routes d'amorce du parcours (virgule) — celles qu'aucun lien n'atteint |
 | `FORGE_TESTS_QUALIF_MARQUEURS` | JSON `{"/route": "marqueur métier"}` ; à défaut le titre de la page |
 | `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
