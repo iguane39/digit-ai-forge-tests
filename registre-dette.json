@@ -905,6 +905,12 @@
       "statut": "todo"
     },
     {
+      "id": "interface-statique-019",
+      "domaine": "interface-statique",
+      "enonce": "interface/ecart-servi : les deux termes delocalisent leurs cles, le servi avec les locales qu il PREFIXE et la source avec celles qu on lui donne. Les locales du servi sont donc rendues a la lecture de la source (alignement). Reste indeterminable une entree source `/xx/…` dont `xx` est une locale CONNUE que ni l arborescence source ni le build servi ne nomme : son espace de cles n est pas etablissable, le jugement y est SUSPENDU et l entree NOMMEE au motif — un deploiement correct accuse coute plus cher qu une entree non jugee",
+      "statut": "todo"
+    },
+    {
       "id": "qualif-navigateur-002",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",
