@@ -35,7 +35,7 @@ from pathlib import Path
 
 from forge_tests import seuils
 from forge_tests.disposition import motif_indetermine, paquet_sources, racine_execution
-from forge_tests.execution import resume_fichiers
+from forge_tests.execution import PREALABLE_ABSENT, motif_indisponibilite, resume_fichiers
 from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -648,10 +648,21 @@ def analyser(cible: Path) -> SortieAdaptateur:
         if not verte:
             inventaire = _inventaire_modules(racine, retenus, exclus, couverture, {})
             av.final()
+            # TF-0299 — « suite rouge avant mutation » est FAUX quand la suite n a pas pu
+            # démarrer : le démon de conteneurs injoignable la fait échouer avant le premier
+            # test, et ce pan accusait alors la suite d un projet sain. Le motif déjà DÉCLARÉ par
+            # l exécution (elle a lancé la même suite quelques lignes plus haut, `resume_fichiers`)
+            # porte le préalable manquant : le reprendre ici évite deux diagnostics du même fait.
+            prealable = motif_indisponibilite(cible, "backend", "")
             return SortieAdaptateur(
                 NOM, PAN, str(cible), "SKIP",
                 findings=_findings_modules(dossier, inventaire),
-                non_juge=[*non_juge, "suite rouge avant mutation : score non calculable"],
+                non_juge=[
+                    *non_juge,
+                    f"back : {prealable}"
+                    if PREALABLE_ABSENT in prealable
+                    else "suite rouge avant mutation : score non calculable",
+                ],
                 modules=inventaire,
             )
         fichier_courant: Path | None = None
