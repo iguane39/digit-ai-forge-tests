@@ -656,6 +656,7 @@ Sans instance servie, le pan **ne devine rien** : `SKIP` avec son motif, ses cha
 | `FORGE_TESTS_QUALIF_ROUTES` | routes d'amorce (virgule) — celles qu'aucun lien n'atteint |
 | `FORGE_TESTS_QUALIF_MARQUEURS` | JSON `{"/route": "marqueur métier"}` ; à défaut le titre de la page (premier `h1` non vide, sinon `title`) |
 | `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
+| `FORGE_TESTS_QUALIF_REFUS` | routes (virgule) sur lesquelles le produit ATTERRIT pour dire « accès refusé » sans rendre 401/403 ni sa mire (`/erreur/403`, `/oups`). Déclarées, elles jugent ; absentes, seuls les segments nommant l'erreur d'autorisation (`403`, `acces-refuse`, `forbidden`…) sont reconnus, et un refus servi sous un nom quelconque reste **compté comme parcouru** plutôt qu'accusé à tort (TF-0325) |
 
 ## Pan `i18n` — la parité entre locales, sur le build servi
 
@@ -950,6 +951,7 @@ journalisé). Modèle : `.env.exemple`.
 | `FORGE_TESTS_QUALIF_ROUTES` | routes d'amorce du parcours (virgule) — celles qu'aucun lien n'atteint |
 | `FORGE_TESTS_QUALIF_MARQUEURS` | JSON `{"/route": "marqueur métier"}` ; à défaut le titre de la page |
 | `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
+| `FORGE_TESTS_QUALIF_REFUS` | routes d'atterrissage de refus d'autorisation propres au produit (virgule) — voir « Pan `qualif` » |
 | `FORGE_TESTS_I18N_BUILD` | dossier du **build servi** lu par le pan `i18n` (l'arborescence de pages telle que le visiteur la reçoit). À défaut, le pan cherche `out/`, `dist/`, `build/`, `_site/`, `site/`, `www/`, `public/` sous la racine, puis un `index.html` à la racine elle-même. Aucun réseau, aucun navigateur |
 | `FORGE_TESTS_EXIGENCES` | chemin d'un `EXIGENCES.json` : les cas des cahiers y sont rattachés, **avec leur provenance** (`declare` ou `lexical`). Absent, le cahier le déclare en tête et dérive de la seule surface. Un chemin qui n'existe pas est un **refus**, pas un silence |
 | `FORGE_TESTS_PRODUIT` | nom du produit dans les noms de fichiers des livrables. À défaut : le champ `projet` du référentiel d'exigences, puis le nom du dossier audité |

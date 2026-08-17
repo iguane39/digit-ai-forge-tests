@@ -937,7 +937,13 @@
     {
       "id": "qualif-navigateur-008",
       "domaine": "qualif-navigateur",
-      "enonce": "qualif : les surfaces INVISIBLES a l identite exercee ne sont ni inventoriees ni comptees — une route qu aucun lien ne rend pour ce role, et qu aucune amorce ne declare, n apparait nulle part au rapport : son absence ne se voit pas. Seules les routes REFUSEES (401, 403, redirection d autorisation) sont nommees, parce qu elles ont ete atteintes",
+      "enonce": "qualif : les surfaces INVISIBLES a l identite exercee ne sont ni inventoriees ni comptees — une route qu aucun lien ne rend pour ce role, et qu aucune amorce ne declare, n apparait nulle part au rapport : son absence ne se voit pas. Seules les routes REFUSEES (401, 403, redirection d autorisation, atterrissage de refus reconnu) sont nommees, parce qu elles ont ete atteintes",
+      "statut": "todo"
+    },
+    {
+      "id": "qualif-navigateur-009",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : un refus rendu par une page MAISON n est reconnu que si sa route est DECLAREE (FORGE_TESTS_QUALIF_REFUS) ou si un de ses segments nomme l erreur d autorisation (403, acces-refuse, forbidden…). Un produit qui refuse en servant `/oups` ou `/erreur` sans plus de precision garde ce refus COMPTE COMME PARCOURU : le non-jugement est prefere au faux refus, qui sortirait du ratio une route peut-etre cassee. Declarer la route leve la limite",
       "statut": "todo"
     },
     {
