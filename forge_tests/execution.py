@@ -653,11 +653,50 @@ def schema_obtenu(banc_str: str) -> dict | None:
                 str(python), str(SONDES / "verifier_schema.py"),
                 str(racine_execution(banc)), str(sortie),
             ],
-            banc=banc, domaine="backend", quoi="rejeu des migrations sur base neuve",
+            # TF-0309 — domaine PROPRE à ce chemin plutôt que « backend » : un délai dépassé sur
+            # le rejeu des migrations se publiait sous le motif que lisent `api` et `batch`, et
+            # un préalable déclaré ici écraserait celui de la suite backend — reclasser une suite
+            # VRAIMENT rouge en poste mal équipé est le défaut symétrique, celui qui absout.
+            banc=banc, domaine="schema", quoi="rejeu des migrations sur base neuve",
             cwd=racine_execution(banc), timeout=900,  # TF-0216 — racine DÉCOUVERTE
             env={**os.environ, "PYTHONPATH": ".", "PYTHONDONTWRITEBYTECODE": "1"},
         )
-        if resultat is None or resultat.returncode != 0 or not sortie.exists():
+        if resultat is None:
+            return None  # `_run` a déjà déclaré (délai, lancement impossible)
+        if resultat.returncode != 0 or not sortie.exists():
+            # TF-0309 — ce chemin rendait None SANS MOTIF : les deux pans qui le consultent
+            # publiaient « schema reel non introspectable » sans dire pourquoi. Or la sonde monte
+            # sa base par conteneur (testcontainers) : sur un projet dont la suite backend n en
+            # utilise pas, le démon absent frappe ICI et NULLE PART AILLEURS — muet. Même idiome
+            # que TF-0299 : le marqueur est DANS le motif, et la preuve voyage avec lui.
+            trace = f"{resultat.stdout or ''}\n{resultat.stderr or ''}"
+            preuve = prealable_conteneur(trace)
+            if preuve is not None:
+                _declarer(
+                    banc,
+                    "schema",
+                    f"{PREALABLE_ABSENT} — demon de conteneurs INJOIGNABLE : le rejeu des "
+                    "migrations sur base neuve monte sa base par conteneur (testcontainers) et "
+                    "n a donc JAMAIS eu lieu. Ce n est ni un schema divergent, ni une regression "
+                    "du framework : aucune mesure n a eu lieu. Demarrer le demon (Docker "
+                    "Desktop), verifier `docker ps`, puis rejouer. Preuve lue dans la trace : "
+                    f"{preuve}",
+                )
+            else:
+                # Second sens : un rejeu qui échoue POUR SA PROPRE raison (migration invalide,
+                # dépendance absente) garde un motif qui l accuse, lui. Le préalable ne doit pas
+                # devenir l explication de tout.
+                derniere = next(
+                    (ligne.strip() for ligne in reversed(trace.splitlines()) if ligne.strip()),
+                    "aucune sortie",
+                )
+                _declarer(
+                    banc,
+                    "schema",
+                    "le rejeu des migrations sur base neuve a echoue (code "
+                    f"{resultat.returncode}) — schema reel non introspectable. Derniere ligne de "
+                    f"la trace : {derniere[:200]}",
+                )
             return None
         donnees = json.loads(sortie.read_text(encoding="utf-8"))
     return None if "erreur" in donnees else donnees
