@@ -101,7 +101,7 @@ ENTETES: dict[str, tuple[str, str]] = {
         "Résultat",
         "état mesuré de l ÉLÉMENT : ✓ Passé · ✕ KO · ○ Non exercé (aucun test de la suite ne "
         "l atteint) · ⊘ Non testable ici (configuration absente) · – Exclu. À ne pas confondre "
-        "avec le statut des CAS dépliés, qui sont des propositions à adopter",
+        "avec l état des CAS dépliés, qui sont des cas à adopter et exécuter (R-40)",
     ),
     "classe": ("Type de constat", "famille du défaut mesuré ; vide = passé, sans objet"),
     "constat mesuré": (

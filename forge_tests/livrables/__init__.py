@@ -5,9 +5,14 @@ framework. Ce paquet en tire les trois documents qu une équipe utilise réellem
 cahiers de tests et un tableau de bord — sans qu aucun ne soit écrit à la main.
 
 Garde-fou G-1, appliqué ici comme au générateur de cas : **rien n est écrit dans le projet
-audité.** Le dossier de dépôt est une PROPOSITION désignée par l opérateur, et la vérification
-n est pas une convention de nommage : le chemin est résolu, et s il tombe sous la racine
-auditée, la production est refusée avant d écrire quoi que ce soit.
+audité.** Le dossier de dépôt est EXTÉRIEUR au projet et désigné par l opérateur, et la
+vérification n est pas une convention de nommage : le chemin est résolu, et s il tombe sous la
+racine auditée, la production est refusée avant d écrire quoi que ce soit.
+
+R-40 (17/08, TF-0349) : ce dépôt hors projet ne fait pas de ces cahiers des propositions
+terminales. Les cas qu ils portent naissent « à adopter et exécuter » et doivent être SOLDÉS
+par le projet (adoptés, `non_testable` motivés, ou écartés par décision humaine nommée) —
+le cahier publie ce solde en tête.
 """
 
 from __future__ import annotations
@@ -43,9 +48,10 @@ def _verifier_hors_projet(dossier: Path, cible: Path) -> None:
     racine, depot = Path(cible).resolve(), Path(dossier).resolve()
     if depot == racine or racine in depot.parents:
         raise DepotInterdit(
-            f"G-1 : « {depot} » est dans le projet audité (« {racine} »). Les livrables sont des "
-            "PROPOSITIONS : les déposer dans le projet reviendrait à ce que la forge écrive chez "
-            "l audité, puis s auditise elle-même au run suivant. Choisir un dossier extérieur"
+            f"G-1 : « {depot} » est dans le projet audité (« {racine} »). Les livrables sont "
+            "DÉRIVÉS et déposés hors du projet : les y déposer reviendrait à ce que la forge "
+            "écrive chez l audité, puis s auditise elle-même au run suivant. Choisir un dossier "
+            "extérieur"
         )
 
 
@@ -116,8 +122,9 @@ def produire(
 
     # 2. Cahiers — un chapitre par déclaration d adaptateur, un cas ou un « non couvert » par
     #    élément. L exhaustivité est une propriété vérifiable, pas une intention.
-    # RT-13 : les adoptions déclarées par le PROJET (lecture seule, G-1) — un cas adopté cesse
-    # d'être une proposition, et le solde du cahier descend au lieu de rester figé.
+    # RT-13 puis R-40 : les déclarations du PROJET (lecture seule, G-1) — un cas soldé (adopté,
+    # non testable motivé, écarté nommé) sort du reste-à-faire, et le solde du cahier descend
+    # au lieu de rester figé.
     adoptions = _adoption.charger(cible)
     chapitres = [_cahiers.cas_du_chapitre(c, referentiel, adoptions) for c in chapitres_bruts]
     chemins: dict[str, Path] = {"jeu": chemin_jeu}

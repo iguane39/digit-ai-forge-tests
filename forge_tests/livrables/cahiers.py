@@ -17,10 +17,16 @@ que ce qu on sait construire honnêtement. Un élément qu aucune exécution ne 
 les champs à fournir. Émettre un cas qu on sait injouable invite à l assouplir pour le faire
 passer — le test-fitting que le garde-fou G-2 interdit.
 
-**Séparation juge et partie.** Ces cahiers sont des PROPOSITIONS déposées dans un dossier
-extérieur au projet (G-1). La forge n audite jamais des cas qu elle a produits et que le
-produit n a pas adoptés : tant qu ils ne sont pas dans la suite du projet, ils ne comptent pour
-rien dans la couverture mesurée.
+**Séparation juge et partie.** Ces cahiers sont déposés dans un dossier extérieur au projet
+(G-1). La forge n audite jamais des cas qu elle a produits et que le produit n a pas adoptés :
+tant qu ils ne sont pas dans la suite du projet, ils ne comptent pour rien dans la couverture
+mesurée.
+
+**R-40 (17/08, TF-0349) — le cahier porte son CONTRAT, il ne se déclare plus proposition.** Un
+cas dérivé n est pas un livrable : il naît « à adopter et exécuter », état transitoire, et se
+solde adopté-et-exécuté, `non_testable` motivé (`champs_requis`) ou écarté par une décision
+humaine nommée. Le solde attendu est ZÉRO ; un cahier non soldé est un reste-à-faire, jamais
+un livrable clos. Le calcul et sa publication vivent dans `forge_tests.adoption`.
 """
 
 from __future__ import annotations
@@ -415,8 +421,10 @@ def cas_du_chapitre(
     """Cas et non-couverts d un chapitre. Chaque élément va dans l un ou dans l autre.
 
     `adoptions` (RT-13) : déclarations du projet lues par `forge_tests.adoption`. Chaque cas
-    porte alors son statut — proposition, adopté (avec son test), ou adoption refusée avec son
-    motif. C'est ce qui fait descendre le solde des propositions au lieu de le figer.
+    porte alors son état — à adopter, adopté (avec son test), non testable (motivé), écarté
+    (nommé), ou adoption refusée avec son motif. C'est ce qui fait DESCENDRE le solde R-40 au
+    lieu de le figer. Le solde du chapitre est renvoyé avec lui : un chapitre qui compterait
+    ses cas sans compter leurs états ne dirait rien du reste-à-faire.
     """
     adoptions = adoptions or {}
     fabrique = _FABRIQUES.get(chapitre.get("axe_cas", "unitaire"), _cas_unitaire)
@@ -425,7 +433,7 @@ def cas_du_chapitre(
     non_couverts: list[dict] = []
     rattachements: dict[str, list[dict]] = {}
     total_cas = 0
-    total_adoptes = 0
+    etats_cas: list[dict] = []
     for sous in chapitre["sous_chapitres"]:
         cle_jeu = f"JD-{chapitre['code']}-{sous['libelle']}"
         entrees = []
@@ -448,20 +456,24 @@ def cas_du_chapitre(
                 unite["ref"] = f"{chapitre['code']}-{rang_stable:04d}-{rang}"
                 unite["element"] = element["id"]
                 unite["exigences"] = liens
-                # RT-13 : le cas n'est plus une proposition éternelle — le projet peut le
-                # déclarer adopté, et la déclaration est vérifiée (test existant).
+                # RT-13 puis R-40 : le cas n'est plus une proposition éternelle — le projet le
+                # solde (adopté / non testable motivé / écarté nommé), et sa déclaration est
+                # vérifiée. Tant qu'il ne l'a pas fait, le cas reste « à adopter » et pèse au
+                # solde : c'est ce chiffre-là, et lui seul, qui dit le reste-à-faire.
                 unite["adoption"] = _adoption.statut(adoptions, unite["ref"])
-                total_adoptes += unite["adoption"]["statut"] == "adopte"
+                etats_cas.append(unite["adoption"])
             total_cas += len(cas)
             entrees.append({"element": element, "cas": cas})
         sous_chapitres.append({"libelle": sous["libelle"], "entrees": entrees, "cle_jeu": cle_jeu})
+    solde_chapitre = _adoption.solde(etats_cas)
     return {
         **chapitre,
         "sous_chapitres": sous_chapitres,
         "non_couverts": non_couverts,
         "rattachements": rattachements,
         "total_cas": total_cas,
-        "total_adoptes": total_adoptes,
+        "total_adoptes": solde_chapitre["adoptes"],
+        "solde": solde_chapitre,
         "axe_repli": repli,
     }
 
@@ -484,18 +496,24 @@ def _rendre_exigences(liens: list[dict], referentiel: dict | None) -> str:
 
 
 def _libelle_adoption(adoption: dict | None) -> str:
-    """Statut d'un cas en une ligne (RT-13). « Proposition » n'est pas « non joué » : c'est
-    l'état structurel d'un cas que le projet n'a pas encore adopté — la forge n'audite jamais
-    ses propres cas."""
-    entree = adoption or {"statut": "proposition"}
-    if entree["statut"] == "adopte":
-        return f"**ADOPTÉ** par le projet — test : `{entree['test']}`"
-    if entree["statut"] == "refuse":
-        return f"**adoption REFUSÉE** — {entree['motif']}"
+    """État d'un cas en une ligne (RT-13, R-40). « À adopter » n'est pas « non joué » : c'est
+    l'état de NAISSANCE d'un cas que le projet n'a pas encore soldé — la forge n'audite jamais
+    ses propres cas, mais ce cas-là compte au solde tant qu'il reste dans cet état."""
+    entree = adoption or {"statut": _adoption.A_ADOPTER}
+    if entree["statut"] == _adoption.ADOPTE:
+        return f"**ADOPTÉ ET EXÉCUTÉ** par le projet — test : `{entree['test']}`"
+    if entree["statut"] == _adoption.NON_TESTABLE:
+        return f"**NON TESTABLE ici, motivé** (RT-6) — {entree['motif']}"
+    if entree["statut"] == _adoption.ECARTE:
+        return f"**ÉCARTÉ par décision humaine nommée** — {entree['motif']}"
+    if entree["statut"] == _adoption.REFUSE:
+        return f"**déclaration REFUSÉE** (le cas reste au solde) — {entree['motif']}"
     return (
-        "**Proposition (non adoptée)** — ce cas n'est pas « non joué » : il n'appartient pas "
-        f"encore à la suite du projet. Pour l'adopter, l'écrire puis le déclarer dans "
-        f"`{_adoption.FICHIER}`"
+        "**À ADOPTER ET EXÉCUTER — non soldé** : ce cas n'est pas « non joué », il n'appartient "
+        "pas encore à la suite du projet, et il pèse au solde R-40 tant qu'il y reste. Trois "
+        f"sorties, aucune autre : l'écrire, l'exécuter et le déclarer dans `{_adoption.FICHIER}` ; "
+        "ou le déclarer `non_testable` avec ses `champs_requis` ; ou l'écarter par une décision "
+        "humaine nommée (`ecarte_par`, `date`, `motif`)"
     )
 
 
@@ -503,7 +521,8 @@ def _rendre_chapitre(chapitre: dict, referentiel: dict | None) -> list[str]:
     lignes = [f"## {chapitre['code']} — {chapitre['titre']}", ""]
     lignes.append(
         f"Pan(s) d origine : `{'`, `'.join(chapitre['pans'])}` · découpe par {chapitre['decoupe']} "
-        f"· axe des cas : {chapitre.get('axe_cas')} · {chapitre['total_cas']} cas dérivés."
+        f"· axe des cas : {chapitre.get('axe_cas')} · {chapitre['total_cas']} cas dérivés · "
+        f"{_adoption.libelle_solde(chapitre.get('solde') or _adoption.solde([]))}."
     )
     lignes.append("")
     if chapitre.get("axe_repli"):
@@ -593,7 +612,7 @@ def _entete(titre: str, contexte: dict, chapitres: list[dict]) -> list[str]:
     declares = {e["id"] for c in chapitres for e in c["non_couverts"]}
     non_couverts = len(declares)
     elements = len(avec_cas | declares)
-    adoptes = sum(c.get("total_adoptes", 0) for c in chapitres)
+    total = _adoption.cumuler([c.get("solde") or _adoption.solde([]) for c in chapitres])
     lignes = [
         f"# {titre}",
         "",
@@ -623,27 +642,48 @@ def _entete(titre: str, contexte: dict, chapitres: list[dict]) -> list[str]:
         "Ce cahier est régénéré à chaque audit. **Une édition manuelle est un défaut** : le sceau "
         "en tête la trahit, et la régénération suivante l écrase. Corriger la source, pas la vue.",
         "",
+        "## Contrat de ce cahier — trois états, solde attendu ZÉRO (R-40)",
+        "",
+        "> Un cas dérivé **n est pas un livrable**, et « proposition » n est pas un état "
+        "terminal. Il naît **à adopter et exécuter** — état TRANSITOIRE — et se solde de "
+        "**trois façons, aucune autre** :",
+        ">",
+        "> 1. **adopté et exécuté** — le test est écrit, joué, son verdict est au rapport, et il "
+        f"est déclaré dans `{_adoption.FICHIER}` : "
+        '`{"cas": "<référence>", "test": "<chemin>"}` ;',
+        "> 2. **`non_testable` motivé** — idiome RT-6, `champs_requis[]` nommés : "
+        '`{"cas": "<référence>", "non_testable": true, "champs_requis": ["<champ>"]}`. '
+        "Il se répare en FOURNISSANT ce qui manque, jamais en écrivant un test de complaisance ;",
+        "> 3. **écarté par une décision humaine nommée** — qui, quand, pourquoi : "
+        '`{"cas": "<référence>", "ecarte_par": "<nom>", "date": "<AAAA-MM-JJ>", '
+        '"motif": "<pourquoi>"}`.',
+        ">",
+        "> **Le silence n est pas un état.** Le solde attendu est **ZÉRO** : un cahier dont le "
+        "solde `dérivés − adoptés − non_testables − écartés` n est pas nul porte un "
+        "**reste-à-faire**, jamais un livrable clos. Une déclaration invérifiable (test cité "
+        "introuvable, écart anonyme, `non_testable` sans champ) reste AU solde, avec son motif.",
+        "",
+        "### Solde mesuré de ce cahier",
+        "",
+        "| éléments inventoriés | cas dérivés | adoptés et exécutés | non testables (motivés) "
+        "| écartés (nommés) | **SOLDE** | éléments non couverts (déclarés) |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+        f"| {elements} | {couverts} | {total['adoptes']} | {total['non_testables']} "
+        f"| {total['ecartes']} | **{total['solde']}** | {non_couverts} |",
+        "",
+        f"{_adoption.libelle_solde(total)}.",
+        "",
         "## Exhaustivité — définition opposable",
         "",
         "> Chaque élément de surface inventorié porte **au moins un cas**, ou figure en "
         "**« non couvert » avec sa raison**. Aucune absence silencieuse.",
         "",
-        "| éléments inventoriés | cas dérivés | cas adoptés par le projet | éléments non "
-        "couverts (déclarés) |",
-        "| --- | --- | --- | --- |",
-        f"| {elements} | {couverts} | {adoptes} | {non_couverts} |",
-        "",
-        "Ces cas sont des **PROPOSITIONS** déposées hors du projet audité (garde-fou G-1). Tant "
-        "que le produit ne les a pas adoptés, ils ne comptent pour rien dans la couverture "
-        "mesurée : la forge n audite jamais ses propres cas.",
-        "",
-        "**Adoption (RT-13).** Un cas écrit dans la suite du projet se déclare dans "
-        f"`{_adoption.FICHIER}` — une ligne "
-        f"`{{\"cas\": \"<référence>\", \"test\": \"<chemin>\"}}`. "
-        "La déclaration est vérifiée (le test cité doit exister, sinon l adoption est refusée "
-        "avec son motif) et la colonne « cas adoptés » ci-dessus devient un solde qui descend. "
-        "Les références de cas sont stables d un audit à l autre : elles sont citables depuis "
-        "du code.",
+        "Ces cas sont déposés hors du projet audité (garde-fou G-1) : la forge n audite jamais "
+        "ses propres cas, et tant que le produit ne les a pas soldés ils ne comptent pour rien "
+        "dans la couverture mesurée. C est exactement pourquoi les laisser en l état ne prouve "
+        "rien, et pourquoi le solde ci-dessus est le seul chiffre opposable de ce document. Les "
+        "références de cas sont stables d un audit à l autre : elles sont citables depuis du "
+        "code.",
         "",
     ]
     return lignes
