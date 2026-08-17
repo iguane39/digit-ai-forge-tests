@@ -42,46 +42,68 @@ RACINE = Path(__file__).resolve().parent.parent
 ROUGE = RACINE / "fixtures" / "banc-rouge"
 VERT = RACINE / "fixtures" / "banc-vert"
 
-# Chaque défaut du corpus, et le préfixe d identifiant qui prouve sa détection.
+# Chaque défaut du corpus : son code, son pan, son libellé, le préfixe d identifiant qui prouve sa
+# détection, et la CLASSE de finding qui le nomme.
+#
+# TF-0310 — la classe fait partie du contrat de l entrée depuis le 17/08. Le préfixe seul
+# débordait : `interface:` (H-13) appariait aussi le `interface:ecart-servi:` de H-20, et
+# `migration:` (H-05) appariait aussi le `migration:<nom>:retour` de classe `divergence`. Une
+# entrée pouvait sortir [DETECTE] sur le défaut d une AUTRE — le corpus mesurait moins que ce
+# qu il affiche, et la disparition du défaut propre à l entrée passait inaperçue. Le prix de ce
+# contrat est assumé : une classe renommée par un adaptateur fait sortir son entrée en [MANQUE],
+# ce qui est exactement ce qu on veut d un contrat (bruyant, jamais silencieux).
 CORPUS = [
-    ("D-01", "front", "parcours Front tronqué", ("route:", "element:")),
-    ("H-02", "api", "codes d erreur jamais exercés", ("code:",)),
-    ("H-03", "api", "méthodes HTTP jamais atteintes", ("endpoint:",)),
-    ("H-04", "data", "contraintes jamais violées", ("contrainte:",)),
-    ("H-05", "migrations", "migrations ni inversées ni rejouées", ("migration:",)),
-    ("H-06", "batch", "branches de rejet et reprise non parcourues", ("branche:", "rejet:")),
-    ("H-07", "fichiers", "chemins de parsing non exercés", ("chemin:",)),
-    ("H-08", "back", "assertions permissives", ("mutant:", "seuil:back")),
-    ("H-09", "securite", "execution dynamique non signalee", ("securite:",)),
-    ("H-10", "accessibilite", "controles sans nom accessible", ("a11y:",)),
-    ("H-11", "visuel", "regression visuelle de mise en page", ("visuel:",)),
-    ("H-12", "migrations", "migration qui defait la precedente", ("divergence:migration:",)),
+    ("D-01", "front", "parcours Front tronqué", ("route:", "element:"),
+     ("element-non-exerce",)),
+    ("H-02", "api", "codes d erreur jamais exercés", ("code:",), ("element-non-exerce",)),
+    ("H-03", "api", "méthodes HTTP jamais atteintes", ("endpoint:",), ("element-non-exerce",)),
+    ("H-04", "data", "contraintes jamais violées", ("contrainte:",), ("element-non-exerce",)),
+    # La classe écarte ici le `migration:<nom>:retour` de classe `divergence` — une migration sans
+    # section de retour est un autre défaut, dont le pendant au corpus est H-12.
+    ("H-05", "migrations", "migrations ni inversées ni rejouées", ("migration:",),
+     ("element-non-exerce",)),
+    ("H-06", "batch", "branches de rejet et reprise non parcourues", ("branche:", "rejet:"),
+     ("element-non-exerce",)),
+    ("H-07", "fichiers", "chemins de parsing non exercés", ("chemin:",), ("element-non-exerce",)),
+    ("H-08", "back", "assertions permissives", ("mutant:", "seuil:back"),
+     ("mutant-survivant", "seuil-non-tenu")),
+    ("H-09", "securite", "execution dynamique non signalee", ("securite:",), ("securite",)),
+    ("H-10", "accessibilite", "controles sans nom accessible", ("a11y:",), ("accessibilite",)),
+    ("H-11", "visuel", "regression visuelle de mise en page", ("visuel:",),
+     ("regression-visuelle",)),
+    ("H-12", "migrations", "migration qui defait la precedente", ("divergence:migration:",),
+     ("divergence",)),
+    # La classe écarte ici l ecart servi/versionné de H-20, qui vit dans le même pan et sous le
+    # même préfixe : c est le débordement qui a motivé TF-0310.
     ("H-13", "interface", "affordances inertes — bouton, lien et formulaire sans effet",
-     ("interface:",)),
+     ("interface:",), ("affordance-inerte",)),
     # A-2 : le principe fondateur applique a l etage du MODULE. `app/recherche.py` du banc
     # rouge n est importe par aucun test : il doit sortir NOMME, jamais fondu dans un total.
-    ("A-2", "back", "module source jamais importe par la suite", ("module-non-exerce:",)),
+    ("A-2", "back", "module source jamais importe par la suite", ("module-non-exerce:",),
+     ("module-non-exerce",)),
     # A-3 : un seuil n est opposable que s il attrape quelque chose. Le banc rouge porte des
     # modules metier dont la suite ne tue pas la moitie des mutants.
     ("A-3", "back", "seuil de mutation par module de logique metier viole",
-     ("seuil:mutation-module:",)),
+     ("seuil:mutation-module:",), ("seuil-non-tenu",)),
     # A-4 : le parcours navigateur d une instance SERVIE — 404 sur lien, trace d exception
     # rendue, marqueur de contenu absent, erreur console, affordance sans le moindre ecouteur.
     ("A-4", "qualif", "instance servie : route en defaut et affordance sans effet",
-     ("qualif:",)),
+     ("qualif:",), ("route-en-defaut", "affordance-sans-effet")),
     # TF-0200 (verdict O2 de l etude du 14/08) : le pan `prompts`, v0 STATIQUE et GRATUITE.
     # H-14 — un modele designe par un ALIAS mouvant : le systeme sous test change sans qu un
     # seul commit ne bouge (`claude-opus-4-1-20250805` retire le 2026-08-05, alias `-latest`
     # de Google remappes a dates fixes). H-15 — un prompt adressable qu AUCUN cas n exerce.
-    ("H-14", "prompts", "modele designe par un alias mouvant, jamais epingle", ("modele:",)),
-    ("H-15", "prompts", "prompt adressable sans aucun cas au corpus", ("prompt:",)),
+    ("H-14", "prompts", "modele designe par un alias mouvant, jamais epingle", ("modele:",),
+     ("modele-non-epingle",)),
+    ("H-15", "prompts", "prompt adressable sans aucun cas au corpus", ("prompt:",),
+     ("element-non-exerce",)),
     # TF-0203 (precision humaine du 14/08 : « un produit trigger, l enclenchement de batch »).
     # Le pan `batch` mesurait l INTERIEUR du traitement en supposant qu il demarre. Le banc
     # rouge porte un lot qu aucun declencheur n atteint : le constat sortait bien du pan, mais
     # n etait declare dans AUCUNE entree de ce corpus — un defaut detecte hors contrat n est
     # pas un defaut couvert.
     ("H-16", "batch", "traitement par lot qu aucun declencheur n enclenche",
-     ("job-sans-declencheur", "trigger:")),
+     ("job-sans-declencheur", "trigger:"), ("job-sans-declencheur",)),
     # TF-0293 — le pan `i18n` (TF-0284) etait prouve par 21 tests et par ses deux bancs, mais
     # ABSENT de ce corpus : la recette qui prononce S-01 ne le mesurait pas. Ses pages sont
     # portees au BUILD SERVI des bancs historiques (`dist\`), et ses TROIS defauts — les trois
@@ -90,11 +112,11 @@ CORPUS = [
     # fait passer les trois pour couverts des que l un sortait, ce qui est exactement l absence
     # silencieuse que ce corpus existe pour supprimer.
     ("H-17", "i18n", "route servie dans une locale et pas dans une autre",
-     ("i18n:route:en:/tarifs",)),
+     ("i18n:route:en:/tarifs",), ("i18n",)),
     ("H-18", "i18n", "menu d une locale ampute par rapport au menu le plus riche",
-     ("i18n:navigation:",)),
+     ("i18n:navigation:",), ("i18n",)),
     ("H-19", "i18n", "page servie sous une locale non francaise avec du contenu francais",
-     ("i18n:route:en:/blog",)),
+     ("i18n:route:en:/blog",), ("i18n",)),
     # TF-0300 — l ecart SERVI <-> VERSIONNE (TF-0288) n avait au corpus AUCUNE entree : ses
     # branches PASS et SKIP etaient mesurees par la recette sur les deux bancs, mais la branche
     # qui ACCUSE ne reposait que sur pytest. Exactement l ecart que TF-0293 vient de fermer pour
@@ -105,11 +127,11 @@ CORPUS = [
     #
     # Le prefixe est celui de la CLASSE, pas le `interface:` de H-13 : les deux se lisent dans le
     # meme pan, et un prefixe commun aurait fait passer H-13 pour couvert des que l ecart sort.
-    # L inverse reste vrai et il est DECLARE ici : `interface:` de H-13 apparie AUSSI ce constat —
-    # les six affordances inertes du banc rouge le couvrent aujourd hui, mais un prefixe qui
-    # deborde reste un prefixe qui deborde (candidature au registre du pilot).
+    # Le debordement INVERSE (`interface:` de H-13 appariant ce constat) etait declare ici en
+    # commentaire faute de mecanisme : TF-0310 l a ferme, l appariement portant desormais aussi
+    # sur la classe.
     ("H-20", "interface", "menu promis par la source versionnee et non servi par la production",
-     ("interface:ecart-servi:",)),
+     ("interface:ecart-servi:",), ("ecart-servi-versionne",)),
 ]
 
 # RT-8 — le lecteur SQL, verifie sur pieces. Ces cas ne passent par aucun banc : ils portent
@@ -1032,8 +1054,27 @@ def verifier_lecture_sql() -> int:
     return echecs
 
 
-def _findings(rapport: dict, prefixes: tuple[str, ...]) -> list[dict]:
-    return [f for f in rapport["findings"] if f["id"].startswith(prefixes)]
+def _findings(
+    rapport: dict, prefixes: tuple[str, ...], classes: tuple[str, ...] = ()
+) -> list[dict]:
+    """Les findings qui prouvent CETTE entrée du corpus — préfixe d identifiant ET classe.
+
+    TF-0310 : le préfixe seul débordait. `interface:` (H-13, affordances inertes) appariait aussi
+    `interface:ecart-servi:` (H-20), et `migration:` (H-05, migrations ni inversées ni rejouées)
+    appariait aussi le `migration:<nom>:retour` de classe `divergence`. Une entrée pouvait donc
+    sortir [DETECTE] sur le défaut d une AUTRE : un corpus qui mesure moins que ce qu il affiche,
+    et le jour où le défaut propre à l entrée disparaît, personne ne l apprend.
+
+    La classe est le discriminant naturel : c est elle que l adaptateur pose pour dire DE QUOI il
+    parle, et deux défauts distincts n en partagent pas une par accident. `classes` vide est
+    refusé par `test_tf_0310_appariement_par_classe.py` — un défaut sans classe déclarée
+    rouvrirait le trou en silence.
+    """
+    return [
+        f
+        for f in rapport["findings"]
+        if f["id"].startswith(prefixes) and (not classes or f.get("classe") in classes)
+    ]
 
 
 # --- Mandats 1 a 4 : cahiers derives, jeux synthetiques, dashboard, actions -------------------
@@ -1489,8 +1530,8 @@ def verifier_corpus_des_bancs(
     sans_mesure = set((prealables or {}).get("rouge", {}))
     suspendus: list[tuple[str, str, str]] = []
     detectes = 0
-    for code, pan, libelle, prefixes in CORPUS:
-        trouves = _findings(rouge, prefixes)
+    for code, pan, libelle, prefixes, classes in CORPUS:
+        trouves = _findings(rouge, prefixes, classes)
         ok = bool(trouves)
         if not ok and pan in sans_mesure:
             suspendus.append((code, pan, libelle))

@@ -202,7 +202,7 @@ def test_la_section_corpus_DECLARE_les_defauts_non_mesurables_et_ne_les_compte_p
     """Le cœur de l item : les défauts des pans sans mesure sortent NON MESURABLES, NOMMÉS un par
     un, et ne comptent pas comme échecs — un `[MANQUE]` serait une régression annoncée à tort."""
     prealables = {"rouge": {"api": _MOTIF_CONTENEUR}}
-    attendus = [code for code, pan, _l, _p in vc.CORPUS if pan == "api"]
+    attendus = [code for code, pan, *_reste in vc.CORPUS if pan == "api"]
     assert attendus, "le corpus doit porter au moins un défaut du pan api"
 
     echecs = vc.verifier_corpus_des_bancs(
@@ -229,7 +229,7 @@ def test_sans_prealable_declare_les_memes_defauts_restent_des_MANQUES(
 ) -> None:
     """Second sens, et c est le garde-fou essentiel : sans préalable déclaré, un défaut non détecté
     reste un MANQUE. Sinon la nouveauté deviendrait une amnistie générale."""
-    attendus = [code for code, pan, _l, _p in vc.CORPUS if pan == "api"]
+    attendus = [code for code, pan, *_reste in vc.CORPUS if pan == "api"]
 
     echecs = vc.verifier_corpus_des_bancs(_rapport({}), _rapport({}), [], {}, {})
     sortie = capsys.readouterr().out
