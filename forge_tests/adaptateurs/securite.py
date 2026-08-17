@@ -66,7 +66,45 @@ NON_JUGE = [
     "par le produit. Meme perimetre que `.venv` et que la gate `vendor/` de forge-development : "
     "un secret commis DANS un vendored se corrige en changeant l epingle, pas la ligne. Un "
     "projet qui nommerait `vendor` un dossier de SON produit le verrait donc ignore ici",
+    # TF-0291 — meme famille que le Larsen du pan `prompts` (TF-0257) : l auditeur s accusait
+    # lui-meme. La regle est declaree ici, comme celle de TF-0257 l est dans `prompts`.
+    "securite : quand le projet audite EST forge-tests (signature du depot : le paquet "
+    "`forge_tests`, sa recette et son registre de dette), ses bancs d essai `fixtures\\` et ses "
+    "chaines de montage de test `tests\\` ne sont PAS scannes — un banc rouge PORTE le defaut "
+    "qu il existe pour faire detecter, et une chaine de montage PLANTE le secret dont elle "
+    "prouve la detection : les accuser mesure l auditeur, pas l audite (TF-0291). Le code de la "
+    "forge (`forge_tests\\`, `recette\\`) reste scanne, et tout autre projet garde ses "
+    "`fixtures\\` et ses `tests\\` sous controle",
 ]
+
+# --- TF-0291, le LARSEN du pan securite -------------------------------------------------------
+# Constat mesure le 15/08 : le pan joue sur forge-tests elle-meme sort 5 constats, TOUS sur de la
+# matiere de test plantee expres — 2 SAST (`fixtures/banc-rouge/backend/app/recherche.py:13`, qui
+# est le defaut du banc rouge, et `tests/test_tf_0279_id_sast_stable.py:47`, la chaine de montage
+# qui prouve la stabilite de l identifiant SAST) et 3 secrets (des AKIA de fixture dans
+# `test_correctifs_20260811.py`, `test_tf_0216_racine_plate.py`, `test_tf_0280_vendored_exclu.py`).
+#
+# C est le cousin exact du Larsen de TF-0257 : l auditeur mesure ses propres bancs. Le remede est
+# le meme — reconnaitre l auditeur, et n exclure que ce qu il DECLARE comme matiere de test.
+#
+# La reconnaissance se fait sur la SIGNATURE du depot, jamais sur son nom : un depot renomme
+# reste forge-tests, et un produit qui s appellerait `forge-tests` sans en etre un doit rester
+# scanne entierement. Trois marqueurs, TOUS exiges.
+_SIGNATURE_FORGE_TESTS = (
+    Path("forge_tests") / "adaptateurs" / "__init__.py",
+    Path("recette") / "verifier_corpus.py",
+    Path("registre-dette.json"),
+)
+# Les emplacements que la forge DECLARE comme matiere de test. `fixtures\` est deja declare tel
+# quel dans son `pyproject.toml` (« les bancs d essai sont des DONNEES d acceptation — produits
+# factices figes —, pas le code de la forge ») ; `tests\` est le dossier des chaines de montage.
+# Ancres a la RACINE de l application : un `tests\` niche dans `forge_tests\` resterait scanne.
+_MATIERE_DE_TEST_DE_LA_FORGE = ("fixtures", "tests")
+
+
+def est_la_forge_elle_meme(application: Path) -> bool:
+    """Le projet audité est-il forge-tests ? Sur signature, jamais sur le nom du dossier."""
+    return all((application / marqueur).exists() for marqueur in _SIGNATURE_FORGE_TESTS)
 
 
 def _racine_oracles() -> Path | None:
@@ -114,7 +152,10 @@ _EXCLUS_DEPENDANCES = (
 
 
 def _sources_du_produit(
-    application: Path, tmp: Path, vendorises: list[str] | None = None
+    application: Path,
+    tmp: Path,
+    vendorises: list[str] | None = None,
+    bancs: list[str] | None = None,
 ) -> Path:
     """Copie FILTRÉE de `application`, sans les dossiers de dépendances.
 
@@ -125,12 +166,23 @@ def _sources_du_produit(
     `vendorises` recueille les dossiers vendorisés réellement écartés : une exclusion se DIT au
     rapport, elle ne se pratique jamais en silence (TF-0280). Sans cette liste, un lecteur ne
     pourrait pas distinguer « aucun secret dans le vendored » de « le vendored n a pas été lu ».
+
+    `bancs` fait de même pour la matière de test de la forge (TF-0291), et pour la même raison.
+    L exclusion est ANCRÉE à la racine de l application : un `tests\\` niché dans le paquet reste
+    scanné, seule la matière déclarée à la racine du dépôt de la forge sort du périmètre.
     """
     cible = tmp / "sources"
     filtre = shutil.ignore_patterns(*_EXCLUS_DEPENDANCES)
+    forge = est_la_forge_elle_meme(application)
 
     def tracant(dossier: str, noms: list[str]) -> set[str]:
-        exclus = filtre(dossier, noms)
+        exclus = set(filtre(dossier, noms))
+        if forge and Path(dossier) == Path(application):
+            for nom in noms:
+                if nom in _MATIERE_DE_TEST_DE_LA_FORGE and (application / nom).is_dir():
+                    exclus.add(nom)
+                    if bancs is not None:
+                        bancs.append(nom)
         if vendorises is not None:
             vendorises.extend(
                 os.path.relpath(Path(dossier, nom), application)
@@ -241,8 +293,21 @@ def analyser(cible: Path) -> SortieAdaptateur:
     joues: list[str] = []
 
     vendorises: list[str] = []
+    bancs: list[str] = []
     with tempfile.TemporaryDirectory(prefix="forge-tests-securite-") as brouillon:
-        scan = _sources_du_produit(application, Path(brouillon), vendorises)
+        scan = _sources_du_produit(application, Path(brouillon), vendorises, bancs)
+        # TF-0291 : la MESURE de l exclusion — ce que CE scan a reellement ecarte parce que le
+        # projet audite est la forge elle-meme. La regle vit dans `NON_JUGE` ; ici on nomme les
+        # dossiers, et seulement s il y en a. Un lecteur doit pouvoir distinguer « rien a
+        # signaler dans les bancs » de « les bancs n ont jamais ete lus ».
+        if bancs:
+            non_juge.append(
+                "securite : matiere de test de la forge ECARTEE de ce scan — "
+                + ", ".join(sorted(bancs))
+                + " : le projet audite EST forge-tests (signature du depot). Un banc rouge PORTE "
+                "le defaut qu il existe pour faire detecter, une chaine de montage PLANTE le "
+                "secret dont elle prouve la detection. Le code de la forge, lui, reste scanne"
+            )
         # TF-0280 : l exclusion se DIT, toujours, et elle NOMME ce qu elle a ecarte. Un pan qui
         # borne son perimetre sans le publier transforme un choix defendable en angle mort : le
         # lecteur d un rapport muet ne peut pas distinguer « rien a signaler dans le vendored »

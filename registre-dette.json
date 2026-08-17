@@ -858,6 +858,12 @@
       "domaine": "securite-oracles",
       "enonce": "securite : le code VENDORISE (dossier de convention `vendor`) n est PAS scanne — dependance tierce EPINGLEE, copiee dans le depot pour la figer, jamais servie ni modifiee par le produit. Meme perimetre que `.venv` et que la gate `vendor/` de forge-development : un secret commis DANS un vendored se corrige en changeant l epingle, pas la ligne. Un projet qui nommerait `vendor` un dossier de SON produit le verrait donc ignore ici",
       "statut": "todo"
+    },
+    {
+      "id": "securite-oracles-006",
+      "domaine": "securite-oracles",
+      "enonce": "securite : quand le projet audite EST forge-tests (signature du depot : le paquet `forge_tests`, sa recette et son registre de dette), ses bancs d essai `fixtures\\` et ses chaines de montage de test `tests\\` ne sont PAS scannes — un banc rouge PORTE le defaut qu il existe pour faire detecter, et une chaine de montage PLANTE le secret dont elle prouve la detection : les accuser mesure l auditeur, pas l audite (TF-0291). Le code de la forge (`forge_tests\\`, `recette\\`) reste scanne, et tout autre projet garde ses `fixtures\\` et ses `tests\\` sous controle",
+      "statut": "todo"
     }
   ]
 }
