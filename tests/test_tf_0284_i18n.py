@@ -57,15 +57,24 @@ def test_rouge_une_route_sans_equivalent_dans_une_locale_est_nommee() -> None:
 
 
 def test_rouge_le_menu_ampute_d_une_locale_est_nomme_avec_son_ecart() -> None:
-    """(b) — 2 entrées contre 4 : le défaut qui a vécu de juin au 15/08 sans être vu."""
+    """(b) — 2 entrées contre 4 : le défaut qui a vécu de juin au 15/08 sans être vu.
+
+    TF-0295 (levée 1) : le message NOMME désormais les entrées manquantes, il ne se contente
+    plus d un écart de comptes — un lecteur ne pouvait rien faire de « manquent 2 entrées ».
+    """
     message = _constats(ROUGE)["i18n:navigation:en"]
-    assert "2 entree(s) contre 4" in message
+    assert "2 entree(s) distincte(s) contre 4" in message
+    assert "« /tarifs »" in message and "« /contact »" in message
 
 
 def test_rouge_une_page_anglaise_servie_en_francais_est_nommee() -> None:
-    """(c) — le câblage de données renvoie la langue par défaut quelle que soit la locale."""
+    """(c) — le câblage de données renvoie la langue par défaut quelle que soit la locale.
+
+    TF-0295 (levée 3) : le message NOMME la langue détectée — le pan ne connaît plus le seul
+    couple « français sous locale non française ».
+    """
     message = _constats(ROUGE)["i18n:route:en:/blog"]
-    assert "FRANÇAIS" in message and "heuristique" in message
+    assert "« fr »" in message and "heuristique" in message
 
 
 def test_rouge_trois_constats_et_TROIS_SEULEMENT() -> None:

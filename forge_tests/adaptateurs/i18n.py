@@ -67,14 +67,21 @@ NON_JUGE = [
     "route servie dans une seule langue manque donc dans les autres. Sur un produit ou la "
     "traduction est en cours PAR CHOIX, l ecart mesure est reel mais il peut etre voulu : il se "
     "conteste alors par declaration, il ne se devine pas",
-    "i18n : la parite de NAVIGATION compare le NOMBRE d entrees du menu de la page d accueil de "
-    "chaque locale au menu le PLUS RICHE ; deux menus de meme taille aux entrees differentes "
-    "passent le controle, et un sous-menu qui ne s ouvre qu au clic (non rendu dans le HTML "
-    "servi) n est pas compte",
-    "i18n : la langue du contenu est jugee par HEURISTIQUE — densite de mots-outils francais "
-    "sur le texte visible de la page. Le lexique est FRANCAIS et lui seul : le pan detecte du "
-    "francais servi sous une locale non francaise, jamais l inverse ni un autre couple de "
+    # TF-0295, levee 1 : l appariement par ENTREE remplace la comparaison de COMPTES. Ce qui
+    # reste hors de portee est le sous-menu non rendu, et il est dit.
+    "i18n : la parite de NAVIGATION apparie les entrees du menu de la page d accueil de chaque "
+    "locale a celles du menu le PLUS RICHE, par DESTINATION delocalisee — deux menus de meme "
+    "taille aux entrees differentes echouent donc, et les entrees manquantes sont nommees. Un "
+    "sous-menu qui ne s ouvre qu au clic (absent du HTML servi) n est toujours pas compte, et "
+    "une entree sans destination lisible est appariee sur son libelle, donc jamais entre deux "
     "langues",
+    # TF-0295, levee 3 : le lexique n est plus le seul francais et il est declarable par projet.
+    "i18n : la langue du contenu est jugee par HEURISTIQUE — densite des mots-outils d une "
+    "langue sur le texte visible de la page. Le pan connait les lexiques `fr` et `en` et accepte "
+    "ceux que le projet DECLARE (FORGE_TESTS_I18N_LEXIQUES) ; une langue servie sans lexique "
+    "opposable n est pas jugee, et le rapport DIT contre quels lexiques il a mesure",
+    "i18n : seule une locale PREFIXEE est jugee sur sa langue — la locale par defaut n a pas de "
+    "prefixe, donc aucune langue opposable, et la deviner reviendrait a interroger le suspect",
     "i18n : une page de moins de 40 mots visibles n est pas jugee sur sa langue — sous ce "
     "volume, la densite de mots-outils n est plus un signal, c est du bruit",
     "i18n : l attribut `lang` du document n est pas oppose au contenu — un `lang=\"en\"` pose "
@@ -116,6 +123,36 @@ MOTS_OUTILS_FR = frozenset((
     "puis", "ni", "tandis",
 ))
 
+# TF-0295 (levée 3) — le lexique n est plus le seul français. Le pan ne connaissait qu UN couple,
+# « français servi sous locale non française » : un produit dont les pages `/fr` rendent de
+# l anglais — le cas symétrique, tout aussi réel — passait sans un mot. Le contrôle est désormais
+# une TABLE de lexiques, et la règle est générale : sous la locale L, la présence dense du
+# lexique d une langue M ≠ L est un constat.
+#
+# Mêmes précautions que pour le français, et elles sont la condition du contrôle : aucun mot
+# ambigu entre les deux langues. « on », « en », « a », « as », « son », « plus », « car »,
+# « pas », « no », « or », « si », « ni », « nos », « ces » sont donc ABSENTS des deux lexiques —
+# ce sont eux qui feraient monter la densité d une page saine, c est-à-dire qui accuseraient à
+# tort. Le seuil, lui, est commun et opposable (`seuils.py`).
+MOTS_OUTILS_EN = frozenset((
+    "the", "and", "with", "this", "that", "these", "those", "from", "have", "has", "had",
+    "which", "they", "their", "them", "our", "your", "been", "were", "will", "would", "should",
+    "could", "about", "into", "than", "then", "when", "what", "who", "whom", "whose", "how",
+    "there", "here", "because", "while", "after", "before", "each", "any", "all", "not", "but",
+    "for", "are", "was", "its", "his", "her", "him", "you", "of", "to", "in", "is", "be", "by",
+    "at", "an", "so", "if", "we", "it", "also", "such", "both", "very", "many", "more", "most",
+    "other", "some", "only", "own", "same", "through", "during", "between", "under", "over",
+    "again", "further", "once", "always", "never", "already", "still", "just", "does", "did",
+))
+
+# Le lexique d une langue, par code ISO 639-1. Une clé de plus suffit à ouvrir un couple de plus :
+# c est ce que « extensible » veut dire ici. Un projet peut en DÉCLARER d autres sans toucher au
+# code, par `FORGE_TESTS_I18N_LEXIQUES` (voir `lexiques()`).
+LEXIQUES: dict[str, frozenset[str]] = {"fr": MOTS_OUTILS_FR, "en": MOTS_OUTILS_EN}
+# Sous ce nombre de mots, un lexique DÉCLARÉ ne fait pas un contrôle : une poignée de mots-outils
+# ne discrimine rien et fabriquerait des constats au hasard. Le refus est déclaré, pas silencieux.
+_LEXIQUE_MINIMAL = 20
+
 
 class _Page(HTMLParser):
     """Ce qu une page servie dit d elle-même : sa langue déclarée, son menu, son texte."""
@@ -124,6 +161,11 @@ class _Page(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.lang = ""
         self.menu: list[str] = []
+        # TF-0295 (1) : la DESTINATION de chaque entrée, dans le même ordre que `menu`. C est
+        # elle qui rend deux menus comparables ENTRÉE PAR ENTRÉE : les libellés, eux, sont
+        # traduits — « Accueil » et « Home » sont la même entrée et aucun rapprochement textuel
+        # ne peut le savoir.
+        self.destinations: list[str] = []
         self.texte: list[str] = []
         self._muet = 0
         self._dans_menu = 0
@@ -142,6 +184,7 @@ class _Page(HTMLParser):
         if tag == "a" and self._dans_menu:
             self._lien_de_menu = True
             self.menu.append(table.get("aria-label") or "")
+            self.destinations.append(table.get("href") or "")
 
     def handle_endtag(self, tag: str) -> None:
         if tag in ("script", "style", "template") and self._muet:
@@ -237,8 +280,85 @@ def _route_servie(locale: str, route: str) -> str:
     return f"/{locale}" if route == "/" else f"/{locale}{route}"
 
 
-def densite_mots_outils_fr(texte: str) -> tuple[float, int]:
-    """(part des mots-outils français dans le texte, nombre de mots). Déterministe, sans modèle.
+# --- Parité de navigation : par ENTRÉE, jamais par compte (TF-0295, levée 1) -------------------
+def entrees_de_menu(page: _Page, locales: set[str]) -> list[str]:
+    """Clés comparables des entrées du menu de `page`, dans l ordre du document.
+
+    La clé est la DESTINATION délocalisée : `/en/tarifs` sous la locale `en` et `/tarifs` sous la
+    locale par défaut sont la MÊME entrée. Le libellé ne peut pas servir de clé — il est traduit,
+    c est tout l objet du sujet. Une entrée sans destination lisible retombe sur son libellé,
+    faute de mieux, et une entrée sans ni l un ni l autre porte son rang : sans cela deux entrées
+    muettes se confondraient et un menu amputé de l une passerait pour complet.
+    """
+    cles: list[str] = []
+    for rang, (libelle, destination) in enumerate(
+        zip(page.menu, page.destinations, strict=True)
+    ):
+        brut = (destination or "").split("?")[0].split("#")[0].strip()
+        if brut.startswith("/"):
+            chemin = brut.rstrip("/") or "/"
+            segments = chemin.split("/")
+            if len(segments) > 1 and segments[1] in locales:
+                chemin = _sans_prefixe(chemin, segments[1])
+            cles.append(chemin)
+        elif brut:
+            cles.append(brut)  # externe, `mailto:`, ancre : comparable tel quel
+        elif libelle.strip():
+            cles.append(f"libelle:{libelle.strip().lower()}")
+        else:
+            cles.append(f"rang:{rang}")
+    return cles
+
+
+def lexiques() -> dict[str, frozenset[str]]:
+    """Les lexiques opposables : ceux du code, plus ceux que le projet DÉCLARE (TF-0295).
+
+    `FORGE_TESTS_I18N_LEXIQUES` désigne un fichier JSON `{"de": ["der", "die", …], …}`. Un
+    lexique déclaré remplace celui du code pour la même langue — un produit sait mieux que la
+    forge quels mots-outils il n emploie jamais dans l autre langue. Un fichier illisible, une
+    langue inconnue ou un lexique trop court sont IGNORÉS et le motif se dit au rapport
+    (`motifs_de_lexique`), jamais silencieusement pris pour bon.
+    """
+    table = dict(LEXIQUES)
+    for code, mots in _lexiques_declares()[0].items():
+        table[code] = mots
+    return table
+
+
+def _lexiques_declares() -> tuple[dict[str, frozenset[str]], list[str]]:
+    """(lexiques déclarés retenus, motifs de ce qui a été écarté)."""
+    import json
+
+    chemin = (os.environ.get("FORGE_TESTS_I18N_LEXIQUES") or "").strip()
+    if not chemin:
+        return {}, []
+    fichier = Path(chemin)
+    if not fichier.is_file():
+        return {}, [f"lexiques declares introuvables : {chemin}"]
+    try:
+        charge = json.loads(fichier.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as erreur:
+        return {}, [f"lexiques declares illisibles ({type(erreur).__name__}) : {chemin}"]
+    if not isinstance(charge, dict):
+        return {}, [f"lexiques declares : objet JSON attendu, {type(charge).__name__} lu"]
+    retenus: dict[str, frozenset[str]] = {}
+    motifs: list[str] = []
+    for code, mots in sorted(charge.items()):
+        if code not in LOCALES_CONNUES:
+            motifs.append(f"lexique declare « {code} » : locale inconnue, ignore")
+            continue
+        if not isinstance(mots, list) or len(mots) < _LEXIQUE_MINIMAL:
+            motifs.append(
+                f"lexique declare « {code} » : moins de {_LEXIQUE_MINIMAL} mots-outils, ignore "
+                "— un lexique trop court ne discrimine rien et accuserait au hasard"
+            )
+            continue
+        retenus[code] = frozenset(str(mot).strip().lower() for mot in mots if str(mot).strip())
+    return retenus, motifs
+
+
+def densite_mots_outils(texte: str, lexique: frozenset[str]) -> tuple[float, int]:
+    """(part des mots-outils de `lexique` dans le texte, nombre de mots). Sans modèle.
 
     Le compte porte sur des mots ENTIERS et minusculés ; les accents ne sont pas requis (une
     page servie en `latin-1` mal décodée perdrait ses accents mais garderait ses mots-outils).
@@ -250,8 +370,13 @@ def densite_mots_outils_fr(texte: str) -> tuple[float, int]:
     mots = [mot for mot in mots if mot]
     if not mots:
         return 0.0, 0
-    outils = sum(1 for mot in mots if mot in MOTS_OUTILS_FR)
+    outils = sum(1 for mot in mots if mot in lexique)
     return outils / len(mots), len(mots)
+
+
+def densite_mots_outils_fr(texte: str) -> tuple[float, int]:
+    """La densité du lexique FRANÇAIS — le premier couple, conservé sous son nom d origine."""
+    return densite_mots_outils(texte, MOTS_OUTILS_FR)
 
 
 def _sans_accents(texte: str) -> str:
@@ -260,13 +385,27 @@ def _sans_accents(texte: str) -> str:
     return texte.translate(table)
 
 
-def _constat_de_langue(fichier: Path) -> tuple[float, int] | None:
-    """Densité de français d une page, ou None si le volume ne permet pas de conclure."""
+def _constat_de_langue(
+    fichier: Path, locale: str, table: dict[str, frozenset[str]] | None = None
+) -> tuple[str, float, int] | None:
+    """(langue détectée, densité, nombre de mots) quand une page trahit une AUTRE langue que sa
+    locale — sinon None (page saine, ou volume insuffisant pour conclure).
+
+    TF-0295 (levée 3) : la règle est générale. Sous la locale L, chaque lexique d une langue
+    M ≠ L est mesuré, et c est le plus dense au-delà du seuil qui est retenu — nommer deux
+    langues pour une même page serait dire deux fois le même défaut.
+    """
     page = _lire(fichier)
-    densite, mots = densite_mots_outils_fr(_sans_accents(" ".join(page.texte)))
-    if mots < _MINIMUM_MOTS:
+    texte = _sans_accents(" ".join(page.texte))
+    mesures = [
+        (code, *densite_mots_outils(texte, lexique))
+        for code, lexique in sorted((table or lexiques()).items())
+        if code != locale
+    ]
+    if not mesures or mesures[0][2] < _MINIMUM_MOTS:
         return None
-    return densite, mots
+    code, densite, mots = max(mesures, key=lambda mesure: mesure[1])
+    return (code, densite, mots) if densite >= SEUIL_DENSITE_FR else None
 
 
 def _signes_i18n(cible: Path) -> list[str]:
@@ -386,6 +525,20 @@ def analyser(cible: Path) -> SortieAdaptateur:
         f"{', '.join(sorted(nom or 'defaut (sans prefixe)' for nom in par_locale))} ; parite "
         f"mesuree contre l UNION des routes ({len(attendues)} routes attendues par locale)"
     )
+    # TF-0295 (levée 3) : QUELS lexiques ont jugé, et ce qui a été écarté. « aucun français
+    # détecté » et « la langue n a été mesurée contre aucun lexique » ne sont pas le même rapport.
+    table = lexiques()
+    declares, motifs_lexique = _lexiques_declares()
+    non_juge.append(
+        "i18n : langue du contenu jugee contre les lexiques "
+        + ", ".join(f"{code} ({len(mots)} mots-outils)" for code, mots in sorted(table.items()))
+        + (
+            f" — dont declares par le projet : {', '.join(sorted(declares))}"
+            if declares
+            else " — aucun lexique declare par le projet (FORGE_TESTS_I18N_LEXIQUES)"
+        )
+    )
+    non_juge.extend(f"i18n : {motif}" for motif in motifs_lexique)
 
     findings: list[Finding] = []
     tenus: list[str] = []
@@ -415,18 +568,22 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     )
                 )
                 continue
-            mesure = _constat_de_langue(servie) if locale and locale != "fr" else None
-            if mesure is not None and mesure[0] >= SEUIL_DENSITE_FR:
-                densite, mots = mesure
+            # TF-0295 (levée 3) : toute locale PRÉFIXÉE est jugée, contre tous les lexiques sauf
+            # le sien. La locale par défaut, elle, n a pas de préfixe et donc pas de langue
+            # opposable — la juger reviendrait à deviner la langue du site.
+            mesure = _constat_de_langue(servie, locale, table) if locale else None
+            if mesure is not None:
+                langue, densite, mots = mesure
                 findings.append(
                     Finding(
                         id=identifiant,
                         classe="i18n",
                         localisation=str(servie),
                         message=(
-                            f"page servie sous « /{locale} » dont le contenu est FRANÇAIS : "
-                            f"{densite:.0%} de mots-outils français sur {mots} mots (seuil "
-                            f"{SEUIL_DENSITE_FR:.0%}) — heuristique, contestable par déclaration"
+                            f"page servie sous « /{locale} » dont le contenu est en "
+                            f"« {langue} » : {densite:.0%} de mots-outils {langue} sur {mots} "
+                            f"mots (seuil {SEUIL_DENSITE_FR:.0%}) — heuristique, contestable "
+                            "par déclaration"
                         ),
                         risque=coter(PAN, identifiant, str(servie)),
                     )
@@ -436,8 +593,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
 
     # (b) PARITÉ DE NAVIGATION — le menu de la page d accueil de chaque locale. 4 entrées contre
     #     9, non détecté depuis juin : personne ne comparait deux locales entre elles.
+    #
+    #     TF-0295 (levée 1) : l appariement se fait par ENTRÉE, plus par COMPTE. Deux menus de
+    #     même taille aux entrées DIFFÉRENTES passaient le contrôle — un menu qui a perdu
+    #     « Tarifs » et gagné « Blog » est amputé pour le visiteur, et il l est en silence. La
+    #     clé est la destination délocalisée, seule chose qu on puisse comparer entre deux
+    #     langues, et les entrées manquantes sont NOMMÉES.
     menus = {
-        locale: _lire(fichier).menu
+        locale: entrees_de_menu(_lire(fichier), locales)
         for locale, routes in par_locale.items()
         if (fichier := routes.get("/")) is not None
     }
@@ -449,9 +612,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
         )
     lisibles = {locale: menu for locale, menu in menus.items() if menu}
     if len(lisibles) > 1:
-        plus_riche = max(sorted(lisibles), key=lambda locale: len(lisibles[locale]))
+        # La référence est le menu le plus RICHE en entrées distinctes : c est celui qui dit ce
+        # que le produit sait offrir. À égalité, la locale de plus petit nom, pour que deux runs
+        # sur le même build rendent le même verdict.
+        plus_riche = max(sorted(lisibles), key=lambda locale: len(set(lisibles[locale])))
+        reference = dict.fromkeys(lisibles[plus_riche])  # ordre du document, doublons ôtés
         for locale, menu in sorted(lisibles.items()):
-            if len(menu) >= len(lisibles[plus_riche]):
+            manquantes = [entree for entree in reference if entree not in set(menu)]
+            if not manquantes:
                 continue
             identifiant = f"i18n:navigation:{locale or 'defaut'}"
             findings.append(
@@ -460,10 +628,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     classe="i18n",
                     localisation=str(par_locale[locale]["/"]),
                     message=(
-                        f"menu de la locale « {locale or 'defaut'} » : {len(menu)} entree(s) "
-                        f"contre {len(lisibles[plus_riche])} en "
+                        f"menu de la locale « {locale or 'defaut'} » : {len(set(menu))} "
+                        f"entree(s) distincte(s) contre {len(reference)} en "
                         f"« {plus_riche or 'defaut'} » — manquent "
-                        f"{len(lisibles[plus_riche]) - len(menu)} entree(s)"
+                        f"{len(manquantes)} entree(s) : "
+                        + ", ".join(f"« {entree} »" for entree in manquantes)
                     ),
                     risque=coter(PAN, identifiant, str(par_locale[locale]["/"])),
                 )
