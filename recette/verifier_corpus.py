@@ -95,6 +95,21 @@ CORPUS = [
      ("i18n:navigation:",)),
     ("H-19", "i18n", "page servie sous une locale non francaise avec du contenu francais",
      ("i18n:route:en:/blog",)),
+    # TF-0300 — l ecart SERVI <-> VERSIONNE (TF-0288) n avait au corpus AUCUNE entree : ses
+    # branches PASS et SKIP etaient mesurees par la recette sur les deux bancs, mais la branche
+    # qui ACCUSE ne reposait que sur pytest. Exactement l ecart que TF-0293 vient de fermer pour
+    # le pan i18n. Le banc rouge porte donc desormais la source du site (`site/`) : son menu
+    # anglais promet trois entrees de premier niveau quand `dist/en/index.html` n en sert que
+    # deux — la page des tarifs, jamais deployee au menu. Le banc vert n a pas de source de site :
+    # son controle reste en SKIP, et aucun constat nouveau n y apparait.
+    #
+    # Le prefixe est celui de la CLASSE, pas le `interface:` de H-13 : les deux se lisent dans le
+    # meme pan, et un prefixe commun aurait fait passer H-13 pour couvert des que l ecart sort.
+    # L inverse reste vrai et il est DECLARE ici : `interface:` de H-13 apparie AUSSI ce constat —
+    # les six affordances inertes du banc rouge le couvrent aujourd hui, mais un prefixe qui
+    # deborde reste un prefixe qui deborde (candidature au registre du pilot).
+    ("H-20", "interface", "menu promis par la source versionnee et non servi par la production",
+     ("interface:ecart-servi:",)),
 ]
 
 # RT-8 — le lecteur SQL, verifie sur pieces. Ces cas ne passent par aucun banc : ils portent
