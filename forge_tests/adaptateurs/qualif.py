@@ -123,10 +123,13 @@ CHAPITRES = (
 # le sac partagé du domaine « acces » et sont réclamés à tous les pans en SKIP.
 # TF-0222 : les deux champs de session FOURNIE y entrent, sinon ils seraient réclamés au nom du
 # pan `data` (qui n en ferait rien) et jamais au nom de celui qu ils débloquent.
+# TF-0315 : `FORGE_TESTS_QUALIF_CONNEXION` y entre parce que le pan la RÉCLAME désormais (état
+# CONNEXION_ECHOUEE) — sans revendication, elle serait demandée au nom du pan `data`.
 CHAMPS_REQUIS = (
     "FORGE_TESTS_QUALIF_URL",
     "FORGE_TESTS_QUALIF_LOGIN",
     "FORGE_TESTS_QUALIF_PASSWORD",
+    "FORGE_TESTS_QUALIF_CONNEXION",
     "FORGE_TESTS_QUALIF_STORAGE_STATE",
     "FORGE_TESTS_QUALIF_BEARER",
 )
@@ -341,6 +344,59 @@ CHAMPS_REQUIS_SESSION = ("FORGE_TESTS_QUALIF_LOGIN", "FORGE_TESTS_QUALIF_PASSWOR
 # on préfère laisser passer un constat douteux plutôt que taire un pan qu on n a pas su juger.
 _ROUTES_MIN_GARDE = 2
 
+# --- TF-0315 : le TROISIÈME état de réparation --------------------------------------------------
+# Deux existaient : `CHAMPS_REQUIS_SESSION` (« il n y a pas de compte ») et
+# `CHAMPS_REQUIS_SESSION_FOURNIE` (« la session capturée a péri, recapture-la »). Manquait celui
+# qui a été mesuré le 17/08 : un compte FOURNI ET VALIDE, et la connexion qui n aboutit pas. Les
+# six non_testables publiaient alors `[LOGIN, PASSWORD]` — « pas de compte » et « compte fourni,
+# connexion échouée » étaient indiscernables, l opérateur refaisait trois gestes déjà faits puis
+# concluait que son compte était mauvais. Ce que le pan a le droit de demander ici, c est la
+# ROUTE de la mire (si celle qu il a essayée n était pas la bonne) ou une session ouverte AILLEURS
+# (si la forge ne sait pas rejouer cette mire) — jamais le compte qu il a déjà reçu.
+CHAMPS_REQUIS_CONNEXION_ECHOUEE = (
+    "FORGE_TESTS_QUALIF_CONNEXION",
+    "FORGE_TESTS_QUALIF_STORAGE_STATE",
+    "FORGE_TESTS_QUALIF_BEARER",
+)
+
+
+def connexion_echouee(sessions: list[dict] | None) -> dict | None:
+    """La session dont la connexion a été TENTÉE et n a pas abouti, ou None.
+
+    « Aucune mire trouvée » en fait partie : dans les deux cas un compte a été fourni et le pan
+    n a pas ouvert de session — c est la même réparation, et surtout ce n est pas le compte.
+    """
+    for session in sessions or []:
+        if session.get("etat") in (SESSION_ECHOUEE, SESSION_SANS_MIRE):
+            return session
+    return None
+
+
+def champs_a_fournir(config: dict, sessions: list[dict] | None = None) -> tuple[str, ...]:
+    """Ce qui DÉBLOQUE le pan, selon ce qui a été constaté — trois états, trois demandes."""
+    if session_fournie(config):
+        return CHAMPS_REQUIS_SESSION_FOURNIE
+    if connexion_echouee(sessions) is not None:
+        return CHAMPS_REQUIS_CONNEXION_ECHOUEE
+    return CHAMPS_REQUIS_SESSION
+
+
+def detail_connexion(sessions: list[dict] | None) -> str:
+    """CE QUI A ÉTÉ TENTÉ et OÙ ÇA S EST ARRÊTÉ — dans le champ que l opérateur lit pour réparer.
+
+    L information était déjà produite par `_connecter` ; elle était diluée dans `non_juge`, hors
+    du seul champ qu on relit quand on veut réparer. Elle est donc republiée ici, à l identique.
+    """
+    session = connexion_echouee(sessions)
+    if session is None:
+        return ""
+    motif = str(session.get("motif") or "connexion echouee, sans detail")
+    arret = str(session.get("arret") or "")
+    detail = f" TENTE : {motif}"
+    if arret and arret not in motif:
+        detail += f" ; ARRET : {arret}"
+    return detail + "."
+
 _REFUS_CODES = re.compile(r"\b(?:401|403)\b")
 _REFUS_MOTS = (
     "unauthorized",
@@ -389,7 +445,9 @@ def _signal_session_absente(page_vue: dict, config: dict) -> str | None:
     return None
 
 
-def precondition_absente(releve: list[dict], config: dict) -> str | None:
+def precondition_absente(
+    releve: list[dict], config: dict, sessions: list[dict] | None = None
+) -> str | None:
     """Motif si la précondition du pan — une session ouverte — manque POUR TOUT LE PAN.
 
     **Critère, et rien d autre** : au moins `_ROUTES_MIN_GARDE` routes parcourues, et CHACUNE
@@ -409,8 +467,14 @@ def precondition_absente(releve: list[dict], config: dict) -> str | None:
         signaux.append(f"{page_vue['route']} ({signal})")
     # TF-0222 : une session FOURNIE et pourtant refusee partout, c est le cas de peremption —
     # le geste de reparation n est alors pas « fournir un compte » mais « recapturer la session ».
-    a_reparer = (
-        CHAMPS_REQUIS_SESSION_FOURNIE if session_fournie(config) else CHAMPS_REQUIS_SESSION
+    # TF-0315 : un compte fourni dont la connexion a echoue est un TROISIEME cas, et il ne se
+    # repare pas en fournissant le compte qu on a deja donne.
+    a_reparer = champs_a_fournir(config, sessions)
+    echec_connexion = (
+        " La connexion a ete TENTEE avec le compte fourni et elle n a PAS abouti : ce n est donc "
+        "pas le compte qui manque ici." + detail_connexion(sessions)
+        if connexion_echouee(sessions) is not None
+        else ""
     )
     peremption = (
         " La session FOURNIE n a donc PAS ete acceptee par l instance : une session capturee "
@@ -424,10 +488,14 @@ def precondition_absente(releve: list[dict], config: dict) -> str | None:
         f"et les {len(releve)} route(s) parcourue(s) sur {config['base']} l attestent toutes "
         f"absente : " + " · ".join(signaux) + ". Le pan a donc photographie le meme ecran "
         "autant de fois qu il a visite de routes : son inventaire est declare NON MESURABLE et "
-        "il n emet AUCUN constat produit." + peremption + " Fournir ou corriger "
-        + ", ".join(a_reparer)
-        + " (et FORGE_TESTS_QUALIF_CONNEXION si la mire n est pas sur /connexion ou /login), "
-        "puis `--reprendre` le rapport. Un pan aveugle qui se tait est utile ; un pan aveugle "
+        "il n emet AUCUN constat produit." + peremption + echec_connexion
+        + " Fournir ou corriger " + ", ".join(a_reparer)
+        + (
+            ""
+            if "FORGE_TESTS_QUALIF_CONNEXION" in a_reparer
+            else " (et FORGE_TESTS_QUALIF_CONNEXION si la mire n est pas sur /connexion ou /login)"
+        )
+        + ", puis `--reprendre` le rapport. Un pan aveugle qui se tait est utile ; un pan aveugle "
         "qui accuse coute un audit entier a dementir"
     )
 
@@ -1323,13 +1391,14 @@ def conclure(
     # l état qu il exige ne mesure pas le produit, il mesure son propre échec — le publier comme
     # un défaut du produit fabrique un bloc de findings identiques, tous au même risque, qu il
     # faut un audit entier pour démentir.
-    motif = precondition_absente(releve, config)
+    motif = precondition_absente(releve, config, sessions)
     if motif is not None:
-        declarer(
-            cible,
-            "acces",
-            CHAMPS_REQUIS_SESSION_FOURNIE if session_fournie(config) else CHAMPS_REQUIS_SESSION,
-        )
+        # TF-0315 : la demande de réparation suit CE QUI A ÉTÉ CONSTATÉ. Réclamer un compte déjà
+        # fourni et valide envoie l opérateur refaire trois gestes faits, puis douter de son
+        # compte — c est le temps perdu mesuré sur l audit du 17/08.
+        requis = champs_a_fournir(config, sessions)
+        tente = detail_connexion(sessions)
+        declarer(cible, "acces", requis)
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
             findings=[constat_entree] if constat_entree is not None else [],
@@ -1338,15 +1407,12 @@ def conclure(
             non_testables=[
                 NonTestable(
                     element=f"qualif:route:{page_vue['route']}",
-                    champs_requis=list(
-                        CHAMPS_REQUIS_SESSION_FOURNIE
-                        if session_fournie(config)
-                        else CHAMPS_REQUIS_SESSION
-                    ),
+                    champs_requis=list(requis),
                     pan=PAN,
                     motif=(
                         f"qualif : {page_vue['route']} non mesurable — precondition du pan "
-                        "(session ouverte) non etablie ; aucun constat produit n en est tire"
+                        f"(session ouverte) non etablie ;{tente} Aucun constat produit n en est "
+                        "tire"
                     ),
                 )
                 for page_vue in releve
