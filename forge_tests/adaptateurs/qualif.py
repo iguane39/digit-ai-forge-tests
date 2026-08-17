@@ -153,6 +153,14 @@ NON_JUGE = [
     # La sortie continue de publier le COMPTE d URLs confrontees et les origines admises — deux
     # mesures, propres a chaque run ; la regle, elle, borne le controle de la meme facon partout,
     # et c est a ce titre qu elle doit se compter au registre de dette.
+    # TF-0314 : la REGLE du constat d ouverture. Ce que le pan sait voir borne ce qu il peut
+    # affirmer — et c est la seule facon de ne plus annoncer une session qui n existe pas.
+    "qualif : l ouverture d une session par la mire se CONSTATE — un cookie de session pose "
+    "pendant la soumission, ou la mire qui rend la main (sortie de sa route, sans champ de mot "
+    "de passe rendu). Un produit qui garde son jeton en MEMOIRE, sans cookie ni changement de "
+    "route, reste indiscernable d un echec : la session est alors declaree NON OUVERTE plutot "
+    "que supposee ouverte — un audit qui se croit authentifie est plus dangereux qu un audit "
+    "anonyme",
     "qualif : le controle des URL auto-referentes ne connait que quatre formes — `canonical`, "
     "`og:url`, le `url`/`@id` du JSON-LD et les `loc` de sitemap — lues sur les seules routes "
     "PARCOURUES et dans les 20 000 premiers caracteres de chaque page ; une page plus longue, "
@@ -209,7 +217,22 @@ def _entete_autorisation(valeur: str) -> str:
     return f"Bearer {valeur}"
 
 
-def provenance_session(config: dict) -> str:
+# --- État de session : CONSTATÉ, jamais déduit (TF-0314) ---------------------------------------
+# `provenance_session` ne consultait que le dictionnaire de CONFIGURATION : elle ne pouvait
+# structurellement pas savoir si la session avait été ouverte, elle constatait seulement qu un
+# login et un mot de passe avaient été fournis. Payé dans le rapport BAV2 du 17/08 : non_juge[0]
+# annonçait « session ouverte PAR LA FORGE elle-même » pendant que non_juge[1] disait « aucune
+# mire de connexion trouvée » — deux phrases contradictoires, et c est la première qui se lit en
+# tête. La phrase de provenance dépend désormais du RÉSULTAT de `_connecter`, et l ouverture se
+# CONSTATE (un cookie de session posé, ou la mire qui rend la main) au lieu de se déduire d un
+# clic émis.
+SESSION_SANS_COMPTE = "sans_compte"  # aucun compte fourni : rien n a été tenté
+SESSION_OUVERTE = "ouverte"  # tentée ET constatée
+SESSION_ECHOUEE = "echouee"  # mire trouvée, remplie, soumise — ouverture NON constatée
+SESSION_SANS_MIRE = "sans_mire"  # aucune mire trouvée, après attente d apparition
+
+
+def provenance_session(config: dict, session: dict | None = None) -> str:
     """Sous QUELLE identité l audit a été mené — publié au rapport, à chaque exécution.
 
     TF-0222 : un audit fait sous une session CAPTURÉE ne se confond pas avec un audit qui s est
@@ -220,6 +243,10 @@ def provenance_session(config: dict) -> str:
 
     Ni le jeton ni le chemin complet du storage state n apparaissent : le rapport CIRCULE, et
     ces deux valeurs portent une identité. Seuls la nature de la session et le NOM du fichier.
+
+    TF-0314 : quand la session doit être ouverte PAR LA FORGE, la phrase suit le RÉSULTAT que
+    `_connecter` a constaté (`session`), jamais la seule présence d un compte en configuration.
+    Sans résultat relevé, elle dit qu il n a pas été relevé — elle n affirme pas une session.
     """
     natures: list[str] = []
     if config.get("storage_state"):
@@ -244,10 +271,26 @@ def provenance_session(config: dict) -> str:
             "produit. A ne pas confondre avec un audit qui s est authentifie lui-meme"
         )
     if config.get("login") and config.get("mdp"):
+        etat = (session or {}).get("etat")
+        if etat == SESSION_OUVERTE:
+            return (
+                "qualif : PROVENANCE DE SESSION — session ouverte PAR LA FORGE elle-meme, en "
+                "rejouant la mire formulaire avec FORGE_TESTS_QUALIF_LOGIN, et l ouverture est "
+                f"CONSTATEE ({(session or {}).get('preuve') or 'constat non detaille'}) ; ce que "
+                "le pan voit est exactement ce que ce compte voit"
+            )
+        if etat in (SESSION_ECHOUEE, SESSION_SANS_MIRE):
+            return (
+                "qualif : PROVENANCE DE SESSION — un compte a ete fourni "
+                "(FORGE_TESTS_QUALIF_LOGIN) et la session N A PAS ete ouverte : "
+                f"{(session or {}).get('motif') or 'echec non detaille'}. Le parcours qui suit "
+                "est donc ANONYME DE FAIT — tout contenu place derriere l authentification reste "
+                "hors de portee de ce releve, et un compte configure ne prouve pas une session"
+            )
         return (
-            "qualif : PROVENANCE DE SESSION — session ouverte PAR LA FORGE elle-meme, en "
-            "rejouant la mire formulaire avec FORGE_TESTS_QUALIF_LOGIN ; ce que le pan voit est "
-            "exactement ce que ce compte voit"
+            "qualif : PROVENANCE DE SESSION — un compte est configure "
+            "(FORGE_TESTS_QUALIF_LOGIN) mais le RESULTAT de la mire n a pas ete releve : "
+            "l ouverture de session n est donc PAS constatee ici, et elle n est pas affirmee"
         )
     return (
         "qualif : PROVENANCE DE SESSION — AUCUNE session : l instance a ete parcourue en "
@@ -907,15 +950,93 @@ def _attendre(page, selecteur: str, timeout: int = ATTENTE_MIRE_MS):  # noqa: AN
         return None
 
 
-def _connecter(page, config: dict) -> str | None:  # noqa: ANN001
-    """Ouvre une session si un compte est fourni. Renvoie un motif d échec, ou None."""
+def _cookies(page) -> set[str]:  # noqa: ANN001
+    """NOMS des cookies posés dans le contexte — les valeurs ne sortent jamais d ici."""
+    try:
+        return {str(biscuit.get("name") or "") for biscuit in page.context.cookies()}
+    except Exception:  # noqa: BLE001 — un contexte muet n atteste rien, il n invente rien
+        return set()
+
+
+def _url_courante(page) -> str:  # noqa: ANN001
+    try:
+        return str(page.url or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _constater_ouverture(
+    page,  # noqa: ANN001
+    route: str,
+    cookies_avant: set[str],
+    config: dict,
+) -> dict:
+    """L ouverture de session se CONSTATE (TF-0314) — deux attestations, aucune déduction.
+
+    Dans l ordre de force :
+      - un cookie de session a été POSÉ pendant la soumission (cas réel BAV2 : deux cookies JWT,
+        `access_token_cookie` et `refresh_token_cookie`) ;
+      - la mire a RENDU LA MAIN : la page a quitté la route de la mire et n y rend plus de champ
+        de mot de passe — un jeton peut vivre en stockage local, où aucun cookie ne l atteste.
+
+    Tout le reste est un ÉCHEC constaté, y compris « le clic a été émis » : c est précisément la
+    déduction que ce constat remplace.
+    """
+    poses = sorted(nom for nom in _cookies(page) - cookies_avant if nom)
+    if poses:
+        return {
+            "etat": SESSION_OUVERTE,
+            "preuve": (
+                f"{len(poses)} cookie(s) de session pose(s) par la soumission de {route} : "
+                + ", ".join(poses[:4])
+            ),
+        }
+    # Une URL courante ILLISIBLE ne dit rien : la résoudre quand même la ramènerait à « / », donc
+    # à « ce n est plus la mire » — un constat d ouverture fabriqué par une ignorance.
+    url = _url_courante(page)
+    arrivee = _route(url, config["base"]) if url else None
+    mire = _route(route, config["base"])
+    if arrivee is not None and arrivee != mire:
+        if page.query_selector(_SELECTEUR_MOTDEPASSE) is None:
+            return {
+                "etat": SESSION_OUVERTE,
+                "preuve": (
+                    f"la mire {mire} a rendu la main : arrivee sur {arrivee}, sans champ de mot "
+                    "de passe rendu et sans cookie de session observe (jeton hors cookie)"
+                ),
+            }
+        return {
+            "etat": SESSION_ECHOUEE,
+            "motif": (
+                f"la mire {mire} a ete remplie et soumise, la page a navigue vers {arrivee} et la "
+                "mire y est TOUJOURS rendue — aucun cookie de session pose"
+            ),
+            "arret": f"{mire} : soumission suivie d une mire encore rendue sur {arrivee}",
+        }
+    return {
+        "etat": SESSION_ECHOUEE,
+        "motif": (
+            f"la mire {mire} a ete remplie et soumise, et l ouverture de session n est PAS "
+            "constatee : aucun cookie pose, aucune sortie de la mire"
+        ),
+        "arret": f"{mire} : soumission sans effet observable",
+    }
+
+
+def _connecter(page, config: dict) -> dict:  # noqa: ANN001
+    """Tente d ouvrir une session, et rend ce qui a été CONSTATÉ (TF-0313, TF-0314).
+
+    Renvoie l état (`SESSION_*`), la preuve de l ouverture quand elle est constatée, sinon le
+    motif de l échec et le point d ARRÊT exact — que `champs_requis` republie (TF-0315).
+    """
     if not (config["login"] and config["mdp"]):
-        return None
+        return {"etat": SESSION_SANS_COMPTE}
     candidates = [config["connexion"]] if config["connexion"] else ["/connexion", "/login"]
     arrets: list[str] = []
     for route in candidates:
         if not route:
             continue
+        cookies_avant = _cookies(page)
         try:
             page.goto(config["base"] + route, wait_until="domcontentloaded", timeout=30000)
         except Exception as erreur:  # noqa: BLE001
@@ -940,13 +1061,17 @@ def _connecter(page, config: dict) -> str | None:  # noqa: ANN001
             continue
         bouton.click()
         page.wait_for_load_state("networkidle")
-        return None
-    return (
-        "aucune mire de connexion trouvee, APRES attente d apparition du champ mot de passe "
-        f"({ATTENTE_MIRE_MS // 1000} s par route) — routes essayees : "
-        + " · ".join(arrets or [", ".join(c for c in candidates if c)])
-        + " ; la declarer par FORGE_TESTS_QUALIF_CONNEXION"
-    )
+        return _constater_ouverture(page, route, cookies_avant, config)
+    return {
+        "etat": SESSION_SANS_MIRE,
+        "motif": (
+            "aucune mire de connexion trouvee, APRES attente d apparition du champ mot de passe "
+            f"({ATTENTE_MIRE_MS // 1000} s par route) — routes essayees : "
+            + " · ".join(arrets or [", ".join(c for c in candidates if c)])
+            + " ; la declarer par FORGE_TESTS_QUALIF_CONNEXION"
+        ),
+        "arret": " · ".join(arrets),
+    }
 
 
 def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN001
@@ -1089,6 +1214,10 @@ def analyser(cible: Path) -> SortieAdaptateur:
 
     non_juge = list(NON_JUGE)
     entree: dict | None = None
+    # TF-0314 : la session est un objet dont l état se remplit par CONSTAT, et il est publié même
+    # quand le parcours s effondre ensuite — une provenance non relevée se DIT, elle ne se devine
+    # pas. `etat` à None veut dire « pas encore relevé », et la provenance le dira ainsi.
+    sessions: list[dict] = [{"role": "", "etat": None}]
     try:
         with sync_playwright() as pw:
             navigateur = pw.chromium.launch()
@@ -1107,9 +1236,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
             # Une session FOURNIE prime : rejouer la mire par-dessus ecraserait l identite qu on
             # nous a confiee, et le rapport annoncerait une provenance qui n est plus la bonne.
             if not session_fournie(config):
-                echec = _connecter(page, config)
-                if echec:
-                    non_juge.append(f"qualif : {echec}")
+                sessions[0].update(_connecter(page, config))
+                if sessions[0].get("motif"):
+                    non_juge.append(f"qualif : {sessions[0]['motif']}")
             releve, avertissements = _visiter(page, config)
             navigateur.close()
     except Exception as erreur:  # noqa: BLE001 — un pan qui ne peut pas voir le DECLARE
@@ -1120,7 +1249,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             findings=[f for f in (finding_entree(entree, config, cible),) if f is not None],
             non_juge=[
                 *non_juge,
-                provenance_session(config),
+                provenance_session(config, sessions[0]),
                 *mentions_entree(entree, config),
                 f"qualif : instance {config['base']} non parcourable "
                 f"({type(erreur).__name__}: {erreur})",
@@ -1132,13 +1261,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
             findings=[f for f in (finding_entree(entree, config, cible),) if f is not None],
             non_juge=[
                 *non_juge,
-                provenance_session(config),
+                provenance_session(config, sessions[0]),
                 *mentions_entree(entree, config),
                 f"qualif : aucune route atteinte sur {config['base']}",
             ],
         )
     non_juge.extend(sorted(set(avertissements)))
-    return conclure(cible, config, releve, non_juge, entree)
+    return conclure(cible, config, releve, non_juge, entree, sessions)
 
 
 def finding_entree(entree: dict | None, config: dict, cible: Path) -> Finding | None:
@@ -1161,6 +1290,7 @@ def conclure(
     releve: list[dict],
     non_juge: list[str],
     entree: dict | None = None,
+    sessions: list[dict] | None = None,
 ) -> SortieAdaptateur:
     """Traduit le relevé de parcours en verdict — SEUL endroit où ce pan accuse le produit.
 
@@ -1168,11 +1298,20 @@ def conclure(
     soient prouvables sans navigateur : c est le relevé qui décide, et un relevé s écrit. Il en
     va de même du parcours d entrée (`entree`, TF-0223) : une chaîne de redirections est une
     donnée, et son jugement se prouve sans Chromium.
+
+    `sessions` porte ce qui a été CONSTATÉ de chaque session exercée (TF-0314) ; absent, il vaut
+    « une session, dont le résultat n a pas été relevé » — et la provenance le dira ainsi plutôt
+    que d affirmer une identité.
     """
     from forge_tests.noyau import NonTestable
     from forge_tests.qualification import declarer, detecter
 
-    non_juge = [*non_juge, provenance_session(config), *mentions_entree(entree, config)]
+    sessions = list(sessions or [{"role": "", "etat": None}])
+    non_juge = [
+        *non_juge,
+        *(provenance_session(config, session) for session in sessions),
+        *mentions_entree(entree, config),
+    ]
     # TF-0223 — fabriqué AVANT la garde, et volontairement pas soumis à elle : la garde dit que
     # le pan n a pas vu l INTÉRIEUR de l instance ; le parcours d entrée, lui, s est joué sans
     # session et n avait rien à établir. Le taire ici reconstruirait un étage plus bas le silence
