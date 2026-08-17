@@ -283,7 +283,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, _motif_surface_absente(cible)]
         )
-    sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE)
+    # TF-0309 — `list(NON_JUGE)` comme le pan `migrations` : `evaluer_surface` garde la liste
+    # REÇUE, et l `append` ci-dessous mutait donc la constante du module. Le motif du banc rouge
+    # se retrouvait publié sur le banc vert, et plus le motif est précis (la cause du rejeu, ici)
+    # plus la fuite ment.
+    sortie = evaluer_surface(NOM, PAN, str(cible), inv, couvert, SEUIL, list(NON_JUGE))
 
     # Une contrainte declaree au MODELE mais absente des MIGRATIONS est une divergence : le code
     # croit la base protegee, la base ne l est pas. Aucun test ne peut la reveler — il n y a rien
@@ -295,8 +299,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
         reference = " ".join(
             sans_commentaires(f.read_text(encoding="utf-8")) for f in _sql(cible)
         )
+        # TF-0309 — le motif DÉCLARÉ par le rejeu voyage jusqu au rapport : « non introspectable »
+        # seul ne dit pas si une migration est invalide ou si le démon de conteneurs manque. Même
+        # reprise que le pan `back` (TF-0299) : deux diagnostics du même fait valent moins qu un.
         sortie.non_juge.append(
-            "data : schema reel non introspectable — divergence jugee sur le TEXTE des migrations"
+            "data : schema reel non introspectable — divergence jugee sur le TEXTE des "
+            "migrations. Cause : "
+            + motif_indisponibilite(cible, "schema", "non declaree par le rejeu")
         )
     else:
         reference = " ".join(schema["contraintes"] + schema["index"] + schema["tables"])
