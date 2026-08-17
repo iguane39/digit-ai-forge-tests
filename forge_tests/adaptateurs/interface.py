@@ -69,10 +69,13 @@ CHAPITRES = (
 # littérales, elles, sont lues depuis TF-0283 (voir `EXTENSIONS_COMPOSANTS` plus bas).
 EXTENSIONS = (".html", ".htm", ".jinja", ".jinja2", ".j2", ".twig", ".ejs", ".hbs")
 EXTENSIONS_JS = (".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue", ".svelte")
-# TF-0283 : composants dont les liens à destination LITTÉRALE sont jugés. React seulement : les
-# dialectes de gabarit de Vue et Svelte ont leur propre grammaire d attributs, et prétendre les
-# lire avec ce scanner produirait exactement le faux positif que la limite d origine évitait.
-EXTENSIONS_COMPOSANTS = (".jsx", ".tsx")
+# TF-0283 : composants dont les liens à destination LITTÉRALE sont jugés.
+#
+# TF-0295 (levée 2) — Vue et Svelte entrent, chacun avec SA grammaire (voir `_GRAMMAIRES`). La
+# limite d origine était juste : prétendre lire `:to="lien"` avec le scanner JSX aurait pris une
+# expression pour un littéral et accusé un lien sain. Elle se lève en DÉCLARANT les dialectes,
+# pas en élargissant le scanner à l aveugle.
+EXTENSIONS_COMPOSANTS = (".jsx", ".tsx", ".vue", ".svelte")
 _EXCLUS = {
     "node_modules", ".venv", "venv", ".git", "__pycache__", "site-packages", "dist", "build",
     ".next", ".nuxt", ".svelte-kit", ".visuel", "htmlcov", "coverage", ".tox", ".mypy_cache",
@@ -104,9 +107,11 @@ NON_JUGE = [
     "suffit a le blanchir : le pan attrape l inerte flagrant, il ne certifie pas le cable",
     "interface : le cablage prouve l existence d un gestionnaire, jamais que son effet soit "
     "OBSERVABLE par l utilisateur — un handler vide passerait pour cable",
+    # TF-0295, levee 2 : Vue et Svelte rejoignent React, chacun avec sa grammaire declaree.
     "interface : les composants de framework (.jsx, .tsx, .vue, .svelte) ne sont pas analyses "
-    "comme gabarits — seule la DESTINATION litterale des liens des composants React (.jsx, .tsx) "
-    "est jugee (TF-0283) ; leur surface est inventoriee par le pan front via `data-testid`",
+    "comme gabarits — seule la DESTINATION litterale de leurs liens est jugee (TF-0283, etendu "
+    "a `.vue` et `.svelte` par TF-0295) ; leur CABLAGE reste hors perimetre et leur surface est "
+    "inventoriee par le pan front via `data-testid`",
     "interface : une ancre `#nom` dont la cible n existe pas dans le document n est pas jugee "
     "morte — la cible peut etre injectee au rendu",
     # TF-0283 — les limites du controle des liens de composants, chacune payee d un faux verdict
@@ -120,9 +125,21 @@ NON_JUGE = [
     "(routes Next `app/`+`pages/`, tables react-router et TanStack, gabarits et fichiers "
     "`public/`) ; une route posee a l execution ou par un proxy est invisible ici, et si aucune "
     "route n est enumerable le controle d existence est DESACTIVE plutot que devine",
+    # TF-0295, levee 4 : la CONFIGURATION du framework est lue elle aussi, et l absence de
+    # locale opposable suspend le jugement au lieu de le deviner.
     "interface/liens : la locale d un composant est deduite de son arborescence ou de son nom "
-    "(`.../en/Header.tsx`, `HeaderEn.tsx`) ; un composant qui rend PLUSIEURS locales selon une "
-    "prop n a pas de locale propre et ses liens ne sont pas juges sur ce critere",
+    "(`.../en/Header.tsx`, `HeaderEn.tsx`), et les locales OPPOSABLES sont lues dans "
+    "l arborescence litterale ET dans la configuration du framework (`locales: [...]` de Next, "
+    "nuxt, next-intl — TF-0295) ; un composant qui rend PLUSIEURS locales selon une prop n a pas "
+    "de locale propre et ses liens ne sont pas juges sur ce critere. Quand le produit route ses "
+    "locales par un segment DYNAMIQUE sans les declarer, aucune racine de locale n est "
+    "connaissable : logo, bascule de langue et coherence de locale sont alors NON JUGES, et le "
+    "rapport le dit — les deviner accusait un logo correct",
+    "interface/liens : les grammaires de destination sont DECLAREES par dialecte — React "
+    "(`href`, `to`, expression `{...}`), Vue (`to`, `:to`, `v-bind:href`, la forme liee etant "
+    "toujours EXPRIMEE) et Svelte (`href`, interpolation dans la chaine). Un dialecte absent de "
+    "la table (Angular, Astro, Solid) n est pas lu, et un attribut de destination pose par une "
+    "bibliotheque de routage inconnue non plus",
     "interface/liens : « logo » et « bascule de langue » sont reconnus par HEURISTIQUE — mention "
     "de `logo` dans le contenu du lien, libelle egal a un nom de langue ou attribut `hrefLang`. "
     "Un logo sans le mot `logo` ni `hrefLang` echappe au controle, et le lien ainsi reconnu se "
@@ -325,7 +342,36 @@ def _libelle(entree: dict) -> str:
 
 _BALISES_LIEN = ("a", "Link", "NavLink")
 _ATTRIBUTS_DESTINATION = ("href", "to")
-_NOM_ATTRIBUT = re.compile(r"[A-Za-z_][-\w:.]*")
+
+# TF-0295 (levée 2) — une grammaire par dialecte, DÉCLARÉE. Trois choses la définissent : les
+# balises qui portent un lien, les attributs qui portent sa destination, et les formes d attribut
+# qui sont des EXPRESSIONS par nature (`:to` de Vue, `v-bind:href`). Une expression n est jamais
+# jugée : elle est comptée et déclarée, exactement comme `href={x}` en JSX.
+_GRAMMAIRES: dict[str, dict[str, tuple[str, ...]]] = {
+    ".jsx": {"balises": _BALISES_LIEN, "destinations": _ATTRIBUTS_DESTINATION, "liees": ()},
+    ".tsx": {"balises": _BALISES_LIEN, "destinations": _ATTRIBUTS_DESTINATION, "liees": ()},
+    # Vue : `<router-link to="/en">` est littéral, `<router-link :to="lien">` est une expression.
+    # `<nuxt-link>` suit la même grammaire. Le `<a href>` d un `<template>` est du HTML ordinaire.
+    ".vue": {
+        "balises": ("a", "router-link", "RouterLink", "nuxt-link", "NuxtLink", "NuxtLinkLocale"),
+        "destinations": _ATTRIBUTS_DESTINATION,
+        "liees": (":href", ":to", "v-bind:href", "v-bind:to"),
+    },
+    # Svelte : la destination est un attribut HTML, l interpolation se fait par `{...}` — dans
+    # l attribut nu (`href={x}`) comme dans la chaîne (`href="{x}"`). Les deux se déclarent.
+    ".svelte": {
+        "balises": ("a", "Link", "NavLink"),
+        "destinations": _ATTRIBUTS_DESTINATION,
+        "liees": (),
+    },
+}
+# Le nom d attribut accepte `:` et `@` en tête : ce sont les liaisons de Vue (`:to`, `@click`).
+# Sans cela, `:to="lien"` était lu comme `to="lien"` — une expression prise pour un littéral,
+# donc un lien sain accusé de pointer vers « lien ». C est le faux positif exact que la limite
+# d origine de TF-0283 évitait en ne lisant pas Vue du tout.
+_NOM_ATTRIBUT = re.compile(r"[A-Za-z_:@][-\w:.]*")
+# Une valeur de chaîne qui porte une interpolation n est pas un littéral (Svelte, Angular…).
+_INTERPOLATION = re.compile(r"\{[^{}]*\}|\$\{")
 _ESPACES = " \t\r\n"
 _EXTENSIONS_ROUTE = (".js", ".jsx", ".ts", ".tsx")
 # Codes ISO 639-1 des langues qu un site multilingue préfixe couramment. La liste est FERMÉE, et
@@ -472,22 +518,29 @@ def _texte_visible(fragment: str) -> str:
     return " ".join(sans_expressions.split())
 
 
-def _liens_jsx(texte: str) -> list[dict]:
-    """Liens d un composant React, avec leur destination littérale (ou None si calculée)."""
+def _liens_jsx(texte: str, grammaire: dict[str, tuple[str, ...]] | None = None) -> list[dict]:
+    """Liens d un composant, avec leur destination littérale (ou None si calculée).
+
+    `grammaire` déclare les balises, les attributs de destination et les formes LIÉES du dialecte
+    (TF-0295, levée 2). Par défaut : React, la grammaire d origine de TF-0283.
+    """
+    regles = grammaire or _GRAMMAIRES[".jsx"]
     liens: list[dict] = []
-    for balise in _BALISES_LIEN:
-        for ouverture in re.finditer(rf"<{balise}(?=[\s/>])", texte):
+    for balise in regles["balises"]:
+        for ouverture in re.finditer(rf"<{re.escape(balise)}(?=[\s/>])", texte):
             fin = _fin_de_balise(texte, ouverture.end())
             if fin is None:
                 continue
             attributs = _attributs_jsx(texte[ouverture.end():fin])
             destination: str | None = None
             exprimee = False
-            for nom in _ATTRIBUTS_DESTINATION:
+            # Les formes LIÉES d abord : `:to="lien"` et `to="/en"` peuvent cohabiter, et c est
+            # la liée qui gagne à l exécution. La lire en second aurait jugé la morte.
+            for nom in (*regles["liees"], *regles["destinations"]):
                 if nom not in attributs:
                     continue
                 valeur = attributs[nom]
-                if valeur is None:
+                if valeur is None or nom in regles["liees"] or _INTERPOLATION.search(valeur):
                     exprimee = True
                 else:
                     destination = valeur
@@ -607,6 +660,67 @@ def _routes_declarees_par_le_front(cible: Path) -> list[str]:
     return [e.id.split(":", 1)[1] for e in inventaire_front if e.id.startswith("route:")]
 
 
+# --- Locales DÉCLARÉES par la configuration du framework (TF-0295, levée 4) --------------------
+# La locale d un composant était déduite de la seule arborescence LITTÉRALE. Or un produit Next
+# internationalisé ne porte aucun segment de locale littéral : ses routes vivent sous
+# `app/[locale]/…`, et la liste des locales est DÉCLARÉE dans la configuration. Conséquence
+# mesurée sur ce patron : `arbre["locales"]` sortait VIDE, donc `HeaderEn.tsx` n avait plus de
+# locale reconnaissable, donc les contrôles de logo, de bascule et de cohérence de locale étaient
+# tous DÉSACTIVÉS — sur le patron d application le plus courant, et sans que rien ne le dise.
+# C est exactement la configuration d INS-0001.
+_FICHIERS_CONFIG_LOCALES = (
+    "next.config.js", "next.config.mjs", "next.config.cjs", "next.config.ts",
+    "i18n.js", "i18n.ts", "i18n.config.js", "i18n.config.ts",
+    "i18n/routing.ts", "i18n/routing.js", "src/i18n/routing.ts", "src/i18n/routing.js",
+    "i18n/request.ts", "src/i18n/request.ts",
+    "nuxt.config.ts", "nuxt.config.js", "svelte.config.js",
+)
+# `locales: ['fr', 'en']`, `locales = ["fr","en"]`, `defaultLocale: 'fr'`. Seul le LITTÉRAL est lu :
+# une liste construite à l exécution n est pas devinée.
+_LOCALES_CONFIG = re.compile(r"locales\s*[:=]\s*\[([^\]]*)\]", re.IGNORECASE)
+_LOCALE_DEFAUT_CONFIG = re.compile(
+    r"default(?:Locale|Lang)\s*[:=]\s*[\"'`]([A-Za-z-]{2,5})[\"'`]", re.IGNORECASE
+)
+_CHAINE_SIMPLE = re.compile(r"[\"'`]([A-Za-z-]{2,5})[\"'`]")
+# Segment dynamique de locale : il PROUVE que le produit est internationalisé par configuration,
+# mais il ne dit pas quelles locales — c est la configuration qui les nomme.
+_SEGMENTS_DYNAMIQUES_LOCALE = ("[locale]", "[lang]", "[lng]", "[...locale]", "[[...locale]]")
+
+
+def locales_declarees(cible: Path) -> set[str]:
+    """Locales que la CONFIGURATION du framework déclare — jamais devinées.
+
+    Filtrées par `_LOCALES_CONNUES` pour la même raison que partout ailleurs ici : prendre une
+    valeur quelconque pour une locale fabriquerait une parité imaginaire, donc des constats contre
+    des liens sains.
+    """
+    trouvees: set[str] = set()
+    for nom in _FICHIERS_CONFIG_LOCALES:
+        fichier = cible / nom
+        if not fichier.is_file():
+            continue
+        texte = fichier.read_text(encoding="utf-8", errors="replace")
+        for corps in _LOCALES_CONFIG.findall(texte):
+            trouvees |= {
+                code.lower()
+                for code in _CHAINE_SIMPLE.findall(corps)
+                if code.split("-")[0].lower() in _LOCALES_CONNUES
+            }
+        for code in _LOCALE_DEFAUT_CONFIG.findall(texte):
+            if code.split("-")[0].lower() in _LOCALES_CONNUES:
+                trouvees.add(code.split("-")[0].lower())
+    return {code.split("-")[0] for code in trouvees}
+
+
+def _locale_par_configuration(cible: Path) -> bool:
+    """Le produit route-t-il ses locales par un segment DYNAMIQUE (`app/[locale]/…`) ?"""
+    return any(
+        partie in _SEGMENTS_DYNAMIQUES_LOCALE
+        for fichier in _fichiers(cible, _EXTENSIONS_ROUTE)
+        for partie in fichier.parts
+    )
+
+
 def _arborescence(cible: Path) -> dict:
     """Ce que le projet DÉCLARE comme destinations atteignables, et les locales qu il préfixe."""
     from forge_tests.adaptateurs import front
@@ -620,13 +734,24 @@ def _arborescence(cible: Path) -> dict:
         front.motif_de_route(route)
         for route in {r for r in declarees if r.startswith("/") and (":" in r or "*" in r)}
     ]
-    locales = {
+    litterales = {
         segment
         for chemin in chemins
         for segment in [chemin.split("/")[1] if chemin.count("/") >= 1 else ""]
         if segment in _LOCALES_CONNUES
     }
-    return {"chemins": chemins, "motifs": motifs, "locales": locales}
+    # TF-0295 (levée 4) : l arborescence littérale ET la configuration. Les deux sources sont
+    # tenues à part pour que le rapport puisse DIRE laquelle a parlé — « aucune locale » et
+    # « locales lues dans next.config » ne sont pas le même rapport.
+    configurees = locales_declarees(cible)
+    return {
+        "chemins": chemins,
+        "motifs": motifs,
+        "locales": litterales | configurees,
+        "locales_litterales": litterales,
+        "locales_configurees": configurees,
+        "routage_dynamique": _locale_par_configuration(cible),
+    }
 
 
 def _connue(destination: str, arbre: dict) -> bool:
@@ -710,6 +835,16 @@ def _juger_lien(lien: dict, locale_composant: str | None, arbre: dict) -> str | 
             "servie"
         )
 
+    # TF-0295 (levée 4) — les trois contrôles qui suivent ont tous besoin de la RACINE d une
+    #    locale, et cette racine n est connaissable que si les locales le sont. Sur un produit qui
+    #    route ses locales par un segment DYNAMIQUE (`app/[locale]/…`) sans les déclarer nulle
+    #    part, affirmer que l accueil d un composant est « / » est une DEVINETTE — et elle
+    #    accusait un `HeaderEn.tsx` dont le logo pointe correctement vers `/en`. Le jugement se
+    #    SUSPEND donc, et la suspension se déclare au rapport (`_declarations_de_composants`) :
+    #    un cas non résolu dégrade en non jugé motivé, jamais en finding.
+    if arbre.get("routage_dynamique") and not locales:
+        return None
+
     # 2. Le logo — sa cible est CONNUE D AVANCE : la racine de la locale qu il sert. Un logo qui
     #    mène à une page profonde emmène tout le site sur cette page, depuis chaque écran.
     if _porte_un_logo(lien):
@@ -753,18 +888,21 @@ def _juger_lien(lien: dict, locale_composant: str | None, arbre: dict) -> str | 
     )
 
 
-def _relever_composants(cible: Path) -> tuple[list[dict], int]:
-    """Liens des composants React, jugés. Le second membre compte les destinations EXPRIMÉES."""
+def _relever_composants(cible: Path) -> tuple[list[dict], int, list[str]]:
+    """Liens des composants, jugés. Puis le compte des destinations EXPRIMÉES, puis ce qui se
+    DÉCLARE au rapport : les dialectes réellement lus, et d où viennent les locales (TF-0295)."""
     fichiers = _fichiers(cible, EXTENSIONS_COMPOSANTS)
     if not fichiers:
-        return [], 0
+        return [], 0, []
     arbre = _arborescence(cible)
     locales = set(arbre["locales"])
+    declarations = _declarations_de_composants(fichiers, arbre)
     releve: list[dict] = []
     exprimees = 0
     for fichier in fichiers:
         texte = fichier.read_text(encoding="utf-8", errors="replace")
-        liens = _liens_jsx(texte)
+        # TF-0295 (levée 2) : chaque composant est lu avec la grammaire de SON dialecte.
+        liens = _liens_jsx(texte, _GRAMMAIRES.get(fichier.suffix.lower()))
         if not liens:
             continue
         locale = _locale_du_composant(fichier, cible, locales)
@@ -786,14 +924,59 @@ def _relever_composants(cible: Path) -> tuple[list[dict], int]:
                     "motif": _juger_lien(lien, locale, arbre),
                 }
             )
-    return releve, exprimees
+    return releve, exprimees, declarations
 
 
-def _relever(cible: Path) -> tuple[list[dict], bool, int]:
+def _declarations_de_composants(fichiers: list[Path], arbre: dict) -> list[str]:
+    """Ce que le contrôle des liens de composants DIT de lui-même — TF-0295.
+
+    Deux phrases, et chacune répare un silence : quels dialectes ont été lus (avant, seul React
+    l était et rien ne le disait), et d où viennent les locales opposables. « Aucune locale » et
+    « locales lues dans la configuration » ne donnent pas le même verdict aux contrôles de logo,
+    de bascule de langue et de cohérence — les taire rendait leur DÉSACTIVATION invisible.
+    """
+    lus = sorted({fichier.suffix.lower() for fichier in fichiers} & set(_GRAMMAIRES))
+    declarations = [
+        "interface/liens : dialectes de composant lus — "
+        + ", ".join(f"`{suffixe}`" for suffixe in lus)
+        + " ; chacun avec SA grammaire de destination (les formes liees de Vue, `:to` et "
+        "`v-bind:href`, et les interpolations Svelte sont comptees EXPRIMEES, jamais jugees)"
+    ]
+    sources: list[str] = []
+    if arbre["locales_litterales"]:
+        sources.append(
+            "arborescence litterale (" + ", ".join(sorted(arbre["locales_litterales"])) + ")"
+        )
+    if arbre["locales_configurees"]:
+        sources.append(
+            "configuration du framework (" + ", ".join(sorted(arbre["locales_configurees"])) + ")"
+        )
+    if sources:
+        declarations.append(
+            "interface/liens : locales opposables lues depuis " + " et ".join(sources)
+        )
+    elif arbre["routage_dynamique"]:
+        declarations.append(
+            "interface/liens : le produit route ses locales par un segment DYNAMIQUE "
+            "(`app/[locale]/…`) mais AUCUNE liste de locales n est lisible dans sa configuration "
+            "— logo, bascule de langue et coherence de locale sont donc NON JUGES : declarer les "
+            "locales (`locales: ['fr','en']` dans next.config) les rendrait opposables"
+        )
+    else:
+        declarations.append(
+            "interface/liens : aucune locale opposable (ni segment litteral, ni liste declaree "
+            "dans la configuration) — le produit est traite comme monolingue et les controles de "
+            "logo, de bascule de langue et de coherence de locale ne s appliquent pas"
+        )
+    return declarations
+
+
+def _relever(cible: Path) -> tuple[list[dict], bool, int, list[str]]:
     """Affordances du projet (gabarits ET liens de composants), motif de défaut de chacune.
 
     Troisième membre : le nombre de destinations EXPRIMÉES rencontrées — comptées pour être
-    déclarées, jamais jugées.
+    déclarées, jamais jugées. Quatrième : ce que le contrôle des liens de composants déclare de
+    son propre périmètre (dialectes lus, provenance des locales — TF-0295).
     """
     corpus, tronque = _corpus_js(cible)
     releve: list[dict] = []
@@ -823,13 +1006,13 @@ def _relever(cible: Path) -> tuple[list[dict], bool, int]:
             )
     # TF-0283 : les liens des composants React rejoignent le MÊME relevé. Les tenir à part aurait
     # produit une seconde surface, un second seuil et un second verdict pour la même loi.
-    composants, exprimees = _relever_composants(cible)
+    composants, exprimees, declarations = _relever_composants(cible)
     releve += composants
-    return releve, tronque, exprimees
+    return releve, tronque, exprimees, declarations
 
 
 def inventaire(cible: Path) -> list[Element]:
-    releve, _, _ = _relever(cible)
+    releve, _, _, _ = _relever(cible)
     return [
         Element(e["id"], PAN, f"{e['tag']} « {e['libelle']} »", e["fichier"]) for e in releve
     ]
@@ -860,8 +1043,8 @@ def sans_objet(cible: Path) -> str | None:
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
-    releve, tronque, exprimees = _relever(cible)
-    non_juge = list(NON_JUGE)
+    releve, tronque, exprimees, declarations = _relever(cible)
+    non_juge = [*NON_JUGE, *declarations]
     if exprimees:
         non_juge.append(
             f"interface/liens : {exprimees} destination(s) de lien EXPRIMEE(S) dans les "

@@ -313,7 +313,7 @@
     {
       "id": "interface-statique-004",
       "domaine": "interface-statique",
-      "enonce": "interface : les composants de framework (.jsx, .tsx, .vue, .svelte) ne sont pas analyses comme gabarits — seule la DESTINATION litterale des liens des composants React (.jsx, .tsx) est jugee (TF-0283) ; leur surface est inventoriee par le pan front via `data-testid`",
+      "enonce": "interface : les composants de framework (.jsx, .tsx, .vue, .svelte) ne sont pas analyses comme gabarits — seule la DESTINATION litterale de leurs liens est jugee (TF-0283, etendu a `.vue` et `.svelte` par TF-0295) ; leur CABLAGE reste hors perimetre et leur surface est inventoriee par le pan front via `data-testid`",
       "statut": "assume",
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : contrôle STATIQUE par nature : le dynamique appartient au pan qualif et aux tests d interactions (deux étages voulus). Réévaluer si un run réel prouve que la limite coûte."
     },
@@ -584,6 +584,27 @@
       "note": "le DOM capture est autoportant par choix : dependre du serveur au moment du jugement rendrait le verdict non reproductible."
     },
     {
+      "id": "i18n-build-servi-003",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : la parite de NAVIGATION compare le NOMBRE d entrees du menu de la page d accueil de chaque locale au menu le PLUS RICHE ; deux menus de meme taille aux entrees differentes passent le controle, et un sous-menu qui ne s ouvre qu au clic (non rendu dans le HTML servi) n est pas compte",
+      "statut": "ok",
+      "preuve": "tests/test_tf_0295_levees.py — levee 1 : l appariement se fait par ENTREE (destination delocalisee), deux menus de meme taille aux entrees differentes echouent, et les entrees manquantes sont nommees"
+    },
+    {
+      "id": "i18n-build-servi-004",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : la langue du contenu est jugee par HEURISTIQUE — densite de mots-outils francais sur le texte visible de la page. Le lexique est FRANCAIS et lui seul : le pan detecte du francais servi sous une locale non francaise, jamais l inverse ni un autre couple de langues",
+      "statut": "ok",
+      "preuve": "tests/test_tf_0295_levees.py — levee 3 : le lexique est une TABLE (`fr`, `en`) extensible par declaration de projet, et le couple symetrique (anglais servi sous `/fr`) est prouve rouge/vert"
+    },
+    {
+      "id": "interface-statique-009",
+      "domaine": "interface-statique",
+      "enonce": "interface/liens : la locale d un composant est deduite de son arborescence ou de son nom (`.../en/Header.tsx`, `HeaderEn.tsx`) ; un composant qui rend PLUSIEURS locales selon une prop n a pas de locale propre et ses liens ne sont pas juges sur ce critere",
+      "statut": "ok",
+      "preuve": "tests/test_tf_0295_levees.py — levee 4 : les locales opposables sont lues dans la configuration du framework (`locales: [...]`), et sans locale connaissable le jugement est SUSPENDU plutot que devine"
+    },
+    {
       "id": "api-fastapi-002",
       "domaine": "api-fastapi",
       "enonce": "api : un code asserte dans une fonction de test est rattache a TOUS les appels de cette fonction ; l oracle ne relie pas l assertion a un appel precis",
@@ -776,18 +797,6 @@
       "statut": "todo"
     },
     {
-      "id": "i18n-build-servi-003",
-      "domaine": "i18n-build-servi",
-      "enonce": "i18n : la parite de NAVIGATION compare le NOMBRE d entrees du menu de la page d accueil de chaque locale au menu le PLUS RICHE ; deux menus de meme taille aux entrees differentes passent le controle, et un sous-menu qui ne s ouvre qu au clic (non rendu dans le HTML servi) n est pas compte",
-      "statut": "todo"
-    },
-    {
-      "id": "i18n-build-servi-004",
-      "domaine": "i18n-build-servi",
-      "enonce": "i18n : la langue du contenu est jugee par HEURISTIQUE — densite de mots-outils francais sur le texte visible de la page. Le lexique est FRANCAIS et lui seul : le pan detecte du francais servi sous une locale non francaise, jamais l inverse ni un autre couple de langues",
-      "statut": "todo"
-    },
-    {
       "id": "i18n-build-servi-005",
       "domaine": "i18n-build-servi",
       "enonce": "i18n : une page de moins de 40 mots visibles n est pas jugee sur sa langue — sous ce volume, la densite de mots-outils n est plus un signal, c est du bruit",
@@ -803,6 +812,24 @@
       "id": "i18n-build-servi-007",
       "domaine": "i18n-build-servi",
       "enonce": "i18n : les pages conventionnelles de service (`404`, `500`, et tout segment commencant par `_`) sont hors comptage de parite : elles ne sont pas des routes du produit",
+      "statut": "todo"
+    },
+    {
+      "id": "i18n-build-servi-008",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : la parite de NAVIGATION apparie les entrees du menu de la page d accueil de chaque locale a celles du menu le PLUS RICHE, par DESTINATION delocalisee — deux menus de meme taille aux entrees differentes echouent donc, et les entrees manquantes sont nommees. Un sous-menu qui ne s ouvre qu au clic (absent du HTML servi) n est toujours pas compte, et une entree sans destination lisible est appariee sur son libelle, donc jamais entre deux langues",
+      "statut": "todo"
+    },
+    {
+      "id": "i18n-build-servi-009",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : la langue du contenu est jugee par HEURISTIQUE — densite des mots-outils d une langue sur le texte visible de la page. Le pan connait les lexiques `fr` et `en` et accepte ceux que le projet DECLARE (FORGE_TESTS_I18N_LEXIQUES) ; une langue servie sans lexique opposable n est pas jugee, et le rapport DIT contre quels lexiques il a mesure",
+      "statut": "todo"
+    },
+    {
+      "id": "i18n-build-servi-010",
+      "domaine": "i18n-build-servi",
+      "enonce": "i18n : seule une locale PREFIXEE est jugee sur sa langue — la locale par defaut n a pas de prefixe, donc aucune langue opposable, et la deviner reviendrait a interroger le suspect",
       "statut": "todo"
     },
     {
@@ -824,12 +851,6 @@
       "statut": "todo"
     },
     {
-      "id": "interface-statique-009",
-      "domaine": "interface-statique",
-      "enonce": "interface/liens : la locale d un composant est deduite de son arborescence ou de son nom (`.../en/Header.tsx`, `HeaderEn.tsx`) ; un composant qui rend PLUSIEURS locales selon une prop n a pas de locale propre et ses liens ne sont pas juges sur ce critere",
-      "statut": "todo"
-    },
-    {
       "id": "interface-statique-010",
       "domaine": "interface-statique",
       "enonce": "interface/liens : « logo » et « bascule de langue » sont reconnus par HEURISTIQUE — mention de `logo` dans le contenu du lien, libelle egal a un nom de langue ou attribut `hrefLang`. Un logo sans le mot `logo` ni `hrefLang` echappe au controle, et le lien ainsi reconnu se conteste comme tout constat (`declarations`)",
@@ -839,6 +860,18 @@
       "id": "interface-statique-011",
       "domaine": "interface-statique",
       "enonce": "interface/liens : le libelle d un lien est lu jusqu a la premiere fermeture de meme balise ; un lien qui en imbrique un autre de meme nom verrait son libelle tronque",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-012",
+      "domaine": "interface-statique",
+      "enonce": "interface/liens : la locale d un composant est deduite de son arborescence ou de son nom (`.../en/Header.tsx`, `HeaderEn.tsx`), et les locales OPPOSABLES sont lues dans l arborescence litterale ET dans la configuration du framework (`locales: [...]` de Next, nuxt, next-intl — TF-0295) ; un composant qui rend PLUSIEURS locales selon une prop n a pas de locale propre et ses liens ne sont pas juges sur ce critere. Quand le produit route ses locales par un segment DYNAMIQUE sans les declarer, aucune racine de locale n est connaissable : logo, bascule de langue et coherence de locale sont alors NON JUGES, et le rapport le dit — les deviner accusait un logo correct",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-013",
+      "domaine": "interface-statique",
+      "enonce": "interface/liens : les grammaires de destination sont DECLAREES par dialecte — React (`href`, `to`, expression `{...}`), Vue (`to`, `:to`, `v-bind:href`, la forme liee etant toujours EXPRIMEE) et Svelte (`href`, interpolation dans la chaine). Un dialecte absent de la table (Angular, Astro, Solid) n est pas lu, et un attribut de destination pose par une bibliotheque de routage inconnue non plus",
       "statut": "todo"
     },
     {

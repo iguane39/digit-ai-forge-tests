@@ -103,7 +103,7 @@ def _produit(racine: Path, entete: str, pied: str) -> Path:
 
 def _motifs(cible: Path) -> dict[str, str]:
     """Libellé du lien -> motif du constat, pour les seuls liens jugés fautifs."""
-    releve, _ = interface._relever_composants(cible)
+    releve, _, _ = interface._relever_composants(cible)
     return {entree["libelle"]: entree["motif"] for entree in releve if entree["motif"]}
 
 
@@ -128,7 +128,7 @@ def test_rouge_le_contact_anglais_de_l_entete_pointe_vers_le_francais(tmp_path: 
 def test_rouge_le_contact_anglais_du_pied_de_page_aussi(tmp_path: Path) -> None:
     """Défaut 3 — le même défaut dans un AUTRE composant : les deux sont nommés, pas un seul."""
     cible = _produit(tmp_path, _ENTETE_FAUX, _PIED_FAUX)
-    releve, _ = interface._relever_composants(cible)
+    releve, _, _ = interface._relever_composants(cible)
     fautifs = {
         Path(e["fichier"]).name for e in releve if e["motif"] and e["libelle"] == "Contact"
     }
@@ -147,7 +147,7 @@ def test_rouge_les_quatre_liens_et_EUX_SEULS_sont_nommes(tmp_path: Path) -> None
     """Le compte exact : quatre constats. Un cinquième serait un faux positif, et il coûterait
     autant de confiance que les quatre défauts en coûtent."""
     cible = _produit(tmp_path, _ENTETE_FAUX, _PIED_FAUX)
-    releve, _ = interface._relever_composants(cible)
+    releve, _, _ = interface._relever_composants(cible)
     fautifs = [e for e in releve if e["motif"]]
     assert len(fautifs) == 4, [e["motif"] for e in fautifs]
 
@@ -155,7 +155,7 @@ def test_rouge_les_quatre_liens_et_EUX_SEULS_sont_nommes(tmp_path: Path) -> None
 # --- Fixture VERTE : les mêmes composants, corrigés --------------------------------------------
 def test_vert_les_memes_composants_corriges_ne_produisent_aucun_constat(tmp_path: Path) -> None:
     cible = _produit(tmp_path, _ENTETE_JUSTE, _PIED_JUSTE)
-    releve, _ = interface._relever_composants(cible)
+    releve, _, _ = interface._relever_composants(cible)
     assert [e["motif"] for e in releve if e["motif"]] == []
     assert len(releve) == 6  # les six liens sont bien RELEVÉS, pas ignorés
 
@@ -163,7 +163,7 @@ def test_vert_les_memes_composants_corriges_ne_produisent_aucun_constat(tmp_path
 def test_vert_un_lien_externe_n_est_jamais_juge(tmp_path: Path) -> None:
     """Le lien LinkedIn du pied de page : hors du site, hors de portée d un contrôle statique."""
     cible = _produit(tmp_path, _ENTETE_JUSTE, _PIED_JUSTE)
-    releve, _ = interface._relever_composants(cible)
+    releve, _, _ = interface._relever_composants(cible)
     externe = [e for e in releve if e["libelle"] == "LinkedIn"]
     assert len(externe) == 1 and externe[0]["motif"] is None
 
@@ -198,7 +198,7 @@ def test_une_destination_exprimee_est_comptee_et_jamais_jugee(tmp_path: Path) ->
     (cible / "components" / "Dyn.tsx").write_text(
         "<a href={`/${locale}/blog`}>Blog</a>\n<a href={lien}>Autre</a>\n", encoding="utf-8"
     )
-    releve, exprimees = interface._relever_composants(cible)
+    releve, exprimees, _ = interface._relever_composants(cible)
     assert exprimees == 2
     assert [e["motif"] for e in releve if e["fichier"].endswith("Dyn.tsx")] == [None, None]
 
