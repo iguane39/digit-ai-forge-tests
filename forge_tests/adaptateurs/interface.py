@@ -175,6 +175,13 @@ NON_JUGE = [
     "composant",
     "interface/ecart-servi : une destination EXPRIMEE d un composant n entre pas dans les "
     "entrees promises — comparer ce qu on n a pas resolu accuserait un deploiement correct",
+    # TF-0312 — la frontiere qui restait TUE, et qui a produit une fausse accusation hors bancs.
+    "interface/ecart-servi : les deux termes delocalisent leurs cles, le servi avec les locales "
+    "qu il PREFIXE et la source avec celles qu on lui donne. Les locales du servi sont donc "
+    "rendues a la lecture de la source (alignement). Reste indeterminable une entree source "
+    "`/xx/…` dont `xx` est une locale CONNUE que ni l arborescence source ni le build servi ne "
+    "nomme : son espace de cles n est pas etablissable, le jugement y est SUSPENDU et l entree "
+    "NOMMEE au motif — un deploiement correct accuse coute plus cher qu une entree non jugee",
 ]
 
 # Attributs qui portent un gestionnaire, tous dialectes confondus.
@@ -965,18 +972,25 @@ def _entree_delocalisee(destination: str, locales: set[str]) -> str:
     return chemin
 
 
-def navigation_source(cible: Path) -> tuple[dict[str, set[str]], list[str], int]:
+def navigation_source(
+    cible: Path, locales_en_plus: set[str] | None = None
+) -> tuple[dict[str, set[str]], list[str], int]:
     """(entrées de navigation promises par locale, fichiers lus, nombre de liens de nav lus).
 
     La clé `""` porte les entrées des composants SANS locale propre : ils servent toutes les
     locales, donc leurs entrées sont promises partout. Une destination EXPRIMÉE n entre pas — on
     ne compare pas ce qu on n a pas résolu, sous peine d accuser un déploiement correct.
+
+    `locales_en_plus` (TF-0312) : locales que l APPELANT sait être des locales sans que
+    l arborescence source les déclare — en pratique celles que le build servi PRÉFIXE. Sans
+    elles, la clé source `/en/tarifs` et la clé servie `/tarifs` (délocalisée par le lecteur du
+    build) ne vivent pas dans le même espace, et la comparaison accuse un déploiement correct.
     """
     fichiers = _fichiers(cible, EXTENSIONS_COMPOSANTS)
     if not fichiers:
         return {}, [], 0
     arbre = _arborescence(cible)
-    locales = set(arbre["locales"])
+    locales = set(arbre["locales"]) | (locales_en_plus or set())
     promises: dict[str, set[str]] = {}
     lus: list[str] = []
     liens_lus = 0
@@ -1048,19 +1062,70 @@ def ecart_servi_versionne(cible: Path) -> dict:
     pages = i18n.pages_servies(build)
     locales_servies = i18n.locales_servies(pages)
     par_locale = i18n._par_locale(pages, locales_servies)
-    communes = promises.get("", set())
+
+    # TF-0312 — ALIGNER LES DEUX ESPACES DE CLÉS avant de comparer quoi que ce soit. Le lecteur du
+    # build DÉLOCALISE ses clés avec les locales qu il SERT (`/en/tarifs` -> `/tarifs`) ; la source
+    # les délocalisait avec les seules locales que son arborescence DÉCLARE. Quand la source n en
+    # déclare aucune et que le servi en sert une, les deux termes ne parlent plus de la même chose
+    # et le contrôle accuse un déploiement CORRECT : reproduit le 17/08 hors bancs, 3 entrées
+    # « manquantes » sur un servi qui les rendait toutes. Les locales du SERVI sont un fait
+    # constaté, pas une supposition : les rendre à la lecture de la source est l alignement.
+    locales_source = set(_arborescence(cible)["locales"])
+    if locales_servies - locales_source:
+        promises, fichiers_lus, liens_lus = navigation_source(cible, locales_servies)
+    reconnues = locales_source | locales_servies
+
+    # Reste le cas où AUCUN des deux termes ne nomme la locale : une entrée source `/xx/…` dont
+    # `xx` est une locale connue sans que la source la déclare ni que le servi la préfixe. Elle
+    # peut être une page localisée comme une page `/en/…` légitime — indéterminable. Le jugement
+    # est alors SUSPENDU sur ces entrées, et DIT (patron TF-0295 levée 4 : la provenance des
+    # locales se déclare). Préférer le non-jugement déclaré au faux positif.
+    suspendues = {
+        entree
+        for entrees in promises.values()
+        for entree in entrees
+        if (segments := entree.split("/"))[1:2]
+        and segments[1] in _LOCALES_CONNUES
+        and segments[1] not in reconnues
+    }
+
+    communes = promises.get("", set()) - suspendues
     manquantes: dict[str, list[str]] = {}
     servies_par_locale: dict[str, int] = {}
+    comparees = 0
     for locale in sorted(par_locale):
         accueil = par_locale[locale].get("/")
         if accueil is None:
             continue
         servies = set(i18n.entrees_de_menu(i18n._lire(accueil), locales_servies))
         servies_par_locale[locale or "defaut"] = len(servies)
-        attendues = communes | promises.get(locale, set())
+        attendues = communes | (promises.get(locale, set()) - suspendues)
+        comparees += len(attendues)
         absentes = sorted(attendues - servies)
         if absentes:
             manquantes[locale] = absentes
+
+    motif_suspension = (
+        ""
+        if not suspendues
+        else (
+            f" — jugement SUSPENDU sur {len(suspendues)} entree(s) source ("
+            + ", ".join(f"« {entree} »" for entree in sorted(suspendues))
+            + ") : leur premier segment est une locale CONNUE que ni l arborescence source ni le "
+            "build servi ne declare, l espace de cles n est donc pas determinable. Declarer les "
+            "locales dans la configuration du framework pour les faire juger (TF-0312)"
+        )
+    )
+    if suspendues and not comparees:
+        return {
+            "verdict": "SKIP",
+            "motif": (
+                "ecart servi/versionne : navigation SOURCE lue "
+                f"({liens_lus} lien(s) de `<nav>` dans {', '.join(fichiers_lus)}) mais AUCUNE "
+                f"entree comparable{motif_suspension}"
+            ),
+            "manquantes": {},
+        }
     return {
         "verdict": "FAIL" if manquantes else "PASS",
         "motif": (
@@ -1068,6 +1133,7 @@ def ecart_servi_versionne(cible: Path) -> dict:
             f"({liens_lus} lien(s) de `<nav>` dans {', '.join(fichiers_lus)}) confrontee au "
             f"build servi `{build}` — entrees servies par locale : "
             + " · ".join(f"{nom}={compte}" for nom, compte in sorted(servies_par_locale.items()))
+            + motif_suspension
         ),
         "manquantes": manquantes,
         "build": str(build),
