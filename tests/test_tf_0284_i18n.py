@@ -99,10 +99,67 @@ def test_vert_aucun_constat_sur_le_banc_corrige() -> None:
     assert sortie.surface["ratio"] == 1.0
 
 
-def test_vert_la_locale_par_defaut_n_est_jamais_jugee_sur_sa_langue() -> None:
+def test_vert_aucune_page_du_banc_corrige_n_est_jugee_sur_sa_langue() -> None:
+    """Le compte du banc vert, dit pour lui-même : aucun constat de LANGUE sur le banc corrigé."""
+    assert not [
+        identifiant for identifiant in _constats(VERT) if identifiant.startswith("i18n:route:")
+    ]
+
+
+# --- La locale par défaut, sur du contenu réellement JUGEABLE (TF-0301) -------------------------
+# Ce contrôle était asserté sur le banc VERT — qui n a AUCUN finding : « aucun message ne contient
+# FRANÇAIS » y est vrai à vide, et le test passait sans rien discriminer (R-35 : un contrôle vert
+# qui ne discrimine rien vaut un contrôle jamais joué). La fixture ci-dessous donne à la locale par
+# défaut du français en volume SUFFISANT pour être jugé, puis oppose le témoin inverse : le MÊME
+# texte servi sous `/en` DOIT sortir constaté. Le test échoue donc si la règle disparaît, dans les
+# deux sens — exemption perdue comme contrôle perdu.
+_TEXTE_FRANCAIS = (
+    "Cette page est servie dans la langue par defaut du site, qui est le francais. Elle presente "
+    "les activites de la maison, les equipes qui font le travail et les moyens de nous joindre. "
+    "Nous publions aussi les tarifs pour chaque prestation, avec les delais que nous tenons."
+)
+
+
+def _build_bilingue(racine: Path, texte: str) -> Path:
+    """Un build servi minimal : la MÊME page française sous la locale par défaut ET sous `/en`.
+
+    Le même texte des deux côtés EST le témoin : ce qui sépare les deux verdicts n est pas le
+    contenu, c est la locale sous laquelle il est servi. Les deux menus portent la même entrée
+    délocalisée (`/`), sans quoi la parité de navigation ajouterait un constat étranger au sujet.
+    """
+    build = racine / "dist"
+    (build / "en").mkdir(parents=True)
+    gabarit = (
+        '<html lang="{lang}"><body><nav><a href="{accueil}">Accueil</a></nav>'
+        "<main><p>{texte}</p></main></body></html>"
+    )
+    (build / "index.html").write_text(
+        gabarit.format(lang="fr", accueil="/", texte=texte), encoding="utf-8"
+    )
+    (build / "en" / "index.html").write_text(
+        gabarit.format(lang="en", accueil="/en", texte=texte), encoding="utf-8"
+    )
+    return racine
+
+
+def test_la_locale_par_defaut_n_est_pas_jugee_alors_que_son_contenu_EST_jugeable(
+    tmp_path: Path,
+) -> None:
     """Les pages de `/` sont en français et c est la langue du site : les juger avec le lexique
     français condamnerait tout produit francophone dès la première page."""
-    assert all("FRANÇAIS" not in message for message in _constats(VERT).values())
+    densite, mots = i18n.densite_mots_outils_fr(_TEXTE_FRANCAIS)
+    # La fixture est jugeable : au-dessus du volume minimal ET du seuil de densité. Sans cette
+    # mesure, l exemption pourrait être « prouvée » par un texte que le pan n aurait pas jugé.
+    assert mots >= i18n._MINIMUM_MOTS, mots
+    assert densite >= i18n.SEUIL_DENSITE_FR, densite
+
+    constats = _constats(_build_bilingue(tmp_path, _TEXTE_FRANCAIS))
+
+    assert "i18n:route:defaut:/" not in constats, constats
+    # TÉMOIN INVERSE : le même français, servi sous une locale préfixée, EST constaté et nommé.
+    assert "i18n:route:en:/" in constats, constats
+    assert "« fr »" in constats["i18n:route:en:/"]
+    assert len(constats) == 1, constats
 
 
 # --- L heuristique de langue, dans les deux sens ------------------------------------------------
