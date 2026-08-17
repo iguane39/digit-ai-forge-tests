@@ -284,7 +284,12 @@ class _FaussePage:
     def wait_for_load_state(self, *_args: object) -> None:
         return None
 
-    def query_selector(self, selecteur: str):
+    def wait_for_selector(self, selecteur: str, **_kw: object):
+        """TF-0313 : la mire est désormais ATTENDUE, pas lue à l instant du `domcontentloaded`.
+
+        Cette instance-là n a pas de mire formulaire (c est un IdP d entreprise) : l attente
+        expire, et le pan a le droit de dire « aucune mire » — après, jamais avant.
+        """
         self.contexte.navigateur.selecteurs.append(selecteur)
         return None
 
