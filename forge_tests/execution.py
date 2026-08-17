@@ -45,6 +45,43 @@ NON_JUGE = [
 # ou si le delai a explose. L appelant lit ce motif et le publie tel quel au rapport.
 _MOTIFS: dict[tuple[str, str], str] = {}
 
+# TF-0299 — MARQUEUR d un préalable d ENVIRONNEMENT manquant, porté par le motif lui-même. Il est
+# ce que les lecteurs en aval (la recette, qui prononce S-01) reconnaissent : un préalable absent
+# n est pas une régression, et confondre les deux a coûté cinq minutes de diagnostic en pleine
+# campagne le 17/08 — dix défauts du corpus sortis en [MANQUE], indiscernables d une régression.
+# Le mot est dans le motif plutôt que dans une structure à part pour que le RAPPORT le porte aussi :
+# un état déclaré au seul appelant serait invisible au lecteur du rapport.
+PREALABLE_ABSENT = "PRÉALABLE D ENVIRONNEMENT ABSENT"
+
+# Démon de conteneurs injoignable — les formes RÉELLES du message, relevées sur ce poste et sur
+# les deux systèmes. `docker-py` (via testcontainers) échoue à la construction du client, AVANT le
+# premier test : la suite n a donc jamais tourné. Motifs volontairement SPÉCIFIQUES : « docker »
+# seul apparaîtrait dans le nom d un test ou dans une assertion de suite légitimement rouge, et
+# reclasser une suite rouge en préalable manquant serait le défaut symétrique — celui qui absout.
+_CONTENEUR_INJOIGNABLE = re.compile(
+    r"docker\.errors\.DockerException"
+    r"|DockerException:"
+    r"|Error while fetching server API version"
+    r"|Cannot connect to the Docker daemon"
+    r"|Is the docker daemon running"
+    r"|Could not get Docker client"
+    r"|failed to start container",
+    re.IGNORECASE,
+)
+
+
+def prealable_conteneur(trace: str) -> str | None:
+    """La ligne de `trace` qui PROUVE le démon de conteneurs injoignable, ou None.
+
+    Rendre la ligne plutôt qu un booléen : le motif publié cite la preuve. « le conteneur manque »
+    sans la trace serait un diagnostic à croire sur parole, et le lecteur ne saurait pas si le
+    démon est arrêté, mal configuré ou hors de portée de ce compte.
+    """
+    for ligne in (trace or "").splitlines():
+        if _CONTENEUR_INJOIGNABLE.search(ligne):
+            return " ".join(ligne.split())[:200]
+    return None
+
 
 def _declarer(banc: Path | str, domaine: str, motif: str) -> None:
     _MOTIFS[(str(banc), domaine)] = motif
@@ -204,15 +241,32 @@ def mesurer(banc_str: str) -> dict | None:
         if lance is None:
             return None
         if lance.returncode != 0:
+            trace = f"{lance.stdout or ''}\n{lance.stderr or ''}"
+            # TF-0299 — PRIORITÉ ABSOLUE sur la branche « suite rouge » ci-dessous, même raison
+            # que le port occupé du pan front (TF-0136) : quand le démon de conteneurs est
+            # injoignable, la suite n a JAMAIS tourné — testcontainers échoue à construire son
+            # client avant le premier test. « suite rouge » est alors un diagnostic faux, et il
+            # envoie chercher une régression dans un dépôt sain (constaté le 17/08 : Docker
+            # Desktop arrêté, 10 défauts du corpus en [MANQUE], 5 minutes de diagnostic).
+            preuve = prealable_conteneur(trace)
+            if preuve is not None:
+                _declarer(
+                    banc,
+                    "backend",
+                    f"{PREALABLE_ABSENT} — demon de conteneurs INJOIGNABLE : la suite backend du "
+                    "projet monte sa base par conteneur (testcontainers) et n a donc JAMAIS ete "
+                    "executee. Ce n est ni une suite rouge, ni une regression du framework : "
+                    "aucune mesure n a eu lieu. Demarrer le demon (Docker Desktop), verifier "
+                    f"`docker ps`, puis rejouer. Preuve lue dans la trace : {preuve}",
+                )
+                return None
             # RT-6a — une suite rouge FAUTE DE CONFIGURATION le dit dans sa propre trace. La
             # lire ici est le seul endroit du framework où le projet audité nomme lui-même les
             # identifiants qui lui manquent : sans cela, « suite rouge » couvre indistinctement
             # un bug du projet et une clé tierce jamais saisie par l opérateur.
             from forge_tests.qualification import detecter
 
-            manquants = detecter(
-                banc, "backend", f"{lance.stdout or ''}\n{lance.stderr or ''}"
-            )
+            manquants = detecter(banc, "backend", trace)
             complement = (
                 f" — configuration absente citée par la trace : {', '.join(sorted(manquants))}"
                 if manquants
