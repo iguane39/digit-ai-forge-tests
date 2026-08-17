@@ -264,6 +264,46 @@ def test_le_controle_se_DECLARE_au_rapport_dans_les_trois_issues(tmp_path: Path)
         assert "ecart servi/versionne" in declarations[0], declarations[0]
 
 
+# --- Les BANCS du depot : la branche FAIL entre au corpus (TF-0300) ----------------------------
+# La campagne TF-0288 avait prouve la branche FAIL par les fixtures ci-dessus, et les branches
+# PASS/SKIP en recette sur les deux bancs : la branche qui ACCUSE reposait donc sur pytest seul.
+# Le banc rouge porte desormais la source du site servi par son `dist\` (`site/`), et l ecart y
+# est plante : entree de corpus H-20. Les deux tests ci-dessous sont le double sens de cette
+# entree — sans le second, planter un defaut au rouge pourrait en fabriquer un au vert sans que
+# rien ne le dise, et le critere S-01 exige ZERO bloquant au vert.
+_BANCS = Path(__file__).resolve().parent.parent / "fixtures"
+
+
+def test_banc_rouge_l_ecart_est_constate_et_la_page_manquante_est_NOMMEE() -> None:
+    """H-20 : le menu anglais versionne promet `/en/tarifs`, `dist/en/index.html` ne le sert pas."""
+    cible = _BANCS / "banc-rouge"
+
+    ecart = interface.ecart_servi_versionne(cible)
+
+    assert ecart["verdict"] == "FAIL", ecart
+    assert ecart["manquantes"] == {"en": ["/tarifs"]}, ecart["manquantes"]
+    constats = [
+        f for f in interface.analyser(cible).findings if f.classe == interface.CLASSE_ECART_SERVI
+    ]
+    assert [f.id for f in constats] == ["interface:ecart-servi:en"], [f.id for f in constats]
+    # Le prefixe que le corpus oppose a H-20 : il apparie ce constat et LUI SEUL.
+    assert constats[0].id.startswith("interface:ecart-servi:")
+
+
+def test_banc_vert_ne_produit_AUCUN_constat_nouveau() -> None:
+    """Le second sens, et la condition de S-01 : le banc vert n a pas de source de site, donc pas
+    de versionne opposable — SKIP motive, et zero finding pour ce pan."""
+    cible = _BANCS / "banc-vert"
+
+    ecart = interface.ecart_servi_versionne(cible)
+
+    assert ecart["verdict"] in ("PASS", "SKIP"), ecart
+    assert ecart["manquantes"] == {}, ecart["manquantes"]
+    sortie = interface.analyser(cible)
+    assert [f.id for f in sortie.findings] == [], [f.id for f in sortie.findings]
+    assert sortie.verdict == "PASS"
+
+
 # --- Ce que le controle ne pretend pas faire ---------------------------------------------------
 def test_une_destination_EXPRIMEE_n_entre_pas_dans_les_entrees_promises(tmp_path: Path) -> None:
     """Comparer ce qu on n a pas resolu accuserait un deploiement correct."""
