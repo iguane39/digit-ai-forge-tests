@@ -95,14 +95,24 @@ def test_le_vendored_n_atteint_jamais_les_oracles(tmp_path):
 
 
 def test_l_exclusion_est_declaree_et_nomme_le_dossier(tmp_path, monkeypatch):
-    """ROUGE de la declaration : une exclusion muette est un angle mort, pas un perimetre."""
+    """ROUGE de la declaration : une exclusion muette est un angle mort, pas un perimetre.
+
+    TF-0292 — deux declarations desormais, et le test le verifie : la REGLE (constante
+    `NON_JUGE` du module, donc comptee au registre de dette) et la MESURE (les dossiers que CE
+    scan a reellement ecartes). Un controle de plus qu avant, pas un de moins : la regle seule
+    ne dirait pas ce qui a ete ecarte, la mesure seule ne dirait pas pourquoi.
+    """
     cible = _produit(tmp_path / "produit", secret_dans_le_produit=False)
 
     sortie = _analyser(cible, tmp_path, monkeypatch)
 
-    declarations = [ligne for ligne in sortie.non_juge if "VENDORISE" in ligne]
-    assert declarations, sortie.non_juge
-    assert "vendor" in declarations[0], declarations[0]
+    regles = [ligne for ligne in securite.NON_JUGE if "VENDORISE" in ligne]
+    assert regles, securite.NON_JUGE
+    assert all(regle in sortie.non_juge for regle in regles)
+
+    mesures = [ligne for ligne in sortie.non_juge if "ECARTE de ce scan" in ligne]
+    assert mesures, sortie.non_juge
+    assert "vendor" in mesures[0], mesures[0]
 
 
 def test_le_vendored_ne_produit_plus_aucun_constat(tmp_path, monkeypatch):
@@ -126,12 +136,18 @@ def test_un_vrai_secret_du_produit_reste_detecte(tmp_path, monkeypatch):
     assert "config.py" in sortie.findings[0].localisation, sortie.findings[0].localisation
 
 
-def test_aucune_declaration_quand_il_n_y_a_rien_a_exclure(tmp_path, monkeypatch):
-    """Declarer une exclusion qui n a rien exclu serait du bruit — et un rapport se lit."""
+def test_aucune_MESURE_quand_il_n_y_a_rien_a_exclure(tmp_path, monkeypatch):
+    """Declarer qu on a ecarte ce qu on n a pas ecarte serait du bruit — et un rapport se lit.
+
+    TF-0292 — la distinction est ici : la REGLE se dit toujours (c est une limite du pan, vraie
+    de tout projet, comptee au registre de dette), la MESURE seulement quand elle a une matiere.
+    """
     cible = tmp_path / "produit"
     (cible / "backend" / "app").mkdir(parents=True)
     (cible / "backend" / "app" / "config.py").write_text("CLE = 1\n", encoding="utf-8")
 
     sortie = _analyser(cible, tmp_path, monkeypatch)
 
-    assert not [ligne for ligne in sortie.non_juge if "VENDORISE" in ligne], sortie.non_juge
+    assert not [ligne for ligne in sortie.non_juge if "ECARTE de ce scan" in ligne], sortie.non_juge
+    # La regle, elle, reste dite : un projet sans vendored n annule pas la limite du pan.
+    assert [ligne for ligne in sortie.non_juge if "VENDORISE" in ligne]

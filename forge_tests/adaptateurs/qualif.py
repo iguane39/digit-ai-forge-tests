@@ -149,6 +149,15 @@ NON_JUGE = [
     "qualif : quand une delegation d evenement est posee sur `document` ou `body`, aucun "
     "element ne peut plus etre declare inerte avec certitude — les elements concernes sont "
     "NOMMES en non_juge au lieu d etre accuses",
+    # TF-0292 : la REGLE, promue ici depuis le non_juge de SORTIE ou TF-0268 l avait laissee.
+    # La sortie continue de publier le COMPTE d URLs confrontees et les origines admises — deux
+    # mesures, propres a chaque run ; la regle, elle, borne le controle de la meme facon partout,
+    # et c est a ce titre qu elle doit se compter au registre de dette.
+    "qualif : le controle des URL auto-referentes ne connait que quatre formes — `canonical`, "
+    "`og:url`, le `url`/`@id` du JSON-LD et les `loc` de sitemap — lues sur les seules routes "
+    "PARCOURUES et dans les 20 000 premiers caracteres de chaque page ; une page plus longue, "
+    "une route non atteinte ou une cinquieme facon de se designer echappent au controle. Les "
+    "URLs RELATIVES ne portent aucune origine : elles ne sont pas jugees, et c est la forme saine",
 ]
 
 # Affordances jugees, alignees sur le pan `interface` : meme loi, autre point d observation.

@@ -846,6 +846,18 @@
       "domaine": "qualif-navigateur",
       "enonce": "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",
       "statut": "todo"
+    },
+    {
+      "id": "qualif-navigateur-005",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : le controle des URL auto-referentes ne connait que quatre formes — `canonical`, `og:url`, le `url`/`@id` du JSON-LD et les `loc` de sitemap — lues sur les seules routes PARCOURUES et dans les 20 000 premiers caracteres de chaque page ; une page plus longue, une route non atteinte ou une cinquieme facon de se designer echappent au controle. Les URLs RELATIVES ne portent aucune origine : elles ne sont pas jugees, et c est la forme saine",
+      "statut": "todo"
+    },
+    {
+      "id": "securite-oracles-005",
+      "domaine": "securite-oracles",
+      "enonce": "securite : le code VENDORISE (dossier de convention `vendor`) n est PAS scanne — dependance tierce EPINGLEE, copiee dans le depot pour la figer, jamais servie ni modifiee par le produit. Meme perimetre que `.venv` et que la gate `vendor/` de forge-development : un secret commis DANS un vendored se corrige en changeant l epingle, pas la ligne. Un projet qui nommerait `vendor` un dossier de SON produit le verrait donc ignore ici",
+      "statut": "todo"
     }
   ]
 }
