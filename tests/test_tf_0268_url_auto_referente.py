@@ -173,10 +173,20 @@ class TestCeQuiSeDit:
 
         sortie = qualif.conclure(tmp_path, _config(), releve, [])
 
-        declarations = [ligne for ligne in sortie.non_juge if "auto-referente" in ligne]
-        assert declarations, sortie.non_juge
-        assert "4 URL(s)" in declarations[0], declarations[0]
-        assert _BASE in declarations[0]
+        # TF-0292 — deux declarations desormais : la REGLE (constante `NON_JUGE` du module,
+        # comptee au registre de dette : les quatre formes reconnues, le plafond de lecture,
+        # les seules routes parcourues) et la MESURE de ce run (combien d URLs confrontees, a
+        # quelles origines). Le test verifie les DEUX : un controle de plus, pas un de moins.
+        # La REGLE vit dans la constante du module — c est de la qu elle entre au registre de
+        # dette (`python -m forge_tests.dette`), et `analyser` la verse dans chaque sortie.
+        regles = [ligne for ligne in qualif.NON_JUGE if "auto-referente" in ligne]
+        assert regles, qualif.NON_JUGE
+        assert "canonical" in regles[0] and "20 000" in regles[0], regles[0]
+
+        mesures = [ligne for ligne in sortie.non_juge if "confrontee(s)" in ligne]
+        assert mesures, sortie.non_juge
+        assert "4 URL(s)" in mesures[0], mesures[0]
+        assert _BASE in mesures[0]
 
     def test_zero_URL_trouvee_se_dit_aussi(self, tmp_path: Path):
         """« aucune URL auto-referente » et « jamais regardees » ne sont pas le meme rapport."""

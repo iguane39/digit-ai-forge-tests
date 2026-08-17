@@ -57,6 +57,15 @@ NON_JUGE = [
     "securite : le scan est BORNE aux sources du produit (dependances exclues — .venv, "
     "node_modules, dist, build…) ; un secret commis DANS une dependance versionnee ne serait "
     "pas vu ici, ce n est pas le meme risque ni le meme destinataire qu un secret du produit",
+    # TF-0292 : la REGLE, promue ici depuis le non_juge de SORTIE ou TF-0280 l avait laissee.
+    # La sortie continue de NOMMER les dossiers reellement ecartes — c est une mesure, elle
+    # depend du projet ; la regle, elle, est vraie de tout projet et c est pour cela qu elle
+    # entre au registre de dette, seul endroit ou les limites se comptent.
+    "securite : le code VENDORISE (dossier de convention `vendor`) n est PAS scanne — "
+    "dependance tierce EPINGLEE, copiee dans le depot pour la figer, jamais servie ni modifiee "
+    "par le produit. Meme perimetre que `.venv` et que la gate `vendor/` de forge-development : "
+    "un secret commis DANS un vendored se corrige en changeant l epingle, pas la ligne. Un "
+    "projet qui nommerait `vendor` un dossier de SON produit le verrait donc ignore ici",
 ]
 
 
@@ -239,13 +248,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
         # lecteur d un rapport muet ne peut pas distinguer « rien a signaler dans le vendored »
         # de « le vendored n a jamais ete lu ». La phrase n est emise que si quelque chose a
         # reellement ete ecarte — declarer une exclusion qui n a rien exclu serait du bruit.
+        # TF-0292 : la REGLE vit desormais dans `NON_JUGE` (elle est vraie de tout projet, donc
+        # elle se compte au registre de dette). Ce qui reste ici est la MESURE — les dossiers
+        # que CE scan a reellement ecartes — et elle ne s emet que s il y en a : declarer une
+        # exclusion qui n a rien exclu serait du bruit, et un rapport se lit.
         if vendorises:
             non_juge.append(
-                "securite : code VENDORISE non scanne — "
-                + ", ".join(sorted(vendorises))
-                + " : dependance tierce EPINGLEE, copiee dans le depot et jamais servie ; meme "
-                "perimetre que `.venv` et que la gate `vendor/` de forge-development. Un secret "
-                "commis DANS un vendored se corrige en changeant l epingle, pas la ligne"
+                "securite : code VENDORISE ECARTE de ce scan — " + ", ".join(sorted(vendorises))
             )
         for nom in ORACLES:
             script = racine / f"oracle-{nom}.mjs"
