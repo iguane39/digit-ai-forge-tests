@@ -923,6 +923,18 @@
       "statut": "todo"
     },
     {
+      "id": "qualif-navigateur-007",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : l etiquette de role d une session declaree est DECLARATIVE — la forge ne verifie PAS qu une session dite « admin » EST admin, elle constate ce que cette session VOIT ; une etiquette fausse produit une couverture faussement nommee, et c est l operateur qui repond de l etiquette",
+      "statut": "todo"
+    },
+    {
+      "id": "qualif-navigateur-008",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : les surfaces INVISIBLES a l identite exercee ne sont ni inventoriees ni comptees — une route qu aucun lien ne rend pour ce role, et qu aucune amorce ne declare, n apparait nulle part au rapport : son absence ne se voit pas. Seules les routes REFUSEES (401, 403, redirection d autorisation) sont nommees, parce qu elles ont ete atteintes",
+      "statut": "todo"
+    },
+    {
       "id": "securite-oracles-005",
       "domaine": "securite-oracles",
       "enonce": "securite : le code VENDORISE (dossier de convention `vendor`) n est PAS scanne — dependance tierce EPINGLEE, copiee dans le depot pour la figer, jamais servie ni modifiee par le produit. Meme perimetre que `.venv` et que la gate `vendor/` de forge-development : un secret commis DANS un vendored se corrige en changeant l epingle, pas la ligne. Un projet qui nommerait `vendor` un dossier de SON produit le verrait donc ignore ici",

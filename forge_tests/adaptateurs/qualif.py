@@ -164,6 +164,15 @@ NON_JUGE = [
     "route, reste indiscernable d un echec : la session est alors declaree NON OUVERTE plutot "
     "que supposee ouverte — un audit qui se croit authentifie est plus dangereux qu un audit "
     "anonyme",
+    # TF-0316 : les deux dettes de la couverture par role, assumees par l etude 20260817c.
+    "qualif : l etiquette de role d une session declaree est DECLARATIVE — la forge ne verifie "
+    "PAS qu une session dite « admin » EST admin, elle constate ce que cette session VOIT ; une "
+    "etiquette fausse produit une couverture faussement nommee, et c est l operateur qui repond "
+    "de l etiquette",
+    "qualif : les surfaces INVISIBLES a l identite exercee ne sont ni inventoriees ni comptees — "
+    "une route qu aucun lien ne rend pour ce role, et qu aucune amorce ne declare, n apparait "
+    "nulle part au rapport : son absence ne se voit pas. Seules les routes REFUSEES (401, 403, "
+    "redirection d autorisation) sont nommees, parce qu elles ont ete atteintes",
     "qualif : le controle des URL auto-referentes ne connait que quatre formes — `canonical`, "
     "`og:url`, le `url`/`@id` du JSON-LD et les `loc` de sitemap — lues sur les seules routes "
     "PARCOURUES et dans les 20 000 premiers caracteres de chaque page ; une page plus longue, "
@@ -250,7 +259,12 @@ def provenance_session(config: dict, session: dict | None = None) -> str:
     TF-0314 : quand la session doit être ouverte PAR LA FORGE, la phrase suit le RÉSULTAT que
     `_connecter` a constaté (`session`), jamais la seule présence d un compte en configuration.
     Sans résultat relevé, elle dit qu il n a pas été relevé — elle n affirme pas une session.
+
+    TF-0316 : quand la session porte une ÉTIQUETTE DE RÔLE, la phrase la nomme — sinon une
+    couverture par rôle serait publiée sans qu on puisse dire laquelle vaut pour qui.
     """
+    role = str((session or {}).get("role") or "")
+    tete = "qualif : PROVENANCE DE SESSION" + (f" (role « {role} »)" if role else "") + " — "
     natures: list[str] = []
     if config.get("storage_state"):
         natures.append(
@@ -267,7 +281,7 @@ def provenance_session(config: dict, session: dict | None = None) -> str:
             else ""
         )
         return (
-            "qualif : PROVENANCE DE SESSION — audit mene sous une session CAPTUREE AILLEURS et "
+            tete + "audit mene sous une session CAPTUREE AILLEURS et "
             "fournie a la forge (" + " · ".join(natures) + ")." + rejouee + " Ce qui est mesure "
             "l est donc sous l identite de l operateur qui a capture la session, et une session "
             "capturee PERIME : sous session expiree, le pan mesure une redirection, pas un "
@@ -277,30 +291,46 @@ def provenance_session(config: dict, session: dict | None = None) -> str:
         etat = (session or {}).get("etat")
         if etat == SESSION_OUVERTE:
             return (
-                "qualif : PROVENANCE DE SESSION — session ouverte PAR LA FORGE elle-meme, en "
+                tete + "session ouverte PAR LA FORGE elle-meme, en "
                 "rejouant la mire formulaire avec FORGE_TESTS_QUALIF_LOGIN, et l ouverture est "
                 f"CONSTATEE ({(session or {}).get('preuve') or 'constat non detaille'}) ; ce que "
                 "le pan voit est exactement ce que ce compte voit"
             )
         if etat in (SESSION_ECHOUEE, SESSION_SANS_MIRE):
             return (
-                "qualif : PROVENANCE DE SESSION — un compte a ete fourni "
+                tete + "un compte a ete fourni "
                 "(FORGE_TESTS_QUALIF_LOGIN) et la session N A PAS ete ouverte : "
                 f"{(session or {}).get('motif') or 'echec non detaille'}. Le parcours qui suit "
                 "est donc ANONYME DE FAIT — tout contenu place derriere l authentification reste "
                 "hors de portee de ce releve, et un compte configure ne prouve pas une session"
             )
         return (
-            "qualif : PROVENANCE DE SESSION — un compte est configure "
+            tete + "un compte est configure "
             "(FORGE_TESTS_QUALIF_LOGIN) mais le RESULTAT de la mire n a pas ete releve : "
             "l ouverture de session n est donc PAS constatee ici, et elle n est pas affirmee"
         )
     return (
-        "qualif : PROVENANCE DE SESSION — AUCUNE session : l instance a ete parcourue en "
+        tete + "AUCUNE session : l instance a ete parcourue en "
         "ANONYME. Tout contenu place derriere une authentification est hors de portee de ce "
         "relevé — fournir un compte (FORGE_TESTS_QUALIF_LOGIN / _PASSWORD) ou une session deja "
         "ouverte (FORGE_TESTS_QUALIF_STORAGE_STATE / _BEARER)"
     )
+
+
+def _provenances(config: dict, sessions: list[dict]) -> list[str]:
+    """La provenance de CHAQUE session exercée — une phrase par identité, jamais une moyenne.
+
+    La vue de configuration est refaite par session : c est SON storage state qui décrit son
+    identité. Une session sans clé `storage_state` (le cas mono, où rien n a été relevé) laisse la
+    configuration intacte — la remplacer par du vide effacerait la session capturée du rapport.
+    """
+    lignes: list[str] = []
+    for session in sessions:
+        vue = dict(config)
+        if "storage_state" in session:
+            vue["storage_state"] = session.get("storage_state") or ""
+        lignes.append(provenance_session(vue, session))
+    return lignes
 
 
 def _options_contexte(config: dict) -> tuple[dict, list[str]]:
@@ -333,6 +363,217 @@ def _options_contexte(config: dict) -> tuple[dict, list[str]]:
                 "le parcours se poursuit SANS cette session, et la provenance publiee le dit"
             )
     return options, alertes
+
+
+# --- Couverture PAR RÔLE : N sessions étiquetées, et ce qu aucune n a vu (TF-0316) -------------
+# `FORGE_TESTS_QUALIF_STORAGE_STATE` est un chemin UNIQUE : un seul storage state, un seul
+# contexte, donc une seule identité pour tout le parcours. Payé sur Approval2 le 12/08 : le pan a
+# rendu « 8/8, ratio 1,00, ZÉRO finding » avec le compte unique `mock-user@example.com`, alors que
+# le produit réserve trois surfaces par rôle (console d administration derrière `RequireAdmin`,
+# écran de revue et décision, vue en lecture seule du destinataire en copie). Aucune n avait été
+# parcourue sous son rôle propre, et le rapport ne le disait pas : « ratio 1,00 » se lit « tout est
+# couvert ». Écart découvert cinq jours plus tard par une question humaine, pas par l outil.
+#
+# Étude d opportunité 20260817c, verdict O3 — les deux niveaux, la DÉCLARATION D ABORD :
+#   (a) déclarer : le rapport dit combien de sessions ont été exercées et ce qu elles n ont pas
+#       vu — N = 1 est le cas dégradé DÉCLARÉ, pas un cas à part — et les refus d autorisation
+#       sortent en issue DISTINCTE d un succès ;
+#   (b) mesurer : N sessions étiquetées, un contexte par session, parcours rejoué par profil,
+#       couverture par rôle au rapport.
+# La non-destructivité ne bouge pas : lire plus de surfaces, jamais agir.
+CLASSE_REFUS_AUTORISATION = "acces-refuse-a-cette-identite"
+# Le parcours d entrée (TF-0223) est relevé SANS session, dans un contexte vierge : il n appartient
+# à aucun rôle, et la couverture par rôle le nomme pour ce qu il est plutôt que de le prêter au
+# premier profil de la liste.
+ROLE_ENTREE = "porte d entree (aucune session)"
+
+
+def sessions_declarees(config: dict) -> tuple[list[dict], list[str]]:
+    """Les sessions à exercer — étiquetées par rôle — et ce qu il a fallu écarter en le disant.
+
+    `FORGE_TESTS_QUALIF_STORAGE_STATES` = `role=chemin`, séparés par des virgules. Le singulier
+    `FORGE_TESTS_QUALIF_STORAGE_STATE` reste VALIDE et décrit LA session de l audit, sans
+    prétendre à un rôle : c est le cas de tous les audits menés jusqu ici, et il ne change pas.
+
+    Il y a TOUJOURS au moins une session, éventuellement sans étiquette et sans storage state (le
+    pan rejoue alors la mire, ou parcourt en anonyme). Une session mal formée est ÉCARTÉE et
+    déclarée : une couverture par rôle bâtie sur une étiquette illisible serait faussement nommée.
+    """
+    alertes: list[str] = []
+    sessions: list[dict] = []
+    for paire in config.get("storage_states") or []:
+        role, _, chemin = paire.partition("=")
+        role, chemin = role.strip(), chemin.strip()
+        if not role or not chemin:
+            alertes.append(
+                f"qualif : entree « {paire[:60]} » de FORGE_TESTS_QUALIF_STORAGE_STATES ECARTEE — "
+                "forme attendue « role=chemin » ; cette session n est pas exercee, et ce que ce "
+                "role voit reste inconnu de cet audit"
+            )
+            continue
+        if any(session["role"] == role for session in sessions):
+            alertes.append(
+                f"qualif : role « {role} » declare DEUX FOIS dans "
+                "FORGE_TESTS_QUALIF_STORAGE_STATES — seule la premiere session de ce role est "
+                "exercee ; une couverture par role exige une etiquette par role"
+            )
+            continue
+        sessions.append({"role": role, "storage_state": chemin, "etat": None})
+    if not sessions:
+        return (
+            [{"role": "", "storage_state": config.get("storage_state") or "", "etat": None}],
+            alertes,
+        )
+    if config.get("storage_state"):
+        alertes.append(
+            "qualif : FORGE_TESTS_QUALIF_STORAGE_STATE (singulier) est IGNORE tant que "
+            "FORGE_TESTS_QUALIF_STORAGE_STATES est declare — sans quoi une session sans etiquette "
+            "se melangerait a des sessions etiquetees, et la couverture par role serait fausse"
+        )
+    if config.get("bearer"):
+        alertes.append(
+            "qualif : FORGE_TESTS_QUALIF_BEARER est pose sur TOUTES les sessions etiquetees — le "
+            "MEME en-tete Authorization pour chaque role, ce qui peut contredire l etiquette ; "
+            "n en fournir aucun quand les sessions portent deja leur identite"
+        )
+    return sessions, alertes
+
+
+def _prefixe_role(session: dict) -> str:
+    """« role:<etiquette>: » quand la session en porte une, rien sinon.
+
+    Mono-session, les identifiants d élément restent INCHANGÉS : la cotation de risque, les
+    déclarations RT-16 et tous les rapports antérieurs s y adossent. Le rôle n entre dans
+    l identifiant que lorsqu il existe VRAIMENT plusieurs identités à distinguer.
+    """
+    role = str(session.get("role") or "")
+    return f"role:{role}:" if role else ""
+
+
+def _identifiant(page_vue: dict, suffixe: str) -> str:
+    """Identifiant d élément de surface, préfixé du RÔLE quand la page a été vue sous un rôle."""
+    return f"qualif:{_prefixe_role(page_vue)}{suffixe}"
+
+
+def couverture_par_role(
+    sessions: list[dict],
+    inventaire: list[str],
+    exerces: list[str],
+    refuses: list[str],
+    role_de: dict[str, str],
+) -> list[dict]:
+    """Ce que CHAQUE identité a inventorié, exercé et vu refuser — jamais une moyenne.
+
+    Une session déclarée qui n a rien inventorié y figure quand même, à zéro : c est le cas d une
+    session périmée ou d une étiquette dont le storage state a été écarté, et c est précisément ce
+    qu il faut voir.
+    """
+    exerce, refuse = set(exerces), set(refuses)
+    roles = [str(session.get("role") or "") for session in sessions]
+    for element in [*inventaire, *refuses]:
+        role = role_de.get(element, "")
+        if role not in roles:
+            roles.append(role)
+    couverture: list[dict] = []
+    for role in roles:
+        elements = [e for e in inventaire if role_de.get(e, "") == role]
+        tenus = [e for e in elements if e in exerce]
+        prives = [e for e in refuses if role_de.get(e, "") == role and e in refuse]
+        couverture.append(
+            {
+                "role": role or "(sans etiquette de role)",
+                "inventorie": len(elements),
+                "exerce": len(tenus),
+                "ratio": round(len(tenus) / len(elements), 4) if elements else 0.0,
+                "refuse": len(prives),
+            }
+        )
+    return couverture
+
+
+def declaration_couverture(
+    config: dict,
+    sessions: list[dict],
+    refuses: list[str],
+    role_de: dict[str, str],
+    couverture: list[dict],
+) -> list[str]:
+    """Ce que le ratio NE dit PAS — publié à chaque rapport, N = 1 compris (TF-0316, niveau a).
+
+    Trois phrases, et elles sont toutes des mesures de CE run : combien d identités ont parcouru
+    et lesquelles, ce que ces identités n ont pas pu voir, et la couverture rôle par rôle. La
+    quatrième — l étiquette de rôle est déclarative — est une RÈGLE, et vit donc au registre de
+    dette (`NON_JUGE`), pas ici.
+    """
+    etiquettes = [str(session.get("role") or "") for session in sessions]
+    nommees = ", ".join(f"« {role} »" for role in etiquettes if role)
+    lignes = [
+        f"qualif : {len(sessions)} session(s) exercee(s)"
+        + (f" — role(s) : {nommees}" if nommees else " — SANS etiquette de role")
+        + f" sur {config.get('base') or 'l instance'} : les routes REFUSEES ou INVISIBLES a cette "
+        "ou ces identites NE SONT PAS JUGEES. Un ratio de 100 % ne dit donc pas « tout est "
+        "couvert », il dit « tout ce que ces identites ont pu voir est couvert »"
+        + (
+            ""
+            if len(sessions) > 1
+            else " — declarer plusieurs sessions etiquetees par "
+            "FORGE_TESTS_QUALIF_STORAGE_STATES (« role=chemin », virgule) pour parcourir chaque "
+            "surface sous son role propre"
+        )
+    ]
+    if refuses:
+        par_role: dict[str, list[str]] = {}
+        for element in refuses:
+            par_role.setdefault(role_de.get(element, ""), []).append(element)
+        detail = " · ".join(
+            f"{role or 'session sans etiquette'} : {len(elements)} route(s) "
+            f"({', '.join(sorted(elements)[:3])}{' …' if len(elements) > 3 else ''})"
+            for role, elements in sorted(par_role.items())
+        )
+        lignes.append(
+            f"qualif : {len(refuses)} route(s) REFUSEE(S) a l identite qui les a demandees "
+            f"(401, 403 ou redirection d autorisation) — {detail}. Elles sortent du ratio en "
+            "issue DISTINCTE d un succes : ce ne sont ni des routes saines, ni des defauts du "
+            "produit, mais des surfaces qu il faut une AUTRE identite pour juger"
+        )
+    lignes.append(
+        "qualif : couverture PAR ROLE — "
+        + " · ".join(
+            f"{entree['role']} : {entree['exerce']}/{entree['inventorie']} "
+            f"({entree['ratio']:.0%}), {entree['refuse']} refusee(s)"
+            for entree in couverture
+        )
+    )
+    return lignes
+
+
+def refus_autorisation(page_vue: dict, config: dict) -> str | None:
+    """Motif si CETTE route a été REFUSÉE à l identité qui l a demandée, ou None.
+
+    Deux formes, et deux seulement :
+      - la route rend 401 ou 403 — le refus est dit par le protocole ;
+      - la navigation a ABOUTI AILLEURS, sur un saut d authentification — le refus est joué en
+        REDIRECTION, et c est la forme qui se confondait avec un SUCCÈS : la mire répond 200 et
+        porte un titre, donc la route comptait pour exercée. Un ratio de 1,00 pouvait ainsi ne
+        rien dire de trois surfaces réservées.
+
+    Ce n est PAS un défaut du produit : c est une surface que l identité exercée n a pas le droit
+    de voir. Elle sort donc en issue DISTINCTE, hors du ratio, et le geste de réparation est de
+    fournir la session du rôle qui y a droit — jamais de corriger la route.
+    """
+    statut = page_vue.get("statut")
+    if statut in (401, 403):
+        return f"HTTP {statut}"
+    url = str(page_vue.get("url_finale") or "")
+    if not url:
+        return None
+    base = config.get("base") or ""
+    arrivee = _route(url, base)
+    if arrivee is None or arrivee == _route(str(page_vue.get("route") or ""), base):
+        return None
+    if not _est_saut_auth(url):
+        return None
+    return f"redirection d autorisation vers {arrivee}"
 
 
 # --- Précondition du pan : une session ouverte (RT-16 / TF-0211) -------------------------------
@@ -790,6 +1031,13 @@ def _config(cible: Path) -> dict:
         # TF-0222 : session ouverte AILLEURS. Aucun repli sur une variable non préfixée : ces
         # deux valeurs portent une identité, elles ne se ramassent pas par accident.
         "storage_state": (os.environ.get("FORGE_TESTS_QUALIF_STORAGE_STATE") or "").strip(),
+        # TF-0316 : N sessions ÉTIQUETÉES (`role=chemin`, virgule). Le singulier ci-dessus reste
+        # valide ; le pluriel est ce qui rend une couverture PAR RÔLE mesurable.
+        "storage_states": [
+            paire.strip()
+            for paire in (os.environ.get("FORGE_TESTS_QUALIF_STORAGE_STATES") or "").split(",")
+            if paire.strip()
+        ],
         "bearer": (os.environ.get("FORGE_TESTS_QUALIF_BEARER") or "").strip(),
         "plafond": int(plafond) if plafond.isdigit() else _PLAFOND_DEFAUT,
     }
@@ -1168,7 +1416,7 @@ def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN00
             problemes.append(f"navigation impossible : {type(erreur).__name__}")
             releve.append(
                 {"route": route, "statut": None, "problemes": problemes, "affordances": [],
-                 "corps": "", "console": []}
+                 "corps": "", "console": [], "url_finale": ""}
             )
             continue
         corps = page.content()
@@ -1238,6 +1486,9 @@ def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN00
             {
                 "route": route,
                 "statut": statut,
+                # TF-0316 : OÙ la navigation a réellement abouti. Un refus d autorisation joué en
+                # redirection rend 200 sur la mire : sans cette URL, il se comptait pour un succès.
+                "url_finale": _url_courante(page),
                 "problemes": problemes,
                 "affordances": affordances,
                 # Tronque : sur une instance reelle, garder 40 pages entieres en memoire pour
@@ -1293,21 +1544,42 @@ def analyser(cible: Path) -> SortieAdaptateur:
             # ensuite (mire rejouee ou storage state charge) rendrait ce releve aveugle a ce qu il
             # existe pour voir. L ordre n est pas un confort, c est le controle lui-meme.
             entree = _relever_entree(navigateur, config)
-            options, alertes = _options_contexte(config)
-            non_juge.extend(alertes)
-            contexte = navigateur.new_context(**options)
-            if config["bearer"]:
-                contexte.set_extra_http_headers(
-                    {"Authorization": _entete_autorisation(config["bearer"])}
-                )
-            page = contexte.new_page()
-            # Une session FOURNIE prime : rejouer la mire par-dessus ecraserait l identite qu on
-            # nous a confiee, et le rapport annoncerait une provenance qui n est plus la bonne.
-            if not session_fournie(config):
-                sessions[0].update(_connecter(page, config))
-                if sessions[0].get("motif"):
-                    non_juge.append(f"qualif : {sessions[0]['motif']}")
-            releve, avertissements = _visiter(page, config)
+            # TF-0316 — UNE session, ou N sessions etiquetees par role. Meme boucle dans les deux
+            # cas : le cas mono n est pas un cas a part, c est N = 1, et il se declare comme tel.
+            declarees, alertes_sessions = sessions_declarees(config)
+            sessions[:] = declarees
+            non_juge.extend(alertes_sessions)
+            releve, avertissements = [], []
+            for session in sessions:
+                # UN CONTEXTE PAR SESSION : deux identites dans le meme contexte melangeraient
+                # leurs cookies, et la couverture par role ne voudrait plus rien dire.
+                vue = {**config, "storage_state": session["storage_state"]}
+                options, alertes = _options_contexte(vue)
+                # L ecart declare par `_options_contexte` corrige la vue : la provenance publiee
+                # ensuite ne peut pas annoncer une session que le fichier n a jamais portee.
+                session["storage_state"] = vue["storage_state"]
+                non_juge.extend(alertes)
+                contexte = navigateur.new_context(**options)
+                if config["bearer"]:
+                    contexte.set_extra_http_headers(
+                        {"Authorization": _entete_autorisation(config["bearer"])}
+                    )
+                page = contexte.new_page()
+                # Une session FOURNIE prime : rejouer la mire par-dessus ecraserait l identite
+                # qu on nous a confiee, et le rapport annoncerait une provenance qui n est plus
+                # la bonne.
+                if not session_fournie(vue):
+                    session.update(_connecter(page, vue))
+                    if session.get("motif"):
+                        etiquette = f"(role « {session['role']} ») " if session["role"] else ""
+                        non_juge.append(f"qualif : {etiquette}{session['motif']}")
+                vues, alertes_visite = _visiter(page, vue)
+                for page_vue in vues:
+                    page_vue["role"] = session["role"]
+                releve.extend(vues)
+                avertissements.extend(alertes_visite)
+                with contextlib.suppress(Exception):
+                    contexte.close()
             navigateur.close()
     except Exception as erreur:  # noqa: BLE001 — un pan qui ne peut pas voir le DECLARE
         return SortieAdaptateur(
@@ -1317,7 +1589,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             findings=[f for f in (finding_entree(entree, config, cible),) if f is not None],
             non_juge=[
                 *non_juge,
-                provenance_session(config, sessions[0]),
+                *_provenances(config, sessions),
                 *mentions_entree(entree, config),
                 f"qualif : instance {config['base']} non parcourable "
                 f"({type(erreur).__name__}: {erreur})",
@@ -1329,7 +1601,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             findings=[f for f in (finding_entree(entree, config, cible),) if f is not None],
             non_juge=[
                 *non_juge,
-                provenance_session(config, sessions[0]),
+                *_provenances(config, sessions),
                 *mentions_entree(entree, config),
                 f"qualif : aucune route atteinte sur {config['base']}",
             ],
@@ -1377,7 +1649,7 @@ def conclure(
     sessions = list(sessions or [{"role": "", "etat": None}])
     non_juge = [
         *non_juge,
-        *(provenance_session(config, session) for session in sessions),
+        *_provenances(config, sessions),
         *mentions_entree(entree, config),
     ]
     # TF-0223 — fabriqué AVANT la garde, et volontairement pas soumis à elle : la garde dit que
@@ -1406,7 +1678,7 @@ def conclure(
             # L inventaire est NOMMÉ route par route — non mesurable, jamais « rien à voir ici ».
             non_testables=[
                 NonTestable(
-                    element=f"qualif:route:{page_vue['route']}",
+                    element=_identifiant(page_vue, f"route:{page_vue['route']}"),
                     champs_requis=list(requis),
                     pan=PAN,
                     motif=(
@@ -1424,12 +1696,20 @@ def conclure(
     findings: list[Finding] = []
     non_testables: list = []
     admises = origines_admises(config)
+    # TF-0316 : le rôle de chaque élément inventorié, pour rendre une couverture PAR RÔLE ; et les
+    # routes REFUSÉES à l identité qui les a demandées, qui sortent du ratio pour ne plus se
+    # confondre avec un succès.
+    role_de: dict[str, str] = {}
+    refuses: list[str] = []
 
     # TF-0223 — la porte d entrée est un ÉLÉMENT DE SURFACE comme une route : inventoriée quand
     # elle a été relevée, exercée quand elle aboutit à une mire. Hors inventaire, un contrôle qui
     # se tait redevient indiscernable d un contrôle qui n a pas tourné.
     if entree is not None and not entree.get("erreur"):
         inventaire.append(IDENT_ENTREE)
+        # La porte d entrée est relevée dans un contexte VIERGE : elle n appartient à aucune
+        # session, et la couverture par rôle la range donc à part plutôt que de la prêter à un rôle.
+        role_de[IDENT_ENTREE] = ROLE_ENTREE
         if constat_entree is None:
             exerces.append(IDENT_ENTREE)
         else:
@@ -1437,8 +1717,33 @@ def conclure(
 
     for page_vue in releve:
         route = page_vue["route"]
-        identifiant = f"qualif:route:{route}"
+        role = str(page_vue.get("role") or "")
+        identifiant = _identifiant(page_vue, f"route:{route}")
+        # TF-0316 — une route REFUSÉE à cette identité n est pas un défaut du produit et n est pas
+        # un succès : elle sort du ratio, en issue DISTINCTE. Avant, un 403 comptait comme une
+        # route en défaut du produit, et un refus joué en REDIRECTION (200 sur la mire, avec son
+        # titre) comptait pour EXERCÉ — indiscernable d une route saine dans le ratio.
+        refus = refus_autorisation(page_vue, config)
+        if refus is not None:
+            refuses.append(identifiant)
+            role_de[identifiant] = role
+            findings.append(
+                Finding(
+                    id=identifiant,
+                    classe=CLASSE_REFUS_AUTORISATION,
+                    localisation=f"{config['base']}{route}",
+                    message=(
+                        f"{route} — REFUSEE a l identite exercee"
+                        + (f" (role « {role} »)" if role else " (session unique de cet audit)")
+                        + f" : {refus}. La route existe et n est PAS jugee sous ce profil — elle "
+                        "est hors du ratio, qui ne mesure que ce que cette identite a pu voir"
+                    ),
+                    risque=coter(PAN, identifiant, str(cible)),
+                )
+            )
+            continue
         inventaire.append(identifiant)
+        role_de[identifiant] = role
         # RT-6a : une route qui echoue en CITANT une configuration absente n accuse pas le
         # projet — elle nomme ce qu il manque ici, et `--reprendre` la rejouera une fois fourni.
         manquants = detecter(cible, "acces", f"{page_vue['corps']}\n" + "\n".join(
@@ -1479,8 +1784,9 @@ def conclure(
         # rejouerait exactement RT-16 (des constats identiques au même risque, qu il faut un
         # audit entier pour démentir).
         for nature, urls in _par_nature(page_vue["corps"]):
-            cle = f"qualif:url:{route}:{nature}"
+            cle = _identifiant(page_vue, f"url:{route}:{nature}")
             inventaire.append(cle)
+            role_de[cle] = role
             etrangeres = sorted({url for url in urls if _origine(url) not in admises})
             if not etrangeres:
                 exerces.append(cle)
@@ -1504,10 +1810,11 @@ def conclure(
             )
 
         for affordance in page_vue["affordances"]:
-            cle = (
-                f"qualif:effet:{route}:{affordance['rang']}:{affordance['tag']}"
+            cle = _identifiant(
+                page_vue, f"effet:{route}:{affordance['rang']}:{affordance['tag']}"
             )
             inventaire.append(cle)
+            role_de[cle] = role
             if affordance["motif"] is None:
                 exerces.append(cle)
             elif affordance["delegation"]:
@@ -1548,6 +1855,11 @@ def conclure(
         f"qualif : {len(releve)} route(s) parcourue(s) sur {config['base']} — "
         f"{sum(len(p['affordances']) for p in releve)} affordance(s) lue(s) dans le DOM rendu"
     )
+    # TF-0316, niveau (a) — la DÉCLARATION, celle qui reste vraie quel que soit N : « 8/8, ratio
+    # 1,00 » s est lu « tout est couvert » pendant cinq jours alors qu une seule identité avait
+    # parcouru et que trois surfaces réservées n avaient jamais été visitées.
+    couverture = couverture_par_role(sessions, inventaire, exerces, refuses, role_de)
+    non_juge.extend(declaration_couverture(config, sessions, refuses, role_de, couverture))
     # TF-0268 : le contrôle DIT ce qu il a confronté et à quoi, y compris quand il n a rien
     # trouvé — « aucune URL auto-référente » et « URLs jamais regardées » ne sont pas le même
     # rapport, et seul le premier se vérifie.
@@ -1573,5 +1885,10 @@ def conclure(
             "seuil": SEUIL,
             "elements_exerces": sorted(exerces),
             "elements_non_exerces": sorted(set(inventaire) - set(exerces)),
+            # TF-0316 : la couverture par RÔLE, seule dimension qui compte pour un produit dont le
+            # domaine est l autorisation multi-acteurs. Publiée même à N = 1 : le cas dégradé se
+            # déclare, il ne se devine pas.
+            "couverture_par_role": couverture,
+            "elements_refuses": sorted(refuses),
         },
     )

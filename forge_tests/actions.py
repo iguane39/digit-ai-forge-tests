@@ -135,6 +135,19 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "development",
         "traiter le signalement de sécurité sur « {id} » : {message}",
     ),
+    # TF-0316 — une route REFUSÉE à l identité qui l a demandée. Ce n est PAS un défaut du produit :
+    # la garde d autorisation fait précisément son travail. Il n y a rien à corriger dans le code,
+    # il y a une identité à fournir — et personne d autre que l humain qui tient les comptes ne
+    # peut la fournir. Classer ce constat en `manuelle_dev`/`development` enverrait un développeur
+    # « corriger » une protection qui fonctionne.
+    "acces-refuse-a-cette-identite": (
+        "manuelle_utilisateur",
+        "mep-config",
+        "fournir une session du RÔLE qui a le droit de voir « {id} » "
+        "(FORGE_TESTS_QUALIF_STORAGE_STATES = « role=chemin », virgule) puis `--reprendre` : la "
+        "route existe et la garde d'autorisation la refuse à l'identité exercée ({message}). Ne "
+        "PAS toucher au code : c'est la couverture de l'audit qui manque, pas la protection",
+    ),
     # TF-0288 — l écart entre la source VERSIONNÉE et ce que la production SERT. La classe est
     # distincte de `lien-casse` et le destinataire aussi : ici le code est CORRECT, c est le
     # déploiement qui a dérivé. Le confondre avec un défaut de développement est exactement
