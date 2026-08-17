@@ -141,9 +141,16 @@ def test_entete_autorisation(libelle: str, fourni: str, attendu: str) -> None:
 # --- 2. La PROVENANCE de la session est publiée au rapport --------------------------------------
 def test_la_provenance_distingue_les_trois_facons_d_entrer(tmp_path: Path) -> None:
     """Trois audits, trois identités, trois phrases. Lire un rapport sans savoir laquelle on
-    tient, c est ignorer ce que « exercé » veut dire dedans."""
+    tient, c est ignorer ce que « exercé » veut dire dedans.
+
+    TF-0314 : la deuxième phrase n est plus déduite de la configuration — elle exige le CONSTAT
+    d ouverture que `_connecter` rend (ici : la session a bien été ouverte).
+    """
     capturee = qualif.provenance_session(_config(storage_state="C:/x/storageState.json"))
-    propre = qualif.provenance_session(_config(login="audit-2026", mdp="motdepasse"))
+    propre = qualif.provenance_session(
+        _config(login="audit-2026", mdp="motdepasse"),
+        {"etat": qualif.SESSION_OUVERTE, "preuve": "2 cookie(s) de session pose(s)"},
+    )
     anonyme = qualif.provenance_session(_config())
 
     assert "CAPTUREE" in capturee and "PERIME" in capturee

@@ -60,6 +60,14 @@ class _Champ:
         self.clics += 1
 
 
+class _ContexteCookies:
+    def __init__(self) -> None:
+        self.biscuits: list[dict] = []
+
+    def cookies(self) -> list[dict]:
+        return list(self.biscuits)
+
+
 class _PageSPA:
     """Une application qui rend en JavaScript : le DOM est VIDE à `domcontentloaded`.
 
@@ -67,6 +75,9 @@ class _PageSPA:
       - `query_selector` = l instant du chargement — ne rend JAMAIS rien (React n a pas monté) ;
       - `wait_for_selector` = l attente d apparition — rend le champ si le bundle le monte,
         et expire sinon.
+
+    La soumission reproduit ce que l instance BAV2 fait réellement : deux cookies JWT posés et
+    une redirection vers `/trouver-une-annonce`.
     """
 
     def __init__(self, monte: bool = True) -> None:
@@ -76,9 +87,16 @@ class _PageSPA:
         self.attendus: list[str] = []
         self.champs: dict[str, _Champ] = {}
         self.soumise = False
+        self.contexte = _ContexteCookies()
+        self.url = f"{BASE}/"
+
+    @property
+    def context(self) -> _ContexteCookies:
+        return self.contexte
 
     def goto(self, url: str, **_kw: object) -> None:
         self.visitees.append(urlparse(url).path or "/")
+        self.url = url
 
     def query_selector(self, selecteur: str) -> None:
         self.lus_a_chaud.append(selecteur)
@@ -92,6 +110,10 @@ class _PageSPA:
 
     def wait_for_load_state(self, *_args: object) -> None:
         self.soumise = True
+        self.contexte.biscuits.extend(
+            [{"name": "access_token_cookie"}, {"name": "refresh_token_cookie"}]
+        )
+        self.url = f"{BASE}/trouver-une-annonce"
 
 
 def _config(**surcharges: object) -> dict:
@@ -128,9 +150,9 @@ def test_l_attente_expiree_rend_None_sans_faire_tomber_le_pan() -> None:
 def test_la_mire_montee_APRES_le_chargement_est_trouvee_et_remplie() -> None:
     page = _PageSPA(monte=True)
 
-    echec = qualif._connecter(page, _config())
+    resultat = qualif._connecter(page, _config())
 
-    assert echec is None
+    assert resultat["etat"] == qualif.SESSION_OUVERTE
     assert page.visitees == ["/login"]  # la route DÉCLARÉE, et elle suffit
     assert page.champs[qualif._SELECTEUR_IDENTIFIANT].rempli == "audit-2026"
     assert page.champs[qualif._SELECTEUR_MOTDEPASSE].rempli == "motdepasse-audit"
@@ -154,9 +176,8 @@ def test_les_deux_routes_par_defaut_restent_essayees_dans_l_ordre() -> None:
 def test_sans_mire_le_motif_n_est_publie_qu_APRES_l_attente() -> None:
     page = _PageSPA(monte=False)
 
-    echec = qualif._connecter(page, _config(connexion=""))
+    echec = qualif._connecter(page, _config(connexion=""))["motif"]
 
-    assert echec is not None
     assert "aucune mire de connexion trouvee" in echec
     # Ce que l ancien motif ne disait pas : l attente a bien eu lieu, et sur quoi.
     assert "APRES attente d apparition du champ mot de passe" in echec
@@ -177,10 +198,10 @@ def test_une_mire_sans_champ_identifiant_nomme_CE_point_d_arret() -> None:
                 raise _Expiration("Timeout")
             return super().wait_for_selector(selecteur, **kw)
 
-    echec = qualif._connecter(_MireSansIdentifiant(monte=True), _config())
+    resultat = qualif._connecter(_MireSansIdentifiant(monte=True), _config())
 
-    assert echec is not None
-    assert "/login : champ mot de passe present, aucun champ identifiant" in echec
+    assert resultat["etat"] == qualif.SESSION_SANS_MIRE
+    assert "/login : champ mot de passe present, aucun champ identifiant" in resultat["motif"]
 
 
 def test_une_navigation_impossible_est_nommee_comme_telle() -> None:
@@ -188,15 +209,17 @@ def test_une_navigation_impossible_est_nommee_comme_telle() -> None:
         def goto(self, url: str, **_kw: object) -> None:
             raise _Expiration("net::ERR_CONNECTION_REFUSED")
 
-    echec = qualif._connecter(_Injoignable(), _config())
+    resultat = qualif._connecter(_Injoignable(), _config())
 
-    assert echec is not None and "/login : navigation impossible (_Expiration)" in echec
+    assert "/login : navigation impossible (_Expiration)" in resultat["motif"]
 
 
 def test_sans_compte_fourni_rien_n_est_tente() -> None:
     """Non-régression : le pan ne cherche pas de mire quand il n a pas de quoi la remplir."""
     page = _PageSPA(monte=True)
-    assert qualif._connecter(page, _config(login="", mdp="")) is None
+    assert qualif._connecter(page, _config(login="", mdp="")) == {
+        "etat": qualif.SESSION_SANS_COMPTE
+    }
     assert page.visitees == [] and page.attendus == []
 
 
@@ -232,6 +255,7 @@ class _PageInstance(_PageSPA):
     def goto(self, url: str, **_kw: object) -> _FausseReponse:
         chemin = urlparse(url).path or "/"
         self.visitees.append(chemin)
+        self.url = url
         if self.soumise:
             self._corps, self._titre, self._statut = "<h1>Annonces</h1>", "Annonces", 200
         else:
@@ -250,7 +274,11 @@ class _FauxContexte:
         self.navigateur, self.options = navigateur, dict(options)
         self.entetes: dict[str, str] = {}
         self.pages: list[_PageInstance] = []
+        self.biscuits: list[dict] = []
         self.ferme = False
+
+    def cookies(self) -> list[dict]:
+        return list(self.biscuits)
 
     def set_extra_http_headers(self, entetes: dict) -> None:
         self.entetes.update(entetes)
