@@ -492,6 +492,14 @@ développeur corriger un code déjà juste, c'est-à-dire refaire l'erreur qui a
 Le contrôle se déclare au rapport dans les **trois** issues : un `SKIP` muet rendrait « aucun
 écart » indiscernable de « la comparaison n'a pas eu lieu ».
 
+Bancs d'essai (TF-0300) : la branche qui **accuse** est mesurée par la recette elle-même, entrée
+de corpus `H-20`. `fixtures/banc-rouge/site/` porte la source du site servi par
+`fixtures/banc-rouge/dist` — son menu anglais promet trois entrées de premier niveau quand la
+production n'en sert que deux, la page des tarifs n'étant jamais arrivée au menu. Le banc vert n'a
+pas de source de site : son contrôle reste en `SKIP`, et aucun constat nouveau n'y apparaît. Sans
+cette entrée, seule la suite `pytest` prouvait la branche `FAIL` — exactement l'écart que TF-0293
+venait de fermer pour le pan `i18n`.
+
 **Limites déclarées** (reprises telles quelles en `non_juge`) :
 
 - la comparaison porte sur les liens d'un `<nav>` **littéral**, des deux côtés. Un menu rendu par
