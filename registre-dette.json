@@ -875,6 +875,36 @@
       "statut": "todo"
     },
     {
+      "id": "interface-statique-014",
+      "domaine": "interface-statique",
+      "enonce": "interface/ecart-servi : le controle compare les entrees de NAVIGATION — les liens vivant dans un `<nav>` LITTERAL, des deux cotes (composant source et page servie). Un menu rendu par un composant `<Nav>`, marque `role=\"navigation\"` ou construit a l execution echappe aux deux lecteurs : c est voulu, les deux cotes doivent voir la meme chose sous peine de mesurer l ecart des lecteurs et non celui du produit",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-015",
+      "domaine": "interface-statique",
+      "enonce": "interface/ecart-servi : la comparaison n est pas symetrique — une entree SERVIE qu aucune source ne promet n est PAS jugee. Elle peut venir d un autre composant, d un gabarit rendu cote serveur ou d une forme de menu non reconnue : l accuser serait accuser la limite du lecteur. Seul le manque de ce que la source PROMET est un constat",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-016",
+      "domaine": "interface-statique",
+      "enonce": "interface/ecart-servi : le terme « versionne » est le WORKING TREE, pas une reference git — un produit hors git n a donc pas de version opposable, seulement des fichiers. Le contrôle reste jouable et le dit ; poser git est le prealable, pas ce controle",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-017",
+      "domaine": "interface-statique",
+      "enonce": "interface/ecart-servi : la confrontation porte sur la page d ACCUEIL de chaque locale servie. Un menu qui differerait sur une page profonde seulement n est pas vu — c est le cas fondateur (INS-0001) qui fixe ce perimetre, ou les 36 pages EN partageaient le meme composant",
+      "statut": "todo"
+    },
+    {
+      "id": "interface-statique-018",
+      "domaine": "interface-statique",
+      "enonce": "interface/ecart-servi : une destination EXPRIMEE d un composant n entre pas dans les entrees promises — comparer ce qu on n a pas resolu accuserait un deploiement correct",
+      "statut": "todo"
+    },
+    {
       "id": "qualif-navigateur-002",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",

@@ -28,6 +28,15 @@ et la bascule de langue (racine de la locale visée) — pointent bien où ils l
 destination EXPRIMÉE (`href={...}`) ne se devine pas : elle est comptée et déclarée en
 `non_juge`, jamais jugée.
 
+**Écart SERVI ↔ VERSIONNÉ (TF-0288).** Le pan tient désormais les deux termes que personne ne
+comparait : ce que la source promet en navigation, et ce que le build servi en rend. Cas
+fondateur INS-0001 — `HeaderEn.tsx` portait 8 entrées et 36 liens, utilisé par 36 pages EN sur
+36 ; la production en servait 3. L écart vivait entre la source et le servi, et la cause évidente
+(compléter le composant) aurait été un développement inutile sur un défaut de DÉPLOIEMENT. Le
+contrôle réutilise la grammaire de composants ci-dessus pour la source et la lecture du build
+servi du pan `i18n` pour le servi — en écrire de nouveaux aurait fait diverger deux lectures de
+la même chose. Verdict machine, trois issues, toutes DÉCLARÉES au rapport.
+
 Loi appliquée : *une affordance est câblée, ou elle n existe pas*. Ce que l analyse statique ne
 peut pas voir — un gestionnaire posé à l exécution par un framework, une délégation d événement
 sur un ancêtre — est déclaré en `non_juge`, jamais deviné dans un sens ni dans l autre.
@@ -146,6 +155,26 @@ NON_JUGE = [
     "conteste comme tout constat (`declarations`)",
     "interface/liens : le libelle d un lien est lu jusqu a la premiere fermeture de meme balise ; "
     "un lien qui en imbrique un autre de meme nom verrait son libelle tronque",
+    # TF-0288 — les frontieres du controle d ecart servi/versionne, chacune payee d un faux
+    # verdict possible si elle etait tue.
+    "interface/ecart-servi : le controle compare les entrees de NAVIGATION — les liens vivant "
+    "dans un `<nav>` LITTERAL, des deux cotes (composant source et page servie). Un menu rendu "
+    "par un composant `<Nav>`, marque `role=\"navigation\"` ou construit a l execution echappe "
+    "aux deux lecteurs : c est voulu, les deux cotes doivent voir la meme chose sous peine de "
+    "mesurer l ecart des lecteurs et non celui du produit",
+    "interface/ecart-servi : la comparaison n est pas symetrique — une entree SERVIE qu aucune "
+    "source ne promet n est PAS jugee. Elle peut venir d un autre composant, d un gabarit rendu "
+    "cote serveur ou d une forme de menu non reconnue : l accuser serait accuser la limite du "
+    "lecteur. Seul le manque de ce que la source PROMET est un constat",
+    "interface/ecart-servi : le terme « versionne » est le WORKING TREE, pas une reference git — "
+    "un produit hors git n a donc pas de version opposable, seulement des fichiers. Le contrôle "
+    "reste jouable et le dit ; poser git est le prealable, pas ce controle",
+    "interface/ecart-servi : la confrontation porte sur la page d ACCUEIL de chaque locale "
+    "servie. Un menu qui differerait sur une page profonde seulement n est pas vu — c est le cas "
+    "fondateur (INS-0001) qui fixe ce perimetre, ou les 36 pages EN partageaient le meme "
+    "composant",
+    "interface/ecart-servi : une destination EXPRIMEE d un composant n entre pas dans les "
+    "entrees promises — comparer ce qu on n a pas resolu accuserait un deploiement correct",
 ]
 
 # Attributs qui portent un gestionnaire, tous dialectes confondus.
@@ -518,6 +547,22 @@ def _texte_visible(fragment: str) -> str:
     return " ".join(sans_expressions.split())
 
 
+def _spans_de_nav(texte: str) -> list[tuple[int, int]]:
+    """Intervalles (début, fin) des éléments `<nav>` du composant — TF-0288.
+
+    Seul le `<nav>` LITTÉRAL est reconnu, et c est délibéré : c est exactement ce que le lecteur
+    du build servi reconnaît lui aussi (`i18n._Page`). Les deux côtés de la comparaison doivent
+    voir la même chose, sinon l écart mesuré serait celui des deux lecteurs, pas celui du
+    produit. Un menu rendu par un composant `<Nav>` ou marqué `role="navigation"` échappe donc
+    aux deux, et c est déclaré.
+    """
+    spans: list[tuple[int, int]] = []
+    for ouverture in re.finditer(r"<nav(?=[\s/>])", texte, flags=re.IGNORECASE):
+        fermeture = texte.lower().find("</nav", ouverture.end())
+        spans.append((ouverture.start(), fermeture if fermeture != -1 else len(texte)))
+    return spans
+
+
 def _liens_jsx(texte: str, grammaire: dict[str, tuple[str, ...]] | None = None) -> list[dict]:
     """Liens d un composant, avec leur destination littérale (ou None si calculée).
 
@@ -525,6 +570,7 @@ def _liens_jsx(texte: str, grammaire: dict[str, tuple[str, ...]] | None = None) 
     (TF-0295, levée 2). Par défaut : React, la grammaire d origine de TF-0283.
     """
     regles = grammaire or _GRAMMAIRES[".jsx"]
+    navs = _spans_de_nav(texte)
     liens: list[dict] = []
     for balise in regles["balises"]:
         for ouverture in re.finditer(rf"<{re.escape(balise)}(?=[\s/>])", texte):
@@ -554,6 +600,13 @@ def _liens_jsx(texte: str, grammaire: dict[str, tuple[str, ...]] | None = None) 
                     "attributs": attributs,
                     "destination": destination,
                     "exprimee": exprimee,
+                    # TF-0288 : ce lien est-il une entrée de NAVIGATION ? Le contrôle d écart
+                    # servi ↔ versionné compare des menus, et un lien de pied de page ou de
+                    # corps de texte n en est pas un — les mélanger produirait un écart massif
+                    # et faux dès le premier produit.
+                    "dans_nav": any(
+                        debut < ouverture.start() < fin for debut, fin in navs
+                    ),
                     "contenu": contenu,
                     "libelle": _texte_visible(contenu)
                     or attributs.get("aria-label")
@@ -888,6 +941,166 @@ def _juger_lien(lien: dict, locale_composant: str | None, arbre: dict) -> str | 
     )
 
 
+# --- Écart SERVI ↔ VERSIONNÉ (TF-0288, volet détection — verdict O3 de l étude 20260817a) ------
+# Le cas fondateur, INS-0001 (15/08/2026) : le menu anglais amputé n était PAS dans le composant.
+# `HeaderEn.tsx` portait ses 8 entrées de premier niveau et ses 36 liens, et il était utilisé par
+# 36 pages EN sur 36 ; la production en servait TROIS. L écart vivait entre la SOURCE et le SERVI,
+# et aucun oracle de l écosystème ne comparait ces deux termes-là. Sans le bloc (b) de
+# l instruction, la réponse évidente aurait été d ajouter les entrées manquantes au composant :
+# un développement inutile sur un défaut de DÉPLOIEMENT, et un troisième « toujours pas ».
+#
+# Ce contrôle tient les deux termes, et il les tient avec des lecteurs DÉJÀ livrés : la grammaire
+# de composants de TF-0283/TF-0295 pour la source, la lecture du build servi de TF-0284 pour le
+# servi. En écrire de nouveaux aurait fait diverger deux lectures de la même chose.
+CLASSE_ECART_SERVI = "ecart-servi-versionne"
+
+
+def _entree_delocalisee(destination: str, locales: set[str]) -> str:
+    """Clé comparable d une entrée de menu — le pendant SOURCE d `i18n.entrees_de_menu`."""
+    chemin = _normaliser(destination)
+    segments = chemin.split("/")
+    if len(segments) > 1 and segments[1] in locales:
+        reste = chemin[len(f"/{segments[1]}"):]
+        return reste.rstrip("/") or "/"
+    return chemin
+
+
+def navigation_source(cible: Path) -> tuple[dict[str, set[str]], list[str], int]:
+    """(entrées de navigation promises par locale, fichiers lus, nombre de liens de nav lus).
+
+    La clé `""` porte les entrées des composants SANS locale propre : ils servent toutes les
+    locales, donc leurs entrées sont promises partout. Une destination EXPRIMÉE n entre pas — on
+    ne compare pas ce qu on n a pas résolu, sous peine d accuser un déploiement correct.
+    """
+    fichiers = _fichiers(cible, EXTENSIONS_COMPOSANTS)
+    if not fichiers:
+        return {}, [], 0
+    arbre = _arborescence(cible)
+    locales = set(arbre["locales"])
+    promises: dict[str, set[str]] = {}
+    lus: list[str] = []
+    liens_lus = 0
+    for fichier in fichiers:
+        texte = fichier.read_text(encoding="utf-8", errors="replace")
+        liens = [
+            lien
+            for lien in _liens_jsx(texte, _GRAMMAIRES.get(fichier.suffix.lower()))
+            if lien["dans_nav"] and lien["destination"] and lien["destination"].startswith("/")
+        ]
+        if not liens:
+            continue
+        locale = _locale_du_composant(fichier, cible, locales) or ""
+        lus.append(fichier.relative_to(cible).as_posix())
+        liens_lus += len(liens)
+        promises.setdefault(locale, set()).update(
+            _entree_delocalisee(lien["destination"], locales) for lien in liens
+        )
+    return promises, sorted(lus), liens_lus
+
+
+def ecart_servi_versionne(cible: Path) -> dict:
+    """Ce que la SOURCE promet en navigation, contre ce que le BUILD SERVI en rend — TF-0288.
+
+    Verdict machine, trois issues et pas une de plus :
+
+      - **SKIP** quand un des deux termes manque. Sans source lisible, il n y a pas de versionné
+        opposable et la comparaison n a pas de sens ; sans build servi, il n y a rien à comparer.
+        Le motif DIT lequel manque : « pas de source » et « pas de build » ne se réparent pas de
+        la même façon.
+      - **FAIL** quand une entrée promise par la source n est pas servie. Les entrées manquantes
+        sont NOMMÉES : c est tout l enjeu du cas fondateur — savoir que l écart est un défaut de
+        déploiement et non de code se lit dans la liste des entrées absentes.
+      - **PASS** quand chaque entrée promise est servie.
+
+    Le sens de la comparaison n est pas symétrique, et c est voulu : une entrée SERVIE qu aucune
+    source ne promet n est pas jugée ici. Elle peut venir d un autre composant, d un `<Nav>` que
+    ce lecteur ne reconnaît pas, ou d une page rendue côté serveur — l accuser serait accuser la
+    limite du lecteur.
+    """
+    from forge_tests.adaptateurs import i18n
+
+    promises, fichiers_lus, liens_lus = navigation_source(cible)
+    build = i18n.build_servi(cible)
+    if not promises:
+        return {
+            "verdict": "SKIP",
+            "motif": (
+                "ecart servi/versionne : aucune navigation SOURCE lisible (pas de composant "
+                f"{', '.join(EXTENSIONS_COMPOSANTS)} portant des liens litteraux dans un `<nav>` "
+                f"sous {cible}) — sans source, il n y a pas de versionne OPPOSABLE et la "
+                "comparaison n a pas d objet. C est l aggravant du cas fondateur : un produit "
+                "hors git ne dit pas ce qui est deploye"
+            ),
+            "manquantes": {},
+        }
+    if build is None:
+        return {
+            "verdict": "SKIP",
+            "motif": (
+                "ecart servi/versionne : navigation SOURCE lue "
+                f"({liens_lus} lien(s) de `<nav>` dans {', '.join(fichiers_lus)}) mais AUCUN "
+                "build servi a confronter — declarer le dossier construit dans "
+                f"FORGE_TESTS_I18N_BUILD (cherche : {', '.join(i18n.DOSSIERS_BUILD)})"
+            ),
+            "manquantes": {},
+        }
+
+    pages = i18n.pages_servies(build)
+    locales_servies = i18n.locales_servies(pages)
+    par_locale = i18n._par_locale(pages, locales_servies)
+    communes = promises.get("", set())
+    manquantes: dict[str, list[str]] = {}
+    servies_par_locale: dict[str, int] = {}
+    for locale in sorted(par_locale):
+        accueil = par_locale[locale].get("/")
+        if accueil is None:
+            continue
+        servies = set(i18n.entrees_de_menu(i18n._lire(accueil), locales_servies))
+        servies_par_locale[locale or "defaut"] = len(servies)
+        attendues = communes | promises.get(locale, set())
+        absentes = sorted(attendues - servies)
+        if absentes:
+            manquantes[locale] = absentes
+    return {
+        "verdict": "FAIL" if manquantes else "PASS",
+        "motif": (
+            "ecart servi/versionne : navigation SOURCE lue "
+            f"({liens_lus} lien(s) de `<nav>` dans {', '.join(fichiers_lus)}) confrontee au "
+            f"build servi `{build}` — entrees servies par locale : "
+            + " · ".join(f"{nom}={compte}" for nom, compte in sorted(servies_par_locale.items()))
+        ),
+        "manquantes": manquantes,
+        "build": str(build),
+        "fichiers": fichiers_lus,
+        "pages": {locale: str(par_locale[locale]["/"]) for locale in par_locale
+                  if par_locale[locale].get("/") is not None},
+    }
+
+
+def _findings_ecart(cible: Path, ecart: dict) -> list[Finding]:
+    """Un constat par locale dont le menu servi est amputé — les entrées manquantes NOMMÉES."""
+    findings: list[Finding] = []
+    for locale, absentes in sorted(ecart["manquantes"].items()):
+        identifiant = f"interface:ecart-servi:{locale or 'defaut'}"
+        localisation = ecart["pages"].get(locale, ecart.get("build", str(cible)))
+        findings.append(
+            Finding(
+                id=identifiant,
+                classe=CLASSE_ECART_SERVI,
+                localisation=localisation,
+                message=(
+                    f"la source versionnee promet {len(absentes)} entree(s) de navigation que le "
+                    f"build SERVI ne rend pas sous « {locale or 'defaut'} » : "
+                    + ", ".join(f"« {entree} »" for entree in absentes)
+                    + " — le code est deja correct, c est le SERVI qui a derive (defaut de "
+                    "deploiement, pas de developpement)"
+                ),
+                risque=coter(PAN, identifiant, localisation),
+            )
+        )
+    return findings
+
+
 def _relever_composants(cible: Path) -> tuple[list[dict], int, list[str]]:
     """Liens des composants, jugés. Puis le compte des destinations EXPRIMÉES, puis ce qui se
     DÉCLARE au rapport : les dialectes réellement lus, et d où viennent les locales (TF-0295)."""
@@ -1045,6 +1258,14 @@ def sans_objet(cible: Path) -> str | None:
 def analyser(cible: Path) -> SortieAdaptateur:
     releve, tronque, exprimees, declarations = _relever(cible)
     non_juge = [*NON_JUGE, *declarations]
+
+    # TF-0288 — l ecart SERVI ↔ VERSIONNE. Le contrôle se DIT toujours, dans les trois issues :
+    # un SKIP muet aurait rendu « aucun ecart » indiscernable de « la comparaison n a pas eu
+    # lieu », et c est précisément cette confusion qui a coûté deux « toujours pas » sur INS-0001.
+    ecart = ecart_servi_versionne(cible)
+    non_juge.append(f"interface/{ecart['verdict'].lower()} — {ecart['motif']}")
+    findings_ecart = _findings_ecart(cible, ecart)
+
     if exprimees:
         non_juge.append(
             f"interface/liens : {exprimees} destination(s) de lien EXPRIMEE(S) dans les "
@@ -1056,7 +1277,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
             "interface : corpus JavaScript tronque au-dela de 8 Mo — au-dela, un element "
             "pourrait etre declare inerte alors que son cablage vit dans la partie non lue"
         )
-    if not releve:
+    # `not findings_ecart` : un ecart mesuré ne peut pas sortir sous un verdict NA ni SKIP — ce
+    # serait un constat rendu puis enterré par le verdict qui l accompagne.
+    if not releve and not findings_ecart:
         motif_sans_objet = sans_objet(cible)
         if motif_sans_objet:
             # NA (14/08) : ce pan lit des GABARITS (HTML, Jinja, Twig…). Un produit dont
@@ -1090,6 +1313,10 @@ def analyser(cible: Path) -> SortieAdaptateur:
         )
         for e in inertes
     ]
+    # TF-0288 : l ecart servi/versionne rejoint les MEMES findings — un seul verdict, une seule
+    # liste de travaux. Il ne rejoint PAS la surface : ce n est pas une affordance de plus, c est
+    # une comparaison entre deux etats du meme produit, et l ajouter au ratio le rendrait faux.
+    findings += findings_ecart
     findings.sort(key=lambda f: f.risque or 0, reverse=True)
     total = len(releve)
     cables = total - len(inertes)
@@ -1108,7 +1335,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
         surface={
             "inventorie": total,
             "exerce": cables,
-            "ratio": round(cables / total, 4),
+            # `total` peut valoir 0 : un ecart servi/versionne mesure sans qu aucune affordance
+            # de gabarit n ait ete relevee est un cas licite (TF-0288), pas une division.
+            "ratio": round(cables / total, 4) if total else 0.0,
             "seuil": SEUIL,
             "elements_exerces": sorted(e["id"] for e in releve if not e["motif"]),
             "elements_non_exerces": [e["id"] for e in inertes],

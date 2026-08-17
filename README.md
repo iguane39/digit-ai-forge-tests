@@ -438,8 +438,16 @@ Classe de finding propre — `lien-casse`, jamais `affordance-inerte` : un lien 
   un handler vide passerait pour câblé ;
 - le **câblage** des composants (`.jsx`, `.tsx`, `.vue`, `.svelte`) n'est pas analysé comme celui
   d'un gabarit ; leur surface interactive est inventoriée par le pan `front` via `data-testid`.
-  Seule la **destination** de leurs liens est jugée, et pour React seulement (`.jsx`/`.tsx`) :
-  les dialectes de Vue et Svelte ont leur propre grammaire d'attributs ;
+  Seule la **destination** de leurs liens est jugée — pour React (`.jsx`/`.tsx`), Vue (`.vue`) et
+  Svelte (`.svelte`), chacun avec **sa** grammaire déclarée : les formes liées de Vue (`:to`,
+  `v-bind:href`) et les interpolations Svelte (`href="{x}"`) sont comptées **exprimées**, jamais
+  jugées, et à conflit c'est la liaison qui l'emporte comme à l'exécution (TF-0295). Un dialecte
+  absent de la table — Angular, Astro, Solid — n'est pas lu ;
+- les **locales opposables** sont lues dans l'arborescence littérale **et** dans la configuration
+  du framework (`locales: [...]` de Next, nuxt, next-intl — TF-0295). Quand le produit route ses
+  locales par un segment **dynamique** (`app/[locale]/…`) sans les déclarer, aucune racine de
+  locale n'est connaissable : logo, bascule de langue et cohérence de locale sont alors **non
+  jugés**, et le rapport le dit. Les deviner accusait un logo pourtant correct ;
 - une destination **exprimée** (`href={chemin}`, template avec `${…}`, constante importée) n'est
   pas résolue : elle est **comptée** et déclarée non jugée. Un lien **relatif** (sans `/`
   initial) non plus — sa résolution dépend de l'URL de rendu ;
@@ -451,6 +459,58 @@ Classe de finding propre — `lien-casse`, jamais `affordance-inerte` : un lien 
   produit se conteste comme tout autre (`.forge-tests-declarations.json`) ;
 - une ancre `#nom` dont la cible n'existe pas dans le document n'est pas jugée morte : la cible
   peut être injectée au rendu.
+
+### Écart SERVI ↔ VERSIONNÉ — ce que la production sert n'est pas ce que la source promet (TF-0288)
+
+Le 15/08/2026, un menu anglais amputé, signalé **deux fois** par l'humain. La cause évidente était
+fausse : `HeaderEn.tsx` portait bien ses **8 entrées** de premier niveau et ses 36 liens, et il
+était utilisé par 36 pages EN sur 36. La production en servait **trois**. L'écart vivait entre la
+source et le servi, et aucun oracle de l'écosystème ne comparait ces deux termes-là — le pan
+`i18n` compare les locales du servi *entre elles*, le contrôle ci-dessus juge la cohérence
+*interne* de la source, le pan `qualif` juge la *santé* du servi, et un menu amputé mais
+fonctionnel n'est en erreur nulle part. Sans le bloc (b) de l'instruction, la réponse évidente
+aurait été d'ajouter au composant des entrées qu'il portait déjà : un développement inutile sur un
+défaut de **déploiement**.
+
+Le contrôle tient les deux termes, avec des lecteurs déjà livrés — la grammaire de composants
+ci-dessus pour la source, la lecture du build servi du pan `i18n` pour le servi. Il compare les
+entrées de navigation **entrée par entrée**, par destination délocalisée, et rend un verdict de
+machine :
+
+| Issue | Quand | Ce qui est publié |
+|---|---|---|
+| `FAIL` | une entrée promise par la source n'est pas servie | un constat par locale, les entrées manquantes **nommées**, et la phrase qui compte : *le code est déjà correct, c'est le servi qui a dérivé* |
+| `PASS` | chaque entrée promise est servie | la confrontation, avec le nombre d'entrées servies par locale |
+| `SKIP` | un des deux termes manque | **lequel** manque : sans source, il n'y a pas de versionné opposable (l'aggravant du cas fondateur : le produit n'était pas sous git) ; sans build servi, il n'y a rien à confronter |
+
+Classe de finding propre — `ecart-servi-versionne` — et destinataire propre : `manuelle_utilisateur`
+/ `mep-config`, jamais `development`. La suite à donner est un **redéploiement depuis la source**,
+avec la consigne explicite de *ne pas toucher au code*. Le classer en `development` renverrait le
+développeur corriger un code déjà juste, c'est-à-dire refaire l'erreur qui a coûté deux
+« toujours pas ».
+
+Le contrôle se déclare au rapport dans les **trois** issues : un `SKIP` muet rendrait « aucun
+écart » indiscernable de « la comparaison n'a pas eu lieu ».
+
+**Limites déclarées** (reprises telles quelles en `non_juge`) :
+
+- la comparaison porte sur les liens d'un `<nav>` **littéral**, des deux côtés. Un menu rendu par
+  un composant `<Nav>`, marqué `role="navigation"` ou construit à l'exécution échappe aux deux
+  lecteurs — c'est voulu : les deux côtés doivent voir la même chose, sous peine de mesurer
+  l'écart des lecteurs et non celui du produit ;
+- la comparaison n'est **pas symétrique** : une entrée servie qu'aucune source ne promet n'est pas
+  jugée. Elle peut venir d'un autre composant ou d'un gabarit rendu côté serveur, et l'accuser
+  serait accuser la limite du lecteur ;
+- le « versionné » est le **working tree**, pas une référence git : un produit hors git n'a pas de
+  version opposable, seulement des fichiers. Poser git est le préalable, pas ce contrôle ;
+- la confrontation porte sur la page d'**accueil** de chaque locale servie ; un menu qui ne
+  différerait que sur une page profonde n'est pas vu ;
+- une destination **exprimée** n'entre pas dans les entrées promises — comparer ce qu'on n'a pas
+  résolu accuserait un déploiement correct.
+
+La **prévention** est l'autre volet du même sujet et elle vit chez `forge-ops` (empreinte scellée
+au déploiement, comparée au servi) : chaque volet dans le domaine de sa forge, aucun ne singe
+l'autre — verdict O3 de l'étude d'opportunité du 17/08.
 
 ## Seuils opposables — au-dessus des standards, et versionnés
 
@@ -603,16 +663,30 @@ navigateur**.
 | Contrôle | Nature | Constat |
 |---|---|---|
 | **parité de routes** — chaque route est servie dans chaque locale | comparaison exacte | `route « /en/tarifs » absente du build : servie dans 1 locale(s) sur 2` |
-| **parité de navigation** — le menu de la page d'accueil de chaque locale | comparaison exacte | `menu de la locale « en » : 2 entree(s) contre 4 en « defaut »` |
-| **langue du contenu** — densité de mots-outils français sous une locale non française | **heuristique**, seuil `densite_mots_outils_francais` | `page servie sous « /en » dont le contenu est FRANÇAIS : 30 % de mots-outils français sur 89 mots (seuil 8 %)` |
+| **parité de navigation** — le menu de la page d'accueil de chaque locale, apparié **entrée par entrée** par destination délocalisée | comparaison exacte | `menu de la locale « en » : 2 entree(s) distincte(s) contre 4 en « defaut » — manquent 2 entree(s) : « /contact », « /tarifs »` |
+| **langue du contenu** — densité des mots-outils d'une langue sous une locale qui n'est pas la sienne | **heuristique**, seuil `densite_mots_outils_francais` | `page servie sous « /en » dont le contenu est en « fr » : 30 % de mots-outils fr sur 89 mots (seuil 8 %)` |
+
+L'appariement de navigation se fait par **destination délocalisée** et non par nombre d'entrées :
+deux menus de même taille aux entrées différentes échouent, et les entrées manquantes sont
+**nommées** — « manquent 2 entrées » ne disait rien à faire au lecteur (TF-0295). La clé ne peut
+pas être le libellé : il est traduit, c'est tout l'objet du sujet.
+
+Le lexique de langue est une **table** — `fr` et `en` livrés, extensible par
+`FORGE_TESTS_I18N_LEXIQUES` (fichier JSON `{"de": ["der", "die", …]}`) — et la règle est
+générale : sous la locale L, la densité du lexique d'une langue M ≠ L est un constat. Un lexique
+déclaré de moins de 20 mots-outils est **refusé** avec son motif : il ne discrimine rien et
+accuserait au hasard. Aucun mot n'est partagé entre deux lexiques, condition sans laquelle le
+contrôle accuserait à tort des deux côtés. Le rapport **dit** contre quels lexiques il a mesuré :
+« aucun anglais détecté » et « la langue n'a été mesurée contre aucun lexique » ne sont pas le
+même rapport.
 
 **Ce que le pan ne juge pas** (repris tels quels en `non_juge`) : une locale déclarée mais
-jamais construite ; deux menus de même taille aux entrées différentes ; un sous-menu qui ne
-s'ouvre qu'au clic ; une page de moins de 40 mots visibles (sous ce volume la densité est du
-bruit, pas un signal) ; tout couple de langues autre que « français servi sous une locale non
-française » — le lexique est français, et lui seul. L'attribut `lang` du document n'est
-**jamais** opposé au contenu : un `lang="en"` posé sur du français *est* le défaut, le croire
-reviendrait à interroger le suspect.
+jamais construite ; un sous-menu qui ne s'ouvre qu'au clic (absent du HTML servi) ; une entrée
+sans destination lisible, appariée sur son libellé donc jamais entre deux langues ; une page de
+moins de 40 mots visibles (sous ce volume la densité est du bruit, pas un signal) ; une langue
+servie sans lexique opposable ; la **locale par défaut**, qui n'a pas de préfixe donc pas de
+langue opposable. L'attribut `lang` du document n'est **jamais** opposé au contenu : un
+`lang="en"` posé sur du français *est* le défaut, le croire reviendrait à interroger le suspect.
 
 **Ce qui n'est pas un défaut** : ne pas être multilingue. Un produit sans build servi **et**
 sans signe d'internationalisation (dépendance `next-intl`/`i18next`, dossier de traductions,
@@ -620,8 +694,11 @@ segment de route `[locale]`) sort en **NA** avec sa preuve. Un produit qui *se d
 mais dont le build est absent sort en **SKIP** : le manque est le dossier, pas le sujet, et il
 se répare en le fournissant.
 
-Bancs d'essai : `fixtures/i18n-rouge` (les trois défauts) et `fixtures/i18n-vert` (les mêmes
-pages corrigées), joués de bout en bout par `tests/test_tf_0284_i18n.py`.
+Bancs d'essai : le **build servi** des bancs historiques — `fixtures/banc-rouge/dist` (les trois
+défauts, entrées de corpus `H-17`, `H-18`, `H-19`) et `fixtures/banc-vert/dist` (les mêmes pages
+corrigées). Joués de bout en bout par `tests/test_tf_0284_i18n.py` **et** par la section `corpus`
+de la recette, seule à prononcer S-01 : le pan a d'abord vécu dans des bancs séparés, donc hors
+du corpus, c'est-à-dire non mesuré par la recette du dépôt (TF-0293).
 
 ## Lecture du SQL — filtrer avant de découper
 
