@@ -99,6 +99,8 @@ POUR_COUVRIR = (
     "Options : FORGE_TESTS_QUALIF_ROUTES (routes d'amorce, virgule), "
     "FORGE_TESTS_QUALIF_MARQUEURS (JSON route -> marqueur de contenu), "
     "FORGE_TESTS_QUALIF_CONNEXION (route de la mire), FORGE_TESTS_QUALIF_PLAFOND (routes max), "
+    "FORGE_TESTS_QUALIF_REFUS (routes d atterrissage de refus d autorisation propres au produit, "
+    "virgule — sans elles, seuls 401/403, la mire et les segments nommant l erreur sont reconnus). "
     "FORGE_TESTS_QUALIF_ORIGINES (origines publiques declarees du produit, virgule — les URLs "
     "auto-referentes des pages y sont admises en plus de celle de l instance auditee). "
     "Instance derriere un IdP d entreprise (Entra, Okta, MFA) que la forge ne peut pas rejouer : "
@@ -172,7 +174,15 @@ NON_JUGE = [
     "qualif : les surfaces INVISIBLES a l identite exercee ne sont ni inventoriees ni comptees — "
     "une route qu aucun lien ne rend pour ce role, et qu aucune amorce ne declare, n apparait "
     "nulle part au rapport : son absence ne se voit pas. Seules les routes REFUSEES (401, 403, "
-    "redirection d autorisation) sont nommees, parce qu elles ont ete atteintes",
+    "redirection d autorisation, atterrissage de refus reconnu) sont nommees, parce qu elles ont "
+    "ete atteintes",
+    # TF-0325 (1) — ce qui reste hors couverture APRES la levee : la frontiere s est deplacee, elle
+    # ne s est pas evaporee, et une frontiere deplacee sans etre redite est une frontiere tue.
+    "qualif : un refus rendu par une page MAISON n est reconnu que si sa route est DECLAREE "
+    "(FORGE_TESTS_QUALIF_REFUS) ou si un de ses segments nomme l erreur d autorisation (403, "
+    "acces-refuse, forbidden…). Un produit qui refuse en servant `/oups` ou `/erreur` sans plus "
+    "de precision garde ce refus COMPTE COMME PARCOURU : le non-jugement est prefere au faux "
+    "refus, qui sortirait du ratio une route peut-etre cassee. Declarer la route leve la limite",
     "qualif : le controle des URL auto-referentes ne connait que quatre formes — `canonical`, "
     "`og:url`, le `url`/`@id` du JSON-LD et les `loc` de sitemap — lues sur les seules routes "
     "PARCOURUES et dans les 20 000 premiers caracteres de chaque page ; une page plus longue, "
@@ -532,7 +542,8 @@ def declaration_couverture(
         )
         lignes.append(
             f"qualif : {len(refuses)} route(s) REFUSEE(S) a l identite qui les a demandees "
-            f"(401, 403 ou redirection d autorisation) — {detail}. Elles sortent du ratio en "
+            f"(401, 403, redirection d autorisation ou atterrissage de refus) — {detail}. "
+            "Elles sortent du ratio en "
             "issue DISTINCTE d un succes : ce ne sont ni des routes saines, ni des defauts du "
             "produit, mais des surfaces qu il faut une AUTRE identite pour juger"
         )
@@ -547,15 +558,56 @@ def declaration_couverture(
     return lignes
 
 
+# TF-0325 (1) — segments qui nomment une erreur d AUTORISATION, et rien d autre. Le mot doit être
+# un segment ENTIER (`/erreur/403`, `/acces-refuse`), jamais une sous-chaîne : `/produits/403-w`
+# n est pas un refus. Volontairement restreint à l autorisation : `/erreur`, `/oups` ou `/500`
+# nomment une panne, et prendre une panne pour un refus SORTIRAIT du ratio une route cassée —
+# exactement le silence que TF-0316 vient de fermer, retourné contre lui.
+_SEGMENTS_REFUS = frozenset(
+    {
+        "401", "403", "forbidden", "unauthorized", "unauthorised", "access-denied",
+        "accessdenied", "permission-denied", "acces-refuse", "acces-interdit", "non-autorise",
+        "interdit", "denied",
+    }
+)
+
+
+def _est_atterrissage_de_refus(route: str, config: dict) -> str | None:
+    """Motif si `route` est la page d atterrissage d un refus d AUTORISATION, ou None — TF-0325.
+
+    Deux sources, de la plus opposable à la plus prudente, comme partout ailleurs ici :
+
+      - la route DÉCLARÉE par l opérateur (`FORGE_TESTS_QUALIF_REFUS`) — déclarée, elle juge ;
+      - un segment qui NOMME l erreur d autorisation. Prudente par construction : le segment doit
+        être entier et parler d autorisation, pas d erreur en général.
+
+    Ce qu aucune des deux ne reconnaît n est pas jugé refus — la route reste comptée comme
+    parcourue et le pan DÉCLARE la frontière. Un faux refus coûte plus cher qu un non-jugement :
+    il fait sortir du ratio une route peut-être cassée.
+    """
+    declarees = {r.rstrip("/") or "/" for r in (config.get("refus") or [])}
+    if route in declarees:
+        return f"route de refus DÉCLARÉE ({route})"
+    segments = {s for s in route.lower().split("/") if s}
+    nommant = sorted(segments & _SEGMENTS_REFUS)
+    if nommant:
+        return f"page d atterrissage nommant l erreur d autorisation ({', '.join(nommant)})"
+    return None
+
+
 def refus_autorisation(page_vue: dict, config: dict) -> str | None:
     """Motif si CETTE route a été REFUSÉE à l identité qui l a demandée, ou None.
 
-    Deux formes, et deux seulement :
+    Trois formes, et trois seulement :
       - la route rend 401 ou 403 — le refus est dit par le protocole ;
       - la navigation a ABOUTI AILLEURS, sur un saut d authentification — le refus est joué en
         REDIRECTION, et c est la forme qui se confondait avec un SUCCÈS : la mire répond 200 et
         porte un titre, donc la route comptait pour exercée. Un ratio de 1,00 pouvait ainsi ne
-        rien dire de trois surfaces réservées.
+        rien dire de trois surfaces réservées ;
+      - TF-0325 : la navigation a abouti sur une page de refus MAISON (`/erreur/403`,
+        `/acces-refuse`) — ni 401/403, ni mire d authentification. Le produit dit « tu n as pas le
+        droit » dans son propre dialecte, et le pan n en reconnaissait aucun : ces routes
+        comptaient pour exercées, et le ratio d un rôle bridé annonçait 100 %.
 
     Ce n est PAS un défaut du produit : c est une surface que l identité exercée n a pas le droit
     de voir. Elle sort donc en issue DISTINCTE, hors du ratio, et le geste de réparation est de
@@ -571,9 +623,12 @@ def refus_autorisation(page_vue: dict, config: dict) -> str | None:
     arrivee = _route(url, base)
     if arrivee is None or arrivee == _route(str(page_vue.get("route") or ""), base):
         return None
-    if not _est_saut_auth(url):
-        return None
-    return f"redirection d autorisation vers {arrivee}"
+    if _est_saut_auth(url):
+        return f"redirection d autorisation vers {arrivee}"
+    atterrissage = _est_atterrissage_de_refus(arrivee, config)
+    if atterrissage is not None:
+        return f"redirection vers {arrivee} — {atterrissage}"
+    return None
 
 
 # --- Précondition du pan : une session ouverte (RT-16 / TF-0211) -------------------------------
@@ -1039,6 +1094,15 @@ def _config(cible: Path) -> dict:
             if paire.strip()
         ],
         "bearer": (os.environ.get("FORGE_TESTS_QUALIF_BEARER") or "").strip(),
+        # TF-0325 (1) : les routes d ATTERRISSAGE que le produit sert pour dire « accès refusé »
+        # quand il ne rend ni 401 ni 403 et que sa page n est pas une mire (`/erreur/403`,
+        # `/oups`…). Déclarées, elles sont le juge ; absentes, seule l heuristique prudente
+        # ci-dessous parle, et ce qu elle ne reconnaît pas reste NON JUGÉ plutôt qu accusé.
+        "refus": [
+            r.strip()
+            for r in (os.environ.get("FORGE_TESTS_QUALIF_REFUS") or "").split(",")
+            if r.strip()
+        ],
         "plafond": int(plafond) if plafond.isdigit() else _PLAFOND_DEFAUT,
     }
 
@@ -1390,6 +1454,19 @@ def _connecter(page, config: dict) -> dict:  # noqa: ANN001
     }
 
 
+def _avec_role(alertes: list[str], role: str | None) -> list[str]:
+    """Les mêmes alertes, ÉTIQUETÉES du rôle qui les a rencontrées — TF-0325 (2).
+
+    L étiquette suit l idiome déjà posé pour le motif de session (« (role « admin ») … ») : ce sont
+    deux constats de la même nature, et le lecteur du rapport ne doit pas apprendre deux formes.
+    Sans rôle (N = 1 non étiqueté), l alerte est rendue telle quelle — ajouter « (role «  ») »
+    fabriquerait une dimension que l opérateur n a pas déclarée.
+    """
+    if not role:
+        return list(alertes)
+    return [f"qualif : (role « {role} ») {alerte.removeprefix('qualif : ')}" for alerte in alertes]
+
+
 def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN001
     """Visite chaque route atteignable et relève tout ce qui s y voit."""
     base = config["base"]
@@ -1577,7 +1654,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 for page_vue in vues:
                     page_vue["role"] = session["role"]
                 releve.extend(vues)
-                avertissements.extend(alertes_visite)
+                # TF-0325 (2) — l avertissement par ROUTE porte son RÔLE. `sorted(set(...))` plus
+                # bas dédoublonne : deux profils dont la même route est muette au DevTools ne
+                # produisaient qu une ligne, et la dimension rôle — la seule qui compte dès que N
+                # sessions sont déclarées — était perdue. « /admin non jugée » ne dit pas POUR QUI.
+                avertissements.extend(_avec_role(alertes_visite, session["role"]))
                 with contextlib.suppress(Exception):
                     contexte.close()
             navigateur.close()
