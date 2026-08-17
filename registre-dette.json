@@ -917,6 +917,12 @@
       "statut": "todo"
     },
     {
+      "id": "qualif-navigateur-006",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : l ouverture d une session par la mire se CONSTATE — un cookie de session pose pendant la soumission, ou la mire qui rend la main (sortie de sa route, sans champ de mot de passe rendu). Un produit qui garde son jeton en MEMOIRE, sans cookie ni changement de route, reste indiscernable d un echec : la session est alors declaree NON OUVERTE plutot que supposee ouverte — un audit qui se croit authentifie est plus dangereux qu un audit anonyme",
+      "statut": "todo"
+    },
+    {
       "id": "securite-oracles-005",
       "domaine": "securite-oracles",
       "enonce": "securite : le code VENDORISE (dossier de convention `vendor`) n est PAS scanne — dependance tierce EPINGLEE, copiee dans le depot pour la figer, jamais servie ni modifiee par le produit. Meme perimetre que `.venv` et que la gate `vendor/` de forge-development : un secret commis DANS un vendored se corrige en changeant l epingle, pas la ligne. Un projet qui nommerait `vendor` un dossier de SON produit le verrait donc ignore ici",
