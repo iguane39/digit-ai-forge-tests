@@ -876,39 +876,76 @@ def _a_un_effet(descripteur: dict, types: set[str] | None) -> str | None:
 
 
 # --- Parcours ---------------------------------------------------------------------------------
+# TF-0313 : `domcontentloaded` ne dit RIEN du rendu d une application qui rend en JavaScript, et
+# la SPA est le cas MAJORITAIRE de la cible de ce pan. Rejoué à l identique contre l instance
+# servie de BAV2 (React 18 + Ant Design, `/login`) : à l instant du `domcontentloaded` le DOM est
+# vide — ni champ mot de passe, ni identifiant, pas même un `button`. Le pan épuisait ses
+# candidats et concluait « aucune mire de connexion trouvée » sur la BONNE route, avec un compte
+# VALIDE. Contre-épreuve : la même mire, attendue, s ouvre (deux cookies JWT posés). L absence de
+# mire ne se constate donc qu APRÈS expiration d une attente d APPARITION, jamais à l instant du
+# chargement — et chaque candidat dit désormais OÙ il s est arrêté (TF-0315 le republie).
+_SELECTEUR_MOTDEPASSE = "input[type=password]"
+_SELECTEUR_IDENTIFIANT = (
+    "input[type=email], input[name*=mail i], input[name*=login i], "
+    "input[name*=user i], input[type=text]"
+)
+_SELECTEUR_SOUMISSION = "button[type=submit], input[type=submit], button"
+# Le délai laissé au bundle pour MONTER la mire avant qu on ait le droit de dire qu il n y en a
+# pas. Un pan qui n attend pas ne mesure pas l application, il mesure sa propre impatience.
+ATTENTE_MIRE_MS = 10000
+
+
+def _attendre(page, selecteur: str, timeout: int = ATTENTE_MIRE_MS):  # noqa: ANN001
+    """Le premier élément correspondant, attendu jusqu à son APPARITION ; None à l expiration.
+
+    Sans attente, « pas encore rendu » et « jamais rendu » sont le même constat — et le pan
+    publiait le second en n ayant observé que le premier.
+    """
+    try:
+        return page.wait_for_selector(selecteur, timeout=timeout)
+    except Exception:  # noqa: BLE001 — expiration : l element n a PAS paru, et c est le constat
+        return None
+
+
 def _connecter(page, config: dict) -> str | None:  # noqa: ANN001
     """Ouvre une session si un compte est fourni. Renvoie un motif d échec, ou None."""
     if not (config["login"] and config["mdp"]):
         return None
     candidates = [config["connexion"]] if config["connexion"] else ["/connexion", "/login"]
+    arrets: list[str] = []
     for route in candidates:
         if not route:
             continue
         try:
             page.goto(config["base"] + route, wait_until="domcontentloaded", timeout=30000)
-        except Exception:  # noqa: BLE001
+        except Exception as erreur:  # noqa: BLE001
+            arrets.append(f"{route} : navigation impossible ({type(erreur).__name__})")
             continue
-        mdp = page.query_selector("input[type=password]")
+        mdp = _attendre(page, _SELECTEUR_MOTDEPASSE)
         if mdp is None:
+            arrets.append(
+                f"{route} : aucun « {_SELECTEUR_MOTDEPASSE} » apparu en "
+                f"{ATTENTE_MIRE_MS // 1000} s"
+            )
             continue
-        identifiant = page.query_selector(
-            "input[type=email], input[name*=mail i], input[name*=login i], "
-            "input[name*=user i], input[type=text]"
-        )
+        identifiant = _attendre(page, _SELECTEUR_IDENTIFIANT)
         if identifiant is None:
+            arrets.append(f"{route} : champ mot de passe present, aucun champ identifiant")
             continue
         identifiant.fill(config["login"])
         mdp.fill(config["mdp"])
-        bouton = page.query_selector("button[type=submit], input[type=submit], button")
+        bouton = _attendre(page, _SELECTEUR_SOUMISSION)
         if bouton is None:
+            arrets.append(f"{route} : mire remplie, aucun bouton de soumission")
             continue
         bouton.click()
         page.wait_for_load_state("networkidle")
         return None
     return (
-        "aucune mire de connexion trouvee (routes essayees : "
-        + ", ".join(c for c in candidates if c)
-        + ") — la declarer par FORGE_TESTS_QUALIF_CONNEXION"
+        "aucune mire de connexion trouvee, APRES attente d apparition du champ mot de passe "
+        f"({ATTENTE_MIRE_MS // 1000} s par route) — routes essayees : "
+        + " · ".join(arrets or [", ".join(c for c in candidates if c)])
+        + " ; la declarer par FORGE_TESTS_QUALIF_CONNEXION"
     )
 
 
