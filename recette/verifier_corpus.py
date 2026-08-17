@@ -82,6 +82,19 @@ CORPUS = [
     # pas un defaut couvert.
     ("H-16", "batch", "traitement par lot qu aucun declencheur n enclenche",
      ("job-sans-declencheur", "trigger:")),
+    # TF-0293 — le pan `i18n` (TF-0284) etait prouve par 21 tests et par ses deux bancs, mais
+    # ABSENT de ce corpus : la recette qui prononce S-01 ne le mesurait pas. Ses pages sont
+    # portees au BUILD SERVI des bancs historiques (`dist\`), et ses TROIS defauts — les trois
+    # payes en production le 15/08, chacun trouve a la main en quelques minutes — recoivent ici
+    # l entree qu ils n avaient pas. Les prefixes DISTINGUENT les trois : un seul `i18n:` aurait
+    # fait passer les trois pour couverts des que l un sortait, ce qui est exactement l absence
+    # silencieuse que ce corpus existe pour supprimer.
+    ("H-17", "i18n", "route servie dans une locale et pas dans une autre",
+     ("i18n:route:en:/tarifs",)),
+    ("H-18", "i18n", "menu d une locale ampute par rapport au menu le plus riche",
+     ("i18n:navigation:",)),
+    ("H-19", "i18n", "page servie sous une locale non francaise avec du contenu francais",
+     ("i18n:route:en:/blog",)),
 ]
 
 # RT-8 — le lecteur SQL, verifie sur pieces. Ces cas ne passent par aucun banc : ils portent
