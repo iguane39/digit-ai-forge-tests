@@ -135,6 +135,20 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "development",
         "traiter le signalement de sécurité sur « {id} » : {message}",
     ),
+    # TF-0288 — l écart entre la source VERSIONNÉE et ce que la production SERT. La classe est
+    # distincte de `lien-casse` et le destinataire aussi : ici le code est CORRECT, c est le
+    # déploiement qui a dérivé. Le confondre avec un défaut de développement est exactement
+    # l erreur qu'INS-0001 a coûtée — sans le bloc (b) de l'instruction, on aurait ajouté au
+    # composant des entrées qu'il portait déjà. L'étape cible est donc `mep-config`, jamais
+    # `development`, et le geste est un redéploiement, pas un correctif.
+    "ecart-servi-versionne": (
+        "manuelle_utilisateur",
+        "mep-config",
+        "REDÉPLOYER depuis la source versionnée : « {id} » — {message}. Ne PAS toucher au code : "
+        "il porte déjà ce que le servi ne rend pas. Vérifier quel artefact la production "
+        "exécute et d'où il vient (aucun agent ne peut le faire à la place de qui tient le "
+        "déploiement)",
+    ),
     # TF-0284 — parité entre locales. Le destinataire est le développeur : une route manquante
     # se construit, un menu incomplet se complète, un contenu servi dans la mauvaise langue est
     # un câblage de données à corriger. Aucun des trois ne se règle par un test de plus.
