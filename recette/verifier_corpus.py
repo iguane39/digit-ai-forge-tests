@@ -1436,14 +1436,51 @@ def verifier_dashboard(rouge: dict) -> int:
     return echecs
 
 
+def prealables_absents(rapports: dict[str, dict | None]) -> dict[str, dict[str, str]]:
+    """{banc: {pan: motif}} — les pans dont la mesure est tombée faute d un PRÉALABLE
+    D ENVIRONNEMENT, jamais faute d un défaut du framework — TF-0299.
+
+    Le 17/08, Docker Desktop arrêté a rendu 10 défauts du corpus en [MANQUE] (12/22) :
+    indiscernables d une régression, le lecteur devait DÉDUIRE le démon absent. La section lint
+    déclare déjà un ruff introuvable comme tel (TF-0226) ; même idiome ici, à ceci près que le
+    préalable ne tombe pas sur une seule section mais sur les pans que la mesure a perdus — ils
+    sont donc DÉRIVÉS du rapport (motif porteur du marqueur), jamais écrits en dur : une liste de
+    pans « dépendants du conteneur » mentirait au premier pan ajouté.
+    """
+    from forge_tests.execution import PREALABLE_ABSENT
+
+    absents: dict[str, dict[str, str]] = {}
+    for nom, rapport in rapports.items():
+        if not rapport:
+            continue
+        touches = {
+            pan: motif
+            for pan, motif in (rapport.get("motifs_non_couverture") or {}).items()
+            if PREALABLE_ABSENT in motif
+        }
+        if touches:
+            absents[nom] = touches
+    return absents
+
+
 def verifier_corpus_des_bancs(
-    rouge: dict, vert: dict, alteres: list[str], empreintes_avant: dict
+    rouge: dict, vert: dict, alteres: list[str], empreintes_avant: dict,
+    prealables: dict[str, dict[str, str]] | None = None,
 ) -> int:
     """Le cœur historique : les défauts plantés au banc rouge, le banc vert sans bloquant."""
+    # TF-0299 — les pans que le préalable manquant a privés de mesure. Un défaut de leur ressort
+    # n est ni détecté ni MANQUANT : sa mesure n a pas eu lieu, et l écrire « MANQUE » serait
+    # accuser le framework d une régression qu il n a pas.
+    sans_mesure = set((prealables or {}).get("rouge", {}))
+    suspendus: list[tuple[str, str, str]] = []
     detectes = 0
     for code, pan, libelle, prefixes in CORPUS:
         trouves = _findings(rouge, prefixes)
         ok = bool(trouves)
+        if not ok and pan in sans_mesure:
+            suspendus.append((code, pan, libelle))
+            print(f"  [NON MESURABLE] {code} ({pan:<10}) {libelle}")
+            continue
         detectes += ok
         marque = "DETECTE" if ok else "MANQUE "
         print(f"  [{marque}] {code} ({pan:<10}) {libelle}")
@@ -1452,14 +1489,37 @@ def verifier_corpus_des_bancs(
         if len(trouves) > 2:
             print(f"             -> ... et {len(trouves) - 2} autre(s) élément(s) nommé(s)")
 
+    if suspendus:
+        print("-" * 78)
+        print(
+            f"  PRÉALABLE D ENVIRONNEMENT ABSENT : {len(suspendus)} défaut(s) NON MESURABLES, "
+            "nommés ici"
+        )
+        print("  un par un — ils ne sont NI détectés NI manquants, leur mesure n a pas eu lieu :")
+        for code, pan, libelle in suspendus:
+            print(f"             -> {code} ({pan:<10}) {libelle}")
+        for pan, motif in sorted((prealables or {}).get("rouge", {}).items()):
+            print(f"             pan {pan:<12} : {motif}")
+
     print("-" * 78)
     print(
-        f"  banc ROUGE : {detectes}/{len(CORPUS)} défauts détectés · "
-        f"{len(rouge['findings'])} findings nommés"
+        f"  banc ROUGE : {detectes}/{len(CORPUS) - len(suspendus)} défauts détectés"
+        + (f" ({len(suspendus)} NON MESURABLES) · " if suspendus else " · ")
+        + f"{len(rouge['findings'])} findings nommés"
     )
     bloquants_vert = [f for f in vert["findings"] if f.get("severite") == "bloquant"]
     signales_vert = [f for f in vert["findings"] if f.get("severite") != "bloquant"]
     print(f"  banc VERT  : {len(bloquants_vert)} finding(s) bloquant(s) — attendu 0")
+    # TF-0299 — « 0 bloquant » sur un banc dont des pans n ont pas ete mesures est un vert
+    # partiel : le dire est le meme devoir que pour le rouge, sinon la moitie saine du critere
+    # se lit comme une preuve alors qu elle n en est pas une.
+    sans_mesure_vert = sorted((prealables or {}).get("vert", {}))
+    if sans_mesure_vert:
+        print(
+            f"               ATTENTION : {len(sans_mesure_vert)} pan(s) NON MESURE(S) faute d un "
+            "prealable d environnement"
+        )
+        print(f"               ({', '.join(sans_mesure_vert)}) — ce « 0 bloquant » est PARTIEL")
     print(f"               {len(signales_vert)} signale(s) non bloquant(s), nommes :")
     for f in signales_vert:
         print(f"                 - {f['id']}")
@@ -1498,7 +1558,10 @@ def verifier_corpus_des_bancs(
         f"  G-1 sources   : {empreintes} fichier(s) empreinte(s) "
         + ("— AUCUN altere par l audit" if not alteres else f"— ALTERES : {', '.join(alteres)}")
     )
-    return (len(CORPUS) - detectes) + len(bloquants_vert) + len(alteres)
+    # Les défauts NON MESURABLES ne comptent pas comme échecs : ce serait rendre un verdict sur une
+    # mesure qui n a pas eu lieu. C est le verdict d ENSEMBLE qui est suspendu (voir `verdict_s01`),
+    # pas cette section qui accuse à leur place.
+    return (len(CORPUS) - len(suspendus) - detectes) + len(bloquants_vert) + len(alteres)
 
 
 # --- Sections de la recette --------------------------------------------------------------------
@@ -1530,10 +1593,54 @@ SECTIONS: dict[str, dict] = {
 }
 
 
+def verdict_s01(
+    succes: bool, partielle: bool, prealables: dict[str, dict[str, str]]
+) -> tuple[list[str], int]:
+    """(lignes à imprimer, code de sortie) — le verdict, et RIEN d autre : TF-0299.
+
+    Trois états déjà là, un quatrième posé ici, et l ordre entre eux est le sujet :
+
+      - recette PARTIELLE : S-01 non prononcé (le sélecteur ne juge pas les sections tues) ;
+      - **PRÉALABLE D ENVIRONNEMENT ABSENT et tout le reste vert** : S-01 non prononcé, code 3.
+        C est le tranchage de TF-0299, et il suit TF-0294 à la lettre : « un verdict rendu sur une
+        mesure impossible n est pas un verdict ». Un « NON TENU » ici serait le FAUX verdict que
+        l item dénonce — dix défauts non mesurés ne sont pas dix régressions. La sémantique de S-01
+        n est pas touchée : NON TENU garde son sens, TENU gagne une condition qu il avait déjà
+        implicitement (la mesure a eu lieu) ;
+      - préalable absent MAIS une section réellement rouge : « NON TENU » reste VRAI — quelque
+        chose est rouge indépendamment du conteneur, et le taire au nom d une mesure manquante
+        absoudrait un échec réel. Le préalable est alors dit, le verdict est rendu ;
+      - rien à signaler : TENU ou NON TENU comme avant.
+    """
+    lignes: list[str] = []
+    if prealables:
+        for banc, pans in sorted(prealables.items()):
+            lignes.append(
+                f"  PRÉALABLE D ENVIRONNEMENT ABSENT — banc {banc} : "
+                f"{len(pans)} pan(s) sans mesure ({', '.join(sorted(pans))})"
+            )
+    if partielle:
+        return lignes, 0 if succes else 1
+    if prealables and succes:
+        lignes.append(
+            "  S-01 NON PRONONCÉ — la mesure n a pas eu lieu pour les pans ci-dessus : le corpus"
+        )
+        lignes.append(
+            "  n a donc pas ete mesuré en entier. Ni TENU (rien ne le prouve), ni NON TENU (aucune"
+        )
+        lignes.append(
+            "  régression constatée). Lever le préalable, puis rejouer la recette ENTIÈRE."
+        )
+        return lignes, 3
+    lignes.append("  S-01 TENU" if succes else "  S-01 NON TENU")
+    return lignes, 0 if succes else 1
+
+
 def _jouer(nom: str, rouge: dict | None, vert: dict | None, contexte: dict) -> int:
     if nom == "corpus":
         return verifier_corpus_des_bancs(
-            rouge, vert, contexte["alteres"], contexte["empreintes_avant"]
+            rouge, vert, contexte["alteres"], contexte["empreintes_avant"],
+            contexte["prealables"],
         )
     if nom == "unitaire":
         return verifier_suite_unitaire()
@@ -1607,7 +1714,7 @@ def main(argv: list[str] | None = None) -> int:
     print("=" * 78)
 
     rouge = vert = None
-    contexte: dict = {"alteres": [], "empreintes_avant": {}}
+    contexte: dict = {"alteres": [], "empreintes_avant": {}, "prealables": {}}
     if a_auditer:
         # G-1 : l empreinte des sources des bancs AVANT tout audit. La mutation les altere le
         # temps d un mutant ; si un seul octet survit a la restauration, la recette le dit.
@@ -1618,6 +1725,10 @@ def main(argv: list[str] | None = None) -> int:
         if "vert" in a_auditer:
             vert = analyser_servi(VERT)
         contexte["alteres"] = alterations(contexte["empreintes_avant"])
+        # TF-0299 — relevé AVANT les sections : ce que les audits ont déclaré non mesurable faute
+        # d un préalable d ENVIRONNEMENT. Les sections le lisent pour le DIRE, le verdict pour ne
+        # pas prononcer sur une mesure qui n a pas eu lieu.
+        contexte["prealables"] = prealables_absents({"rouge": rouge, "vert": vert})
 
     echecs = {nom: _jouer(nom, rouge, vert, contexte) for nom in choisies}
 
@@ -1655,9 +1766,10 @@ def main(argv: list[str] | None = None) -> int:
             f"  RECETTE PARTIELLE — S-01 NON PRONONCÉ ({len(non_jouees)} section(s) non "
             f"jouée(s) : {', '.join(non_jouees)})"
         )
-    else:
-        print("  S-01 TENU" if succes else "  S-01 NON TENU")
-    return 0 if succes else 1
+    lignes, code = verdict_s01(succes, partielle, contexte["prealables"])
+    for ligne in lignes:
+        print(ligne)
+    return code
 
 
 if __name__ == "__main__":
