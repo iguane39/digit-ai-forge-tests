@@ -76,6 +76,7 @@ import html as _html
 import re
 from pathlib import Path
 
+from forge_tests import adoption as _adoption
 from forge_tests import declarations as _declarations
 from forge_tests.actions import (
     CATEGORIES,
@@ -1649,11 +1650,11 @@ def _detail_element(detail: dict | None) -> tuple[str, str]:
             contenu,
         )
     cartes = []
-    adoptes = 0
+    etats = []
     for cas in detail.get("cas") or []:
         etapes = "".join(f"<li>{_e(geste)}</li>" for geste in (cas.get("etapes") or []))
-        adoption = cas.get("adoption") or {"statut": "proposition"}
-        adoptes += adoption.get("statut") == "adopte"
+        adoption = cas.get("adoption") or {"statut": _adoption.A_ADOPTER}
+        etats.append(adoption)
         cartes.append(
             '<div class="cas-carte">'
             f'<p class="cas-ref"><code>{_e(cas.get("ref"))}</code> · '
@@ -1670,42 +1671,62 @@ def _detail_element(detail: dict | None) -> tuple[str, str]:
         return '<span class="discret">—</span>', ""
     n = len(cartes)
     # RT-12 : le bouton ne dit plus « 4 cas » (que le lecteur lisait comme « 4 tests non
-    # joués ») mais ce que ces cas SONT — des propositions, dont x adoptées par le projet.
-    libelle = f"{n} cas proposé{'s' if n > 1 else ''}"
-    if adoptes:
-        libelle += f", {adoptes} adopté{'s' if adoptes > 1 else ''}"
+    # joués ») mais ce que ces cas SONT. R-40 : ce ne sont plus des « propositions » — ce sont
+    # des cas à adopter et exécuter, et le bouton annonce le SOLDE, pas le seul volume.
+    compte = _adoption.solde(etats)
+    libelle = f"{n} cas dérivé{'s' if n > 1 else ''}"
+    libelle += f", {compte['solde']} à adopter" if compte["solde"] else ", tous soldés"
     bouton = (
         f'<button type="button" class="btn-detail" aria-expanded="false" '
-        f'title="cas DÉRIVÉS de la surface, déposés hors du projet (G-1) : des propositions '
-        f'à adopter, pas des tests que l audit aurait sautés">{_e(libelle)} ▸</button>'
+        f'title="cas DÉRIVÉS de la surface, déposés hors du projet (G-1) : à adopter et '
+        f'exécuter, pas des tests que l audit aurait sautés — {_e(_adoption.libelle_solde(compte))}'
+        f'">{_e(libelle)} ▸</button>'
     )
     return bouton, f'<div class="cas-grille">{"".join(cartes)}</div>'
 
 
 def _badge_adoption(adoption: dict) -> str:
-    """Statut d'un cas dérivé (RT-13) — « Proposition » n'est pas « Non joué ».
+    """État d'un cas dérivé (RT-13, R-40) — « À adopter » n'est pas « Non joué ».
 
     Retour humain du 14/08 : le lecteur a lu « Non joué » sur un cas dérivé et a demandé
     « pourquoi ce type de tests n'est pas joué ? ». Un cas dérivé n'est pas joué par
     construction — il n'appartient pas encore à la suite du projet.
+
+    R-40 : cet état est TRANSITOIRE, et le badge le dit. Le repli final couvre aussi le
+    vocabulaire d'avant le 17/08 (« proposition ») porté par les rapports déjà rendus —
+    l'antériorité s'affiche, elle ne se réécrit pas.
     """
     statut = adoption.get("statut")
-    if statut == "adopte":
+    if statut == _adoption.ADOPTE:
         return (
             '<p><span class="badge b-pass" title="le projet a déclaré ce cas adopté et le '
-            'test cité existe">✓ Adopté par le projet</span> '
+            'test cité existe">✓ Adopté et exécuté par le projet</span> '
             f'<code>{_e(adoption.get("test"))}</code></p>'
         )
-    if statut == "refuse":
+    if statut == _adoption.NON_TESTABLE:
         return (
-            '<p><span class="badge b-fail" title="adoption déclarée mais non vérifiable">'
-            f'✕ Adoption refusée</span> <span class="discret">{_e(adoption.get("motif"))}'
+            '<p><span class="badge b-info" title="RT-6 : aucune exécution ne peut l atteindre '
+            'ici — il se répare en fournissant les champs requis, pas en écrivant un test">'
+            f'⊘ Non testable ici, motivé</span> <span class="discret">{_e(adoption.get("motif"))}'
             "</span></p>"
+        )
+    if statut == _adoption.ECARTE:
+        return (
+            '<p><span class="badge b-info" title="écarté par une décision humaine nommée : qui, '
+            'quand, pourquoi">– Écarté (décision nommée)</span> '
+            f'<span class="discret">{_e(adoption.get("motif"))}</span></p>'
+        )
+    if statut == _adoption.REFUSE:
+        return (
+            '<p><span class="badge b-fail" title="déclaration faite mais non vérifiable — le cas '
+            f'reste au solde">✕ Déclaration refusée</span> <span class="discret">'
+            f'{_e(adoption.get("motif"))}</span></p>'
         )
     return (
         '<p><span class="badge b-part" title="cas dérivé de la surface : il n appartient pas '
-        "encore à la suite du projet — ce n est pas un test que l audit aurait sauté\">"
-        "○ Proposition (non adoptée)</span></p>"
+        "encore à la suite du projet — ce n est pas un test que l audit aurait sauté, c est un "
+        'cas que personne n a encore soldé (R-40)">'
+        "○ À adopter et exécuter — non soldé</span></p>"
     )
 
 

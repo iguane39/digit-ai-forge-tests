@@ -767,6 +767,12 @@
       "statut": "retiree"
     },
     {
+      "id": "adoption-003",
+      "domaine": "adoption",
+      "enonce": "adoption : un cas `non_testable` ou `ecarte` (R-40) est pris au mot — ce module exige que le motif soit NOMME (champs_requis, ou qui/quand/pourquoi) et jamais que la raison soit bonne ; le solde compte des etats declares, il ne juge pas un arbitrage humain",
+      "statut": "todo"
+    },
+    {
       "id": "dashboard-005",
       "domaine": "dashboard",
       "enonce": "dashboard : un constat DECLARE par le projet (RT-18) sort du compteur « Constats d echec » et reste integralement affiche, avec son motif type et sa contre-preuve — la page rend la declaration, elle ne la valide pas",
