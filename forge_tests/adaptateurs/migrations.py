@@ -312,7 +312,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # Effet REEL : un objet qu une section pretend creer doit exister apres application.
     schema = schema_obtenu(str(cible))
     if schema is None:
-        sortie.non_juge.append("migrations : schema reel non introspectable, effet non verifie")
+        # TF-0309 — cf. `data` : la CAUSE déclarée par le rejeu suit le motif. Un démon de
+        # conteneurs absent frappe ce chemin même quand la suite backend, elle, tourne sans
+        # conteneur : sans cette reprise il restait muet sur son seul chemin.
+        sortie.non_juge.append(
+            "migrations : schema reel non introspectable, effet non verifie. Cause : "
+            + motif_indisponibilite(cible, "schema", "non declaree par le rejeu")
+        )
         return sortie
     presents = set(schema["tables"]) | set(schema["contraintes"]) | set(schema["index"])
     for fichier in _fichiers(cible):
