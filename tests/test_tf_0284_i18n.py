@@ -8,9 +8,20 @@ tous scriptables sans modèle de langage :
   - un menu anglais à 4 entrées quand le français en portait 9 — non détecté depuis juin ;
   - 9 pages sur 200 servies sous `/en` avec du contenu FRANÇAIS.
 
-Les fixtures servies du dépôt (`fixtures/i18n-rouge`, `fixtures/i18n-vert`) reproduisent les
-trois : le banc rouge les porte, le banc vert porte les mêmes pages corrigées. Le pan est joué
-de bout en bout dessus, exactement comme il le sera sur un produit.
+Les trois défauts vivent dans le BUILD SERVI des bancs HISTORIQUES du dépôt
+(`fixtures/banc-rouge/dist`, `fixtures/banc-vert/dist`) : le banc rouge les porte, le banc vert
+porte les mêmes pages corrigées. Le pan est joué de bout en bout dessus, exactement comme il le
+sera sur un produit.
+
+TF-0293 — ces pages vivaient d abord dans des bancs SÉPARÉS (`fixtures/i18n-rouge`,
+`fixtures/i18n-vert`), posés hors des bancs historiques parce qu une campagne parallèle
+travaillait sur le même dépôt le 15/08 et que le corpus S-01 mesure le banc vert à zéro finding
+bloquant. Le pan était donc prouvé par ces 21 tests, mais ABSENT du corpus qui prononce S-01 : la
+recette du dépôt ne le mesurait pas. Les pages sont désormais portées au build servi des bancs, et
+les trois défauts ont leurs entrées de corpus (H-17, H-18, H-19). Le dossier `dist\\` est le choix
+qui ne déplace la surface d aucun autre pan : `interface` et `securite` l excluent par convention,
+`accessibilite` et `visuel` tirent leurs routes de la table de routage du front, `prompts` ne lit
+pas le `.html`.
 """
 
 from __future__ import annotations
@@ -22,7 +33,9 @@ import pytest
 from forge_tests.adaptateurs import PANS_ATTENDUS, REGISTRE, i18n
 
 BANCS = Path(__file__).resolve().parent.parent / "fixtures"
-ROUGE, VERT = BANCS / "i18n-rouge", BANCS / "i18n-vert"
+ROUGE, VERT = BANCS / "banc-rouge", BANCS / "banc-vert"
+# Le build SERVI de chaque banc — ce que le pan lit, et ce que la recette mesure au corpus.
+BUILD_ROUGE, BUILD_VERT = ROUGE / "dist", VERT / "dist"
 
 
 @pytest.fixture(autouse=True)
@@ -128,8 +141,8 @@ def test_une_page_trop_courte_n_est_pas_jugee_sur_sa_langue(tmp_path: Path) -> N
 def test_le_build_declare_l_emporte_sur_la_decouverte(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("FORGE_TESTS_I18N_BUILD", str(ROUGE / "out"))
-    assert i18n.build_servi(tmp_path) == ROUGE / "out"
+    monkeypatch.setenv("FORGE_TESTS_I18N_BUILD", str(BUILD_ROUGE))
+    assert i18n.build_servi(tmp_path) == BUILD_ROUGE
 
 
 def test_un_produit_monolingue_sort_en_NA_avec_sa_preuve(tmp_path: Path) -> None:
