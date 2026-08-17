@@ -5,7 +5,8 @@
 
 **État : outil en service.** Le noyau, treize adaptateurs, le générateur de cas, le registre
 de dette et la recette du corpus sont écrits et exécutables. La recette officielle
-(`recette/verifier_corpus.py`) détecte **19/19** des défauts plantés au banc rouge, ne lève
+(`recette/verifier_corpus.py`) détecte **chacun** des défauts plantés au banc rouge — leur
+compte vivant est celui de `CORPUS` dans ce fichier, jamais recopié ici (loi 4) — ne lève
 **aucun finding bloquant** au banc vert, et vérifie sur pièces — en treize sections — le
 lecteur SQL (RT-8), la qualification des non-testables (RT-6), l'analyse statique des
 divergences (RT-9 / RT-10), la suite unitaire (TF-0006) et le linter (TF-0226).
@@ -965,8 +966,10 @@ uv run python -m forge_tests.dette             # régénère registre-dette.json
 uv run python -m forge_tests.dette --verifier  # exit 1 si le registre committé a divergé
 ```
 
-La recette rejoue le framework sur la paire de bancs de `fixtures/` : chacun des **16** défauts
-plantés du banc rouge doit produire un finding **nommé**, le banc vert aucun finding bloquant.
+La recette rejoue le framework sur la paire de bancs de `fixtures/` : **chacune** des entrées de
+`CORPUS` (`recette/verifier_corpus.py` — la liste est la seule source du compte, et la recette
+l'imprime au verdict) doit produire un finding **nommé** par SON propre défaut planté au banc
+rouge, le banc vert aucun finding bloquant.
 
 Le pan `qualif` juge une application **en service** : il ne pourrait donc pas être exercé par
 un banc de fichiers, comme les onze autres. La recette **sert elle-même** `fixtures/banc-*/
