@@ -34,7 +34,12 @@ CHAPITRE_SANS_DECLARATION = {
 # couple (motif, gabarit) : le premier motif qui reconnaît l identifiant donne le sous-chapitre.
 # `entree` (TF-0223) rejoint les axes qualif : la porte d entrée est un écran et un parcours au
 # même titre qu une route — sans elle, `qualif:entree:/` tombait en « éléments non rattachés ».
-_AXES_QUALIF = r"^qualif:(?:route|effet|console|marqueur|entree):(?P<v>/[^:]*)"
+# TF-0316 : le segment `role:<etiquette>:` est OPTIONNEL. Sans lui, les éléments d un audit joué
+# sous plusieurs identités tombaient tous en « éléments non rattachés » — la même route vue par
+# deux rôles est le même ÉCRAN, et c est à cet écran qu elle se range.
+_AXES_QUALIF = (
+    r"^qualif:(?:role:[^:]+:)?(?:route|effet|console|marqueur|entree):(?P<v>/[^:]*)"
+)
 _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
     "ecran": (
         (re.compile(_AXES_QUALIF), "écran {v}"),
