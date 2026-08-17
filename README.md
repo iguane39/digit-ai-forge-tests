@@ -24,8 +24,8 @@ appelle ; ils sont désormais des sections comme les autres, et leur échec fait
 | Service | Intention (« je veux… ») | Point d'entrée | Statut |
 |---|---|---|---|
 | **Auditer une suite de tests** | savoir ce que mes tests couvrent vraiment et ce qui n'est pas exercé | `uv run python -m forge_tests <racine> --json [--sortie <fichier>]` | prouvé (experimental) |
-| **Générer des cas de tests en proposition** | recevoir des cas de tests prêts à adopter, sans pollution de mon projet | `uv run python -m forge_tests <racine> --generer <dossier-proposition>` | prouvé (experimental) |
-| **Livrables de tests dérivés** | obtenir cahiers de tests, jeu de données synthétique et dashboard | `uv run python -m forge_tests <racine> --livrables <dossier-proposition>` | prouvé (experimental) |
+| **Générer des cas de tests à adopter et exécuter** | recevoir des cas de tests que j'adopte, j'exécute — ou que je solde motivés (R-40) — sans pollution de mon projet | `uv run python -m forge_tests <racine> --generer <dossier-proposition>` | prouvé (experimental) |
+| **Livrables de tests dérivés (cas à adopter et exécuter)** | obtenir cahiers de tests, jeu de données synthétique et dashboard, chacun publiant son **solde** de cas non soldés | `uv run python -m forge_tests <racine> --livrables <dossier-proposition>` | prouvé (experimental) |
 | **Tendance et reprise ciblée** | comparer deux audits et ne rejouer que ce qui n'était pas vert | `uv run python -m forge_tests <racine> --precedent <r.json> | --reprendre <r.json>` | prouvé (experimental) |
 | **Inventaire sans exécution** | cartographier la surface de test sans rien exécuter | `env FORGE_TESTS_SANS_EXECUTION=1 + CLI` | déclaré (experimental) |
 | **Impact par diff, flaky, propriétés, mutation par risque** | auditer moins mais juste : cibler par diff, isoler les flaky, proposer du property-based | `forge_tests\{impact,flaky,generateur_proprietes}.py · risque.repartir_mutants` | déclaré (experimental) |
@@ -75,10 +75,10 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 |---|---|
 | `--json` | rapport complet en JSON sur stdout (sinon résumé lisible) |
 | `--pans <pan> [...]` | restreint l'audit à ces pans (`front interface api data migrations batch fichiers back securite accessibilite visuel qualif prompts`) |
-| `--generer <dossier>` | dépose les cas de test générés dans ce dossier de **proposition** — jamais dans le projet analysé. Les messages partent sur stderr : `--generer --json` produit un stdout JSON pur |
+| `--generer <dossier>` | dépose les cas de test générés dans ce dossier de **dépôt extérieur** — jamais dans le projet analysé. Ces cas sont **à adopter et exécuter** (R-40), pas un livrable en soi. Les messages partent sur stderr : `--generer --json` produit un stdout JSON pur |
 | `--sortie <fichier>` | persiste le rapport dans ce fichier, **à l'identique** de stdout (le dossier parent est créé au besoin) |
 | `--reprendre <rapport.json>` | relit un rapport antérieur et **ne rejoue que ce qui n'était pas vert** ; le rapport produit fusionne l'ancien et le neuf avec la provenance de chaque élément — voir « Audit de qualification avec reprise » |
-| `--livrables <dossier>` | produit les **livrables dérivés** dans ce dossier de proposition, **hors du projet audité** : deux cahiers de tests, un jeu de données synthétique, un dashboard HTML autonome. Régénérés à chaque audit, `--reprendre` compris. Messages sur stderr — voir « Cahiers de tests dérivés et dashboard d'exécution » |
+| `--livrables <dossier>` | produit les **livrables dérivés** dans ce dossier de dépôt, **hors du projet audité** : deux cahiers de tests, un jeu de données synthétique, un dashboard HTML autonome. Régénérés à chaque audit, `--reprendre` compris. Messages sur stderr — voir « Cahiers de tests dérivés et dashboard d'exécution » |
 | `--precedent <rapport.json>` | rapport antérieur servant de **point de comparaison** : le dashboard affiche alors la tendance de chaque compteur. Sans lui, l'onglet Synthèse le déclare |
 
 ### Codes de sortie
@@ -153,8 +153,8 @@ jq '.actions[] | select(.categorie=="manuelle_utilisateur")' rapport.json
 ## Cahiers de tests dérivés et dashboard d'exécution
 
 `--livrables <dossier>` produit quatre fichiers datés, nommés à la convention Digit-AI
-(`<Produit> - <Nature> - AAAAMMJJ<i>.<ext>`), dans un dossier de **proposition extérieur au
-projet audité**. Le garde-fou G-1 n'est pas une convention de nommage : le chemin est résolu, et
+(`<Produit> - <Nature> - AAAAMMJJ<i>.<ext>`), dans un **dossier de dépôt extérieur au projet
+audité**. Le garde-fou G-1 n'est pas une convention de nommage : le chemin est résolu, et
 s'il tombe sous la racine auditée la production est **refusée avant d'écrire quoi que ce soit**.
 
 | Livrable | Contenu |
@@ -163,6 +163,31 @@ s'il tombe sous la racine auditée la production est **refusée avant d'écrire 
 | `… - Cahier de tests techniques - …md` | chapitré par pan puis module / table / fichier / job |
 | `… - Jeu de donnees de tests - …json` | valeurs **synthétiques uniquement**, vérifiées avant écriture |
 | `… - Dashboard tests - …html` | page autonome à six onglets, dérivée du **seul** rapport JSON |
+
+### Un cas dérivé n'est pas un livrable — trois états, solde attendu zéro (R-40)
+
+La voie « proposition de tests » est **fermée** (R-40 du pilot, 17/08, TF-0349 ; coût mesuré :
+971 cas dérivés pour 0 adopté sur un produit réel — un contrôle jamais joué livré comme s'il
+protégeait). Un cas dérivé **naît « à adopter et exécuter »** : état transitoire, jamais
+terminal. Il se solde de **trois façons, aucune autre**, déclarées par le PROJET dans
+`<projet>/forge/cas-adoptes.jsonl` (lu en lecture seule, G-1) :
+
+| État | Ligne à déclarer | Vérification faite par la forge |
+|---|---|---|
+| **adopté et exécuté** | `{"cas": "F1-3025-3", "test": "frontend/tests/e2e/10-navigation.spec.ts"}` | le test cité doit **exister**, sinon la déclaration est refusée avec son motif |
+| **`non_testable` motivé** (RT-6) | `{"cas": "T2-0481-1", "non_testable": true, "champs_requis": ["FORGE_TESTS_QUALIF_URL"]}` | `champs_requis` **non vide** — il se répare en fournissant, pas en écrivant un test |
+| **écarté par décision humaine nommée** | `{"cas": "F1-3025-2", "ecarte_par": "<nom>", "date": "2026-08-17", "motif": "<pourquoi>"}` | `ecarte_par` **et** `motif` exigés — un écart anonyme est un silence déguisé |
+
+Le **solde** `dérivés − adoptés − non_testables − écartés` est calculé par
+`forge_tests.adoption` et **publié** en tête de chaque cahier, par chapitre, et sur le
+dashboard. Le solde attendu est **zéro** : un cahier non soldé porte un **reste-à-faire**, ce
+n'est pas un livrable clos. Une déclaration invérifiable reste **au** solde, avec son motif —
+sinon le solde descendrait sur du vide (RT-13).
+
+Les références de cas sont **stables** d'un audit à l'autre : elles sont citables depuis du
+code. Antériorité : les fichiers et rapports écrits avant le 17/08 portent l'ancien vocabulaire
+(`proposition`) — le lecteur l'accepte et l'affiche comme « à adopter », le producteur ne
+l'émet plus.
 
 ### « Exhaustif » — une définition opposable, pas une intention
 

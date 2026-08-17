@@ -141,8 +141,11 @@ def test_rt13_adoption_declaree_et_verifiee(tmp_path: Path) -> None:
     )
     adoptions = adoption.charger(tmp_path)
     assert adoption.statut(adoptions, "F1-3025-3")["statut"] == "adopte"
-    # Un cas non déclaré reste une proposition — jamais « non joué ».
-    assert adoption.statut(adoptions, "F1-9999-1")["statut"] == "proposition"
+    # Un cas non déclaré reste « à adopter » — jamais « non joué ». R-40 (17/08, TF-0349) a
+    # requalifié cet état : il s appelait « proposition », il s appelle `a_adopter` et il est
+    # TRANSITOIRE. L antériorité reste lue (`est_a_adopter`), elle n est plus produite.
+    assert adoption.statut(adoptions, "F1-9999-1")["statut"] == "a_adopter"
+    assert adoption.est_a_adopter("proposition")
 
 
 def test_rt13_adoption_sans_test_existant_est_refusee(tmp_path: Path) -> None:
