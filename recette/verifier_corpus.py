@@ -421,6 +421,90 @@ def alterations(empreintes_avant: dict[Path, dict[str, str]]) -> list[str]:
     ]
 
 
+def _fichiers_de_l_arbre(racine: Path) -> list[str] | None:
+    """Chemins que git connaît : suivis, plus non suivis NON ignorés. `None` si git est muet.
+
+    TF-0294 — le périmètre est celui de git, et c est ce qui rend l empreinte honnête. La recette
+    écrit légitimement pendant qu elle tourne : `__pycache__`, caches de pytest et de ruff,
+    traces de navigateur, `test-results\\` des bancs — tout cela est IGNORÉ par le `.gitignore`
+    du dépôt, donc absent du relevé. Ce qui reste est exactement ce qu une campagne concurrente
+    éditerait : du code, des tests, des fixtures, un registre.
+    """
+    import subprocess
+
+    fichiers: list[str] = []
+    for arguments in (["ls-files"], ["ls-files", "--others", "--exclude-standard"]):
+        try:
+            resultat = subprocess.run(
+                ["git", "-C", str(racine), *arguments],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if resultat.returncode != 0:
+            return None
+        fichiers.extend(ligne.strip() for ligne in resultat.stdout.splitlines() if ligne.strip())
+    return sorted(set(fichiers))
+
+
+def empreinte_arbre(racine: Path | None = None) -> dict[str, str] | None:
+    """SHA-256 de chaque fichier de l arbre de travail. `None` = empreinte NON RELEVÉE.
+
+    `None` et `{}` ne disent pas la même chose : le premier est « git n a pas répondu, la
+    stabilité n est pas mesurable », le second « un arbre sans aucun fichier ». Les confondre
+    ferait passer une non-mesure pour une mesure rassurante — le silence que ce dépôt interdit.
+    """
+    import hashlib
+
+    cible = racine or RACINE
+    fichiers = _fichiers_de_l_arbre(cible)
+    if fichiers is None:
+        return None
+    empreintes: dict[str, str] = {}
+    for relatif in fichiers:
+        chemin = cible / relatif
+        try:
+            empreintes[relatif] = hashlib.sha256(chemin.read_bytes()).hexdigest()
+        except OSError:
+            # Un fichier listé par git mais illisible à l instant du relevé : ABSENT du relevé,
+            # donc vu comme « disparu » au second passage s il l était au premier. C est le
+            # comportement voulu : un fichier qui va et vient sous la recette est une instabilité.
+            continue
+    return empreintes
+
+
+def instabilites(
+    avant: dict[str, str] | None,
+    apres: dict[str, str] | None,
+    deja_nommes: list[str] | None = None,
+) -> list[str]:
+    """TF-0294 — ce qui a bougé dans l arbre entre deux relevés, nommé fichier par fichier.
+
+    `deja_nommes` reçoit les altérations G-1 (`alterations`) : un source de banc que la
+    restauration après mutation n a pas rendu à l octet près est un ÉCHEC MESURÉ de la recette,
+    déjà nommé par la section `corpus`. Le compter ici une seconde fois transformerait une
+    régression réelle en « arbre instable, verdict refusé » — c est-à-dire masquerait précisément
+    ce que la recette venait de trouver.
+    """
+    if avant is None or apres is None:
+        return []
+    ecartes = [nomme.replace("\\", "/") for nomme in (deja_nommes or [])]
+    bouges: list[str] = []
+    for relatif in sorted(set(avant) | set(apres)):
+        if relatif not in apres:
+            etat = "disparu"
+        elif relatif not in avant:
+            etat = "apparu"
+        elif avant[relatif] != apres[relatif]:
+            etat = "modifie"
+        else:
+            continue
+        if any(nomme.endswith(relatif) for nomme in ecartes):
+            continue
+        bouges.append(f"{relatif} ({etat})")
+    return bouges
+
+
 def verifier_lecture_seule() -> int:
     """G-1 — la mutation restaure le source A L OCTET PRES, fins de ligne comprises.
 
@@ -1496,6 +1580,17 @@ def main(argv: list[str] | None = None) -> int:
     if partielle:
         print(f"  SÉLECTION : {', '.join(choisies)}")
         print(f"  BANCS AUDITÉS : {', '.join(sorted(a_auditer)) or 'aucun (contrôles sur pièces)'}")
+
+    # TF-0294 — l empreinte de l ARBRE DE TRAVAIL, relevée avant le premier contrôle. Le 15/08,
+    # deux « S-01 NON TENU » ont été rendus sur un dépôt qu une campagne concurrente modifiait
+    # pendant que la recette tournait : des échecs FANTÔMES, indiscernables d une régression
+    # réelle, dont un a coûté une instruction complète avant d être écarté. Un verdict rendu sur
+    # un arbre instable n est pas un verdict — il est donc REFUSÉ, jamais rendu NON TENU.
+    arbre_avant = empreinte_arbre()
+    if arbre_avant is None:
+        print("  ARBRE : empreinte NON RELEVÉE (git muet) — la stabilité ne sera pas vérifiable")
+    else:
+        print(f"  ARBRE : {len(arbre_avant)} fichier(s) empreinté(s) à l ouverture (TF-0294)")
     print("=" * 78)
 
     rouge = vert = None
@@ -1513,10 +1608,32 @@ def main(argv: list[str] | None = None) -> int:
 
     echecs = {nom: _jouer(nom, rouge, vert, contexte) for nom in choisies}
 
+    # TF-0294 — second relevé, APRÈS le dernier contrôle : l arbre est-il resté celui qu on a
+    # jugé ? Les altérations G-1 sont écartées — elles sont un échec MESURÉ de la restauration
+    # après mutation, déjà nommé par la section `corpus`, et non le fait d une session tierce.
+    bouges = instabilites(arbre_avant, empreinte_arbre(), contexte["alteres"])
+
     print("=" * 78)
     for nom, compte in echecs.items():
         print(f"  {'OK   ' if not compte else 'ECHEC'}  {nom:<14} {SECTIONS[nom]['titre']}")
     succes = not any(echecs.values())
+    if bouges:
+        # Verdict DISTINCT : ni TENU, ni NON TENU. Ce que la recette a mesuré porte sur un état
+        # du dépôt qui n existe plus — rendre un verdict serait attribuer à une régression ce qui
+        # peut n être que la campagne du voisin. Code de sortie 2, pour que l appelant le
+        # distingue lui aussi de l échec (1) et du succès (0).
+        print(f"  ARBRE INSTABLE — VERDICT REFUSÉ : {len(bouges)} fichier(s) ont bougé pendant la")
+        print("  recette. Le verdict porte sur un arbre qui n existe plus : il n est ni TENU ni")
+        print("  NON TENU. Rejouer la recette sur un arbre STABLE (aucune autre session en")
+        print("  écriture sur ce dépôt).")
+        for ligne in bouges[:15]:
+            print(f"             -> {ligne}")
+        if len(bouges) > 15:
+            print(f"             -> ... et {len(bouges) - 15} autre(s)")
+        return 2
+    if arbre_avant is None:
+        print("  ARBRE : stabilité NON VÉRIFIÉE (git muet) — le verdict ci-dessous est rendu sans")
+        print("  cette garantie, et cela se dit plutôt que de se taire (TF-0294).")
     if partielle:
         # Une recette partielle ne PRONONCE PAS S-01. Le dire serait le mensonge que le
         # selecteur rendrait facile : « vert » sur trois sections, silence sur les huit autres.
