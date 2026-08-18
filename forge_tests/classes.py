@@ -53,6 +53,10 @@ FAUX_VERT_ABSENCE = "faux-vert-absence-sans-presence"
 FAUX_VERT_MOTIF = "faux-vert-motif-du-declencheur"
 DONNEE_DE_TEST_RECOPIEE = "donnee-de-test-recopiee"
 
+# --- Surface appelée vs surface servie (TF-0371) -------------------------------------------------
+ROUTE_APPELEE_NON_SERVIE = "route-appelee-non-servie"
+RESSOURCE_REFERENCEE_ABSENTE = "ressource-referencee-absente"
+
 # --- Matrice des droits et recette multi-profils (TF-0343 / TF-0342) ----------------------------
 MATRICE_DES_DROITS = "matrice-des-droits"
 
