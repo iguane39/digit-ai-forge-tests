@@ -392,7 +392,7 @@ def _cas_unitaire(element: dict, chapitre: dict, cle_jeu: str) -> list[dict]:
     # Il s ajoute plutôt qu il ne remplace : vérifier qu une route accepte une valeur conforme et
     # vérifier qu elle la RELIT sont deux questions, et c est la seconde que six campagnes n ont
     # jamais posée. Dérivable sans spécification, la surface d écriture étant inventoriée.
-    aller_retour = _relecture.cas_aller_retour(identifiant)
+    aller_retour = _relecture.cas_aller_retour(identifiant, f"{cle_jeu} § conforme")
     return ([aller_retour] if aller_retour else []) + [
         {
             "suffixe": "verification",

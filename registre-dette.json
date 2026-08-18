@@ -45,6 +45,13 @@
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : classification par CLASSE = doctrine du module (déterminisme opposable, jq du DOSSIER-MEP). Réévaluer si un run réel prouve que la limite coûte."
     },
     {
+      "id": "actions-003",
+      "domaine": "actions",
+      "enonce": "actions : un pan SANS element inventorie dont la configuration n est que PRESUMEE ne produit plus d action humaine (TF-0381) — l entree reste au rapport avec son motif, mais reclamer une configuration pour un pan qui n a rien a mesurer usait la credibilite des actions qui comptent. Le pan reste NOMME : ce qui disparait est la demande, pas le constat",
+      "statut": "assume",
+      "note": "Limite ACCEPTEE, pas a outiller : la soustraction est le correctif lui-meme. Reclamer une configuration pour un pan sans element inventorie ne devient pas utile en l outillant mieux — le pan reste NOMME au rapport, et c est ce qui est du. Ce qui resterait a outiller serait de savoir si un pan est SANS OBJET plutot que non mesure, ce qui demande un indice de racine d execution : c est une autre entree, pas celle-ci."
+    },
+    {
       "id": "adoption-001",
       "domaine": "adoption",
       "enonce": "adoption : le fichier `forge/cas-adoptes.jsonl` est une DECLARATION du projet — ce module verifie que le test cite existe, jamais qu il couvre reellement le cas ni qu il affirme quoi que ce soit (c est le role de la mutation)",

@@ -139,7 +139,7 @@ def defauts_evalues_a_l_import(cible: Path) -> list[Finding]:
 METHODES_ECRITURE = ("POST", "PUT", "PATCH")
 
 
-def cas_aller_retour(identifiant: str) -> dict | None:
+def cas_aller_retour(identifiant: str, jeu: str = "jeu du sous-chapitre") -> dict | None:
     """Le cas dérivé « ce que je viens d'écrire, je le relis CHAMP PAR CHAMP ».
 
     Rendu pour un `endpoint:<MÉTHODE> <route>` d'écriture, sinon None. Dérivable sans
@@ -160,7 +160,15 @@ def cas_aller_retour(identifiant: str) -> dict | None:
         "titre": f"{methode.upper()} {route} — ce qui est écrit est ce qui est relu",
         "preconditions": "le jeu de données du sous-chapitre est chargé ; l horloge du poste est "
                          "celle de référence",
-        "gestes": [
+        # DÉFAUT DE MA PREMIÈRE ÉCRITURE, trouvé par la recette du dépôt et non par mes tests :
+        # ce dictionnaire portait `gestes` et `resultat_attendu`, et pas de `jeu`. Le rendu du
+        # cahier lit `etapes`, `attendu` et `jeu` — le cas ne pouvait donc PAS se rendre, et la
+        # première route d écriture rencontrée faisait tomber la construction du cahier entier
+        # (KeyError). Mes tests de TF-0369 vérifiaient la fonction EN ISOLATION : ils étaient
+        # verts, et personne ne jouait le chemin réel. C est le défaut que je constate pour la
+        # cinquième fois de la journée, cette fois sur mon propre code.
+        "jeu": jeu,
+        "etapes": [
             f"écrire un objet complet par {methode.upper()} {route}, en renseignant CHAQUE champ "
             "que l écran peut envoyer — surtout les booléens et les choix, pas seulement les "
             "champs obligatoires",
@@ -173,7 +181,7 @@ def cas_aller_retour(identifiant: str) -> dict | None:
             "écrire un SECOND objet et vérifier que ses champs de date DIFFÈRENT de ceux du "
             "premier — deux dates identiques à la seconde révèlent une valeur figée à l import",
         ],
-        "resultat_attendu": (
+        "attendu": (
             "chaque champ envoyé est relu à l identique ; aucun champ n est remplacé en silence "
             "par une valeur du serveur (un écrasement VOULU se déclare dans le contrat, et le "
             "cas cite alors la ligne qui le déclare) ; chaque date relue est à quelques secondes "

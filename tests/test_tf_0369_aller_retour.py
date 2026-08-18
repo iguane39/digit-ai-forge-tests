@@ -160,7 +160,7 @@ def test_une_route_de_LECTURE_n_en_recoit_PAS() -> None:
 def test_le_cas_exige_les_SCALAIRES_pas_seulement_les_criteres() -> None:
     """C'est ce qui rendait le défaut (2) invisible : le parcours relisait les critères de
     l'alerte, jamais ses booléens."""
-    gestes = " ".join(relecture.cas_aller_retour("endpoint:POST /alerts")["gestes"])
+    gestes = " ".join(relecture.cas_aller_retour("endpoint:POST /alerts")["etapes"])
 
     assert "CHAMP PAR CHAMP" in gestes
     assert "booléens" in gestes
@@ -171,18 +171,18 @@ def test_le_cas_compare_une_DATE_a_l_horloge_et_jamais_a_elle_meme() -> None:
     """Le cœur du cas. Une valeur figée reste cohérente AVEC ELLE-MÊME : la comparer à elle-même
     est exactement ce qui laissait passer la date de démarrage du conteneur."""
     cas = relecture.cas_aller_retour("endpoint:PUT /alerts/{id}")
-    gestes = " ".join(cas["gestes"])
+    gestes = " ".join(cas["etapes"])
 
     assert "comparer à l horloge du test" in gestes
     assert "JAMAIS à la valeur relue d un autre objet ni à elle-même" in gestes
     assert "SECOND objet" in gestes, "deux dates identiques à la seconde révèlent la valeur figée"
-    assert "portent des dates différentes" in cas["resultat_attendu"]
+    assert "portent des dates différentes" in cas["attendu"]
 
 
 def test_l_ecrasement_VOULU_a_une_issue_declaree() -> None:
     """Sinon le cas serait infalsifiable : un serveur a le droit de fixer un champ, à condition
     que son contrat le dise. L'attendu exige alors la ligne qui le déclare."""
-    attendu = relecture.cas_aller_retour("endpoint:POST /alerts")["resultat_attendu"]
+    attendu = relecture.cas_aller_retour("endpoint:POST /alerts")["attendu"]
 
     assert "écrasement VOULU se déclare dans le contrat" in attendu
 
@@ -206,3 +206,49 @@ def test_les_limites_des_DEUX_moities_sont_declarees() -> None:
     assert "NOMINATIVE" in declare, "la liste des appels temporels"
     assert "faux positif ASSUMÉ" in declare, "un `default=` hors modèle est signalé quand même"
     assert "relire exige une instance" in declare, "le cas est dérivé, pas exécuté"
+
+# --- Ce que ces tests-là NE testaient PAS, et qui a cassé la recette --------------------------
+def test_le_cas_porte_EXACTEMENT_les_champs_que_le_RENDU_du_cahier_lit() -> None:
+    """Le trou de ces tests, trouvé par la recette du dépôt et non par eux.
+
+    La première écriture rendait `gestes` et `resultat_attendu`, sans `jeu`. Le rendu du cahier
+    lit `etapes`, `attendu` et `jeu` : le cas ne pouvait donc PAS se rendre, et la première route
+    d'écriture rencontrée faisait tomber la construction du cahier ENTIER (`KeyError: 'jeu'`).
+    Les tests ci-dessus étaient verts — ils vérifiaient la fonction EN ISOLATION, et personne ne
+    jouait le chemin réel. Ce test-ci ferme le trou par le contrat, et celui d'après par le rendu.
+    """
+    cas = relecture.cas_aller_retour("endpoint:POST /alerts", "jeu-alerts")
+
+    for champ in ("suffixe", "titre", "preconditions", "jeu", "etapes", "attendu"):
+        assert champ in cas, f"champ attendu par le rendu du cahier : {champ}"
+    assert cas["jeu"] == "jeu-alerts", "le jeu vient du sous-chapitre"
+    assert "gestes" not in cas and "resultat_attendu" not in cas, "anciens noms, jamais les deux"
+
+
+def test_le_cas_se_REND_dans_un_cahier_sans_faire_tomber_la_construction() -> None:
+    """Et la moitié qui compte vraiment : le rendu JOUÉ, par le vrai chemin.
+
+    Le chapitre passe par `cas_du_chapitre` — le constructeur réel — plutôt que par un
+    dictionnaire assemblé à la main : un chapitre fabriqué à la main aurait fallu compléter
+    clé par clé au fil des KeyError, ce qui aurait dupliqué ici la connaissance du constructeur
+    et laissé le test vert le jour où le rendu change. C'est exactement la faute que ce test
+    existe pour ne pas refaire.
+    """
+    from forge_tests.livrables import cahiers
+
+    chapitre = {
+        "code": "F1", "titre": "Écritures", "famille": "fonctionnel",
+        "pans": ["api"], "decoupe": "pan", "axe_cas": "unitaire", "grise": False,
+        "sous_chapitres": [{
+            "libelle": "Alertes",
+            "elements": [{"id": "endpoint:POST /alerts", "etat": "non_exerce", "message": ""}],
+        }],
+    }
+
+    complet = cahiers.cas_du_chapitre(chapitre, None)
+    rendu = chr(10).join(cahiers._rendre_chapitre(complet, None))
+
+    assert "aller-retour" in rendu or "ce qui est écrit est ce qui est relu" in rendu
+    assert "JD-F1-Alertes" in rendu, "le jeu de données vient du sous-chapitre"
+    assert "CHAMP PAR CHAMP" in rendu, "les étapes sont rendues, pas seulement présentes"
+    assert "un SECOND objet" in rendu, "le geste qui révèle une valeur figée survit au rendu"
