@@ -53,6 +53,9 @@ FAUX_VERT_ABSENCE = "faux-vert-absence-sans-presence"
 FAUX_VERT_MOTIF = "faux-vert-motif-du-declencheur"
 DONNEE_DE_TEST_RECOPIEE = "donnee-de-test-recopiee"
 
+# --- Aller-retour écriture/relecture (TF-0369) ---------------------------------------------------
+DEFAUT_EVALUE_A_L_IMPORT = "defaut-evalue-a-l-import"
+
 # --- Surface appelée vs surface servie (TF-0371) -------------------------------------------------
 ROUTE_APPELEE_NON_SERVIE = "route-appelee-non-servie"
 RESSOURCE_REFERENCEE_ABSENTE = "ressource-referencee-absente"
