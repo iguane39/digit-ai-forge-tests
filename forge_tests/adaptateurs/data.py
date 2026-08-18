@@ -327,4 +327,16 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 )
             )
             sortie.verdict = "FAIL"
+
+    # TF-0369 (A) — le défaut de champ évalué À L IMPORT. Statique, donc rendu même quand la
+    # couverture n est pas mesurable : c est précisément le cas où un défaut de date figée dort
+    # le plus longtemps. Ce pan est le bon porteur — un défaut de champ persisté est de la
+    # donnée, et c est déjà lui qui lit les modèles pour juger les divergences ci-dessus.
+    from forge_tests import relecture
+
+    sortie.non_juge.extend(relecture.NON_JUGE)
+    figes = relecture.defauts_evalues_a_l_import(cible)
+    if figes:
+        sortie.findings.extend(figes)
+        sortie.verdict = "FAIL"
     return sortie

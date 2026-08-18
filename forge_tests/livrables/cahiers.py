@@ -35,6 +35,7 @@ import re
 from pathlib import Path
 
 from forge_tests import adoption as _adoption
+from forge_tests import relecture as _relecture
 from forge_tests.livrables import exigences as _exigences
 from forge_tests.livrables import jeux as _jeux
 from forge_tests.livrables import libelles as _libelles
@@ -386,7 +387,12 @@ def _cas_unitaire(element: dict, chapitre: dict, cle_jeu: str) -> list[dict]:
         gestes = [e.format(id=identifiant) for e in etapes]
         resultat = attendu
         generique = True
-    return [
+    # TF-0369 (B) — l ALLER-RETOUR, en plus de la vérification, pour toute route d ÉCRITURE.
+    # Il s ajoute plutôt qu il ne remplace : vérifier qu une route accepte une valeur conforme et
+    # vérifier qu elle la RELIT sont deux questions, et c est la seconde que six campagnes n ont
+    # jamais posée. Dérivable sans spécification, la surface d écriture étant inventoriée.
+    aller_retour = _relecture.cas_aller_retour(identifiant)
+    return ([aller_retour] if aller_retour else []) + [
         {
             "suffixe": "verification",
             "titre": identifiant + (" — geste générique (forme non reconnue)" if generique else ""),
