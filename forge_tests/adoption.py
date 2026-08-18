@@ -20,11 +20,31 @@ Le solde `dérivés − adoptés − non_testables − écartés` est compté ET
 reste-à-faire, pas un livrable clos. Le coût du statu quo est mesuré : 971 cas dérivés pour
 0 adopté (bourse-aux-vacants, 20260817b), 680 pour 0 (COMPTA, 20260814b).
 
+**TF-0355 (18/08) — le solde des CAS ne solde pas la SURFACE.** Un élément déclaré
+`non_testable` ou `exclu` PAR LE RAPPORT ne produit aucun cas : il sort « non couvert », et
+n entre donc dans aucun terme du solde. Un cahier pouvait afficher « solde 0 — SOLDÉ » avec
+huit éléments de sa surface ne portant aucun cas. Les deux chiffres sont désormais OPPOSÉS :
+`libelle_solde` reçoit le compte des non-couverts et refuse de prononcer « SOLDÉ » tant qu il
+n est pas nul. Les deux dettes restent DISTINCTES — l une se solde par une déclaration du
+projet, l autre en fournissant ce qui manque puis en rejouant.
+
 **Antériorité assumée, déclarée ici.** Les `cas-adoptes.jsonl` déjà écrits par les produits,
 et les rapports déjà rendus, portent l'ancien vocabulaire (`"statut": "proposition"`). Le
 LECTEUR l'accepte et le normalise en `a_adopter` (`est_a_adopter`) : aucun produit n'est
 rattrapé en masse, chacun l'est au prochain run. Le PRODUCTEUR, lui, n'émet plus jamais
 « proposition ».
+
+**Le nom de dossier `propositions/` : requalification SÉQUENCÉE, pas oubliée (TF-0354).** Le
+mot est mort en doctrine, au catalogue, au cahier et à l'oracle ; il survit dans un seul
+endroit, et pour une raison qui n'est pas de la négligence : `<projet>/propositions/` est une
+convention de CHEMIN en service chez les produits, citée par leurs commandes et leurs scripts.
+La renommer d'un geste casserait des appels réels — et la loi 1 vaut aussi pour les chemins :
+une convention est câblée ou n'existe pas. La séquence déclarée est donc : (1) le vocabulaire
+est requalifié partout ailleurs — fait ; (2) le placeholder documenté devient
+`<dossier-cas-derives>`, ce qui ne casse rien puisque c'est le lecteur qui choisit le nom —
+fait ; (3) le renommage du dossier de convention se fait produit par produit, à leur prochain
+run, jamais en masse depuis ici (garde-fou « le pilot n'intervient pas hors run demandé »).
+Tant que (3) n'est pas achevé, `propositions/` reste LU et accepté sans avertissement.
 
 **Condition technique déjà remplie**, vérifiée par le produit : les références de cas sont
 DÉTERMINISTES (74 éléments communs entre deux audits, 0 identifiant changé) — elles sont donc
@@ -241,29 +261,58 @@ def cumuler(soldes: list[dict]) -> dict:
     return total
 
 
-def libelle_solde(compte: dict) -> str:
+def libelle_solde(compte: dict, non_couverts: int = 0) -> str:
     """Le solde en une ligne, PUBLIÉE telle quelle par les cahiers et le dashboard.
 
     Sans texte neutre ici, chaque livrable aurait reformulé le calcul à sa façon et deux
     livrables du même audit auraient pu se contredire sur le même chiffre.
+
+    **TF-0355 — les deux chiffres sont OPPOSÉS, plus seulement voisins.** Un élément que le
+    RAPPORT déclare `non_testable` (ou `exclu`) ne produit aucun cas dérivé : il sort en « non
+    couvert », donc hors du solde, qui ne compte que des cas. Les deux colonnes coexistaient au
+    tableau de tête sans que rien n oppose la seconde — « solde 0 » et « 8 éléments sans aucun
+    cas » s écrivaient côte à côte, et seul le premier portait un verdict. C est exactement le
+    faux confort que R-40 venait de tuer pour les cas, renaissant un cran plus haut, à l étage
+    de la SURFACE. Un cahier n est donc SOLDÉ que si les deux valent zéro ; sinon la phrase
+    nomme le reste et refuse la clôture, en distinguant la cause pour ne pas confondre deux
+    dettes différentes.
     """
     reste = int(compte.get("solde") or 0)
+    surface = max(0, int(non_couverts or 0))
     if not int(compte.get("derives") or 0):
         # Un périmètre sans aucun cas dérivé n a rien soldé : le déclarer « SOLDÉ » offrirait un
         # vert gratuit au chapitre le plus vide du cahier.
-        return "solde R-40 : aucun cas dérivé sur ce périmètre — rien à solder"
+        vide = "solde R-40 : aucun cas dérivé sur ce périmètre — rien à solder"
+        return vide + _rappel_surface(surface)
     detail = (
         f"{compte.get('derives', 0)} dérivés − {compte.get('adoptes', 0)} adoptés "
         f"− {compte.get('non_testables', 0)} non testables (motivés) "
         f"− {compte.get('ecartes', 0)} écartés"
     )
     if reste == 0:
-        return f"solde R-40 : {detail} = 0 — cahier SOLDÉ"
+        if not surface:
+            return f"solde R-40 : {detail} = 0 — cahier SOLDÉ"
+        return (
+            f"solde R-40 : {detail} = 0 pour les cas, MAIS {surface} élément(s) inventorié(s) "
+            "ne portent aucun cas dérivé — cahier NON CLOS : un solde de cas nul ne solde pas "
+            "la surface"
+        )
     refuses = int(compte.get("refuses") or 0)
     rappel = f", dont {refuses} adoption(s) refusée(s)" if refuses else ""
     return (
         f"solde R-40 : {detail} = {reste} cas NON SOLDÉ(S){rappel} — "
         "ce cahier porte un reste-à-faire, ce n'est pas un livrable clos"
+    ) + _rappel_surface(surface)
+
+
+def _rappel_surface(non_couverts: int) -> str:
+    """La seconde dette, jamais fondue dans la première : elle se répare autrement."""
+    if not non_couverts:
+        return ""
+    return (
+        f" ; s y ajoutent {non_couverts} élément(s) inventorié(s) SANS AUCUN cas dérivé "
+        "(déclarés `non_testable` ou `exclu` par le rapport) — ils se réparent en fournissant "
+        "ce qui manque puis en rejouant, jamais en les déclarant au fichier d adoption"
     )
 
 

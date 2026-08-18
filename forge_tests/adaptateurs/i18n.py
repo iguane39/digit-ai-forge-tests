@@ -34,7 +34,7 @@ import os
 from html.parser import HTMLParser
 from pathlib import Path
 
-from forge_tests import seuils
+from forge_tests import classes, seuils
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -556,7 +556,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 findings.append(
                     Finding(
                         id=identifiant,
-                        classe="i18n",
+                        classe=classes.I18N,
                         localisation=str(build),
                         message=(
                             f"route « {_route_servie(locale, route)} » absente du build : servie "
@@ -577,7 +577,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 findings.append(
                     Finding(
                         id=identifiant,
-                        classe="i18n",
+                        classe=classes.I18N,
                         localisation=str(servie),
                         message=(
                             f"page servie sous « /{locale} » dont le contenu est en "
@@ -625,7 +625,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             findings.append(
                 Finding(
                     id=identifiant,
-                    classe="i18n",
+                    classe=classes.I18N,
                     localisation=str(par_locale[locale]["/"]),
                     message=(
                         f"menu de la locale « {locale or 'defaut'} » : {len(set(menu))} "

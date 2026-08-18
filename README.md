@@ -3,7 +3,7 @@
 > Rendre la qualité d'un projet vérifiable, reproductible et enrichissable dans le temps —
 > sans dépendre de la mémoire d'un humain sur ce qu'il faut penser à vérifier.
 
-**État : outil en service.** Le noyau, treize adaptateurs, le générateur de cas, le registre
+**État : outil en service.** Le noyau, ses adaptateurs, le générateur de cas, le registre
 de dette et la recette du corpus sont écrits et exécutables. La recette officielle
 (`recette/verifier_corpus.py`) détecte **chacun** des défauts plantés au banc rouge — leur
 compte vivant est celui de `CORPUS` dans ce fichier, jamais recopié ici (loi 4) — ne lève
@@ -24,8 +24,8 @@ appelle ; ils sont désormais des sections comme les autres, et leur échec fait
 | Service | Intention (« je veux… ») | Point d'entrée | Statut |
 |---|---|---|---|
 | **Auditer une suite de tests** | savoir ce que mes tests couvrent vraiment et ce qui n'est pas exercé | `uv run python -m forge_tests <racine> --json [--sortie <fichier>]` | prouvé (experimental) |
-| **Générer des cas de tests à adopter et exécuter** | recevoir des cas de tests que j'adopte, j'exécute — ou que je solde motivés (R-40) — sans pollution de mon projet | `uv run python -m forge_tests <racine> --generer <dossier-proposition>` | prouvé (experimental) |
-| **Livrables de tests dérivés (cas à adopter et exécuter)** | obtenir cahiers de tests, jeu de données synthétique et dashboard, chacun publiant son **solde** de cas non soldés | `uv run python -m forge_tests <racine> --livrables <dossier-proposition>` | prouvé (experimental) |
+| **Générer des cas de tests à adopter et exécuter** | recevoir des cas de tests que j'adopte, j'exécute — ou que je solde motivés (R-40) — sans pollution de mon projet | `uv run python -m forge_tests <racine> --generer <dossier-cas-derives>` | prouvé (experimental) |
+| **Livrables de tests dérivés (cas à adopter et exécuter)** | obtenir cahiers de tests, jeu de données synthétique et dashboard, chacun publiant son **solde** de cas non soldés | `uv run python -m forge_tests <racine> --livrables <dossier-cas-derives>` | prouvé (experimental) |
 | **Tendance et reprise ciblée** | comparer deux audits et ne rejouer que ce qui n'était pas vert | `uv run python -m forge_tests <racine> --precedent <r.json> | --reprendre <r.json>` | prouvé (experimental) |
 | **Inventaire sans exécution** | cartographier la surface de test sans rien exécuter | `env FORGE_TESTS_SANS_EXECUTION=1 + CLI` | déclaré (experimental) |
 | **Impact par diff, flaky, propriétés, mutation par risque** | auditer moins mais juste : cibler par diff, isoler les flaky, proposer du property-based | `forge_tests\{impact,flaky,generateur_proprietes}.py · risque.repartir_mutants` | déclaré (experimental) |
@@ -219,7 +219,7 @@ chapitre sans qu'une ligne soit touchée ; un pan qui n'en déclare aucun reçoi
 chapitre, nommé « pan sans chapitre déclaré » — visible, jamais absent. Un axe de découpe ou de
 génération de cas inconnu ne casse rien : il retombe sur un repli, **déclaré dans le cahier**.
 
-Les treize pans donnent aujourd'hui : `F1` parcours bout en bout, `F2` écrans × états, `F3`
+Les pans donnent aujourd'hui : `F1` parcours bout en bout, `F2` écrans × états, `F3`
 affordances, `F4` accessibilité, `F5` rendu visuel (goldens × thèmes × largeurs, déclarés par le
 pan `visuel` lui-même) ; `T1` API par routeur, `T2` données par table, `T3` migrations par
 fichier (aller / retour / rejeu), `T4` batch par job, `T5` fichiers par format, `T6` robustesse
@@ -1017,7 +1017,7 @@ l'imprime au verdict) doit produire un finding **nommé** par SON propre défaut
 rouge, le banc vert aucun finding bloquant.
 
 Le pan `qualif` juge une application **en service** : il ne pourrait donc pas être exercé par
-un banc de fichiers, comme les onze autres. La recette **sert elle-même** `fixtures/banc-*/
+un banc de fichiers, comme les autres pans. La recette **sert elle-même** `fixtures/banc-*/
 qualif-web/` sur un port libre (serveur de la bibliothèque standard) et déclare l'URL au pan.
 Le serveur est réel, le navigateur est réel, les erreurs console et les 404 sont réels — seul
 le *peuplement* est écrit en dur dans les pages du banc, parce que peupler une application est
@@ -1071,7 +1071,7 @@ Sections : `corpus`, `unitaire`, `sql`, `qualification`, `dette`, `divergences`,
 
 **Une recette partielle ne prononce jamais S-01.** Elle sort `RECETTE PARTIELLE — S-01 NON
 PRONONCÉ` en nommant les sections non jouées : un « vert » sur trois sections et un silence sur
-les huit autres serait exactement le mensonge que le sélecteur rendrait facile. Le critère de
+toutes les autres serait exactement le mensonge que le sélecteur rendrait facile. Le critère de
 sortie reste la recette entière ; le sélecteur sert la boucle de correction, pas le verdict.
 
 Elle exige un venv sous `fixtures/banc-*/backend` (`uv sync --directory
@@ -1151,7 +1151,7 @@ Deux filets, et ils ne mesurent pas la même chose :
   qu'on demande à un humain de fournir) et `actions.py` (à qui l'audit adresse son travail).
 
 **Ce qui reste sans suite unitaire est nommé, jamais tu** : `noyau.py`, `reprise.py`,
-`execution.py`, `invariants.py`, les douze adaptateurs et les livrables n'ont pour filet que la
+`execution.py`, `invariants.py`, les adaptateurs et les livrables n'ont pour filet que la
 recette. C'est un écart connu, pas un vert.
 
 La suite est jouée **par la recette** (section `unitaire`) : une suite unitaire qu'aucune

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from forge_tests import classes
 from forge_tests.disposition import paquet_sources, racine_execution
 from forge_tests.execution import (
     instructions_sql,
@@ -316,7 +317,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             sortie.findings.append(
                 Finding(
                     id=f"divergence:contrainte:{nom}",
-                    classe="divergence",
+                    classe=classes.DIVERGENCE,
                     localisation=str(modeles),
                     message=(
                         f"contrainte {nom} déclarée au modèle mais absente des migrations : "

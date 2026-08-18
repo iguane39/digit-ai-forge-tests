@@ -10,6 +10,8 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
+from forge_tests import classes
+
 # « NA » (sans objet) — décision humaine du 14/08 : « les pans qui n'ont pas de périmètre dans
 # un projet doivent ressortir en Non Applicable lors des tests, puisqu'il n'y a rien à tester ».
 #
@@ -230,7 +232,7 @@ def evaluer_surface(
     findings = [
         Finding(
             id=e.id,
-            classe="element-non-exerce",
+            classe=classes.ELEMENT_NON_EXERCE,
             localisation=e.source,
             message=f"{e.libelle} : inventorie, jamais exerce par la suite",
             risque=coter(pan, e.id, e.source),
@@ -244,7 +246,7 @@ def evaluer_surface(
             0,
             Finding(
                 id=f"seuil:{pan}",
-                classe="seuil-non-tenu",
+                classe=classes.SEUIL_NON_TENU,
                 localisation=cible,
                 message=f"couverture de surface {ratio:.0%} sous le seuil {seuil:.0%}",
                 risque=coter(pan, f"seuil:{pan}", inventaire[0].source if inventaire else cible),
