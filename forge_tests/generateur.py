@@ -70,7 +70,10 @@ ENTETE = '''"""Cas générés par Forge Tests — À RELIRE AVANT USAGE.
 
 Chaque cas cible un élément de surface INVENTORIÉ ET NON EXERCÉ, cité avec son score de risque.
 Le corps de requête est synthétisé depuis le schéma OpenAPI déclaré par l application.
-Un cas généré est une PROPOSITION : il porte le comportement que la source DÉCLARE.
+Un cas généré naît À ADOPTER ET EXÉCUTER (R-40) — état TRANSITOIRE, jamais terminal : il
+porte le comportement que la source DÉCLARE, et il pèse au solde du cahier tant que le
+projet ne l a pas soldé (adopté et exécuté, `non_testable` motivé, ou écarté par une
+décision humaine nommée).
 """
 
 from __future__ import annotations
@@ -282,13 +285,13 @@ def construire(rapport: dict, schema: dict, limite: int = 30) -> tuple[str, list
             break
     contenu = ENTETE + "".join(cas) if cas else ""
     # TF-0143 — un cas genere doit etre EXECUTABLE : compiler est la condition necessaire a
-    # toute collecte pytest. Verifie ICI, avant que `ecrire` ne pose le fichier en proposition.
+    # toute collecte pytest. Verifie ICI, avant que `ecrire` ne pose le fichier a adopter.
     verifier_syntaxe(contenu)
     return contenu, refuses
 
 
 def ecrire(rapport: dict, destination: Path, schema: dict | None = None, limite: int = 30):
-    """Dépose les cas générés dans un dossier de proposition. Jamais dans le projet analysé."""
+    """Dépose les cas dérivés dans leur dossier hors projet. Jamais dans le projet analysé."""
     if schema is None:
         return None
     contenu, refuses = construire(rapport, schema, limite=limite)

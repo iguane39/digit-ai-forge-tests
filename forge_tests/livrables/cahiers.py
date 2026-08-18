@@ -511,18 +511,22 @@ def _libelle_adoption(adoption: dict | None) -> str:
     return (
         "**À ADOPTER ET EXÉCUTER — non soldé** : ce cas n'est pas « non joué », il n'appartient "
         "pas encore à la suite du projet, et il pèse au solde R-40 tant qu'il y reste. Trois "
-        f"sorties, aucune autre : l'écrire, l'exécuter et le déclarer dans `{_adoption.FICHIER}` ; "
-        "ou le déclarer `non_testable` avec ses `champs_requis` ; ou l'écarter par une décision "
-        "humaine nommée (`ecarte_par`, `date`, `motif`)"
+        f"sorties, aucune autre, et TOUTES LES TROIS se déclarent dans `{_adoption.FICHIER}` "
+        "(un seul fichier, une ligne JSON par cas soldé — il n'existe pas de second sidecar) : "
+        "l'écrire, l'exécuter et déclarer `{\"cas\": …, \"test\": …}` ; ou déclarer "
+        "`{\"cas\": …, \"non_testable\": true, \"champs_requis\": […]}` ; ou l'écarter par une "
+        "décision humaine nommée `{\"cas\": …, \"ecarte_par\": …, \"date\": …, \"motif\": …}`"
     )
 
 
 def _rendre_chapitre(chapitre: dict, referentiel: dict | None) -> list[str]:
     lignes = [f"## {chapitre['code']} — {chapitre['titre']}", ""]
+    solde_du_chapitre = chapitre.get("solde") or _adoption.solde([])
+    surface_du_chapitre = len(chapitre.get("non_couverts") or [])
     lignes.append(
         f"Pan(s) d origine : `{'`, `'.join(chapitre['pans'])}` · découpe par {chapitre['decoupe']} "
         f"· axe des cas : {chapitre.get('axe_cas')} · {chapitre['total_cas']} cas dérivés · "
-        f"{_adoption.libelle_solde(chapitre.get('solde') or _adoption.solde([]))}."
+        f"{_adoption.libelle_solde(solde_du_chapitre, surface_du_chapitre)}."
     )
     lignes.append("")
     if chapitre.get("axe_repli"):
@@ -662,6 +666,13 @@ def _entete(titre: str, contexte: dict, chapitres: list[dict]) -> list[str]:
         "solde `dérivés − adoptés − non_testables − écartés` n est pas nul porte un "
         "**reste-à-faire**, jamais un livrable clos. Une déclaration invérifiable (test cité "
         "introuvable, écart anonyme, `non_testable` sans champ) reste AU solde, avec son motif.",
+        ">",
+        "> **Deux chiffres, pas un (TF-0355).** Un élément que le RAPPORT déclare "
+        "`non_testable` ou `exclu` ne produit AUCUN cas : il sort en « éléments non couverts », "
+        "colonne de droite, et n entre dans aucun terme du solde. Un solde nul ne dit donc rien "
+        "de lui. **Ce cahier n est CLOS que si les deux valent zéro** — et les deux dettes se "
+        "réparent différemment : le solde par une déclaration du projet, la surface en "
+        "FOURNISSANT ce qui manque puis en rejouant l audit (`--reprendre`).",
         "",
         "### Solde mesuré de ce cahier",
         "",
@@ -671,7 +682,7 @@ def _entete(titre: str, contexte: dict, chapitres: list[dict]) -> list[str]:
         f"| {elements} | {couverts} | {total['adoptes']} | {total['non_testables']} "
         f"| {total['ecartes']} | **{total['solde']}** | {non_couverts} |",
         "",
-        f"{_adoption.libelle_solde(total)}.",
+        f"{_adoption.libelle_solde(total, non_couverts)}.",
         "",
         "## Exhaustivité — définition opposable",
         "",

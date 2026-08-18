@@ -33,7 +33,7 @@ import json
 import re
 from pathlib import Path
 
-from forge_tests import flaky
+from forge_tests import classes, flaky
 from forge_tests.noyau import (
     Element,
     Finding,
@@ -471,7 +471,7 @@ def _findings_modeles(cible: Path) -> list[Finding]:
         findings.append(
             Finding(
                 id=identifiant,
-                classe="modele-non-epingle",
+                classe=classes.MODELE_NON_EPINGLE,
                 localisation=source,
                 message=(
                     f"modèle « {nom} » désigné par un ALIAS mouvant, jamais par une version "

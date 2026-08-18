@@ -6,6 +6,7 @@ import configparser
 import re
 from pathlib import Path
 
+from forge_tests import classes
 from forge_tests.disposition import racine_execution
 from forge_tests.execution import (
     instructions_sql,
@@ -268,7 +269,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             sortie.findings.append(
                 Finding(
                     id=f"divergence:migration:{fichier.stem}:retour",
-                    classe="divergence",
+                    classe=classes.DIVERGENCE,
                     localisation=str(fichier),
                     message="downgrade vide : la migration ne peut pas être inversée",
                     risque=coter(PAN, f"migration:{fichier.stem}", str(fichier)),
@@ -290,7 +291,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             sortie.findings.append(
                 Finding(
                     id=f"migration:{fichier.stem}:retour",
-                    classe="divergence",
+                    classe=classes.DIVERGENCE,
                     localisation=str(fichier),
                     message="migration sans section de retour : elle ne peut pas être inversée",
                     risque=coter(PAN, "migration:retour", str(fichier)),
@@ -302,7 +303,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
         sortie.findings.append(
             Finding(
                 id=f"divergence:migration:{fichier.stem}:retour",
-                classe="divergence",
+                classe=classes.DIVERGENCE,
                 localisation=str(fichier),
                 message="downgrade vide : la migration ne peut pas être inversée",
                 risque=coter(PAN, f"migration:{fichier.stem}", str(fichier)),
@@ -346,7 +347,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             sortie.findings.append(
                 Finding(
                     id=f"divergence:migration:{fichier.stem}:{nom}",
-                    classe="divergence",
+                    classe=classes.DIVERGENCE,
                     localisation=str(fichier),
                     message=(
                         f"{nom} annoncé par la migration mais absent du schéma obtenu : "

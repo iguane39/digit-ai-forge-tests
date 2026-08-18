@@ -27,6 +27,8 @@ import ast
 import re
 from pathlib import Path
 
+from forge_tests import classes
+
 NON_JUGE = [
     "declencheurs : la decouverte est STATIQUE et bornee aux formes reconnues (cron d un "
     "workflow CI, crontab, timer systemd, decorateurs de planification Python, taches Celery, "
@@ -215,7 +217,7 @@ def constats(cible: Path, declencheurs: list[dict], jobs: list[str]) -> list[dic
             releves.append(
                 {
                     "id": declencheur["id"],
-                    "classe": "trigger-non-cable",
+                    "classe": classes.TRIGGER_NON_CABLE,
                     "localisation": declencheur["source"],
                     "message": (
                         f"déclencheur {declencheur['type']} déclaré vers « "
@@ -230,7 +232,7 @@ def constats(cible: Path, declencheurs: list[dict], jobs: list[str]) -> list[dic
             releves.append(
                 {
                     "id": declencheur["id"],
-                    "classe": "cron-invalide",
+                    "classe": classes.CRON_INVALIDE,
                     "localisation": declencheur["source"],
                     "message": (
                         f"expression de planification « {declencheur['cadence']} » illisible "
@@ -243,7 +245,7 @@ def constats(cible: Path, declencheurs: list[dict], jobs: list[str]) -> list[dic
         releves.append(
             {
                 "id": "job-sans-declencheur",
-                "classe": "job-sans-declencheur",
+                "classe": classes.JOB_SANS_DECLENCHEUR,
                 "localisation": str(cible),
                 "message": (
                     f"{len(jobs)} élément(s) de traitement par lot inventorié(s) et AUCUN "

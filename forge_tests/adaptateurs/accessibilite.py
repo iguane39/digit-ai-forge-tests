@@ -21,6 +21,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from forge_tests import classes
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -614,7 +615,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 findings.append(
                     Finding(
                         id=identifiant,
-                        classe="accessibilite",
+                        classe=classes.ACCESSIBILITE,
                         localisation=f"{route}",
                         message=f"[{route}] {brut.get('msg', '')}",
                         severite="bloquant" if brut.get("sev") == "bloquant" else "signale",

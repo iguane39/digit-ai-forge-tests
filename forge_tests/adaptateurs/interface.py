@@ -48,6 +48,7 @@ import re
 from html.parser import HTMLParser
 from pathlib import Path
 
+from forge_tests import classes
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -1092,10 +1093,14 @@ def ecart_servi_versionne(cible: Path) -> dict:
     communes = promises.get("", set()) - suspendues
     manquantes: dict[str, list[str]] = {}
     servies_par_locale: dict[str, int] = {}
+    sans_accueil: list[str] = []
     comparees = 0
     for locale in sorted(par_locale):
         accueil = par_locale[locale].get("/")
         if accueil is None:
+            # TF-0333, second silence du même patron : une locale SERVIE dont le build ne rend pas
+            # la racine n a pas de menu confrontable. Le `continue` était muet — on le DIT.
+            sans_accueil.append(locale or "defaut")
             continue
         servies = set(i18n.entrees_de_menu(i18n._lire(accueil), locales_servies))
         servies_par_locale[locale or "defaut"] = len(servies)
@@ -1105,6 +1110,53 @@ def ecart_servi_versionne(cible: Path) -> dict:
         if absentes:
             manquantes[locale] = absentes
 
+    # TF-0333 — LA BOUCLE N ITÈRE QUE SUR LE SERVI : une locale que la SOURCE promet et que le
+    # build ne sert pas du tout n était jamais confrontée, et le contrôle sortait PASS sur une
+    # promesse jamais mesurée. C est le symétrique exact du cas fondateur — là c était le servi
+    # qui manquait des entrées, ici c est une locale ENTIÈRE. Le contrôle né pour attraper cette
+    # famille d écarts laissait passer sa forme la plus grosse.
+    #
+    # Prudence explicite : le jugement n a de sens que si le build PRÉFIXE au moins une locale.
+    # Un build qui n en préfixe aucune peut être le déploiement mono-locale d un produit qui en
+    # construit un par langue — l accuser serait accuser la limite du lecteur. Ce cas est donc
+    # SUSPENDU et DIT, jamais tu (même règle que les entrées suspendues plus haut).
+    # Une locale « promise » est ici une locale dont la SOURCE porte une navigation PROPRE
+    # (`HeaderEn.tsx`, `.../en/Header.tsx`) : c est le terme que ce contrôle oppose. Une locale
+    # seulement DÉCLARÉE en configuration, sans composant à elle, ne promet rien de spécifique —
+    # ses entrées sont les communes, déjà confrontées sous la locale par défaut, et l absence de
+    # ses PAGES est le domaine du pan `i18n` (H-17). Confondre les deux ferait accuser deux fois
+    # le même produit pour deux défauts distincts.
+    locales_promises = {locale for locale in promises if locale}
+    jamais_servies = sorted(
+        locale
+        for locale in locales_promises - set(par_locale)
+        if communes | (promises.get(locale, set()) - suspendues)
+    )
+    suspension_mono_locale = ""
+    if jamais_servies and not locales_servies:
+        suspension_mono_locale = (
+            f" — jugement SUSPENDU sur {len(jamais_servies)} locale(s) promise(s) par la source ("
+            + ", ".join(f"« {locale} »" for locale in jamais_servies)
+            + ") : le build ne PRÉFIXE aucune locale, il peut être le déploiement mono-locale "
+            "d un produit qui en construit un par langue. Déclarer le build multi-locale dans "
+            "FORGE_TESTS_I18N_BUILD pour les faire juger (TF-0333)"
+        )
+        jamais_servies = []
+    for locale in jamais_servies:
+        attendues = communes | (promises.get(locale, set()) - suspendues)
+        comparees += len(attendues)
+        servies_par_locale[locale] = 0
+        manquantes[locale] = sorted(attendues)
+
+    motif_sans_accueil = (
+        ""
+        if not sans_accueil
+        else (
+            f" — {len(sans_accueil)} locale(s) servie(s) sans page racine ("
+            + ", ".join(f"« {locale} »" for locale in sans_accueil)
+            + ") : sans racine, aucun menu servi a confronter (TF-0333)"
+        )
+    )
     motif_suspension = (
         ""
         if not suspendues
@@ -1122,7 +1174,7 @@ def ecart_servi_versionne(cible: Path) -> dict:
             "motif": (
                 "ecart servi/versionne : navigation SOURCE lue "
                 f"({liens_lus} lien(s) de `<nav>` dans {', '.join(fichiers_lus)}) mais AUCUNE "
-                f"entree comparable{motif_suspension}"
+                f"entree comparable{motif_suspension}{motif_sans_accueil}"
             ),
             "manquantes": {},
         }
@@ -1134,8 +1186,11 @@ def ecart_servi_versionne(cible: Path) -> dict:
             f"build servi `{build}` — entrees servies par locale : "
             + " · ".join(f"{nom}={compte}" for nom, compte in sorted(servies_par_locale.items()))
             + motif_suspension
+            + motif_sans_accueil
+            + suspension_mono_locale
         ),
         "manquantes": manquantes,
+        "locales_jamais_servies": jamais_servies,
         "build": str(build),
         "fichiers": fichiers_lus,
         "pages": {locale: str(par_locale[locale]["/"]) for locale in par_locale
@@ -1144,23 +1199,41 @@ def ecart_servi_versionne(cible: Path) -> dict:
 
 
 def _findings_ecart(cible: Path, ecart: dict) -> list[Finding]:
-    """Un constat par locale dont le menu servi est amputé — les entrées manquantes NOMMÉES."""
+    """Un constat par locale dont le menu servi est amputé — les entrées manquantes NOMMÉES.
+
+    TF-0333 — deux formes du même écart, et elles ne se réparent pas pareil : un menu AMPUTÉ
+    (la locale est servie, il lui manque des entrées) et une locale JAMAIS SERVIE (le build ne
+    la rend pas du tout). La seconde était invisible : la comparaison n itérait que sur le
+    servi. Le message DIT laquelle des deux, sinon le lecteur cherche des entrées manquantes
+    dans une page qui n existe pas.
+    """
     findings: list[Finding] = []
+    jamais_servies = set(ecart.get("locales_jamais_servies") or [])
     for locale, absentes in sorted(ecart["manquantes"].items()):
         identifiant = f"interface:ecart-servi:{locale or 'defaut'}"
         localisation = ecart["pages"].get(locale, ecart.get("build", str(cible)))
+        if locale in jamais_servies:
+            message = (
+                f"la locale « {locale} » est promise par la source versionnee (elle y porte "
+                f"{len(absentes)} entree(s) de navigation) et le build SERVI ne la rend NULLE "
+                f"PART — aucune page sous /{locale}/ : "
+                + ", ".join(f"« {entree} »" for entree in absentes)
+                + " — locale entiere absente du deploiement, pas un menu ampute"
+            )
+        else:
+            message = (
+                f"la source versionnee promet {len(absentes)} entree(s) de navigation que le "
+                f"build SERVI ne rend pas sous « {locale or 'defaut'} » : "
+                + ", ".join(f"« {entree} »" for entree in absentes)
+                + " — le code est deja correct, c est le SERVI qui a derive (defaut de "
+                "deploiement, pas de developpement)"
+            )
         findings.append(
             Finding(
                 id=identifiant,
                 classe=CLASSE_ECART_SERVI,
                 localisation=localisation,
-                message=(
-                    f"la source versionnee promet {len(absentes)} entree(s) de navigation que le "
-                    f"build SERVI ne rend pas sous « {locale or 'defaut'} » : "
-                    + ", ".join(f"« {entree} »" for entree in absentes)
-                    + " — le code est deja correct, c est le SERVI qui a derive (defaut de "
-                    "deploiement, pas de developpement)"
-                ),
+                message=message,
                 risque=coter(PAN, identifiant, localisation),
             )
         )
@@ -1199,7 +1272,7 @@ def _relever_composants(cible: Path) -> tuple[list[dict], int, list[str]]:
                     "fichier": str(fichier),
                     "libelle": libelle or f"<{lien['tag']}> sans libellé",
                     "tag": lien["tag"],
-                    "classe": "lien-casse",
+                    "classe": classes.LIEN_CASSE,
                     "motif": _juger_lien(lien, locale, arbre),
                 }
             )
