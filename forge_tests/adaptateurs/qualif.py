@@ -1941,6 +1941,13 @@ def conclure(
     # parcouru et que trois surfaces réservées n avaient jamais été visitées.
     couverture = couverture_par_role(sessions, inventaire, exerces, refuses, role_de)
     non_juge.extend(declaration_couverture(config, sessions, refuses, role_de, couverture))
+    # TF-0342/0343 — DECLARER la couverture par role ne suffit pas : des qu un produit declare
+    # des roles, l audit doit EXIGER autant d identites que de roles et au moins un test ou deux
+    # identites coexistent. Le niveau (a) de TF-0316 disait le cas degrade ; celui-ci le refuse.
+    from forge_tests.droits import controles as controles_droits
+    from forge_tests.revue import _specs
+
+    findings.extend(controles_droits(cible, sessions, _specs(cible)))
     # TF-0268 : le contrôle DIT ce qu il a confronté et à quoi, y compris quand il n a rien
     # trouvé — « aucune URL auto-référente » et « URLs jamais regardées » ne sont pas le même
     # rapport, et seul le premier se vérifie.

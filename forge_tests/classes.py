@@ -48,6 +48,14 @@ REGRESSION_VISUELLE = "regression-visuelle"
 MODELE_NON_EPINGLE = "modele-non-epingle"
 I18N = "i18n"
 
+# --- Revue statique de la suite de tests du projet (TF-0344 / TF-0345) --------------------------
+FAUX_VERT_ABSENCE = "faux-vert-absence-sans-presence"
+FAUX_VERT_MOTIF = "faux-vert-motif-du-declencheur"
+DONNEE_DE_TEST_RECOPIEE = "donnee-de-test-recopiee"
+
+# --- Matrice des droits et recette multi-profils (TF-0343 / TF-0342) ----------------------------
+MATRICE_DES_DROITS = "matrice-des-droits"
+
 # --- Déclencheurs de batch -----------------------------------------------------------------------
 JOB_SANS_DECLENCHEUR = "job-sans-declencheur"
 TRIGGER_NON_CABLE = "trigger-non-cable"

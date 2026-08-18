@@ -798,6 +798,130 @@ portée — l'instruction serait coupée au mauvais endroit.
 Rien de tout cela n'est obligatoire : chaque élément manquant produit un pan **non couvert et
 motivé**, jamais un vert par défaut.
 
+## Matrice des droits exécutable et recette multi-profils (TF-0343 / TF-0342)
+
+**Un produit à rôles n'est pas vérifiable sous une identité unique.** Approval2 a passé un audit
+complet le 12/08 : *pan qualif 8/8, ratio 1,00, zéro finding · suite e2e 10/10 verte* — le tout
+sous **une** identité qui se désignait elle-même approbateur. Le cas nominal du cahier (« un
+approbateur décide, le suivant est sollicité ») n'avait donc jamais été exécuté. Le trou n'a pas
+été trouvé par l'outillage mais par une question humaine, cinq jours plus tard. La première
+recette inter-profils a révélé un **défaut produit réel** — `canDecide` ne vérifie pas le tour,
+l'IHM invite un approbateur hors tour à une action vouée au 409 — plus deux défauts d'ergonomie.
+
+**Et une suite organisée par service ne peut pas dire ce qu'elle ne couvre pas.** Les 10 actions
+× 4 profils du cahier étaient couvertes, dispersées dans 13 fichiers. Deux cases manquaient : le
+profil « en copie » n'était jamais testé en lecture, et aucun admin n'était instancié sur une
+décision — la règle « l'admin ne décide pas à la place d'un approbateur » était vraie *par
+construction* et prouvée par rien.
+
+**Le patron : une action × un profil = une cellule = une assertion**, dans UN fichier dédié.
+La grille se déclare, le fichier se **dérive** :
+
+```jsonc
+// <projet>/forge/matrice-droits.json — une DÉCLARATION du projet (lui seul connaît son contrat)
+{
+  "profils": ["demandeur", "approbateur", "en copie", "admin"],
+  "actions": [
+    {"nom": "decider", "methode": "POST", "route": "/api/demandes/{id}/decision", "mute": true,
+     "attendu": {"approbateur": 200, "demandeur": 403, "en copie": 403, "admin": 403}},
+    {"nom": "relancer", "methode": "POST", "route": "/api/demandes/{id}/relance",
+     "attendu": {"demandeur": 200, "approbateur": 403, "en copie": 403, "admin": 200},
+     "non_tenues": ["demandeur", "admin"]}
+  ]
+}
+```
+
+`--generer <dossier>` y dépose `test_matrice_droits.py`, hors du projet (G-1). Trois propriétés
+portées par le patron, pas par la vigilance :
+
+- **la grille est le produit cartésien** — on énumère d'abord les cases, on regarde ensuite ce
+  que le contrat en dit. Une case absente du contrat sort **nommée**, jamais omise ;
+- **les cellules non tenues sont en `xfail(strict=True)`** — jamais commentées : le jour du
+  correctif, XPASS fait échouer le test et **force** à retirer le marqueur. Un écart commenté,
+  lui, survit à son correctif ;
+- **une cellule `mute` reçoit un objet neuf** — c'est le piège 3 de TF-0344 (l'approbation du
+  profil N ouvrait le tour du profil N+1, qui rendait 201 au lieu de 409) rendu **structurel**.
+  C'est le seul des trois pièges qu'aucune revue statique ne sait voir.
+
+*Coût mesuré sur Approval2 : 15 tests, ~340 lignes, 2 écarts rendus exécutables, 13 cellules
+vertes.*
+
+Dès qu'une matrice déclare des rôles, le pan `qualif` exige deux choses, et les constate sinon :
+**autant d'identités outillées que de rôles** (`FORGE_TESTS_QUALIF_STORAGE_STATES`) et **au moins
+un test où deux identités coexistent** — rejouer le même parcours sous N profils l'un après
+l'autre ne montre jamais ce qu'un profil *voit* pendant qu'un autre *agit*.
+
+## Revue statique de la suite — les faux verts avant de les payer (TF-0344 / TF-0345)
+
+Trois faux verts le même jour, sur la même campagne, aucun vu par un oracle. Deux sont
+détectables **sans rien exécuter** — et c'est décisif : un projet dont la suite ne peut pas
+tourner est justement celui où un faux vert dort le plus longtemps. Le pan `front` les porte.
+
+| Piège | Règle | Ce qu'il a coûté |
+|---|---|---|
+| **absence sans présence** | toute assertion d'absence est précédée d'une assertion de **présence** sur le même écran | `toHaveCount(0)` passe sur une page en chargement : vert en isolation, rouge en exécution complète |
+| **motif satisfait par le déclencheur** | aucun motif d'assertion ne doit pouvoir être satisfait par le **déclencheur** de l'action qu'il vérifie | `getByText(/Refused\|Refus/i)` matchait le bouton « Refuse » : instabilité 1 run sur 2, 30 s de timeout par occurrence, **3,6 min → 36 s** après correction. Le même défaut dormait dans un spec vert depuis le 12/08 |
+| **cellule mutante sur objet partagé** | toute cellule dont le succès **mute** l'état exige un objet neuf | 201 au lieu de 409 — faux échec. **Non détectable statiquement** : déclaré non jugé ici, rendu structurel par la matrice des droits |
+| **donnée de test recopiée** (TF-0345) | une donnée partagée se **référence** (module dédié importé) et se **valide à la génération** | 80 caractères perdus dans la recopie d'un PNG base64 de 3316 : signature PNG intacte, taille plausible, **4 tests en timeout** et un diagnostic égaré vers la chaîne de conversion |
+
+La revue est **textuelle** : un motif construit à l'exécution lui échappe, et les suites Python
+ne sont pas relues (les trois pièges mesurés sont des idiomes de navigateur). Les deux écarts
+sont déclarés au rapport, jamais tus.
+
+## Une campagne se termine — définition de fin et journal de boucle (TF-0352 / TF-0353)
+
+**Le trou, et son prix.** Rien dans le contrat de l'étape tests ne disait qu'une campagne
+inclut la **correction** des anomalies remontées ni le **rejeu jusqu'à extinction**. Le verdict
+`PARTIEL` du 12/08 — 121 findings, 127 actions classées — était donc une fin de mandat
+*conforme*, alors que le produit sortait **inchangé**. La preuve par l'inverse, le 17/08 : la
+même stratégie exécutée avec obligation de traiter a fermé **4 anomalies produit** et **3 faux
+verts** (dont un dormant depuis le 12/08), et divisé par six la durée de la suite e2e
+(3,6 min → 36 s).
+
+**Ce que la boucle mesure**, tour par tour, sur cette journée-là :
+
+| tour | anomalies | d'où elles viennent |
+|---|---|---|
+| 1 | 4 | l'audit |
+| 2 | **9** | des correctifs du tour 1 (signature du port de messagerie, diffusion élargie, scission rappel/relance, export passé en 403, confirmation ajoutée) |
+| 3 | 1 | une **course** — la classe la plus coûteuse à retrouver plus tard |
+| 4 | 0 | trois passages verts consécutifs |
+
+**69 % des anomalies n'existaient pas au tour 1.** Un mandat qui s'arrête au rapport en manque
+4 sur 4 ; un mandat qui s'arrête après avoir corrigé une fois en laisse 10 sur 14 et rend une
+suite rouge. Une clôture au tour 2 aurait livré la course du tour 3.
+
+**La définition de fin, opposable** (`forge_tests/boucle.py`) — une campagne est TERMINÉE
+quand, et seulement quand :
+
+| | Point | Refusé sinon parce que |
+|---|---|---|
+| a | toutes les portes en exit 0 (`suites`, `lint`, `typage`, `e2e`) | une porte **absente du journal** n'est pas une porte verte : elle est manquante, et c'est dit |
+| b | aucun `xfail` / `test.fail` sans arbitrage humain **daté** | un test désarmé sans décision est une anomalie masquée, pas un écart assumé |
+| c | suite verte sur **N ≥ 2** passages consécutifs | un passage unique ne distingue pas une suite stable d'une instabilité qui n'est pas tombée (mesuré : 1 run sur 2) |
+| d | chaque anomalie **corrigée**, ou portée en écart assumé et **écrit** (qui, quand, pourquoi) | un écart anonyme n'assume rien — même raison qu'une adoption invérifiable (RT-13) |
+| e | le dernier tour **rejoué APRÈS** son dernier correctif | sinon « 0 anomalie » ne dit rien d'autre que « on n'a pas rejoué » : c'est la clôture que TF-0353 interdit |
+
+Tant qu'un point manque, l'étape est `en_cours` — **jamais** `termine_avec_ecarts`.
+
+**Le journal.** Une ligne JSON par tour dans `<projet>/forge/journal-boucle.jsonl`, tenue par
+la campagne — jamais par la forge : un journal écrit par l'outil qu'il juge ne prouverait rien.
+
+```json
+{"tour": 3, "anomalies_entrantes": 1, "corrigees": 1, "nouvelles": 1, "restantes": 0,
+ "dernier_correctif": "2026-08-17T16:00:00+02:00", "dernier_run_suite": "2026-08-17T16:20:00+02:00",
+ "portes": {"suites": 0, "lint": 0, "typage": 0, "e2e": 0},
+ "xfail_non_justifies": 0, "passages_verts_consecutifs": 3, "ecarts_assumes": []}
+```
+
+Chaque rapport d'audit porte la section **`boucle`** : elle juge la CAMPAGNE, quand `verdict`
+juge CE run. Les confondre est exactement la faute du 12/08. Journal absent → la section le
+**dit** (`aucun journal de boucle`), elle ne se tait pas.
+
+**Le compteur de tours dit aussi quand s'arrêter pour de bonnes raisons** : une campagne dont
+le tour N révèle autant que le tour N-1 ne converge pas. C'est publié (`convergence.signal`)
+comme un signal à remonter — jamais utilisé pour refuser une clôture qui tient ses cinq points.
+
 ## Contrat du projet audité
 
 Ce que Forge Tests **suppose** du projet pour pouvoir le mesurer. Chaque convention ci-dessous
