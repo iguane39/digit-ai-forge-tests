@@ -301,6 +301,7 @@ def rapport(
     pour_couvrir: dict[str, str] | None = None,
     modules: list[dict] | None = None,
     essais: list[Essai] | None = None,
+    instance: dict | None = None,
 ) -> dict:
     """Assemble le rapport. Un pan sans adaptateur est NOMME, jamais omis.
 
@@ -372,6 +373,16 @@ def rapport(
         "mutation": {s.pan: s.mutation for s in sorties if s.mutation is not None},
         # A-3 : les seuils opposables, valeur ET justification, dans le rapport lui-meme.
         "seuils": seuils_au_rapport(),
+        # TF-0340/TF-0341 — le cycle de vie et la PROVENANCE de l instance servie. Section
+        # toujours presente : absente quand aucune instance n est declaree, elle serait
+        # indiscernable d une section qui a mesure et n a rien trouve. Un audit qui laisse une
+        # instance debout le DIT, et un audit qui mesure un code plus ancien que le depot le dit
+        # aussi — c est la generalisation du terme de comparaison de TF-0288 a l instance entiere.
+        "instance": instance if instance is not None else {
+            "cycle_de_vie": None, "provenance": None,
+            "non_juge": ["instance : section non alimentee par cet appelant (`rapport(..., "
+                         "instance=...)`) — ni le cycle de vie ni la provenance n ont ete mesures"],
+        },
         # A-2 : l inventaire des modules SOURCES — exerce, mute, ou jamais exerce et NOMME.
         "modules": modules if modules is not None else [
             m for s in sorties for m in s.modules

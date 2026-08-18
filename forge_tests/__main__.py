@@ -29,6 +29,7 @@ SORTIE_REFUS_G1 = 4
 
 def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     from forge_tests.avancement import Avancement
+    from forge_tests.instance import au_rapport as instance_au_rapport
     from forge_tests.qualification import qualifier
 
     # TF-0096 (contrat TF-0094 du pilot) : un audit n'est plus silencieux — chaque pan est
@@ -55,7 +56,10 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
         for module in REGISTRE.values()
         if hasattr(module, "PAN") and getattr(module, "POUR_COUVRIR", None)
     }
-    return rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins)
+    # TF-0340/0341 — ce que l audit laisse debout, et de quoi l instance auditee a ete batie.
+    # Mesure APRES les pans : c est l etat en fin d audit qui interesse le lecteur du rapport.
+    return rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins,
+                   instance=instance_au_rapport(cible))
 
 
 _DEBUT = _dt.datetime.now().astimezone()
