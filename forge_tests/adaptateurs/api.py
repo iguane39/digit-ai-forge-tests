@@ -6,6 +6,7 @@ import ast
 import re
 from pathlib import Path
 
+from forge_tests import classes
 from forge_tests.disposition import paquet_sources
 from forge_tests.execution import codes_emis, motif_indisponibilite, schema_openapi
 from forge_tests.invariants import NON_JUGE as NON_JUGE_INV
@@ -353,7 +354,7 @@ def _divergences_gardes(
             findings.append(
                 Finding(
                     id=f"divergence:{element.id}",
-                    classe="divergence",
+                    classe=classes.DIVERGENCE,
                     localisation=ou,
                     message=(
                         f"code {code} déclaré pour {signature} mais aucune garde de "
@@ -406,7 +407,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             0,
             Finding(
                 id="sonde-muette:api",
-                classe="sonde-muette",
+                classe=classes.SONDE_MUETTE,
                 localisation=str(_module_principal(cible)),
                 message=AVERTISSEMENT_SONDE_MUETTE,
                 severite="signale",
@@ -455,7 +456,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
         sortie.findings.append(
             Finding(
                 id=identifiant,
-                classe="divergence",
+                classe=classes.DIVERGENCE,
                 localisation=ou,
                 message="code émis par l'application mais absent de sa déclaration responses=",
                 severite="signale",

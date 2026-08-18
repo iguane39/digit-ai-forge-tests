@@ -85,7 +85,7 @@ from collections import deque
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
-from forge_tests import seuils
+from forge_tests import classes, seuils
 from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -1850,7 +1850,7 @@ def conclure(
             findings.append(
                 Finding(
                     id=identifiant,
-                    classe="route-en-defaut",
+                    classe=classes.ROUTE_EN_DEFAUT,
                     localisation=f"{config['base']}{route}",
                     message=f"{route} — " + " · ".join(ennuis),
                     risque=coter(PAN, identifiant, str(cible)),
@@ -1904,7 +1904,7 @@ def conclure(
                 findings.append(
                     Finding(
                         id=cle,
-                        classe="affordance-sans-effet",
+                        classe=classes.AFFORDANCE_SANS_EFFET,
                         localisation=f"{config['base']}{route}",
                         message=(
                             f"{affordance['tag']} « {affordance['libelle'] or 'sans libellé'} » "
@@ -1921,7 +1921,7 @@ def conclure(
             0,
             Finding(
                 id=f"seuil:{PAN}",
-                classe="seuil-non-tenu",
+                classe=classes.SEUIL_NON_TENU,
                 localisation=config["base"],
                 message=(
                     f"qualification {ratio:.0%} sous le seuil {SEUIL:.0%} — "

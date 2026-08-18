@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # S-01 devenait ininterpretable. Neutralise ici, jamais lu par accident.
 os.environ["FORGE_TESTS_BASE_URL"] = ""
 
+from forge_tests import classes as noms_de_classes  # noqa: E402
 from forge_tests.__main__ import analyser  # noqa: E402
 
 RACINE = Path(__file__).resolve().parent.parent
@@ -52,58 +53,70 @@ VERT = RACINE / "fixtures" / "banc-vert"
 # qu il affiche, et la disparition du défaut propre à l entrée passait inaperçue. Le prix de ce
 # contrat est assumé : une classe renommée par un adaptateur fait sortir son entrée en [MANQUE],
 # ce qui est exactement ce qu on veut d un contrat (bruyant, jamais silencieux).
+
+# TF-0334 — la classe se lit desormais dans `forge_tests.classes`, source unique des noms. Le
+# littéral recopié ici ET dans l adaptateur laissait un renommage sortir en [MANQUE] sans dire
+# POURQUOI : « l adaptateur ne détecte plus » et « la classe s appelle autrement » s écrivaient
+# pareil. Les prefixes, eux, restent des litteraux : ils portent sur des IDENTIFIANTS d elements
+# fabriques par le pan, pas sur un nom declare quelque part.
 CORPUS = [
     ("D-01", "front", "parcours Front tronqué", ("route:", "element:"),
-     ("element-non-exerce",)),
-    ("H-02", "api", "codes d erreur jamais exercés", ("code:",), ("element-non-exerce",)),
-    ("H-03", "api", "méthodes HTTP jamais atteintes", ("endpoint:",), ("element-non-exerce",)),
-    ("H-04", "data", "contraintes jamais violées", ("contrainte:",), ("element-non-exerce",)),
+     (noms_de_classes.ELEMENT_NON_EXERCE,)),
+    ("H-02", "api", "codes d erreur jamais exercés", ("code:",),
+     (noms_de_classes.ELEMENT_NON_EXERCE,)),
+    ("H-03", "api", "méthodes HTTP jamais atteintes", ("endpoint:",),
+     (noms_de_classes.ELEMENT_NON_EXERCE,)),
+    ("H-04", "data", "contraintes jamais violées", ("contrainte:",),
+     (noms_de_classes.ELEMENT_NON_EXERCE,)),
     # La classe écarte ici le `migration:<nom>:retour` de classe `divergence` — une migration sans
     # section de retour est un autre défaut, dont le pendant au corpus est H-12.
     ("H-05", "migrations", "migrations ni inversées ni rejouées", ("migration:",),
-     ("element-non-exerce",)),
+     (noms_de_classes.ELEMENT_NON_EXERCE,)),
     ("H-06", "batch", "branches de rejet et reprise non parcourues", ("branche:", "rejet:"),
-     ("element-non-exerce",)),
-    ("H-07", "fichiers", "chemins de parsing non exercés", ("chemin:",), ("element-non-exerce",)),
+     (noms_de_classes.ELEMENT_NON_EXERCE,)),
+    ("H-07", "fichiers", "chemins de parsing non exercés", ("chemin:",),
+     (noms_de_classes.ELEMENT_NON_EXERCE,)),
     ("H-08", "back", "assertions permissives", ("mutant:", "seuil:back"),
-     ("mutant-survivant", "seuil-non-tenu")),
-    ("H-09", "securite", "execution dynamique non signalee", ("securite:",), ("securite",)),
-    ("H-10", "accessibilite", "controles sans nom accessible", ("a11y:",), ("accessibilite",)),
+     (noms_de_classes.MUTANT_SURVIVANT, noms_de_classes.SEUIL_NON_TENU)),
+    ("H-09", "securite", "execution dynamique non signalee", ("securite:",),
+     (noms_de_classes.SECURITE,)),
+    ("H-10", "accessibilite", "controles sans nom accessible", ("a11y:",),
+     (noms_de_classes.ACCESSIBILITE,)),
     ("H-11", "visuel", "regression visuelle de mise en page", ("visuel:",),
-     ("regression-visuelle",)),
+     (noms_de_classes.REGRESSION_VISUELLE,)),
     ("H-12", "migrations", "migration qui defait la precedente", ("divergence:migration:",),
-     ("divergence",)),
+     (noms_de_classes.DIVERGENCE,)),
     # La classe écarte ici l ecart servi/versionné de H-20, qui vit dans le même pan et sous le
     # même préfixe : c est le débordement qui a motivé TF-0310.
     ("H-13", "interface", "affordances inertes — bouton, lien et formulaire sans effet",
-     ("interface:",), ("affordance-inerte",)),
+     ("interface:",), (noms_de_classes.AFFORDANCE_INERTE,)),
     # A-2 : le principe fondateur applique a l etage du MODULE. `app/recherche.py` du banc
     # rouge n est importe par aucun test : il doit sortir NOMME, jamais fondu dans un total.
     ("A-2", "back", "module source jamais importe par la suite", ("module-non-exerce:",),
-     ("module-non-exerce",)),
+     (noms_de_classes.MODULE_NON_EXERCE,)),
     # A-3 : un seuil n est opposable que s il attrape quelque chose. Le banc rouge porte des
     # modules metier dont la suite ne tue pas la moitie des mutants.
     ("A-3", "back", "seuil de mutation par module de logique metier viole",
-     ("seuil:mutation-module:",), ("seuil-non-tenu",)),
+     ("seuil:mutation-module:",), (noms_de_classes.SEUIL_NON_TENU,)),
     # A-4 : le parcours navigateur d une instance SERVIE — 404 sur lien, trace d exception
     # rendue, marqueur de contenu absent, erreur console, affordance sans le moindre ecouteur.
     ("A-4", "qualif", "instance servie : route en defaut et affordance sans effet",
-     ("qualif:",), ("route-en-defaut", "affordance-sans-effet")),
+     ("qualif:",), (noms_de_classes.ROUTE_EN_DEFAUT, noms_de_classes.AFFORDANCE_SANS_EFFET)),
     # TF-0200 (verdict O2 de l etude du 14/08) : le pan `prompts`, v0 STATIQUE et GRATUITE.
     # H-14 — un modele designe par un ALIAS mouvant : le systeme sous test change sans qu un
     # seul commit ne bouge (`claude-opus-4-1-20250805` retire le 2026-08-05, alias `-latest`
     # de Google remappes a dates fixes). H-15 — un prompt adressable qu AUCUN cas n exerce.
     ("H-14", "prompts", "modele designe par un alias mouvant, jamais epingle", ("modele:",),
-     ("modele-non-epingle",)),
+     (noms_de_classes.MODELE_NON_EPINGLE,)),
     ("H-15", "prompts", "prompt adressable sans aucun cas au corpus", ("prompt:",),
-     ("element-non-exerce",)),
+     (noms_de_classes.ELEMENT_NON_EXERCE,)),
     # TF-0203 (precision humaine du 14/08 : « un produit trigger, l enclenchement de batch »).
     # Le pan `batch` mesurait l INTERIEUR du traitement en supposant qu il demarre. Le banc
     # rouge porte un lot qu aucun declencheur n atteint : le constat sortait bien du pan, mais
     # n etait declare dans AUCUNE entree de ce corpus — un defaut detecte hors contrat n est
     # pas un defaut couvert.
     ("H-16", "batch", "traitement par lot qu aucun declencheur n enclenche",
-     ("job-sans-declencheur", "trigger:"), ("job-sans-declencheur",)),
+     ("job-sans-declencheur", "trigger:"), (noms_de_classes.JOB_SANS_DECLENCHEUR,)),
     # TF-0293 — le pan `i18n` (TF-0284) etait prouve par 21 tests et par ses deux bancs, mais
     # ABSENT de ce corpus : la recette qui prononce S-01 ne le mesurait pas. Ses pages sont
     # portees au BUILD SERVI des bancs historiques (`dist\`), et ses TROIS defauts — les trois
@@ -112,11 +125,11 @@ CORPUS = [
     # fait passer les trois pour couverts des que l un sortait, ce qui est exactement l absence
     # silencieuse que ce corpus existe pour supprimer.
     ("H-17", "i18n", "route servie dans une locale et pas dans une autre",
-     ("i18n:route:en:/tarifs",), ("i18n",)),
+     ("i18n:route:en:/tarifs",), (noms_de_classes.I18N,)),
     ("H-18", "i18n", "menu d une locale ampute par rapport au menu le plus riche",
-     ("i18n:navigation:",), ("i18n",)),
+     ("i18n:navigation:",), (noms_de_classes.I18N,)),
     ("H-19", "i18n", "page servie sous une locale non francaise avec du contenu francais",
-     ("i18n:route:en:/blog",), ("i18n",)),
+     ("i18n:route:en:/blog",), (noms_de_classes.I18N,)),
     # TF-0300 — l ecart SERVI <-> VERSIONNE (TF-0288) n avait au corpus AUCUNE entree : ses
     # branches PASS et SKIP etaient mesurees par la recette sur les deux bancs, mais la branche
     # qui ACCUSE ne reposait que sur pytest. Exactement l ecart que TF-0293 vient de fermer pour
@@ -131,7 +144,7 @@ CORPUS = [
     # commentaire faute de mecanisme : TF-0310 l a ferme, l appariement portant desormais aussi
     # sur la classe.
     ("H-20", "interface", "menu promis par la source versionnee et non servi par la production",
-     ("interface:ecart-servi:",), ("ecart-servi-versionne",)),
+     ("interface:ecart-servi:",), (noms_de_classes.ECART_SERVI_VERSIONNE,)),
 ]
 
 # RT-8 — le lecteur SQL, verifie sur pieces. Ces cas ne passent par aucun banc : ils portent

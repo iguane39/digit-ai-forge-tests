@@ -33,7 +33,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from forge_tests import seuils
+from forge_tests import classes, seuils
 from forge_tests.disposition import motif_indetermine, paquet_sources, racine_execution
 from forge_tests.execution import PREALABLE_ABSENT, motif_indisponibilite, resume_fichiers
 from forge_tests.noyau import Finding, SortieAdaptateur
@@ -482,7 +482,7 @@ def _findings_modules(dossier: Path, inventaire: list[dict]) -> list[Finding]:
             findings.append(
                 Finding(
                     id=identifiant,
-                    classe="module-non-exerce",
+                    classe=classes.MODULE_NON_EXERCE,
                     localisation=chemin,
                     message=(
                         f"{entree['module']} : module source jamais importé par la suite — "
@@ -502,7 +502,7 @@ def _findings_modules(dossier: Path, inventaire: list[dict]) -> list[Finding]:
             findings.append(
                 Finding(
                     id=identifiant,
-                    classe="seuil-non-tenu",
+                    classe=classes.SEUIL_NON_TENU,
                     localisation=chemin,
                     message=(
                         f"{entree['module']} : score de mutation {score:.0%} sous le seuil "
@@ -519,7 +519,7 @@ def _findings_modules(dossier: Path, inventaire: list[dict]) -> list[Finding]:
             findings.append(
                 Finding(
                     id=identifiant,
-                    classe="seuil-non-tenu",
+                    classe=classes.SEUIL_NON_TENU,
                     localisation=chemin,
                     message=(
                         f"{entree['module']} : couverture de branches {ratio:.0%} sous le seuil "
@@ -748,7 +748,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     findings = [
         Finding(
             id=m.id,
-            classe="mutant-survivant",
+            classe=classes.MUTANT_SURVIVANT,
             localisation=f"{racine / m.fichier}:{m.ligne + 1}",
             message=f"mutant {m.avant.strip()} -> {m.apres.strip()} non tué : la suite reste verte",
             severite="signale",
@@ -761,7 +761,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
         findings.append(
             Finding(
                 id=f"seuil:{PAN}",
-                classe="seuil-non-tenu",
+                classe=classes.SEUIL_NON_TENU,
                 localisation=str(cible),
                 message=f"score de mutation {score:.0%} sous le seuil {SEUIL:.0%}",
                 severite=seuils.severite("mutation_globale"),

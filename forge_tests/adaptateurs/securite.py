@@ -18,6 +18,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from forge_tests import classes
 from forge_tests.disposition import motif_racine_execution, racine_execution
 from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
@@ -344,7 +345,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 findings.append(
                     Finding(
                         id=identifiant,
-                        classe="securite",
+                        classe=classes.SECURITE,
                         localisation=ou,
                         message=f"[{nom}] {brut.get('msg', '')}",
                         severite="bloquant" if brut.get("sev") == "bloquant" else "signale",
