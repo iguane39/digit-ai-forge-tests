@@ -1240,6 +1240,44 @@ def _findings_ecart(cible: Path, ecart: dict) -> list[Finding]:
     return findings
 
 
+def _findings_confrontation(cible: Path, resultat: dict) -> list[Finding]:
+    """Un constat par élément PROMIS ET NON SERVI — nommé, jamais un total (TF-0371).
+
+    Deux classes distinctes parce que les deux défauts ne se réparent pas au même endroit : une
+    route appelée et non enregistrée se corrige à l'hôte (un blueprint à monter, une pipeline à
+    compléter) ; une ressource référencée et absente se corrige au build. Les fondre en une
+    seule classe enverrait la moitié des constats à la mauvaise étape (`forge_tests.actions`).
+    """
+    if resultat["verdict"] != "FAIL":
+        return []
+    routes = resultat["domaine"].startswith("routes")
+    prefixe = "interface:route-appelee-non-servie" if routes else "interface:ressource-absente"
+    classe = classes.ROUTE_APPELEE_NON_SERVIE if routes else classes.RESSOURCE_REFERENCEE_ABSENTE
+    findings: list[Finding] = []
+    for element in resultat["manquantes"]:
+        identifiant = f"{prefixe}:{element}"
+        message = (
+            f"le code client APPELLE « {element} » et l hôte ne l enregistre pas : la requête "
+            "rend 404 en service. Ce n est ni un défaut de code client ni un test manquant — "
+            "c est une fonction MORTE, invisible à tout parcours qui ne l a pas dans son "
+            "scénario"
+            if routes else
+            f"une feuille ou une page SERVIE référence « {element} », absent du build : le "
+            "navigateur la résout et obtient 404. Une ressource de repli ne manque qu au moment "
+            "où elle devrait servir — aucun parcours ne l atteint avant"
+        )
+        findings.append(
+            Finding(
+                id=identifiant,
+                classe=classe,
+                localisation=str(cible),
+                message=message,
+                risque=coter(PAN, identifiant, str(cible)),
+            )
+        )
+    return findings
+
+
 def _relever_composants(cible: Path) -> tuple[list[dict], int, list[str]]:
     """Liens des composants, jugés. Puis le compte des destinations EXPRIMÉES, puis ce qui se
     DÉCLARE au rapport : les dialectes réellement lus, et d où viennent les locales (TF-0295)."""
@@ -1404,6 +1442,24 @@ def analyser(cible: Path) -> SortieAdaptateur:
     ecart = ecart_servi_versionne(cible)
     non_juge.append(f"interface/{ecart['verdict'].lower()} — {ecart['motif']}")
     findings_ecart = _findings_ecart(cible, ecart)
+
+    # TF-0371 — DEUX PAIRES DE TERMES DE PLUS, par le même mécanisme (`confrontation`). Elles
+    # entrent ici parce que c est ce pan qui porte déjà « servi ↔ versionné » : un troisième
+    # lecteur de servi ailleurs ferait diverger trois lectures de la même chose, ce que l item
+    # nommait lui-même (« il y a probablement un mécanisme unique à en tirer plutôt que trois »).
+    # Les deux sont STATIQUES : elles sortent même quand aucune instance n est montée.
+    from forge_tests import surface_servie
+    from forge_tests.adaptateurs import i18n as _i18n
+
+    non_juge.extend(surface_servie.NON_JUGE)
+    for confrontation in (
+        surface_servie.confronter_routes(cible),
+        surface_servie.confronter_ressources(_i18n.build_servi(cible)),
+    ):
+        # Les trois issues se DISENT, comme pour TF-0288 : un SKIP muet rendrait « aucun écart »
+        # indiscernable de « la comparaison n a pas eu lieu ».
+        non_juge.append(f"interface/{confrontation['verdict'].lower()} — {confrontation['motif']}")
+        findings_ecart.extend(_findings_confrontation(cible, confrontation))
 
     if exprimees:
         non_juge.append(
