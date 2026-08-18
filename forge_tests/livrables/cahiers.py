@@ -511,11 +511,13 @@ def _libelle_adoption(adoption: dict | None) -> str:
     return (
         "**À ADOPTER ET EXÉCUTER — non soldé** : ce cas n'est pas « non joué », il n'appartient "
         "pas encore à la suite du projet, et il pèse au solde R-40 tant qu'il y reste. Trois "
-        f"sorties, aucune autre, et TOUTES LES TROIS se déclarent dans `{_adoption.FICHIER}` "
-        "(un seul fichier, une ligne JSON par cas soldé — il n'existe pas de second sidecar) : "
-        "l'écrire, l'exécuter et déclarer `{\"cas\": …, \"test\": …}` ; ou déclarer "
-        "`{\"cas\": …, \"non_testable\": true, \"champs_requis\": […]}` ; ou l'écarter par une "
-        "décision humaine nommée `{\"cas\": …, \"ecarte_par\": …, \"date\": …, \"motif\": …}`"
+        "sorties, aucune autre, et DEUX fichiers les portent (R-40) : l'adoption dans "
+        f"`{_adoption.FICHIER}` — `{{\"cas\": …, \"test\": …}}` ; les deux autres dans "
+        f"`{_adoption.FICHIER_ECARTES}` — `{{\"cas\": …, \"statut\": \"non_testable\", "
+        "\"champs_requis\": […]}}` ou `{\"cas\": …, \"statut\": \"ecarte\", \"qui\": …, "
+        "\"quand\": …, \"pourquoi\": …}`. Les deux fichiers sont lus ; écrire les trois formes "
+        f"dans `{_adoption.FICHIER}` reste ACCEPTÉ (antériorité), mais l'oracle d'adoption du "
+        "pilot renvoie les écartements vers leur sidecar"
     )
 
 
