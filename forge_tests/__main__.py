@@ -58,8 +58,14 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     }
     # TF-0340/0341 — ce que l audit laisse debout, et de quoi l instance auditee a ete batie.
     # Mesure APRES les pans : c est l etat en fin d audit qui interesse le lecteur du rapport.
+    # TF-0352/0353 — le journal de boucle du PROJET, lu tel quel. La forge ne l écrit jamais :
+    # c est la campagne qui le tient, et un journal écrit par l outil qu il juge ne prouverait
+    # rien. Absent, le rapport le DIT (« aucun journal de boucle »), il ne se tait pas.
+    from forge_tests import boucle as _boucle
+
     return rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins,
-                   instance=instance_au_rapport(cible))
+                   instance=instance_au_rapport(cible),
+                   boucle=_boucle.verdict(_boucle.lire(cible)))
 
 
 _DEBUT = _dt.datetime.now().astimezone()
@@ -355,7 +361,15 @@ def main(argv: list[str] | None = None) -> int:
                 rap, args.generer.resolve(), schema=schema_openapi(str(args.cible.resolve()))
             )
             produit_data = ecrire_data(rap, args.cible.resolve(), args.generer.resolve())
-            for chemin, pan in ((produit, "api"), (produit_data, "data")):
+            # TF-0343 — la matrice des droits, une cellule par (action x profil). Ecrite ici
+            # parce qu elle DERIVE d une declaration du projet, comme les autres cas : la
+            # forge ne devine pas quel code un contrat promet a quel profil.
+            from forge_tests.droits import ecrire as ecrire_droits
+
+            produit_droits = ecrire_droits(args.cible.resolve(), args.generer.resolve())
+            for chemin, pan in (
+                (produit, "api"), (produit_data, "data"), (produit_droits, "matrice des droits")
+            ):
                 # Sur stderr : `--generer --json` doit produire un stdout JSON PUR, parsable
                 # sans découpage par un appelant machine.
                 message = f"cas generes ({pan}) -> {chemin}" if chemin else f"aucun cas ({pan})"
