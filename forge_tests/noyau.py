@@ -304,6 +304,7 @@ def rapport(
     modules: list[dict] | None = None,
     essais: list[Essai] | None = None,
     instance: dict | None = None,
+    boucle: dict | None = None,
 ) -> dict:
     """Assemble le rapport. Un pan sans adaptateur est NOMME, jamais omis.
 
@@ -411,9 +412,20 @@ def rapport(
         "essais": resume_essais(essais) if essais is not None else {
             "cas": [], "totaux": {}, "signales": [], "fourni": False,
         },
+        # TF-0352/0353 — la CAMPAGNE peut-elle clore ? Le verdict ci-dessous juge CE run ; la
+        # section `boucle` juge la campagne qui l entoure. Les confondre est exactement la
+        # faute du 12/08 : un rapport PARTIEL conforme, 121 findings, produit inchangé. Section
+        # toujours présente : « pas de journal » se lit, il ne se devine pas.
+        "boucle": boucle if boucle is not None else _boucle_non_mesuree(),
         "verdict": (
             "PARTIEL"
             if non_couverts
             else ("FAIL" if any(s.verdict == "FAIL" for s in sorties) else "PASS")
         ),
     }
+
+
+def _boucle_non_mesuree() -> dict:
+    from forge_tests import boucle as _boucle
+
+    return _boucle.verdict([])

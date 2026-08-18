@@ -183,22 +183,35 @@ def exerces(cible: Path, inventaire_elements: list[Element] | None = None) -> se
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
+    # TF-0344/0345 — la revue STATIQUE de la suite tourne d abord, et surtout : elle ne depend
+    # ni de l instance servie ni de l execution de la suite. Un projet dont la suite ne peut pas
+    # tourner est justement celui ou un faux vert dort le plus longtemps.
+    from forge_tests import revue
+
+    faux_verts = revue.analyser_suite(cible)
     inv = inventaire(cible)
     couvert = exerces(cible, inv)
     if couvert is None:
         routes = sum(1 for e in inv if e.id.startswith("route:"))
         return SortieAdaptateur(
-            NOM, PAN, str(cible), "SKIP",
+            NOM, PAN, str(cible), "FAIL" if faux_verts else "SKIP",
+            findings=faux_verts,
             non_juge=[
                 *NON_JUGE,
+                *revue.NON_JUGE,
                 f"front : {len(inv)} elements INVENTORIES ({routes} routes, "
                 f"{len(inv) - routes} elements interactifs) mais couverture non mesurable — "
                 + motif_indisponibilite(cible, "front", "suite e2e non executee"),
             ],
         )
-    return evaluer_surface(
-        NOM, PAN, str(cible), inv, couvert, SEUIL, NON_JUGE, sans_objet=sans_objet(cible)
+    sortie = evaluer_surface(
+        NOM, PAN, str(cible), inv, couvert, SEUIL, [*NON_JUGE, *revue.NON_JUGE],
+        sans_objet=sans_objet(cible),
     )
+    if faux_verts:
+        sortie.findings.extend(faux_verts)
+        sortie.verdict = "FAIL"
+    return sortie
 
 
 def sans_objet(cible: Path) -> str | None:
