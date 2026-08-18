@@ -804,6 +804,24 @@ Ce que Forge Tests **suppose** du projet pour pouvoir le mesurer. Chaque convent
 est appliquée par un adaptateur ; jusqu'ici elles n'étaient découvrables qu'en lisant son code.
 Aucune n'est obligatoire : ce qui manque produit un pan **motivé**, jamais un vert.
 
+### Cycle de vie et provenance de l'instance servie — pans `front`, `qualif`, `accessibilite`, `visuel` (TF-0340 / TF-0341)
+
+Quatre pans exigent une instance **servie**. Le montage reste délégué au projet — lui seul sait ce que « peuplée » veut dire chez lui — mais jusqu'au 18/08 le **démontage** n'était délégué à personne, et le rapport ne disait pas ce qu'il laissait debout.
+
+*Mesuré le 17/08 sur bourse-aux-vacants : 3 conteneurs et un réseau laissés en service **2 h 25** après la fin de l'audit, tenant les ports 8091, 8092 et 5544, jusqu'à ce qu'un humain s'en étonne. Et la moitié grave : la topologie avait été bâtie à 10:47, le correctif D-14 écrit après — pendant cette fenêtre, un audit relancé aurait mesuré l'ancien code et publié ses chiffres comme l'état courant.*
+
+La règle tient en une phrase, et le rapport la publie : **la forge démonte ce qu'elle a monté, et publie ce qu'elle laisse debout quand elle ne l'a pas monté.**
+
+| Convention | Effet si elle n'est pas tenue |
+|---|---|
+| `FORGE_TESTS_INSTANCE_DEMONTER` — la commande qui démonte l'instance | l'audit dit ce qu'il laisse debout **et** que rien ne permet de le démonter : c'est cette absence qui a coûté les 2 h 25 |
+| `FORGE_TESTS_INSTANCE_MONTER` — la commande qui la monte | déclarée pour le jour où la forge montera elle-même ; sans elle, la forge ne monte pas et ne démonte donc rien |
+| `FORGE_TESTS_INSTANCE_PROVENANCE` — chemin d'un document disant **de quoi** l'instance a été bâtie | issue `non_determinable`, en disant que c'est le terme **servi** qui manque : rien ne distingue alors une instance fraîche d'une instance périmée |
+
+Le format de provenance n'est **pas** propre à cette forge : le scellé `forge-ops/empreinte@1` produit par `ops.mjs deployer|canary` est lu tel quel (mêmes empreintes de fichiers que compare `oracle-ops.mjs --empreinte`, O-7). Un projet qui monte localement déclare la forme légère `forge-tests/instance@1` (`commit`, `construit_le`, `images[]`).
+
+La section `instance` du rapport est **toujours présente**, même sans instance déclarée — une section qui disparaîtrait serait indiscernable d'une section qui a mesuré et n'a rien trouvé. La confrontation rend les **trois issues** de l'écart servi ↔ versionné (TF-0288), généralisé de la page à l'instance entière : `concordant` · `divergent`, l'écart nommé fichier par fichier et la phrase qui compte (*ce n'est pas le code qui est en retard, c'est l'instance*) · `non_determinable`, en disant **lequel** des deux termes manque. La comparaison n'est pas symétrique, et c'est déclaré : un fichier neuf que l'empreinte ne connaît pas ne déclenche rien.
+
 ### Application ASGI — pan `api`
 
 | Convention | Effet si elle n'est pas tenue |
