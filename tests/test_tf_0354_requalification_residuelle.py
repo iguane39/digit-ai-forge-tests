@@ -18,6 +18,8 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RACINE))
 
+NL = chr(10)
+
 from forge_tests import adoption, generateur  # noqa: E402
 from forge_tests.livrables import cahiers  # noqa: E402
 
@@ -55,16 +57,103 @@ def test_la_sequence_du_renommage_de_dossier_est_ECRITE_pas_presumee() -> None:
     assert "propositions/" in doctrine and "casserait des appels" in doctrine
 
 
-def test_l_encart_du_cahier_offre_les_TROIS_issues_et_nomme_leur_fichier_unique() -> None:
+def test_l_encart_du_cahier_offre_les_TROIS_issues_ET_leurs_DEUX_fichiers() -> None:
     """Le défaut : le lecteur voyait le fichier de déclaration cité pour la seule adoption.
 
     Il pouvait en conclure que `non_testable` et « écarté » se déclarent ailleurs — ou nulle
-    part. Ils vont dans le MÊME fichier ; l'encart doit le dire.
+    part. Ils se déclarent bien AILLEURS, et l'encart doit nommer où : R-40 (pilot) range les
+    deux autres issues dans `forge/cas-ecartes.jsonl`, et l'oracle d'adoption du pilot renvoie
+    vers ce sidecar tout écartement trouvé dans `cas-adoptes.jsonl`.
     """
     encart = cahiers._libelle_adoption(None)
 
-    assert encart.count(adoption.FICHIER) == 1, "le fichier de déclaration se nomme une fois"
-    assert "TOUTES LES TROIS" in encart
-    assert "second sidecar" in encart, "l'absence d'un second fichier se dit, elle ne se devine pas"
-    for marqueur in ("test", "non_testable", "champs_requis", "ecarte_par", "motif"):
+    assert adoption.FICHIER in encart
+    assert adoption.FICHIER_ECARTES in encart, "le sidecar de R-40 est nommé, pas deviné"
+    assert "DEUX fichiers" in encart
+    for marqueur in ("test", "non_testable", "champs_requis", "ecarte", "pourquoi"):
         assert marqueur in encart, f"issue non outillée dans l'encart : {marqueur}"
+
+
+# --- La contradiction entre deux forges, trouvée en soldant TF-0354 -----------------------------
+def test_le_sidecar_de_la_DOCTRINE_est_lu_sinon_bien_faire_est_puni(tmp_path) -> None:
+    """Le défaut le plus coûteux des trois, et il n'était nommé nulle part.
+
+    R-40 (pilot) prescrit `forge/cas-ecartes.jsonl` pour les deux autres issues, et
+    `oracle-adoption-tests.mjs` (A2) renvoie vers ce sidecar tout écartement écrit dans
+    `cas-adoptes.jsonl`. Ce module ne lisait QUE `cas-adoptes.jsonl` : un produit qui suivait
+    la doctrine voyait ses déclarations invisibles ici, son solde ne descendait jamais, et le
+    cahier lui répondait « reste-à-faire » pour avoir bien fait.
+    """
+    (tmp_path / "forge").mkdir()
+    (tmp_path / adoption.FICHIER_ECARTES).write_text(
+        NL.join([
+            '{"cas": "T2-0481-1", "statut": "non_testable", '
+            '"champs_requis": ["FORGE_TESTS_QUALIF_URL"]}',
+            '{"cas": "F1-3025-2", "statut": "ecarte", "qui": "le commanditaire", '
+            '"quand": "2026-08-18", "pourquoi": "hors perimetre"}',
+        ]),
+        encoding="utf-8",
+    )
+
+    declarations = adoption.charger(tmp_path)
+
+    assert declarations["T2-0481-1"]["statut"] == adoption.NON_TESTABLE
+    assert declarations["F1-3025-2"]["statut"] == adoption.ECARTE
+    assert "le commanditaire" in declarations["F1-3025-2"]["motif"]
+
+
+def test_le_vocabulaire_du_sidecar_est_TRADUIT_pas_refuse(tmp_path) -> None:
+    """Le même objet porte deux vocabulaires selon le fichier : `ecarte_par`/`date`/`motif`
+    ici, `qui`/`quand`/`pourquoi` là-bas. Refuser un écart parce qu'il emploie le mot de
+    l'AUTRE outil aurait recréé la double vérité qu'on vient de fermer."""
+    (tmp_path / "forge").mkdir()
+    (tmp_path / adoption.FICHIER_ECARTES).write_text(
+        '{"cas": "F1-1", "statut": "ecarte", "ecarte_par": "Sébastien", "date": "2026-08-18",'
+        ' "motif": "remplacé par un contrôle amont"}\n',
+        encoding="utf-8",
+    )
+
+    etat = adoption.charger(tmp_path)["F1-1"]
+
+    assert etat["statut"] == adoption.ECARTE
+    assert "Sébastien" in etat["motif"]
+
+
+def test_l_anteriorite_reste_ACCEPTEE_aucun_produit_rattrape_en_masse(tmp_path) -> None:
+    """Second sens : des produits ont écrit les trois formes dans `cas-adoptes.jsonl` avant le
+    18/08. Les refuser d'un coup transformerait un solde nul en reste-à-faire chez eux."""
+    (tmp_path / "forge").mkdir()
+    (tmp_path / adoption.FICHIER).write_text(
+        '{"cas": "T2-9", "non_testable": true, "champs_requis": ["FORGE_TESTS_API_URL"]}\n',
+        encoding="utf-8",
+    )
+
+    assert adoption.charger(tmp_path)["T2-9"]["statut"] == adoption.NON_TESTABLE
+
+
+def test_sur_un_cas_declare_DES_DEUX_COTES_la_doctrine_l_emporte(tmp_path) -> None:
+    """Un produit en migration n'a pas à nettoyer l'ancien fichier avant que le nouveau compte."""
+    (tmp_path / "forge").mkdir()
+    (tmp_path / adoption.FICHIER).write_text(
+        '{"cas": "F1-7", "non_testable": true, "champs_requis": ["ANCIEN"]}\n', encoding="utf-8"
+    )
+    (tmp_path / adoption.FICHIER_ECARTES).write_text(
+        '{"cas": "F1-7", "statut": "ecarte", "qui": "Sébastien", "quand": "2026-08-18",'
+        ' "pourquoi": "tranché depuis"}\n',
+        encoding="utf-8",
+    )
+
+    assert adoption.charger(tmp_path)["F1-7"]["statut"] == adoption.ECARTE
+
+
+def test_une_ADOPTION_fourvoyee_dans_le_sidecar_est_refusee_et_renvoyee(tmp_path) -> None:
+    """Symétrique de la règle A2 du pilot : chaque fichier porte ce qui lui revient."""
+    (tmp_path / "forge").mkdir()
+    (tmp_path / adoption.FICHIER_ECARTES).write_text(
+        '{"cas": "F1-4", "test": "e2e/10-nav.spec.ts"}\n', encoding="utf-8"
+    )
+
+    etat = adoption.charger(tmp_path)["F1-4"]
+
+    assert etat["statut"] == adoption.REFUSE
+    assert adoption.FICHIER in etat["motif"], "le refus dit OÙ la déclaration doit aller"
