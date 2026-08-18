@@ -80,6 +80,21 @@ from pathlib import Path
 
 FICHIER = "forge/cas-adoptes.jsonl"
 
+#: TF-0354 — le SECOND fichier, et la contradiction qu'il révélait.
+#: R-40 (`REGLES-PROJET.md` §T du pilot) prescrit `forge/cas-ecartes.jsonl` pour les DEUX
+#: autres issues, et `oracles/oracle-adoption-tests.mjs` (A2) renvoie vers ce sidecar tout
+#: écartement trouvé dans `cas-adoptes.jsonl`. Ce module, lui, acceptait les trois formes dans
+#: le premier fichier et ne lisait pas le second. Résultat mesuré en confrontant les deux
+#: outils le 18/08 : **un produit qui suit la doctrine était puni par la forge** — ses
+#: `non_testable` et ses écarts partaient dans `cas-ecartes.jsonl`, invisibles ici, et son
+#: solde ne descendait jamais. Le cahier lui répondait « reste-à-faire » pour avoir bien fait.
+#:
+#: Les deux fichiers sont donc lus, et la répartition prescrite est celle du pilot :
+#: l'adoption ici, les deux autres issues là-bas. L'ancienne tolérance (les trois formes dans
+#: `cas-adoptes.jsonl`) reste ACCEPTÉE comme antériorité — des produits ont écrit ainsi avant
+#: le 18/08 et aucun n'est rattrapé en masse — mais elle n'est plus ce que le cahier enseigne.
+FICHIER_ECARTES = "forge/cas-ecartes.jsonl"
+
 # Les quatre états d'un cas dérivé, plus le refus. `A_ADOPTER` est l'état de NAISSANCE : il est
 # transitoire par construction (R-40), et c'est lui que le solde compte comme reste-à-faire.
 A_ADOPTER = "a_adopter"
@@ -139,6 +154,58 @@ def _solder_ecarte(entree: dict) -> dict:
     return {"test": "", "statut": ECARTE, "motif": f"ecarte par {par}{quand} — {motif}"}
 
 
+def _solder_ecarte_du_sidecar(entree: dict) -> dict:
+    """Un écart au vocabulaire du SIDECAR : `qui` / `quand` / `pourquoi` (R-40 du pilot).
+
+    Le même objet porte deux vocabulaires selon le fichier où il vit — `ecarte_par`/`date`/
+    `motif` ici (antériorité RT-13), `qui`/`quand`/`pourquoi` là-bas (R-40). Les traduire à la
+    lecture est moins coûteux que d'imposer un renommage aux produits qui ont déjà déclaré, et
+    surtout : refuser un écart parce qu'il emploie le mot de l'AUTRE outil serait exactement la
+    double vérité que ce module vient de fermer.
+    """
+    return _solder_ecarte({
+        "ecarte_par": entree.get("ecarte_par") or entree.get("qui"),
+        "date": entree.get("date") or entree.get("quand"),
+        "motif": entree.get("motif") or entree.get("pourquoi"),
+    })
+
+
+def _lire_sidecar(cible: Path) -> dict[str, dict]:
+    """Les deux autres issues de R-40, là où la doctrine du pilot les range."""
+    source = Path(cible) / FICHIER_ECARTES
+    if not source.is_file():
+        return {}
+    soldes: dict[str, dict] = {}
+    for rang, ligne in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
+        if not ligne.strip():
+            continue
+        try:
+            entree = json.loads(ligne)
+        except json.JSONDecodeError:
+            soldes[f"({FICHIER_ECARTES} ligne {rang})"] = {
+                "test": "",
+                "statut": REFUSE,
+                "motif": f"ligne {rang} de {FICHIER_ECARTES} : JSON invalide — ignoree",
+            }
+            continue
+        ref = str(entree.get("cas") or "").strip()
+        if not ref:
+            continue
+        declare = str(entree.get("statut") or "").strip()
+        if entree.get("non_testable") or declare == NON_TESTABLE:
+            soldes[ref] = _solder_non_testable(entree)
+        elif declare == ECARTE or "ecarte_par" in entree or "qui" in entree:
+            soldes[ref] = _solder_ecarte_du_sidecar(entree)
+        else:
+            soldes[ref] = {
+                "test": "",
+                "statut": REFUSE,
+                "motif": f"{FICHIER_ECARTES} ne porte que `non_testable` et `ecarte` (R-40) — "
+                "une adoption se declare dans " + FICHIER,
+            }
+    return soldes
+
+
 def charger(cible: Path) -> dict[str, dict]:
     """Déclarations du projet sur ses cas dérivés, chacune avec son verdict de vérification.
 
@@ -148,9 +215,13 @@ def charger(cible: Path) -> dict[str, dict]:
     soldé (R-40).
     """
     source = Path(cible) / FICHIER
-    if not source.is_file():
-        return {}
     adoptions: dict[str, dict] = {}
+    if not source.is_file():
+        # TF-0354 : le sidecar de la doctrine se lit MÊME sans `cas-adoptes.jsonl`. Un produit
+        # dont tous les cas sont non testables ou écartés n'a aucune adoption à déclarer — le
+        # retour anticipé d'ici rendait ses déclarations invisibles, c'est-à-dire punissait
+        # exactement le cas où il a le plus soigneusement suivi R-40.
+        return _lire_sidecar(cible)
     for rang, ligne in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
         if not ligne.strip():
             continue
@@ -195,6 +266,10 @@ def charger(cible: Path) -> dict[str, dict]:
             }
             continue
         adoptions[ref] = {"test": test, "statut": ADOPTE, "motif": ""}
+    # Le sidecar est lu APRÈS : sur un cas déclaré des deux côtés, la déclaration qui suit la
+    # doctrine l'emporte sur l'antériorité tolérée. Un produit en cours de migration n'a donc
+    # pas à nettoyer l'ancien fichier avant que le nouveau compte.
+    adoptions.update(_lire_sidecar(cible))
     return adoptions
 
 
