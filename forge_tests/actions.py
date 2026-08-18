@@ -30,6 +30,10 @@ CATEGORIES = ("auto_ia", "manuelle_dev", "manuelle_utilisateur")
 ETAPES = ("development", "tests-suite", "design", "mep-config", "forge")
 
 NON_JUGE = [
+    "actions : un pan SANS element inventorie dont la configuration n est que PRESUMEE ne "
+    "produit plus d action humaine (TF-0381) — l entree reste au rapport avec son motif, mais "
+    "reclamer une configuration pour un pan qui n a rien a mesurer usait la credibilite des "
+    "actions qui comptent. Le pan reste NOMME : ce qui disparait est la demande, pas le constat",
     "actions : la categorie et l etape sont derivees de la CLASSE du finding, pas de son "
     "contenu — deux findings de meme classe recoivent la meme suite, meme si l un est trivial "
     "et l autre profond ; l attendu, lui, cite l element",
@@ -247,18 +251,34 @@ def _action_configuration(
     Retour humain du 14/08 : la phrase précédente était incompréhensible (liste de 20
     variables en tête, grammaire cassée). Structure fixe : quoi faire → pourquoi → ce qu'on
     obtient. Les CHAMPS restent nommés (jamais leurs valeurs), mais en fin de phrase.
+
+    TF-0381 (lot SCC_ALX 20260818b) : `elements` peut contenir des MARQUE-PLACES `pan:<x>`, posés
+    quand un pan n a rien d énumérable. Les compter comme des éléments inventoriés faisait dire à
+    l action « 1 élément(s) sont inventoriés » alors que le motif du même pan, deux champs plus
+    haut dans le même rapport, annonçait « 0 elements INVENTORIES ». Le rapport se contredisait
+    sur le même pan.
     """
+    reels = {e for e in elements if not e.startswith("pan:")}
+    pourquoi = (
+        f"{len(reels)} élément(s) sont inventoriés mais aucune exécution ne pouvait "
+        "les atteindre ici — manque de configuration, pas trou de couverture du projet. "
+        "Vous obtiendrez : ces éléments mesurés au prochain audit, et le verdict PARTIEL "
+        "pourra se prononcer."
+        if reels
+        else (
+            "aucun élément n est inventorié sur ce périmètre — le pan est nommé pour n être pas "
+            "tu, et la configuration est réclamée parce qu une TRACE D EXÉCUTION l a nommée. "
+            "Vous obtiendrez : de quoi savoir s il y a quelque chose à mesurer."
+        )
+    )
     return {
         "finding_ref": reference,
         "categorie": "manuelle_utilisateur",
         "etape_cible": "mep-config",
         "attendu": (
             f"renseigner la configuration d'audit {portee} dans `<projet>/.env.forge-tests`, "
-            "puis relancer avec `--reprendre <rapport.json>`. Pourquoi : "
-            f"{len(elements)} élément(s) sont inventoriés mais aucune exécution ne pouvait "
-            "les atteindre ici — manque de configuration, pas trou de couverture du projet. "
-            "Vous obtiendrez : ces éléments mesurés au prochain audit, et le verdict PARTIEL "
-            f"pourra se prononcer. Champs à fournir ({len(champs)}) : "
+            f"puis relancer avec `--reprendre <rapport.json>`. Pourquoi : {pourquoi} "
+            f"Champs à fournir ({len(champs)}) : "
             f"{', '.join(champs) or 'la configuration manquante'}"
         ),
     }
@@ -290,8 +310,21 @@ def classifier(
     # l'agrégation ferait disparaître à qui le manque profite. Le détail par pan reste
     # intact au rapport (`non_testables`) : c'est la présentation du travail qui change,
     # jamais la mesure.
+    # TF-0381 — LA COMBINAISON QUI NE MÈNE NULLE PART : aucun élément inventorié, et une
+    # configuration seulement PRÉSUMÉE (déduite d un `.env.example` que nul adaptateur ne
+    # revendique). Mesuré sur un projet d ANALYSE : dix actions manuelles, une par pan, toutes
+    # réclamant les six mêmes variables Databricks — y compris pour `prompts` (0 prompt trouvé)
+    # et `qualif` (qui attend une URL servie, pas un entrepôt). Une configuration réclamée pour
+    # un pan inexistant use la crédibilité des actions qui, elles, comptent.
+    #
+    # L entrée RESTE au rapport (`non_testables`), avec son motif : ce qui disparaît est la
+    # DEMANDE ADRESSÉE À UN HUMAIN, pas le constat. Nommer une limite n est pas réclamer un geste.
+    def _mene_quelque_part(entree: dict) -> bool:
+        return bool(entree.get("inventorie", True)) or entree.get("provenance") != "presume"
+
+    exploitables = [e for e in (non_testables or []) if _mene_quelque_part(e)]
     vu_par: dict[tuple[str, tuple[str, ...]], set[str]] = {}
-    for entree in non_testables or []:
+    for entree in exploitables:
         cle = (str(entree.get("element") or ""), tuple(entree.get("champs_requis") or []))
         vu_par.setdefault(cle, set()).add(str(entree.get("pan") or ""))
     pans_non_testables = {pan for pans in vu_par.values() for pan in pans}
