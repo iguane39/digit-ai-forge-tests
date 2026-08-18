@@ -208,13 +208,22 @@ def qualifier(
         if not champs:
             continue
         requis_tries = sorted(champs)
-        motif = (
-            f"{sortie.pan} : non exercable sans configuration ({provenance}) — "
-            f"fournir {', '.join(requis_tries)}, puis `--reprendre` le rapport"
-        )
         module = modules.get(sortie.pan)
         inventaire = getattr(module, "inventaire", None)
         elements = [e.id for e in inventaire(cible)] if inventaire is not None else []
+        motif = (
+            f"{sortie.pan} : non exercable sans configuration ({provenance}) — "
+            f"fournir {', '.join(requis_tries)}, puis `--reprendre` le rapport"
+            if elements
+            # TF-0381 : sans élément inventorié, le pan n a rien à mesurer — le dire ainsi est la
+            # seule formulation qui ne se contredise pas avec le motif du pan lui-même.
+            else (
+                f"{sortie.pan} : AUCUN element inventorie sur ce projet, et la configuration "
+                f"citee est {provenance}e ({', '.join(requis_tries)}). Le pan est nomme ici pour "
+                "n etre pas tu, mais renseigner cette configuration ne le rendrait pas mesurable "
+                "pour autant : il faudrait d abord qu il y ait quelque chose a mesurer"
+            )
+        )
         # Un pan dont rien n est meme enumerable reste NOMME : une entree pour le pan entier,
         # plutot qu un silence qui ressemblerait a « rien a tester ici ».
         for identifiant in elements or [f"pan:{sortie.pan}"]:
@@ -224,6 +233,10 @@ def qualifier(
                     champs_requis=requis_tries,
                     pan=sortie.pan,
                     motif=motif,
+                    # TF-0381 : le marque-place se DIT marque-place. Le rapport garde son nom
+                    # (loi 3), mais plus personne ne peut le compter pour un élément mesurable.
+                    inventorie=bool(elements),
+                    provenance=provenance,
                 )
             )
     return sorties

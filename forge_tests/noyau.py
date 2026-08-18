@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Literal
 
 from forge_tests import classes
@@ -42,6 +43,38 @@ class Element:
     pan: str
     libelle: str
     source: str
+    #: TF-0380 (lot SCC_ALX 20260818b) — `produit` (le projet le fabrique et le modifie) ou
+    #: `entrant` (une donnee recue, que le projet ne produit ni ne modifie jamais). Laissee VIDE,
+    #: elle est deduite du chemin par `provenance_de` au moment de l evaluation : aucun adaptateur
+    #: n a a connaitre le mecanisme, et un adaptateur futur en herite sans une ligne (meme
+    #: principe que `qualifier`). Un adaptateur qui sait mieux la pose explicitement.
+    provenance: str = ""
+
+
+#: Familles d ENTRANTS de la convention pilot : « tout entrant est une DONNEE ». Un element
+#: inventorie sous l une d elles n est pas de la surface du produit — le projet ne l a pas ecrit
+#: et n a aucun moyen de le corriger.
+#:
+#: LE FAIT (TF-0380) : sur un audit reel, le SEUL pan couvert affichait « interface 15/15,
+#: ratio 1,0, PASS » — et ses 15 elements etaient les 15 ancres de deux fichiers `input/*.html`,
+#: des documents RECUS du client. Au meme commit, les trois livrables HTML de `output/` portaient
+#: 27 ancres, dont aucune n etait inventoriee (`output/` est exclu depuis RT-9/RT-10, a juste
+#: titre : auditer ses propres artefacts est un auto-audit). Le seul PASS de l audit portait donc
+#: sur ce que le projet ne produit pas. Un ratio de 1,0 sur des entrants est PLUS TROMPEUR qu un
+#: pan franchement non couvert : le second se voit, le premier se lit comme une reussite.
+FAMILLES_ENTRANTES = ("input",)
+
+
+def provenance_de(source: str | Path) -> str:
+    """`entrant` si le chemin traverse une famille d entrants declaree, `produit` sinon.
+
+    Deduite du CHEMIN et non d une liste tenue a la main : une famille ajoutee a la convention
+    profite a tous les pans sans qu un adaptateur change. Le sens de l erreur est voulu — ce qui
+    n est pas reconnu comme entrant reste `produit`, donc COMPTE dans la couverture : mieux vaut
+    exiger a tort la couverture d un fichier recu que de dispenser a tort celle d un livrable.
+    """
+    parties = {p.lower() for p in Path(str(source)).parts}
+    return "entrant" if parties & {f.lower() for f in FAMILLES_ENTRANTES} else "produit"
 
 
 @dataclass
@@ -71,6 +104,17 @@ class NonTestable:
     champs_requis: list[str]
     pan: str = ""
     motif: str = ""
+    #: TF-0381 (lot SCC_ALX 20260818b) — `element` nomme-t-il un élément INVENTORIÉ, ou est-il le
+    #: marque-place d un pan dont rien n est énumérable ? Nommer le pan reste juste (loi 3 : un
+    #: silence ressemblerait à « rien à tester ici »), mais l APPELER un élément inventorié est
+    #: faux, et c est ce que l action générée disait : « 1 élément(s) sont inventoriés » sur un
+    #: pan dont le motif, deux champs plus haut, annonçait « 0 elements INVENTORIES ».
+    inventorie: bool = True
+    #: `constate` (le projet ou une trace d exécution a nommé le champ) ou `presume` (déduit d un
+    #: `.env.example` que personne ne revendique). Un champ présumé pour un pan sans élément ne
+    #: mène nulle part : c est la combinaison que TF-0381 a payée, dix actions manuelles pour dix
+    #: pans, toutes réclamant six variables Databricks sur un projet d ANALYSE.
+    provenance: str = "constate"
 
 
 @dataclass(frozen=True)
@@ -226,6 +270,45 @@ def evaluer_surface(
             adaptateur, pan, cible, "SKIP",
             non_juge=[*non_juge, f"{pan} : inventaire VIDE — surface non enumerable sur ce projet"],
         )
+    # TF-0380 — la couverture se mesure sur ce que le projet PRODUIT. Les entrants restent
+    # inventories et NOMMES (les taire ferait disparaitre ce qui a ete lu), mais ils ne comptent
+    # ni au numerateur ni au denominateur : exiger d un projet qu il teste un document recu du
+    # client est un reproche qu il ne peut pas honorer, et le compter comme couvert est pire —
+    # c est le « ratio 1,0 » qui a fait passer un audit pour vert.
+    def _provenance(e: Element) -> str:
+        return e.provenance or provenance_de(e.source)
+
+    entrants = [e for e in inventaire if _provenance(e) == "entrant"]
+    produits = [e for e in inventaire if _provenance(e) != "entrant"]
+    mention_entrants = (
+        f"{pan} : {len(entrants)} element(s) INVENTORIE(S) mais ENTRANT(S) — recu(s), jamais "
+        f"produit(s) par ce projet, donc hors du ratio de couverture "
+        f"({', '.join(sorted(e.id for e in entrants)[:8])}"
+        f"{' …' if len(entrants) > 8 else ''})"
+        if entrants else ""
+    )
+    if entrants and not produits:
+        # Tout l inventaire est entrant : il n y a rien du produit a couvrir ici. NA, et le motif
+        # le DIT — « 15/15 ratio 1,0 PASS » sur des entrants etait le pire des rapports possibles.
+        return SortieAdaptateur(
+            adaptateur, pan, cible, "NA",
+            non_juge=[
+                *non_juge,
+                f"{pan} : SANS OBJET sur ce projet — les {len(entrants)} element(s) enumere(s) "
+                "sont TOUS des entrants (familles "
+                f"{', '.join(FAMILLES_ENTRANTES)}), donc aucun element PRODUIT a couvrir. "
+                "Un ratio de 1,0 sur des entrants est plus trompeur qu un pan franchement non "
+                "couvert (TF-0380)",
+            ],
+            surface={
+                "inventorie": 0, "exerce": 0, "ratio": 1.0, "seuil": seuil,
+                "elements_exerces": [], "elements_non_exerces": [],
+                "entrants_hors_ratio": sorted(e.id for e in entrants),
+            },
+        )
+    if mention_entrants:
+        non_juge = [*non_juge, mention_entrants]
+    inventaire = produits
     manquants = [e for e in inventaire if e.id not in exerces]
     total = len(inventaire)
     ratio = (total - len(manquants)) / total
@@ -268,6 +351,9 @@ def evaluer_surface(
             # reprise ne saurait pas quel element etait deja vert et devrait tout rejouer.
             "elements_exerces": sorted(e.id for e in inventaire if e.id in exerces),
             "elements_non_exerces": [e.id for e in manquants],
+            # TF-0380 : ce qui a ete ECARTE du ratio se publie. Un ecart tu se lirait comme un
+            # perimetre complet — exactement ce que ce champ existe pour empecher.
+            "entrants_hors_ratio": sorted(e.id for e in entrants),
         },
     )
 
