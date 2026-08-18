@@ -36,6 +36,7 @@ from pathlib import Path
 
 from forge_tests import adoption as _adoption
 from forge_tests import relecture as _relecture
+from forge_tests.livrables import anomalies as _anomalies
 from forge_tests.livrables import exigences as _exigences
 from forge_tests.livrables import jeux as _jeux
 from forge_tests.livrables import libelles as _libelles
@@ -708,6 +709,51 @@ def _entete(titre: str, contexte: dict, chapitres: list[dict]) -> list[str]:
     return lignes
 
 
+def _annexe_anomalies(chapitres: list[dict], referentiel_anomalies: dict | None) -> list[str]:
+    """L annexe qui manquait (TF-0372) : « anomalie déclarée → couverte / non couverte ».
+
+    Elle est rendue MÊME sans liste déclarée — c est tout l enjeu de l item. Un cahier qui se
+    taisait là-dessus laissait croire qu il n y avait rien à confronter, alors que treize
+    anomalies clients vivaient dans un board depuis trois semaines et que six campagnes les ont
+    ignorées. Loi 3 : un bloc vide se dit, il ne disparaît pas.
+    """
+    rattachements: dict[str, list[dict]] = {}
+    for chapitre in chapitres:
+        rattachements.update(chapitre["rattachements"])
+    ch = _anomalies.chapitre(referentiel_anomalies, rattachements)
+    lignes = [f"## Annexe — {ch['titre'].lower()}", "", ch["resume"], ""]
+    if not ch["declare"]:
+        lignes += [
+            f"Pour en déclarer une : `{_anomalies.VARIABLE}=<chemin d un JSONL>` — une ligne par "
+            "anomalie (`id`, `titre`, `statut`, `priorite`), exportée par le projet depuis son "
+            "gestionnaire de tickets. La forge ne va JAMAIS la chercher elle-même.",
+            "",
+        ]
+        return lignes
+    if ch["non_couvertes"]:
+        lignes += [
+            "### Anomalies ouvertes qu AUCUN cas dérivé ne touche",
+            "",
+            "| anomalie | priorité | titre |",
+            "| --- | --- | --- |",
+        ]
+        lignes += [
+            f"| {a['id']} | {_echapper(a['priorite'])} | {_echapper(a['titre'])[:180]} |"
+            for a in ch["non_couvertes"]
+        ]
+        lignes.append("")
+    else:
+        lignes += ["Chaque anomalie ouverte est touchée par au moins un cas dérivé.", ""]
+    lignes += [
+        "Le rattachement est **lexical** quand l anomalie ne porte pas de clé technique "
+        "(`elements`) : c est une PISTE, jamais une preuve — qu un cas partage des mots avec une "
+        "anomalie ne prouve pas qu il la couvre. Le recouvrement fortuit constaté le 18/08 "
+        "tenait au hasard de la séquence de test.",
+        "",
+    ]
+    return lignes
+
+
 def _annexe_exigences(chapitres: list[dict], referentiel: dict | None) -> list[str]:
     if referentiel is None:
         return []
@@ -752,6 +798,19 @@ def construire(famille: str, titre: str, chapitres: list[dict], contexte: dict, 
         lignes += _rendre_chapitre(chapitre, referentiel)
     if famille == "fonctionnel":
         lignes += _annexe_exigences(retenus, referentiel)
+        # TF-0372 — la seconde annexe est rendue MÊME sans liste déclarée : c est l enjeu de
+        # l item. Un cahier muet là-dessus laisse croire qu il n y avait rien à confronter.
+        try:
+            reference_anomalies = _anomalies.charger(
+                _anomalies.chemin_declare(contexte.get("cible"))
+            )
+        except FileNotFoundError as refus:
+            # Un chemin déclaré et introuvable est un REFUS, et il se PUBLIE au cahier : le
+            # taire rendrait « aucune anomalie » indiscernable de « chemin faux ».
+            reference_anomalies = None
+            lignes += ["## Annexe — anomalies déclarées", "", f"**REFUS** — {refus}", ""]
+        else:
+            lignes += _annexe_anomalies(retenus, reference_anomalies)
     lignes += [
         "## Dette de jugement de ce cahier",
         "",
