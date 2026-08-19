@@ -62,6 +62,7 @@ def collecter() -> list[dict]:
     from forge_tests import (
         actions,
         adoption,
+        catalogue_i18n,
         declarations,
         declencheurs,
         execution,
@@ -89,6 +90,12 @@ def collecter() -> list[dict]:
         ("qualification", list(qualification.NON_JUGE)),
         ("reprise", list(reprise.NON_JUGE)),
         ("actions", list(actions.NON_JUGE)),
+        # TF-0383 — les limites du CATALOGUE de chaines. Elles sont fusionnees a celles du
+        # pan i18n a l EXECUTION (`analyser`), or ce collecteur lit les modules
+        # STATIQUEMENT : sans cette ligne, sept limites declarees n entraient au registre
+        # d aucun domaine. « Une dette qui n entre pas au registre est de la prose », et
+        # c est le commentaire de cette fonction meme qui le dit.
+        ("catalogue-i18n", list(catalogue_i18n.NON_JUGE)),
         ("adoption", list(adoption.NON_JUGE)),
         ("declarations", list(declarations.NON_JUGE)),
         ("declencheurs", list(declencheurs.NON_JUGE)),

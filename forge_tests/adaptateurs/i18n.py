@@ -34,6 +34,7 @@ import os
 from html.parser import HTMLParser
 from pathlib import Path
 
+from forge_tests import catalogue_i18n as _catalogue
 from forge_tests import classes, seuils
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
@@ -491,10 +492,116 @@ def inventaire(cible: Path) -> list[Element]:
     ]
 
 
+def _findings_catalogue(cible: Path) -> tuple[list[Finding], list[str]]:
+    """Les trois contrôles du CATALOGUE SOURCE — TF-0383. Le second point d'observation du pan.
+
+    Le build servi dit ce que le visiteur reçoit ; le catalogue dit ce que le produit PRÉTEND
+    savoir dire. Un produit à repli de langue sans préfixe d'URL sert toutes ses routes dans
+    toutes ses locales et remplit les trous avec la langue par défaut : le build est parfait, le
+    catalogue est troué, et seul le second le montre. Mesuré sur un produit client livré : 150
+    clés manquantes par locale sur 5 des 7 langues déclarées, et le pan rendait SKIP.
+    """
+    lus, non_lus = _catalogue.catalogues(cible)
+    findings: list[Finding] = []
+    motifs = [f"i18n : catalogue non lu — {motif}" for motif in non_lus]
+
+    if not lus:
+        return findings, motifs
+
+    for dossier, par_locale in sorted(lus.items()):
+        verdict = _catalogue.juger(par_locale)
+        motifs.append(
+            f"i18n : catalogue `{dossier}` lu — {len(verdict['locales'])} locale(s) "
+            f"({', '.join(verdict['locales'])}), {verdict['union']} cle(s) a l UNION ; comptes "
+            + ", ".join(f"{loc} {n}" for loc, n in verdict["comptes"].items())
+        )
+        # (d) COMPLÉTUDE — une locale déclarée dont le catalogue est troué sert la langue de repli
+        # sans le dire. Le finding porte sur la LOCALE et nomme ses premières clés : un total
+        # anonyme ne se corrige pas, et 150 clés listées ne se lisent pas.
+        for locale, absentes in sorted(verdict["manquantes"].items()):
+            part = len(absentes) / verdict["union"] if verdict["union"] else 0
+            findings.append(
+                Finding(
+                    id=f"i18n:catalogue:{dossier}:{locale}",
+                    classe=classes.I18N,
+                    localisation=f"{dossier}/{locale}.json",
+                    message=(
+                        f"locale « {locale} » : {len(absentes)} cle(s) MANQUANTE(S) sur "
+                        f"{verdict['union']} ({part:.0%}) — servies dans la langue de repli sans "
+                        f"qu aucun message ne le signale. Premieres : "
+                        + ", ".join(absentes[:6])
+                        + (f" (+{len(absentes) - 6} autres)" if len(absentes) > 6 else "")
+                    ),
+                    risque=coter(PAN, f"i18n:catalogue:{locale}", dossier),
+                )
+            )
+        # (e) INTÉGRITÉ DES PARAMÈTRES — un paramètre perdu rend un trou dans la phrase, un
+        # paramètre inventé rend le littéral. Les deux sont servis à l utilisateur.
+        for ecart in verdict["divergences"]:
+            findings.append(
+                Finding(
+                    id=f"i18n:parametre:{dossier}:{ecart['locale']}:{ecart['cle']}",
+                    classe=classes.I18N,
+                    localisation=f"{dossier}/{ecart['locale']}.json",
+                    message=(
+                        f"« {ecart['cle']} » en « {ecart['locale']} » : parametre(s) "
+                        + (f"PERDU(S) {', '.join(ecart['perdus'])}" if ecart["perdus"] else "")
+                        + (" et " if ecart["perdus"] and ecart["inventes"] else "")
+                        + (f"INVENTE(S) {', '.join(ecart['inventes'])}"
+                           if ecart["inventes"] else "")
+                        + f" — attendus {ecart['attendus']}, trouves {ecart['trouves']}"
+                    ),
+                    risque=coter(PAN, "i18n:parametre", dossier),
+                )
+            )
+        # (f) CONSTANCE — sur les seuls libelles d ACTION (`voix.md` §Actions). Le resserrage est
+        # mesure : etendu a toutes les chaines, ce controle rendait 6 faux positifs sur 6.
+        for ecart in verdict["inconstances"]:
+            findings.append(
+                Finding(
+                    id=f"i18n:constance:{dossier}:{ecart['locale']}:{ecart['cles'][0]}",
+                    classe=classes.I18N,
+                    localisation=f"{dossier}/{ecart['locale']}.json",
+                    message=(
+                        f"libelle d action rendu de {len(ecart['rendus'])} facons en "
+                        f"« {ecart['locale']} » pour une meme source : "
+                        + " · ".join(f"« {r} »" for r in ecart["rendus"])
+                        + f" — cles {', '.join(ecart['cles'])}. Un libelle, un seul, d un bout a "
+                        "l autre du parcours"
+                    ),
+                    risque=coter(PAN, "i18n:constance", dossier),
+                )
+            )
+    return findings, motifs
+
+
 def analyser(cible: Path) -> SortieAdaptateur:
-    non_juge = list(NON_JUGE)
+    non_juge = [*NON_JUGE, *_catalogue.NON_JUGE]
+    # TF-0383 — le CATALOGUE se juge d abord, et INDEPENDAMMENT du build servi. C est tout le
+    # sujet : un produit a repli de langue sans prefixe d URL n a rien a montrer au build (toutes
+    # les routes existent partout, remplies par la langue par defaut) et tout a montrer au
+    # catalogue. Avant cette levee, le pan rendait SKIP sur un produit dont 5 locales sur 7
+    # portaient 61 % de trous — mesure du 19/08.
+    findings_catalogue, motifs_catalogue = _findings_catalogue(cible)
+    non_juge.extend(motifs_catalogue)
+
     build = build_servi(cible)
     if build is None:
+        if findings_catalogue or any("catalogue `" in m for m in motifs_catalogue):
+            # Le catalogue a parle : le pan MESURE, meme sans build. Le build reste nomme comme
+            # ce qui manque pour juger la parite de routes et la langue servie.
+            non_juge.append(
+                "i18n : AUCUN build servi lu — les controles de parite de routes, de navigation "
+                "et de langue du contenu ne sont pas joues ici ; seul le CATALOGUE SOURCE l est. "
+                f"Declarer le dossier construit dans FORGE_TESTS_I18N_BUILD (cherche : "
+                f"{', '.join(DOSSIERS_BUILD)} sous {cible})"
+            )
+            return SortieAdaptateur(
+                NOM, PAN, str(cible),
+                "FAIL" if findings_catalogue else "PASS",
+                findings=findings_catalogue,
+                non_juge=non_juge,
+            )
         motif = sans_objet(cible)
         if motif:
             return SortieAdaptateur(
@@ -504,7 +611,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
             NOM, PAN, str(cible), "SKIP",
             non_juge=[
                 *non_juge,
-                "i18n : produit multilingue par ses sources, mais AUCUN build servi lu — "
+                "i18n : produit multilingue par ses sources, mais AUCUN build servi lu NI "
+                "catalogue de chaines JSON par locale — "
                 f"declarer le dossier construit dans FORGE_TESTS_I18N_BUILD (cherche : "
                 f"{', '.join(DOSSIERS_BUILD)} sous {cible})",
             ],
