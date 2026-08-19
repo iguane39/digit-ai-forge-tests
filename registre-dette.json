@@ -115,6 +115,62 @@
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : dérivation par la forme et la surface = définition opposable de l exhaustivité — un cas dit QUOI vérifier, jamais COMMENT. Réévaluer si un run réel prouve que la limite coûte."
     },
     {
+      "id": "catalogue-i18n-001",
+      "domaine": "catalogue-i18n",
+      "enonce": "i18n catalogue : la JUSTESSE d une traduction n est PAS jugee — ni sa fidelite, ni son registre, ni sa terminologie. Un catalogue complet, aux parametres intacts et aux libelles constants peut etre integralement mal traduit. La doctrine du socle de marque le dit deja pour la voix : « la justesse n est pas decidable par script, ce qui EST verifiable c est la constance » — et le declarer est la condition pour que les trois controles soient crus",
+      "statut": "assume",
+      "note": "Limite ACCEPTEE, pas a outiller. La plus importante — la JUSTESSE d une traduction n est pas jugee — n est pas une dette : c est la doctrine du socle de marque, « la justesse n est pas decidable par script, ce qui EST verifiable c est la constance ». L outiller demanderait un juge de fidelite, qui n existe pas et dont la sortie serait elle-meme non refutable. Les autres bornent une comparaison exacte (JSON par locale, union des cles, noms de parametres, libelles d action) : les elargir ferait du bruit, et le bruit se fait ignorer. Reste a outiller un jour, hors de cette entree : lire un catalogue TypeScript, ce qui demande un analyseur JS."
+    },
+    {
+      "id": "catalogue-i18n-002",
+      "domaine": "catalogue-i18n",
+      "enonce": "i18n catalogue : seul le JSON par locale est compare (`fr.json`, `en-GB.json`). Un catalogue dans un module TypeScript, un YAML ou un fichier gettext est NOMME comme non lu, jamais confondu avec une absence de catalogue — c est la difference entre « je ne sais pas lire » et « il n y a rien a lire »",
+      "statut": "assume",
+      "note": "Limite ACCEPTEE, pas a outiller. La plus importante — la JUSTESSE d une traduction n est pas jugee — n est pas une dette : c est la doctrine du socle de marque, « la justesse n est pas decidable par script, ce qui EST verifiable c est la constance ». L outiller demanderait un juge de fidelite, qui n existe pas et dont la sortie serait elle-meme non refutable. Les autres bornent une comparaison exacte (JSON par locale, union des cles, noms de parametres, libelles d action) : les elargir ferait du bruit, et le bruit se fait ignorer. Reste a outiller un jour, hors de cette entree : lire un catalogue TypeScript, ce qui demande un analyseur JS."
+    },
+    {
+      "id": "catalogue-i18n-003",
+      "domaine": "catalogue-i18n",
+      "enonce": "i18n catalogue : la completude se mesure contre l UNION des cles de toutes les locales. Une cle presente dans une seule langue manque donc dans les autres — sur un produit ou la traduction est en cours PAR CHOIX, l ecart est reel mais il peut etre voulu : il se conteste par declaration, il ne se devine pas",
+      "statut": "assume",
+      "note": "Limite ACCEPTEE, pas a outiller. La plus importante — la JUSTESSE d une traduction n est pas jugee — n est pas une dette : c est la doctrine du socle de marque, « la justesse n est pas decidable par script, ce qui EST verifiable c est la constance ». L outiller demanderait un juge de fidelite, qui n existe pas et dont la sortie serait elle-meme non refutable. Les autres bornent une comparaison exacte (JSON par locale, union des cles, noms de parametres, libelles d action) : les elargir ferait du bruit, et le bruit se fait ignorer. Reste a outiller un jour, hors de cette entree : lire un catalogue TypeScript, ce qui demande un analyseur JS."
+    },
+    {
+      "id": "catalogue-i18n-004",
+      "domaine": "catalogue-i18n",
+      "enonce": "i18n catalogue : quand les locales ne s accordent pas sur les parametres d une cle, c est la MAJORITE STRICTE qui fait foi. SANS majorite (deux locales qui divergent, par exemple), le desaccord est NOMME sans prendre parti : rien ne permet alors de distinguer un parametre INVENTE d un parametre PERDU, et pretendre le contraire serait une affirmation que la donnee ne porte pas",
+      "statut": "assume",
+      "note": "Limite ACCEPTEE, pas a outiller. La plus importante — la JUSTESSE d une traduction n est pas jugee — n est pas une dette : c est la doctrine du socle de marque, « la justesse n est pas decidable par script, ce qui EST verifiable c est la constance ». L outiller demanderait un juge de fidelite, qui n existe pas et dont la sortie serait elle-meme non refutable. Les autres bornent une comparaison exacte (JSON par locale, union des cles, noms de parametres, libelles d action) : les elargir ferait du bruit, et le bruit se fait ignorer. Reste a outiller un jour, hors de cette entree : lire un catalogue TypeScript, ce qui demande un analyseur JS."
+    },
+    {
+      "id": "catalogue-i18n-005",
+      "domaine": "catalogue-i18n",
+      "enonce": "i18n catalogue : l ordre des parametres n est PAS compare, seuls leurs NOMS le sont — deux langues n ordonnent pas leurs parametres pareil, et l exiger serait un faux defaut. Un `%s` sans nom est compte par son RANG : on n affirme alors que le nombre",
+      "statut": "assume",
+      "note": "Limite ACCEPTEE, pas a outiller. La plus importante — la JUSTESSE d une traduction n est pas jugee — n est pas une dette : c est la doctrine du socle de marque, « la justesse n est pas decidable par script, ce qui EST verifiable c est la constance ». L outiller demanderait un juge de fidelite, qui n existe pas et dont la sortie serait elle-meme non refutable. Les autres bornent une comparaison exacte (JSON par locale, union des cles, noms de parametres, libelles d action) : les elargir ferait du bruit, et le bruit se fait ignorer. Reste a outiller un jour, hors de cette entree : lire un catalogue TypeScript, ce qui demande un analyseur JS."
+    },
+    {
+      "id": "catalogue-i18n-006",
+      "domaine": "catalogue-i18n",
+      "enonce": "i18n catalogue : la constance ne porte que sur les libelles d ACTION, reconnus au SEGMENT de cle (`action`, `bouton`, `button`, `cta`, `commande`, `verbe`). C est ce que `voix.md` §Actions prescrit, et l etendre a toutes les chaines produit du bruit : mesure sur un catalogue reel de 245 cles x 7 locales, 6 constats et 6 FAUX POSITIFS, tous du francais correct (Tous/Toutes, Approuve/Approuvee, accord en genre). Ce que le resserrage abandonne : un STATUT rendu de deux facons dans un meme produit n est plus vu — le distinguer d un accord legitime demande de lire, pas de comparer",
+      "statut": "assume",
+      "note": "Limite ACCEPTEE, pas a outiller. La plus importante — la JUSTESSE d une traduction n est pas jugee — n est pas une dette : c est la doctrine du socle de marque, « la justesse n est pas decidable par script, ce qui EST verifiable c est la constance ». L outiller demanderait un juge de fidelite, qui n existe pas et dont la sortie serait elle-meme non refutable. Les autres bornent une comparaison exacte (JSON par locale, union des cles, noms de parametres, libelles d action) : les elargir ferait du bruit, et le bruit se fait ignorer. Reste a outiller un jour, hors de cette entree : lire un catalogue TypeScript, ce qui demande un analyseur JS."
+    },
+    {
+      "id": "catalogue-i18n-007",
+      "domaine": "catalogue-i18n",
+      "enonce": "i18n catalogue : un catalogue qui ne NOMME pas ses actions (aucun segment `action`/`bouton`/`cta`) n est pas juge sur leur constance. C est une limite du catalogue, declaree — pas un controle qui se tait",
+      "statut": "assume",
+      "note": "Limite ACCEPTEE, pas a outiller. La plus importante — la JUSTESSE d une traduction n est pas jugee — n est pas une dette : c est la doctrine du socle de marque, « la justesse n est pas decidable par script, ce qui EST verifiable c est la constance ». L outiller demanderait un juge de fidelite, qui n existe pas et dont la sortie serait elle-meme non refutable. Les autres bornent une comparaison exacte (JSON par locale, union des cles, noms de parametres, libelles d action) : les elargir ferait du bruit, et le bruit se fait ignorer. Reste a outiller un jour, hors de cette entree : lire un catalogue TypeScript, ce qui demande un analyseur JS."
+    },
+    {
+      "id": "catalogue-i18n-008",
+      "domaine": "catalogue-i18n",
+      "enonce": "i18n catalogue : ce module lit les SOURCES, le pan i18n lit le BUILD SERVI. Les deux peuvent se contredire (un catalogue complet mal cable, un build complet sur catalogue troue) : cette contradiction est un RESULTAT, pas un defaut de mesure",
+      "statut": "assume",
+      "note": "Limite ACCEPTEE, pas a outiller. La plus importante — la JUSTESSE d une traduction n est pas jugee — n est pas une dette : c est la doctrine du socle de marque, « la justesse n est pas decidable par script, ce qui EST verifiable c est la constance ». L outiller demanderait un juge de fidelite, qui n existe pas et dont la sortie serait elle-meme non refutable. Les autres bornent une comparaison exacte (JSON par locale, union des cles, noms de parametres, libelles d action) : les elargir ferait du bruit, et le bruit se fait ignorer. Reste a outiller un jour, hors de cette entree : lire un catalogue TypeScript, ce qui demande un analyseur JS."
+    },
+    {
       "id": "dashboard-001",
       "domaine": "dashboard",
       "enonce": "dashboard : la page rend le rapport, elle ne le juge pas — un chiffre surprenant se conteste sur le rapport JSON, jamais sur le HTML",
