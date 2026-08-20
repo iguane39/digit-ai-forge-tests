@@ -66,6 +66,27 @@
       "note": "instruite le 2026-08-14 (RT-13) : limites constitutives du mécanisme — le module constate une DÉCLARATION du projet et l'existence de son support ; juger qu'un test couvre vraiment son cas est le rôle de la mutation. Réévaluer si un run réel prouve que la limite coûte."
     },
     {
+      "id": "anomalies-001",
+      "domaine": "anomalies",
+      "enonce": "anomalies : le rattachement est celui d `exigences` — déclaré (`elements`) ou LEXICAL. Un rattachement lexical est une PISTE, pas une preuve : qu un cas partage des mots avec une anomalie ne prouve pas qu il la couvre, et c est pourquoi la provenance est publiée",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "anomalies-002",
+      "domaine": "anomalies",
+      "enonce": "anomalies : seules les anomalies OUVERTES entrent au reste-à-faire. Une anomalie fermée n a pas à être couverte — l exiger ferait grossir le reste avec tout l historique du produit, et un reste-à-faire qui grossit cesse d être lu",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "anomalies-003",
+      "domaine": "anomalies",
+      "enonce": "anomalies : ce module ne va PAS chercher les anomalies dans un gestionnaire de tickets. C est le projet qui exporte sa liste — aucune API tierce, aucun secret en transit",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
       "id": "api-fastapi-001",
       "domaine": "api-fastapi",
       "enonce": "api : un code emis pendant la suite est repute couvert ; la sonde ne verifie pas qu une ASSERTION porte sur lui — c est le role du second contre-oracle",
@@ -169,6 +190,20 @@
       "enonce": "i18n catalogue : ce module lit les SOURCES, le pan i18n lit le BUILD SERVI. Les deux peuvent se contredire (un catalogue complet mal cable, un build complet sur catalogue troue) : cette contradiction est un RESULTAT, pas un defaut de mesure",
       "statut": "assume",
       "note": "Limite ACCEPTEE, pas a outiller. La plus importante — la JUSTESSE d une traduction n est pas jugee — n est pas une dette : c est la doctrine du socle de marque, « la justesse n est pas decidable par script, ce qui EST verifiable c est la constance ». L outiller demanderait un juge de fidelite, qui n existe pas et dont la sortie serait elle-meme non refutable. Les autres bornent une comparaison exacte (JSON par locale, union des cles, noms de parametres, libelles d action) : les elargir ferait du bruit, et le bruit se fait ignorer. Reste a outiller un jour, hors de cette entree : lire un catalogue TypeScript, ce qui demande un analyseur JS."
+    },
+    {
+      "id": "confrontation-001",
+      "domaine": "confrontation",
+      "enonce": "confrontation : le sens est ASYMÉTRIQUE — ce qui est SERVI sans être promis n est jamais accusé ; il peut venir d un terme que le lecteur ne sait pas lire, et l accuser serait accuser la limite du lecteur (faute payée une fois, TF-0312)",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "confrontation-002",
+      "domaine": "confrontation",
+      "enonce": "confrontation : la LECTURE des deux termes n est pas jugée ici — ce module reçoit deux ensembles déjà constitués. Un lecteur qui manque des éléments produit une promesse plus courte, donc un PASS plus faible, et c est au lecteur de déclarer sa portée",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
     },
     {
       "id": "dashboard-001",
@@ -276,6 +311,27 @@
       "note": "instruite le 2026-08-14 (TF-0203) : decouverte STATIQUE bornee aux formes reconnues ; un ordonnanceur configure hors depot n'est pas inventoriable, et le declarer serait mentir. Reevaluer si un run reel prouve que la limite coute."
     },
     {
+      "id": "domaine-001",
+      "domaine": "domaine",
+      "enonce": "domaine : seuls les domaines DÉCLARÉS sont lus (`validate.Range`/`OneOf`, `CHECK` SQL). Un domaine déduit des valeurs observées serait une tautologie — il déclarerait conforme exactement ce qui est là, y compris les 11 points du golfe de Guinée",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "domaine-002",
+      "domaine": "domaine",
+      "enonce": "domaine : un contrôle par CHAMP ne voit jamais une combinaison fausse dont chaque terme est valide. Les couples connus sont nommés (`COUPLES_SUSPECTS`) ; les autres échappent, et c est une limite, pas un oubli",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "domaine-003",
+      "domaine": "domaine",
+      "enonce": "domaine : la PRÉSENCE n est pas rejugée ici — elle est comptée à part. Le contrôle de présence n est pas redondant, il est le JUMEAU de celui-ci",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
       "id": "execution-001",
       "domaine": "execution",
       "enonce": "exécution : la couverture combine lignes et ARCS de branchement ; une branche implicite (ternaire, court-circuit booléen) reste hors de portée de coverage.py",
@@ -318,6 +374,20 @@
       "note": "une variante sans branche dediee est indistinguable du chemin nominal par analyse de flot."
     },
     {
+      "id": "flaky-001",
+      "domaine": "flaky",
+      "enonce": "flaky : la detection repose sur la lecture des lignes de verdict par test dans la sortie de la commande rejouee (motif `id::test VERDICT` ou `VERDICT id::test`) — un harnais qui n imprime pas ce format par test n est pas mesurable ici",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "flaky-002",
+      "domaine": "flaky",
+      "enonce": "flaky : deux rejeux identiques ne prouvent pas l ABSENCE de non-determinisme, seulement qu il ne s est pas manifeste sur cet echantillon de repetitions",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
       "id": "front-react-001",
       "domaine": "front-react",
       "enonce": "front : un element manipule pendant la suite est repute exerce ; la trace dit qu il a ete atteint, pas qu une ASSERTION porte sur son effet",
@@ -351,6 +421,41 @@
       "enonce": "generateur data : la valeur violante est derivee du TYPE de contrainte (unicite, non-nullite, cle etrangere, verification) ; une contrainte de verification a expression complexe n est pas resolue et n est pas generee",
       "statut": "assume",
       "note": "une contrainte CHECK a expression arbitraire demande un solveur ; hors contrat, la contrainte est signalee non generable plutot que generee a tort."
+    },
+    {
+      "id": "generateur-proprietes-001",
+      "domaine": "generateur-proprietes",
+      "enonce": "generateur_proprietes : la PURETE d une fonction est approchee par une heuristique legere (pas de self/cls, pas d appel a des fonctions d effet de bord connues) — pas prouvee ; une fonction retenue a tort reste une PROPOSITION a relire, jamais un cas execute a l aveugle",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "generateur-proprietes-002",
+      "domaine": "generateur-proprietes",
+      "enonce": "generateur_proprietes : la PROPRIETE a affirmer n est jamais devinee — chaque squelette porte un `# TODO` explicite, la seule chose que ce module ne PEUT pas dériver du code",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "generateur-proprietes-003",
+      "domaine": "generateur-proprietes",
+      "enonce": "generateur_proprietes : seuls les parametres aux annotations SIMPLES (int, float, str, bool) sont couverts — une fonction pure a parametres complexes (dataclass, Enum) n est pas proposee ici",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "impact-001",
+      "domaine": "impact",
+      "enonce": "impact : la cartographie chemin -> pan est DECLAREE (prefixes de repertoires connus), pas dérivée d un graphe d imports reel — un fichier qui ne matche aucun prefixe fait retomber sur l audit COMPLET plutot que de deviner",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "impact-002",
+      "domaine": "impact",
+      "enonce": "impact : la granularite est le PAN, pas le test individuel — un seul fichier change dans backend/app/ rejoue le pan api en entier, comme une reprise",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
     },
     {
       "id": "interface-statique-001",
@@ -584,6 +689,27 @@
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : granularité au pan et mesure passée : la provenance est déclarée au rapport et rendue à l écran. Réévaluer si un run réel prouve que la limite coûte."
     },
     {
+      "id": "revue-001",
+      "domaine": "revue",
+      "enonce": "revue de suite : la CELLULE MUTANTE sur objet partage (TF-0344, piege 3) n est pas detectable statiquement — savoir qu une action MUTE l etat demande de connaitre le metier. Elle est tenue par le patron de matrice des droits (TF-0343), qui exige un objet neuf pour toute cellule dont le succes mute l etat",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "revue-002",
+      "domaine": "revue",
+      "enonce": "revue de suite : seules les suites de NAVIGATEUR sont relues (.spec.ts et voisins) — les suites Python ne le sont pas, faute de cas reel sur leurs idiomes",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "revue-003",
+      "domaine": "revue",
+      "enonce": "revue de suite : lecture TEXTUELLE, pas d analyse de flot — un motif construit a l execution (variable, gabarit) echappe a ces regles",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
       "id": "risque-001",
       "domaine": "risque",
       "enonce": "risque : la criticité et le coût de détection tardive sont DÉCLARÉS par pan, pas mesurés — un projet dont les enjeux diffèrent doit redéclarer la table COTATION_PAN",
@@ -631,6 +757,41 @@
       "enonce": "sql : ce module lit le TEXTE des migrations, il ne l analyse pas grammaticalement — une instruction syntaxiquement invalide est rendue telle quelle, sans jugement",
       "statut": "assume",
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : lecture textuelle assumée, limites prouvées par RT-8 sur fixtures. Réévaluer si un run réel prouve que la limite coûte."
+    },
+    {
+      "id": "surface-servie-001",
+      "domaine": "surface-servie",
+      "enonce": "routes appelées : seuls les appels LITTÉRAUX absolus sont lus — un client qui compose son URL à l exécution (concaténation, table de configuration) n est pas lisible statiquement",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "surface-servie-002",
+      "domaine": "surface-servie",
+      "enonce": "routes servies : les préfixes de blueprints sont lus dans le MÊME fichier que leurs décorateurs ; un blueprint enregistré ailleurs sous un autre préfixe fait suspendre les appels dont le segment final existe (jamais accuser à la place de savoir)",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "surface-servie-003",
+      "domaine": "surface-servie",
+      "enonce": "ressources : dans un HTML, seules les balises qui chargent un FICHIER sont lues (link, img, script, source, video, audio, track, embed, use) — un `<a href>` est une destination de NAVIGATION, jugée par la paire nav et par le pan i18n, jamais cherchée comme un fichier",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "surface-servie-004",
+      "domaine": "surface-servie",
+      "enonce": "ressources : les URLs absolues, `data:` et `blob:` ne sont pas suivies — elles ne sont pas des fichiers du build ; leur disponibilité RÉELLE relève d un contrôle réseau, pas d ici",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
+    },
+    {
+      "id": "surface-servie-005",
+      "domaine": "surface-servie",
+      "enonce": "ni l une ni l autre paire n interroge l instance : ce sont des confrontations STATIQUES. Un 404 réel dont la cause n est ni une route absente ni un fichier manquant (règle de réécriture, proxy, cache) leur échappe",
+      "statut": "assume",
+      "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
     },
     {
       "id": "visuel-golden-001",

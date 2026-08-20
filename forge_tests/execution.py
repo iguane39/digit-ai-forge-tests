@@ -21,6 +21,7 @@ import tempfile
 from functools import lru_cache
 from pathlib import Path
 
+from forge_tests import disposition
 from forge_tests.disposition import (
     motif_indetermine,
     motif_racine_execution,
@@ -495,7 +496,8 @@ def front_execute(banc_str: str) -> dict | None:
     import zipfile
 
     banc = Path(banc_str)
-    front = banc / "frontend"
+    # TF-0401 : la racine front suit la cascade — manifeste du projet > convention `frontend`.
+    front = banc / (disposition.racines_declarees(banc)[0].get("front") or "frontend")
     if not (front / "node_modules").is_dir():
         _declarer(
             banc,

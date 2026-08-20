@@ -47,7 +47,12 @@ POUR_COUVRIR = (
     "construire le produit et désigner le dossier du BUILD SERVI dans FORGE_TESTS_I18N_BUILD "
     "(`out/`, `dist/`, `_site/`… : l'arborescence de pages telle que le visiteur la reçoit). "
     "Le pan la découvre seul quand elle est à sa place conventionnelle sous la racine du "
-    "projet ; il ne lit AUCUN site distant et n'ouvre aucun navigateur"
+    "projet ; il ne lit AUCUN site distant et n'ouvre aucun navigateur. DÉCISION (RF-7, lot "
+    "SCC-FR 20260820a) : les rendus SERVEUR / ISR qui n'émettent PAS d'arborescence (Next.js "
+    "`output: 'standalone'`) sont HORS CHAMP de la parité de routes et de menus — le CATALOGUE "
+    "SOURCE reste jugé (TF-0383), et la voie de levée est nommée : accepter une racine servie "
+    "(FORGE_TESTS_BASE_URL, déjà employée par le pan accessibilité) comme source des routes par "
+    "crawl des liens. C'est une décision écrite ici, plus une découverte au premier run"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
