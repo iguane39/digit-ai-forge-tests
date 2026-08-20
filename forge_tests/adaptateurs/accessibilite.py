@@ -67,15 +67,19 @@ NON_JUGE = [
     # AILLEURS. Elle ne l est pas, et le lecteur cessait de la chercher — le mecanisme exact
     # de TF-0379 (oracle-calculs), paye cinq jours de run. Un non_juge est une promesse de
     # perimetre : il dit desormais QUI couvre quoi dans le parc, et qui ne couvre rien.
-    "accessibilite : perimetre du seul oracle structurel. La NAVIGATION CLAVIER, les pieges "
-    "de focus et l ARIA avance (roles, ordre de focus) ne sont couverts par AUCUN oracle du "
-    "parc a ce jour — pour un site public francais, RGAA 4.1 est une obligation legale et "
-    "cet ecart se declare au dossier MEP, il ne se tait pas (RF-6, 20/08/2026). Le CONTRASTE "
-    "a, lui, une mesure existante mais NON CABLEE a cet audit : render_page.py V2 du socle "
-    "digit-ai-page-html (luminance WCAG sur styles rendus, deja jouee contre des ecrans "
-    "produits le 11/08) — l executer separement en attendant son cablage. Et l audit RGAA "
-    "complet reste un livrable HUMAIN : un tiers des criteres n est pas mecanisable, la "
-    "machine prepare l audit, elle ne rend pas la declaration",
+    # RF-6a puis TF-0409/O3 (20/08) : cette limite disait « couverts par AUCUN oracle du parc »
+    # pour le clavier, et « mesure existante mais NON CABLEE » pour le contraste. Les deux sont
+    # desormais des PANS — la limite dit donc QUI couvre quoi, et ce qui reste decouvert. Un
+    # non_juge est une promesse de perimetre : le laisser perime le rendrait faux dans l autre
+    # sens, en faisant chercher ailleurs ce qui est ici.
+    "accessibilite : perimetre du seul oracle structurel. Le CONTRASTE est mesure par le pan "
+    "`contraste` (render_page.py V2, luminance WCAG sur styles rendus) et la NAVIGATION "
+    "CLAVIER par le pan `clavier` (focus visible, pieges de focus, lien d evitement). Restent "
+    "DECOUVERTS : l ARIA avance (roles, ordre de focus coherent avec l ordre de lecture) et "
+    "les etats atteints apres interaction — pour un site public francais, RGAA 4.1 est une "
+    "obligation legale et ces ecarts se declarent au dossier MEP, ils ne se taisent pas. Et "
+    "l audit RGAA complet reste un livrable HUMAIN : un tiers des criteres n est pas "
+    "mecanisable, la machine prepare l audit, elle ne rend pas la declaration",
     "accessibilite : les routes RELEVEES sur l instance servie sont celles que la racine LIE — "
     "une page atteinte seulement apres une action (formulaire poste, menu ouvert) ou par une URL "
     "que rien ne lie n y figure pas ; la declarer par FORGE_TESTS_QUALIF_ROUTES (TF-0217)",
