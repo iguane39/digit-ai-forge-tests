@@ -17,18 +17,18 @@
       "note": "instruite le 2026-08-14 (lot COMPTA) : limite declaree par le correctif lui-meme — perimetre du garde-fou, provenance des routes, racine d execution decouverte. Reevaluer si un run reel prouve que la limite coute."
     },
     {
-      "id": "accessibilite-a11y-003",
-      "domaine": "accessibilite-a11y",
-      "enonce": "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
-      "statut": "assume",
-      "note": "limite propre de oracle-a11y, reprise telle quelle : audit axe-core complet, contraste et navigation clavier sortent de son contrat."
-    },
-    {
       "id": "accessibilite-a11y-004",
       "domaine": "accessibilite-a11y",
       "enonce": "accessibilite : les routes RELEVEES sur l instance servie sont celles que la racine LIE — une page atteinte seulement apres une action (formulaire poste, menu ouvert) ou par une URL que rien ne lie n y figure pas ; la declarer par FORGE_TESTS_QUALIF_ROUTES (TF-0217)",
       "statut": "assume",
       "note": "instruite le 2026-08-14 (lot COMPTA) : limite declaree par le correctif lui-meme — perimetre du garde-fou, provenance des routes, racine d execution decouverte. Reevaluer si un run reel prouve que la limite coute."
+    },
+    {
+      "id": "accessibilite-a11y-005",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : perimetre du seul oracle structurel. La NAVIGATION CLAVIER, les pieges de focus et l ARIA avance (roles, ordre de focus) ne sont couverts par AUCUN oracle du parc a ce jour — pour un site public francais, RGAA 4.1 est une obligation legale et cet ecart se declare au dossier MEP, il ne se tait pas (RF-6, 20/08/2026). Le CONTRASTE a, lui, une mesure existante mais NON CABLEE a cet audit : render_page.py V2 du socle digit-ai-page-html (luminance WCAG sur styles rendus, deja jouee contre des ecrans produits le 11/08) — l executer separement en attendant son cablage. Et l audit RGAA complet reste un livrable HUMAIN : un tiers des criteres n est pas mecanisable, la machine prepare l audit, elle ne rend pas la declaration",
+      "statut": "assume",
+      "note": "Limite DECLAREE, chantier decide ailleurs : RF-6 (lot SCC-FR 20260820a) porte les trois temps — declarer (fait, 20/08), cabler render_page V2 puis pan axe-core + clavier (O3 de l etude RGAA 20260820a), design accessible a la source (O4). La lever ici sans le pan serait le mensonge inverse."
     },
     {
       "id": "actions-001",
@@ -666,6 +666,13 @@
       "enonce": "interface/liens : la locale d un composant est deduite de son arborescence ou de son nom (`.../en/Header.tsx`, `HeaderEn.tsx`) ; un composant qui rend PLUSIEURS locales selon une prop n a pas de locale propre et ses liens ne sont pas juges sur ce critere",
       "statut": "ok",
       "preuve": "tests/test_tf_0295_levees.py — levee 4 : les locales opposables sont lues dans la configuration du framework (`locales: [...]`), et sans locale connaissable le jugement est SUSPENDU plutot que devine"
+    },
+    {
+      "id": "accessibilite-a11y-003",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
+      "statut": "retiree",
+      "note": "limite propre de oracle-a11y, reprise telle quelle : audit axe-core complet, contraste et navigation clavier sortent de son contrat."
     },
     {
       "id": "api-fastapi-002",
