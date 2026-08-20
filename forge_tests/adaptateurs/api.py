@@ -368,6 +368,31 @@ def _divergences_gardes(
 
 def analyser(cible: Path) -> SortieAdaptateur:
     inv = inventaire(cible)
+    # TF-0403 (RF-5, lot SCC-FR) — ce pan exige un objet ASGI importable (`FORGE_TESTS_APP`) là
+    # où il n'a besoin que d'une SURFACE (routes × codes). Un back Node/Koa (Strapi) n'est pas
+    # un back mal configuré : aucun `module:attribut` Python n'existera jamais chez lui, et
+    # réclamer cette configuration est une action sans issue. Le motif distingue donc les deux
+    # cas — et nomme la voie de sortie : une sonde HTTP sur instance servie (schéma OpenAPI
+    # exporté ou routes déclarées, `FORGE_TESTS_QUALIF_ROUTES`), la provenance étant
+    # indifférente à un pan qui compare des routes et des codes.
+    from forge_tests.disposition import racine_execution as _racine
+
+    _rex = _racine(cible)
+    if (_rex / "package.json").is_file() and not (_rex / "pyproject.toml").is_file():
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            non_juge=[
+                *NON_JUGE,
+                "api : ÉCOSYSTÈME NON COUVERT — le back de ce projet est Node "
+                f"(`{(_rex / 'package.json').as_posix()}`), et cet adaptateur exige une "
+                "application ASGI Python importable (`FORGE_TESTS_APP = module:attribut`). Ce "
+                "n'est PAS une configuration manquante : aucune valeur de FORGE_TESTS_APP ne "
+                "rendra ce pan mesurable ici. Voie de sortie (RF-5) : une sonde HTTP sur "
+                "instance servie — schéma OpenAPI exporté, ou routes déclarées via "
+                "FORGE_TESTS_QUALIF_ROUTES — le pan compare des routes et des codes, la "
+                "provenance lui est indifférente",
+            ],
+        )
     if exerces(cible) is None:
         # « 0 % couvert » et « couverture non mesurable » sont deux verdicts OPPOSES. Les
         # confondre accuse a tort une suite qu on n a simplement pas pu executer.

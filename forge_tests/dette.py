@@ -107,6 +107,51 @@ def collecter() -> list[dict]:
     for nom, module in ADAPTATEURS.items():
         sources.append((nom, list(getattr(module, "NON_JUGE", []))))
 
+    # TF-0384 (19/08, constaté en livrant TF-0383) — la liste ci-dessus est ÉCRITE À LA MAIN :
+    # un module neuf n'y entrait que si quelqu'un y pensait, et les 8 limites de
+    # `catalogue_i18n` n'entraient au registre d'AUCUN domaine sans que rien ne le signale.
+    # « Une dette qui n'entre pas au registre est de la prose » — le commentaire de cette
+    # fonction le disait en étant lui-même une liste, un cran plus haut. Septième occurrence du
+    # patron « un contrôle qui itère sur une liste ne voit jamais ce qui n'y est pas ».
+    #
+    # La DÉCOUVERTE se fait sur le DISQUE : tout module de `forge_tests/` et
+    # `forge_tests/livrables/` portant un `NON_JUGE` de niveau module est collecté. La liste à
+    # la main ne sert plus qu'à NOMMER les domaines historiques (« jeux-de-donnees » pour
+    # `jeux`…) — un module absent d'elle ET des adaptateurs entre quand même, sous le nom de
+    # son fichier. Les énoncés lus par AST : la déduplication de `collecter` absorbe le
+    # recouvrement avec les modules déjà importés ci-dessus.
+    import ast as _ast
+
+    racine_pkg = Path(__file__).resolve().parent
+    couverts = {module.__name__.rsplit(".", 1)[-1] for module in ADAPTATEURS.values()}
+    couverts |= {
+        "risque", "execution", "invariants", "generateur", "generateur_data", "sql",
+        "qualification", "reprise", "actions", "adoption", "declarations", "declencheurs",
+        "catalogue_i18n", "cahiers", "dashboard", "exigences", "jeux",
+    }
+    for dossier, prefixe in ((racine_pkg, ""), (racine_pkg / "livrables", "livrables.")):
+        for fichier in sorted(dossier.glob("*.py")):
+            stem = fichier.stem
+            if stem.startswith("_") or (prefixe + stem).replace("livrables.", "") in couverts:
+                continue
+            try:
+                arbre = _ast.parse(fichier.read_text(encoding="utf-8", errors="replace"))
+            except SyntaxError:
+                continue
+            enonces: list[str] = []
+            for noeud in arbre.body:
+                if isinstance(noeud, _ast.Assign) and any(
+                    isinstance(c, _ast.Name) and c.id == "NON_JUGE" for c in noeud.targets
+                ):
+                    try:
+                        valeur = _ast.literal_eval(noeud.value)
+                    except (ValueError, SyntaxError):
+                        continue
+                    if isinstance(valeur, list):
+                        enonces.extend(str(x) for x in valeur)
+            if enonces:
+                sources.append((stem.replace("_", "-"), enonces))
+
     entrees: list[dict] = []
     vus: set[tuple[str, str]] = set()
     for domaine, enonces in sources:

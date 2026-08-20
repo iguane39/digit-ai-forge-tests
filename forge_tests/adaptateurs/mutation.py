@@ -544,6 +544,27 @@ def analyser(cible: Path) -> SortieAdaptateur:
     python = racine / ".venv" / "Scripts" / "python.exe"
     if not python.exists():
         python = racine / ".venv" / "bin" / "python"
+    # TF-0402 (RF-4, lot SCC-FR) — « écosystème non couvert » et « configuration manquante » ne
+    # sont pas le même verdict, et les confondre coûte double : une configuration réclamée pour
+    # un pan structurellement inatteignable use la crédibilité des actions (TF-0381), et un
+    # SEUIL BLOQUANT sans porteur est, au dashboard, indiscernable d'un seuil tenu — la pire des
+    # deux formes de silence. Un back Node (package.json sans paquet Python) n'est pas un back
+    # mal configuré : cet adaptateur ne sait PAS le muter, et la justification du seuil cite
+    # Stryker (l'outil JS) qui n'est câblé nulle part.
+    if (dossier is None or not dossier.is_dir()) and (racine / "package.json").is_file():
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            non_juge=[
+                *NON_JUGE,
+                "mutation : ÉCOSYSTÈME NON COUVERT — le back de ce projet est Node "
+                f"(`{(racine / 'package.json').as_posix()}`, aucun paquet Python), et cet "
+                "adaptateur ne mute que du Python. Ce n'est PAS une configuration manquante : "
+                "aucune variable ne rendra ce pan mesurable ici. Le seuil BLOQUANT "
+                f"`mutation_globale` ({SEUIL:.2f}) n'a donc AUCUN PORTEUR sur ce projet — sa "
+                "justification cite Stryker, l'outil JS, câblé nulle part (RF-4) : un pan "
+                "mutation JS est le remède, pas une configuration",
+            ],
+        )
     if dossier is None or not dossier.is_dir():
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",

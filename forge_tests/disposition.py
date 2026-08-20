@@ -111,6 +111,48 @@ def _indices(dossier: Path) -> list[str]:
     return trouves
 
 
+#: TF-0401 (RF-3, lot SCC-FR 20260820a) — le manifeste OPPOSABLE du projet. Le pilot présente
+#: P-18 comme primant sur toute détection ; jusqu'ici AUCUN code de cette forge ne le lisait
+#: (0 occurrence, relevé du 20/08) : les racines étaient en dur (`backend`, `.`, `frontend`),
+#: et une arborescence `back/` + `front/` — celle du produit SCC.FR — n'était pas vue, quel que
+#: soit le manifeste livré. Un audit pouvait mesurer un dossier vide et rendre un verdict
+#: d'apparence normale.
+#:
+#: Schéma minimal, défini ici faute d'exister ailleurs (le manifeste du conducteur porte le
+#: PROFIL, pas les racines) :
+#:
+#:     [racines]
+#:     execution = "back"    # racine d'exécution de la suite (l'« ancre backend »)
+#:     front = "front"       # racine du front
+#:
+#: Cascade : déclaration OPÉRATEUR (FORGE_TESTS_SOURCES, geste explicite au run) > manifeste
+#: PROJET > indices du disque > repli déclaré. Un manifeste illisible ou une racine déclarée
+#: absente du disque se DISENT — jamais un repli silencieux vers la détection : le silence est
+#: exactement ce que le retour a payé.
+MANIFESTE_RELATIF = Path(".forge") / "profile.toml"
+
+
+def racines_declarees(cible: Path) -> tuple[dict[str, str], str | None]:
+    """({execution, front} déclarées par le manifeste, motif d'illisibilité éventuel)."""
+    manifeste = cible / MANIFESTE_RELATIF
+    if not manifeste.is_file():
+        return {}, None
+    import tomllib
+
+    try:
+        donnees = tomllib.loads(manifeste.read_text(encoding="utf-8", errors="replace"))
+    except tomllib.TOMLDecodeError as erreur:
+        return {}, (
+            f"manifeste `{MANIFESTE_RELATIF.as_posix()}` present mais ILLISIBLE ({erreur}) — "
+            "il est ignore EN LE DISANT, jamais en silence"
+        )
+    racines = donnees.get("racines") or {}
+    return (
+        {cle: str(racines[cle]) for cle in ("execution", "front") if racines.get(cle)},
+        None,
+    )
+
+
 def _declaration() -> str:
     return (os.environ.get("FORGE_TESTS_SOURCES") or "").strip()
 
@@ -148,12 +190,31 @@ def _decider_racine(cible: Path) -> tuple[Path, str, list[tuple[Path, bool, list
             f"declaree par FORGE_TESTS_SOURCES={str(base)!r} (chemin absolu : base complete)",
             essais,
         )
+    # TF-0401 — le manifeste du PROJET, après l'opérateur et avant toute détection. Une racine
+    # déclarée qui n'existe pas sur le disque est RENDUE quand même, avec un motif qui le dit :
+    # retomber en silence sur la détection referait exactement le défaut mesuré (un manifeste
+    # livré et ignoré).
+    declarees, motif_manifeste = racines_declarees(cible)
+    if declarees.get("execution"):
+        racine = cible / declarees["execution"]
+        return (
+            racine,
+            f"declaree par le manifeste `{MANIFESTE_RELATIF.as_posix()}` "
+            f"([racines] execution = {declarees['execution']!r})"
+            + ("" if racine.is_dir() else " — ATTENTION : ce dossier N EXISTE PAS sur le disque, "
+               "le manifeste et l arborescence se contredisent"),
+            essais,
+        )
+    if motif_manifeste:
+        essais = [*essais]  # le motif d illisibilité voyage avec la trace publiée
     for candidat, _existe, indices in essais:
         if indices:
             return candidat, f"indices trouves — {', '.join(indices)}", essais
+    prefixe = (motif_manifeste + " ; ") if motif_manifeste else ""
     return (
         cible / "backend",
-        "aucun candidat ne porte d indice de racine d execution — repli DECLARE sur l ancre "
+        prefixe
+        + "aucun candidat ne porte d indice de racine d execution — repli DECLARE sur l ancre "
         "historique `backend`",
         essais,
     )

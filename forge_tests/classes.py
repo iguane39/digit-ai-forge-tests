@@ -52,6 +52,8 @@ I18N = "i18n"
 FAUX_VERT_ABSENCE = "faux-vert-absence-sans-presence"
 FAUX_VERT_MOTIF = "faux-vert-motif-du-declencheur"
 DONNEE_DE_TEST_RECOPIEE = "donnee-de-test-recopiee"
+FAUX_VERT_PREFIXE = "faux-vert-prefixe-d-un-chemin-valide"
+TROU_DE_COUVERTURE_SOEUR = "trou-de-couverture-inter-suites"
 
 # --- Aller-retour écriture/relecture (TF-0369) ---------------------------------------------------
 DEFAUT_EVALUE_A_L_IMPORT = "defaut-evalue-a-l-import"

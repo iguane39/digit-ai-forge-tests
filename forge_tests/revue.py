@@ -36,6 +36,26 @@ en timeout, pour une cause invisible à la lecture du diff — le symptôme (Sen
 pointait vers la chaîne de conversion, pas vers la donnée. *Règle : une donnée de test partagée
 se RÉFÉRENCE (un module dédié, importé), elle ne se recopie pas ; et si elle est générée, elle
 se VALIDE à la génération plutôt qu'on ne fasse confiance au littéral.*
+
+**(5) PRÉFIXE dont l'extension est un chemin valide (TF-0396, lot cockpit-ia 20/08).** Le
+parcours écrit le 19/08 POUR couvrir un défaut de déconnexion affirmait
+`toContain("/.auth/logout")` — vert sur le comportement défectueux, `/.auth/logout` (déconnexion
+du compte Microsoft entier) et `/.auth/logout/complete` (déconnexion de l'application seule)
+partageant ce préfixe. Le défaut a été trouvé par un humain qui a cliqué, pas par le test écrit
+pour lui. *Règle : dès qu'un parcours affirme un lien, une action ou une redirection par
+`toContain`, le chemin affirmé ne doit pas être le préfixe d'un autre chemin valide du même
+corpus de specs — la cible s'affirme EXACTE (égalité, ou ensemble énuméré).*
+
+**(6) ASSERTION PRÉSENTE CHEZ LA SUITE SŒUR, ABSENTE ICI (TF-0395, même lot).** Quand une
+famille de suites parallèles couvre les variantes d'un même comportement (les modes
+d'authentification), chaque suite affirme ce que son auteur avait en tête — rien ne demande à
+une suite ce que sa sœur affirmait. Mesuré : la bascule EasyAuth du 17/08 a produit 13 parcours
+sans reprendre l'assertion de déconnexion que la suite sœur portait ; le bouton a disparu de
+l'environnement déployé pendant TROIS JOURS sous 68 parcours verts. *Règle : un CHEMIN
+APPLICATIF affirmé par une suite sœur (répertoire frère du même dossier de specs) et jamais
+mentionné ici est signalé comme trou de couverture — signal nommé, jamais bloquant : deux
+variantes peuvent différer LÉGITIMEMENT, mais l'écart se lit, il ne se découvre pas en
+production.*
 """
 
 from __future__ import annotations
@@ -261,10 +281,135 @@ def donnees_recopiees(cible: Path) -> list[Finding]:
     return findings
 
 
+#: Chemins d'application relevés dans un texte de spec : « /segment/segment », querystring
+#: exclue. Le point est admis dans un segment (/.auth/logout est le cas fondateur).
+_CHEMIN = re.compile(r"[\"'`](/[.\w][\w./-]{1,80})[\"'`]")
+_TOCONTAIN = re.compile(r"toContain(?:Text)?\s*\(\s*[\"'`](/[.\w][\w./-]{1,80})[\"'`]")
+
+
+def _chemins_du_corpus(specs: list[Path]) -> set[str]:
+    chemins: set[str] = set()
+    for fichier in specs:
+        texte = fichier.read_text(encoding="utf-8", errors="replace")
+        chemins.update(m.group(1) for m in _CHEMIN.finditer(texte))
+    return chemins
+
+
+def prefixe_d_un_chemin_valide(cible: Path) -> list[Finding]:
+    """Piège 5 — `toContain` sur un chemin dont une extension est elle-même un chemin du corpus.
+
+    L'extension est reconnue à la frontière de segment (`p` + `/`, `?` ou `#`) : « /foo » face à
+    « /foobar » n'est pas signalé — deux chemins distincts, pas un préfixe piégeux.
+    """
+    specs = _specs(cible)
+    corpus = _chemins_du_corpus(specs)
+    findings: list[Finding] = []
+    for fichier in specs:
+        relatif = fichier.relative_to(cible).as_posix()
+        for nom, corps in _blocs_de_test(fichier.read_text(encoding="utf-8", errors="replace")):
+            for trouve in _TOCONTAIN.finditer(corps):
+                chemin = trouve.group(1)
+                extensions = sorted(
+                    q for q in corpus
+                    if q != chemin and q.startswith(chemin) and q[len(chemin)] in "/?#"
+                )
+                if not extensions:
+                    continue
+                identifiant = f"revue:prefixe-chemin:{relatif}:{nom}"
+                findings.append(
+                    Finding(
+                        id=identifiant,
+                        classe=classes.FAUX_VERT_PREFIXE,
+                        localisation=relatif,
+                        message=(
+                            f"« {nom} » affirme `toContain(\"{chemin}\")` alors que le corpus "
+                            f"des specs porte aussi {', '.join(f'`{q}`' for q in extensions[:3])}"
+                            f"{' …' if len(extensions) > 3 else ''} — l assertion est VERTE sur "
+                            "les deux comportements, le voulu et le defectueux. La cible "
+                            "s affirme EXACTE (egalite, ou ensemble enumere) : mesure le 20/08, "
+                            "/.auth/logout couvrait /.auth/logout/complete et le defaut a ete "
+                            "trouve par un humain qui a clique"
+                        ),
+                        risque=coter(PAN, identifiant, relatif),
+                    )
+                )
+    return findings
+
+
+def trous_de_couverture_inter_suites(cible: Path) -> list[Finding]:
+    """Piège 6 — un chemin applicatif affirmé par une suite SŒUR et jamais mentionné ici.
+
+    La famille est DÉCOUVERTE : les répertoires frères d'un même dossier qui contiennent chacun
+    des specs. Le signal est par MEMBRE (le répertoire qui n'en parle pas), nommé et non
+    bloquant : deux variantes peuvent différer légitimement, mais l'écart se lit — il ne se
+    découvre pas en production trois jours plus tard.
+    """
+    specs = _specs(cible)
+    par_dossier: dict[Path, list[Path]] = {}
+    for fichier in specs:
+        par_dossier.setdefault(fichier.parent, []).append(fichier)
+    par_parent: dict[Path, list[Path]] = {}
+    for dossier in par_dossier:
+        par_parent.setdefault(dossier.parent, []).append(dossier)
+
+    findings: list[Finding] = []
+    for _parent, freres in sorted(par_parent.items()):
+        if len(freres) < 2:
+            continue  # pas de famille : rien à confronter
+        chemins_par_membre = {
+            membre: _chemins_du_corpus(par_dossier[membre]) for membre in freres
+        }
+        textes_par_membre = {
+            membre: " ".join(
+                f.read_text(encoding="utf-8", errors="replace") for f in par_dossier[membre]
+            )
+            for membre in freres
+        }
+        for membre in sorted(freres):
+            ailleurs: dict[str, str] = {}
+            for soeur in freres:
+                if soeur == membre:
+                    continue
+                for chemin in chemins_par_membre[soeur]:
+                    # Jamais MENTIONNÉ ici — même pas en texte libre : une simple mention vaut
+                    # choix conscient, l absence totale vaut angle mort.
+                    if chemin not in textes_par_membre[membre]:
+                        ailleurs.setdefault(chemin, soeur.name)
+            if not ailleurs:
+                continue
+            relatif = membre.relative_to(cible).as_posix()
+            manquants = sorted(ailleurs)
+            identifiant = f"revue:trou-inter-suites:{relatif}"
+            findings.append(
+                Finding(
+                    id=identifiant,
+                    classe=classes.TROU_DE_COUVERTURE_SOEUR,
+                    localisation=relatif,
+                    severite="signale",
+                    message=(
+                        f"la suite `{relatif}` ne mentionne jamais {len(manquants)} chemin(s) "
+                        "que ses suites sœurs affirment : "
+                        + " · ".join(
+                            f"`{c}` (chez {ailleurs[c]})" for c in manquants[:5]
+                        )
+                        + (f" (+{len(manquants) - 5} autres)" if len(manquants) > 5 else "")
+                        + " — trou de couverture SIGNALÉ, pas un échec : deux variantes peuvent "
+                        "différer légitimement, mais l écart se lit. Mesuré le 20/08 : la "
+                        "bascule EasyAuth a perdu l assertion de déconnexion de sa sœur, trois "
+                        "jours de production sous 68 parcours verts"
+                    ),
+                    risque=coter(PAN, identifiant, relatif),
+                )
+            )
+    return findings
+
+
 def analyser_suite(cible: Path) -> list[Finding]:
-    """Les trois règles mécanisables, sur les specs du projet. Aucune exécution, aucun réseau."""
+    """Les cinq règles mécanisables, sur les specs du projet. Aucune exécution, aucun réseau."""
     return [
         *absence_sans_presence(cible),
         *motif_satisfait_par_le_declencheur(cible),
         *donnees_recopiees(cible),
+        *prefixe_d_un_chemin_valide(cible),
+        *trous_de_couverture_inter_suites(cible),
     ]
