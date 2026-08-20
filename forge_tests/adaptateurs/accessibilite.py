@@ -62,8 +62,20 @@ NON_JUGE = [
     "apres interaction (menu ouvert, modale, message d erreur) ne sont pas audites",
     "accessibilite : sans compte configure (.env), les routes protegees redirigent vers la "
     "page publique — le nombre de PAGES DISTINCTES rendues le dit au rapport",
-    "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni "
-    "contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
+    # RF-6a (lot SCC-FR 20260820a, gravite BLOQUANT) : la version precedente de cette limite
+    # disait « perimetre du seul oracle structurel », comme si la famille etait couverte
+    # AILLEURS. Elle ne l est pas, et le lecteur cessait de la chercher — le mecanisme exact
+    # de TF-0379 (oracle-calculs), paye cinq jours de run. Un non_juge est une promesse de
+    # perimetre : il dit desormais QUI couvre quoi dans le parc, et qui ne couvre rien.
+    "accessibilite : perimetre du seul oracle structurel. La NAVIGATION CLAVIER, les pieges "
+    "de focus et l ARIA avance (roles, ordre de focus) ne sont couverts par AUCUN oracle du "
+    "parc a ce jour — pour un site public francais, RGAA 4.1 est une obligation legale et "
+    "cet ecart se declare au dossier MEP, il ne se tait pas (RF-6, 20/08/2026). Le CONTRASTE "
+    "a, lui, une mesure existante mais NON CABLEE a cet audit : render_page.py V2 du socle "
+    "digit-ai-page-html (luminance WCAG sur styles rendus, deja jouee contre des ecrans "
+    "produits le 11/08) — l executer separement en attendant son cablage. Et l audit RGAA "
+    "complet reste un livrable HUMAIN : un tiers des criteres n est pas mecanisable, la "
+    "machine prepare l audit, elle ne rend pas la declaration",
     "accessibilite : les routes RELEVEES sur l instance servie sont celles que la racine LIE — "
     "une page atteinte seulement apres une action (formulaire poste, menu ouvert) ou par une URL "
     "que rien ne lie n y figure pas ; la declarer par FORGE_TESTS_QUALIF_ROUTES (TF-0217)",
