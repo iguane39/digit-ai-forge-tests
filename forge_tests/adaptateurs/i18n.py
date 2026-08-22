@@ -30,6 +30,7 @@ comme tout constat d audit — `.forge-tests-declarations.json`, motif typé et 
 
 from __future__ import annotations
 
+import json
 import os
 from html.parser import HTMLParser
 from pathlib import Path
@@ -236,11 +237,23 @@ class _Page(HTMLParser):
         self.meta: dict[str, list[str]] = {}
         self._dans_titre = False
         self._dans_jsonld = False
+        # TF-0465 + TF-0467 (22/08) : chaque fragment de texte est enregistré AVEC l'état de
+        # son marquage de langue. Un fragment délibérément dans une autre langue DOIT porter
+        # `lang` (WCAG 2.2, critère 3.1.2) : ce n'est pas opposer `lang` au contenu — ce que le
+        # pan refuse à juste titre — c'est vérifier qu'il est POSÉ là où le contenu est ASSUMÉ
+        # étranger. Preuve : les 201 pages anglaises de digit-ai.fr portent
+        # `aria-label="Voir cette page en français"` sans `lang="fr"` ; un lecteur d'écran les
+        # prononce avec la phonétique anglaise.
+        self.fragments: list[tuple[str, bool]] = []
+        self._pile_lang: list[bool] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         table = {nom.lower(): (valeur or "") for nom, valeur in attrs}
         if tag == "html" and table.get("lang"):
             self.lang = table["lang"]
+        if tag != "html" and table.get("lang"):
+            self._pile_lang.append(True)
+            self._marque_ouverte = self._marque_ouverte + [tag] if hasattr(self, "_marque_ouverte") else [tag]
         if tag == "title":
             self._dans_titre = True
         if tag == "script" and (table.get("type") or "").lower() == "application/ld+json":
@@ -264,6 +277,9 @@ class _Page(HTMLParser):
             self.destinations.append(table.get("href") or "")
 
     def handle_endtag(self, tag: str) -> None:
+        if getattr(self, "_marque_ouverte", None) and self._marque_ouverte[-1] == tag and self._pile_lang:
+            self._pile_lang.pop()
+            self._marque_ouverte.pop()
         if tag == "title":
             self._dans_titre = False
         if tag == "script":
@@ -290,6 +306,9 @@ class _Page(HTMLParser):
                     self.meta.setdefault(f"jsonld:{cle}", []).append(valeur)
         if self._muet:
             return
+        texte_utile = data.strip()
+        if texte_utile:
+            self.fragments.append((texte_utile, bool(self._pile_lang)))
         if self._lien_de_menu and self.menu:
             self.menu[-1] = (self.menu[-1] + " " + data).strip()
         self.texte.append(data)
@@ -541,6 +560,58 @@ def constats_metadonnees(
         ]
         if suspectes:
             constats.append(("mal_traduit", cle, suspectes))
+    return constats
+
+
+def chaines_de_reference() -> dict[str, list[str]]:
+    """Chaînes littérales dont la PRÉSENCE est un constat, par locale, déclarées par le projet.
+
+    `FORGE_TESTS_I18N_CHAINES` désigne un fichier JSON `{"fr": ["Réponse courte", …], …}`.
+    Rien de déclaré : rien de jugé — le pan ne devine pas le vocabulaire d un produit.
+    """
+    chemin = (os.environ.get("FORGE_TESTS_I18N_CHAINES") or "").strip()
+    if not chemin or not Path(chemin).is_file():
+        return {}
+    try:
+        donnees = json.loads(Path(chemin).read_text(encoding="utf-8", errors="replace"))
+    except Exception:  # noqa: BLE001 — une déclaration illisible se DÉCLARE, elle n emporte rien
+        return {}
+    if not isinstance(donnees, dict):
+        return {}
+    return {
+        code: [c for c in valeurs if isinstance(c, str) and c.strip()]
+        for code, valeurs in donnees.items()
+        if isinstance(valeurs, list)
+    }
+
+
+def constats_chaines(
+    servie: Path, chaines: list[str],
+) -> list[tuple[str, str]]:
+    """Chaînes de la langue de référence trouvées sur une page servie sous une AUTRE locale.
+
+    Deux constats, un seul balayage (TF-0465 + TF-0467) :
+
+      · `non_traduite` — la chaîne est là, et rien ne signale qu elle est étrangère : soit la
+        traduire, soit poser `lang` sur son porteur ;
+      · `signalee` — la chaîne est là SOUS un élément portant `lang` : c est la convention
+        correcte pour une bascule de langue, aucun défaut.
+
+    La PRÉSENCE est le constat, jamais la fréquence : « Réponse courte » sur une page de
+    1 200 mots pèse 0,17 %, très en dessous du seuil de densité — et c est pourtant le défaut.
+    Baisser le seuil accuserait au hasard ; c est la méthode qui devait changer, pas son
+    paramètre.
+    """
+    if not chaines:
+        return []
+    page = _lire(servie)
+    constats: list[tuple[str, str]] = []
+    vues: set[str] = set()
+    for texte, marque in page.fragments:
+        for chaine in chaines:
+            if chaine and chaine in texte and (chaine, marque) not in vues:
+                vues.add((chaine, marque))
+                constats.append(("signalee" if marque else "non_traduite", chaine))
     return constats
 
 
