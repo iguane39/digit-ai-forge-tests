@@ -176,6 +176,16 @@ class _Page(HTMLParser):
         self._muet = 0
         self._dans_menu = 0
         self._lien_de_menu = False
+        # TF-0464 (22/08) : le CHROME PARTAGE ne se limite pas au <nav>. Mesure sur
+        # digit-ai.fr, 201 pages en production : le pied de page francais porte 21 liens,
+        # l anglais 3 — et les deux pieds sont des <footer> SANS <nav>. Le pan lisait donc
+        # 0 contre 0 et rendait PASS : un silence indiscernable d un succes, le pire mode de
+        # defaillance d un oracle. La garde existante (`muettes`) ne se declenchait pas
+        # puisque l en-tete, lui, EST un <nav> : la navigation passait pour vue et
+        # l amputation du pied disparaissait sans un mot. Le repere s etend donc a <footer>
+        # et a role="contentinfo"/"navigation" — meme classe de defaut que celui qui a FONDE
+        # le pan (menu anglais a 4 entrees contre 9), autre repere, meme silence.
+        self._reperes = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         table = {nom.lower(): (valeur or "") for nom, valeur in attrs}
@@ -184,8 +194,10 @@ class _Page(HTMLParser):
         if tag in ("script", "style", "template"):
             self._muet += 1
             return
-        if tag == "nav":
+        role = (table.get("role") or "").strip().lower()
+        if tag in ("nav", "footer") or role in ("navigation", "contentinfo"):
             self._dans_menu += 1
+            self._reperes += 1
             return
         if tag == "a" and self._dans_menu:
             self._lien_de_menu = True
@@ -195,7 +207,7 @@ class _Page(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag in ("script", "style", "template") and self._muet:
             self._muet -= 1
-        elif tag == "nav" and self._dans_menu:
+        elif tag in ("nav", "footer") and self._dans_menu:
             self._dans_menu -= 1
         elif tag == "a" and self._lien_de_menu:
             self._lien_de_menu = False
@@ -720,7 +732,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
     muettes = [locale or "defaut" for locale, menu in menus.items() if not menu]
     if muettes:
         non_juge.append(
-            "i18n : aucune entree de menu lisible (`<nav>`) sur la page d accueil des locales "
+            "i18n : aucune entree de navigation lisible (`<nav>`, `<footer>`, role=navigation "
+            "ou contentinfo) sur la page d accueil des locales "
             f"{', '.join(sorted(muettes))} — parite de navigation NON jugee pour elles"
         )
     lisibles = {locale: menu for locale, menu in menus.items() if menu}
