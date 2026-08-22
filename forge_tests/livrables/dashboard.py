@@ -2720,7 +2720,10 @@ def construire(
         for rang, (identifiant, libelle, _) in enumerate(panneaux)
     )
     nav = "".join(
-        f'<button type="button" role="tab" data-cible="{identifiant}" '
+        # L16 du socle (TF-0425, trouvé le 22/08 sur ce dashboard) : un `role="tab"` porte un
+        # `id` et le panneau l'étiquette par `aria-labelledby`. Sans lui, un lecteur d'écran
+        # annonce un panneau anonyme — WAI-ARIA exige le couple, pas seulement aria-controls.
+        f'<button type="button" role="tab" id="tab-{identifiant}" data-cible="{identifiant}" '
         f'data-vue="{identifiant}" '
         f'aria-selected="{"true" if rang == 0 else "false"}" '
         f'aria-controls="{identifiant}">{rang + 1} · {_e(libelle)}</button>'
@@ -2746,6 +2749,7 @@ def construire(
     }
     corps = "".join(
         f'<section class="panneau" id="{identifiant}" role="tabpanel"'
+        f' aria-labelledby="tab-{identifiant}"'
         f'{"" if rang == 0 else " hidden"}>'
         + contenu[0]
         + f'<p class="discret ch-apprend">Ce panneau présente : {_e(annonces[identifiant])}.</p>'
