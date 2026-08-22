@@ -160,6 +160,47 @@ LEXIQUES: dict[str, frozenset[str]] = {"fr": MOTS_OUTILS_FR, "en": MOTS_OUTILS_E
 _LEXIQUE_MINIMAL = 20
 
 
+# TF-0466 — les clés de métadonnées jugées : ce qu'un moteur ou un aperçu social consomme.
+_META_JUGEES = frozenset({
+    "description", "keywords",
+    "og:title", "og:description", "og:site_name",
+    "twitter:title", "twitter:description",
+    "article:tag", "article:section",
+})
+
+
+def _valeurs_jsonld(brut: str, cle: str) -> list[str]:
+    """Valeurs de `cle` dans un bloc JSON-LD, en lecture TOLÉRANTE (chaîne ou liste).
+
+    Un JSON-LD mal formé ne doit pas faire échouer l audit : on lit ce qui se lit, on ignore
+    le reste. Le pan mesure une langue, il ne valide pas un schéma.
+    """
+    import json as _json
+
+    try:
+        donnees = _json.loads(brut)
+    except Exception:
+        return []
+    trouvees: list[str] = []
+
+    def _descendre(noeud: object) -> None:
+        if isinstance(noeud, dict):
+            for nom, valeur in noeud.items():
+                if nom == cle:
+                    if isinstance(valeur, str):
+                        trouvees.append(valeur)
+                    elif isinstance(valeur, list):
+                        trouvees.extend(str(x) for x in valeur if isinstance(x, str))
+                else:
+                    _descendre(valeur)
+        elif isinstance(noeud, list):
+            for valeur in noeud:
+                _descendre(valeur)
+
+    _descendre(donnees)
+    return [v.strip() for v in trouvees if v and v.strip()]
+
+
 class _Page(HTMLParser):
     """Ce qu une page servie dit d elle-même : sa langue déclarée, son menu, son texte."""
 
@@ -186,11 +227,29 @@ class _Page(HTMLParser):
         # et a role="contentinfo"/"navigation" — meme classe de defaut que celui qui a FONDE
         # le pan (menu anglais a 4 entrees contre 9), autre repere, meme silence.
         self._reperes = 0
+        # TF-0466 (22/08) : les MÉTADONNÉES sont ce que consomment les moteurs et les aperçus
+        # sociaux, et le pan ne lisait que les mots VISIBLES. Mesure sur digit-ai.fr : 78 des
+        # 131 articles du blog anglais portent au moins un `article:tag` en français (67 tags
+        # distincts), repris dans les keywords du JSON-LD. Même affichées, ces valeurs
+        # resteraient sous le seuil de densité (5 mots sur 1 200) : c'est la SOURCE qu'il faut
+        # lire, pas le seuil qu'il faut baisser.
+        self.meta: dict[str, list[str]] = {}
+        self._dans_titre = False
+        self._dans_jsonld = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         table = {nom.lower(): (valeur or "") for nom, valeur in attrs}
         if tag == "html" and table.get("lang"):
             self.lang = table["lang"]
+        if tag == "title":
+            self._dans_titre = True
+        if tag == "script" and (table.get("type") or "").lower() == "application/ld+json":
+            self._dans_jsonld = True
+        if tag == "meta":
+            cle = (table.get("property") or table.get("name") or "").strip().lower()
+            valeur = (table.get("content") or "").strip()
+            if valeur and cle in _META_JUGEES:
+                self.meta.setdefault(cle, []).append(valeur)
         if tag in ("script", "style", "template"):
             self._muet += 1
             return
@@ -205,6 +264,10 @@ class _Page(HTMLParser):
             self.destinations.append(table.get("href") or "")
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "title":
+            self._dans_titre = False
+        if tag == "script":
+            self._dans_jsonld = False
         if tag in ("script", "style", "template") and self._muet:
             self._muet -= 1
         elif tag in ("nav", "footer") and self._dans_menu:
@@ -213,6 +276,18 @@ class _Page(HTMLParser):
             self._lien_de_menu = False
 
     def handle_data(self, data: str) -> None:
+        # TF-0466 : les métadonnées se lisent AVANT la garde `_muet` — <title> et le JSON-LD
+        # vivent justement dans des zones que le texte visible ignore. Une seule méthode
+        # `handle_data` par classe : deux définitions et la seconde écrase la première en
+        # silence (piège rencontré en écrivant ce correctif).
+        if self._dans_titre:
+            valeur = data.strip()
+            if valeur:
+                self.meta.setdefault("title", []).append(valeur)
+        elif self._dans_jsonld:
+            for cle in ("keywords", "articleSection"):
+                for valeur in _valeurs_jsonld(data, cle):
+                    self.meta.setdefault(f"jsonld:{cle}", []).append(valeur)
         if self._muet:
             return
         if self._lien_de_menu and self.menu:
@@ -424,6 +499,49 @@ def _constat_de_langue(
         return None
     code, densite, mots = max(mesures, key=lambda mesure: mesure[1])
     return (code, densite, mots) if densite >= SEUIL_DENSITE_FR else None
+
+
+def constats_metadonnees(
+    servie: Path, reference: Path, table: dict[str, frozenset[str]] | None = None,
+    locale: str = "", locale_reference: str = "",
+) -> list[tuple[str, str, list[str]]]:
+    """Métadonnées d une page traduite confrontées à celles de son équivalent de référence.
+
+    Deux constats DISTINCTS, et c est le point (TF-0466) : le lecteur n en fait pas la même
+    chose, et le premier ne demande aucun lexique.
+
+      · `non_traduit` — la valeur est identique, caractère pour caractère, à celle de la page
+        de référence. Aucune heuristique : soit c est un nom propre légitime, soit la
+        traduction n a pas eu lieu, et le rapport nomme la clé pour qu on trancthe en une
+        seconde.
+      · `mal_traduit` — la valeur diffère mais porte des mots-outils de la langue de
+        référence. Mesuré sur la valeur SEULE : une métadonnée fait cinq mots, la noyer dans
+        les 1 200 mots de la page revenait à ne jamais la voir.
+
+    Retourne une liste de (constat, cle, valeurs). Vide = rien à dire.
+    """
+    page, ref = _lire(servie), _lire(reference)
+    if not page.meta:
+        return []
+    lexique_ref = (table or lexiques()).get(locale_reference or "fr") or MOTS_OUTILS_FR
+    constats: list[tuple[str, str, list[str]]] = []
+    for cle, valeurs in sorted(page.meta.items()):
+        valeurs_ref = ref.meta.get(cle, [])
+        identiques = [v for v in valeurs if v in valeurs_ref]
+        if identiques:
+            constats.append(("non_traduit", cle, identiques))
+        autres = [v for v in valeurs if v not in valeurs_ref]
+        if not autres:
+            continue
+        # La densité se mesure sur la valeur seule, et le minimum de mots ne s applique pas :
+        # « Analyse de donnees » fait trois mots et porte deux mots-outils français.
+        suspectes = [
+            v for v in autres
+            if densite_mots_outils(_sans_accents(v), lexique_ref)[0] > 0
+        ]
+        if suspectes:
+            constats.append(("mal_traduit", cle, suspectes))
+    return constats
 
 
 def _signes_i18n(cible: Path) -> list[str]:
