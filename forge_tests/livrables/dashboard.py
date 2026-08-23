@@ -1,5 +1,11 @@
 """Dashboard d exécution — page autonome, dont la SEULE source est le rapport JSON.
 
+promesses-verifiees — ce fichier ADHÈRE au contrôle des promesses de commentaire
+(`oracle-promesses`, règle PR1 du pilot) : une classe ou un attribut nommé dans un commentaire
+ici DOIT exister dans le code. Un générateur de page est l'endroit où une promesse de prose coûte
+le plus cher — elle s'y lit comme une garantie de ce que la page contient. Signé le 23/08/2026,
+choix humain « signer tout ce qui est propre dans les forges » ; joué avant signature, zéro constat.
+
 Pourquoi une seule source : un tableau de bord qui recalcule quoi que ce soit finit par
 diverger du rapport, et c est lui qu on regarde. Deux lecteurs du même audit — l un par le
 HTML, l autre par `jq` — auraient alors deux vérités, et la discussion porterait sur l outil
