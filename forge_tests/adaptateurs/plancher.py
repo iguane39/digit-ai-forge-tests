@@ -62,24 +62,48 @@ CHAMPS_REQUIS = (
     "FORGE_TESTS_PASSWORD",
 )
 
-# Familles BLOQUANTES du socle, avec ce qu'elles disent au lecteur. Le libellé n'est pas
-# décoratif : « v4_overlap » ne se corrige pas, « deux blocs se superposent » se corrige.
-FAMILLES_BLOQUANTES = {
-    "v1_overflow": "débordement horizontal",
-    "v4_overlap": "chevauchement de blocs",
-    "l2_width": "largeur de texte bridée",
-    "l2_gouttiere": "gouttière d'étiquettes",
-    "l2_conteneur": "conteneur de lecture calé à gauche",
-    "l2_filet": "texte écrasé en filet",
-}
-# AVERTISSEMENTS : mesurés, publiés, et jamais bloquants. `l2_freres` (TF-0491) parce qu'une
-# mesure de lecture étroite est un choix défendable qui se DÉCLARE ; V3/V7 parce que le socle
-# lui-même les tient pour des avertissements.
-FAMILLES_AVERTIES = {
-    "l2_freres": "alignement entre frères empilés",
-    "v3_align": "alignement d'une série",
-    "v7_spacing": "rythme d'espacement",
-}
+# LES FAMILLES ET LEUR POIDS SONT LUS DANS LE SOCLE (choix humain du 23/08/2026, option « source
+# unique »). Ce pan tenait DEUX dictionnaires en copie — bloquantes d'un côté, averties de
+# l'autre — et c'est cette forme de copie qui a laissé, chez forge-design, deux familles
+# bloquantes se faire relire en simple avertissement sans que rien ne le dise. Le pan charge déjà
+# la mesure depuis le socle : lire son poids au même endroit n'ajoute aucune dépendance.
+#
+# Le contraste n'est PAS repris ici : il a son pan (`contraste`), et la chaîne des consommateurs
+# est jugée dans son ensemble par le pilot (règle N-10) — ce qui compte est qu'aucune famille ne
+# soit lue par personne, pas que chacun lise tout.
+HORS_PLANCHER = ("v2_contrast",)
+
+
+def _familles_du_socle() -> tuple[dict[str, str], dict[str, str]]:
+    """(bloquantes, averties) telles que le socle les déclare. Vides si le socle est absent."""
+    import json
+    import subprocess
+    if not contraste._SOCLE.exists():  # noqa: SLF001 — un seul chemin de socle pour tout le parc
+        return {}, {}
+    for binaire in ("python", "python3", "py"):
+        try:
+            r = subprocess.run([binaire, "-X", "utf8", str(contraste._SOCLE), "--familles"],  # noqa: SLF001
+                               capture_output=True, text=True, encoding="utf-8", timeout=60)
+        except Exception:  # noqa: BLE001 — interpréteur absent : on essaie le suivant
+            continue
+        if r.returncode != 0:
+            continue
+        try:
+            lu = json.loads((r.stdout or "").strip())
+        except Exception:  # noqa: BLE001
+            continue
+        if lu.get("schema") != "digit-ai/familles-mesure@1":
+            continue
+        bloquantes, averties = {}, {}
+        for cle, v in (lu.get("familles") or {}).items():
+            if cle in HORS_PLANCHER:
+                continue
+            if v.get("severite") == "bloquant":
+                bloquantes[cle] = v.get("libelle", cle)
+            elif v.get("severite") == "avertissement":
+                averties[cle] = v.get("libelle", cle)
+        return bloquantes, averties
+    return {}, {}
 
 NON_JUGE = [
     "plancher : mesure a l etat INITIAL de chaque route — les etats atteints apres interaction "
@@ -114,6 +138,19 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # ce pan en hérite sans une ligne. C'est aussi pour cela que la fonction est réutilisée
     # telle quelle depuis le pan `contraste` — deux chargeurs auraient divergé.
     mesure = contraste._mesure_js()  # noqa: SLF001 — un seul chargeur pour tout le parc
+    FAMILLES_BLOQUANTES, FAMILLES_AVERTIES = _familles_du_socle()
+    if mesure is not None and not FAMILLES_BLOQUANTES:
+        # Le socle est là mais ne publie pas ses poids : on ne DEVINE pas une sévérité. Un poids
+        # inventé rendrait un verdict qui a l'air d'un verdict.
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            non_juge=[
+                *NON_JUGE,
+                f"plancher : le socle ne publie pas sa table de familles ({contraste._SOCLE} "  # noqa: SLF001
+                "--familles) — sans elle, peser un constat reviendrait a recopier une liste, "
+                "c'est-a-dire a recreer la double verite que ce changement supprime",
+            ],
+        )
     if mesure is None:
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
