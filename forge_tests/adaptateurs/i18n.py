@@ -53,7 +53,11 @@ POUR_COUVRIR = (
     "`output: 'standalone'`) sont HORS CHAMP de la parité de routes et de menus — le CATALOGUE "
     "SOURCE reste jugé (TF-0383), et la voie de levée est nommée : accepter une racine servie "
     "(FORGE_TESTS_BASE_URL, déjà employée par le pan accessibilité) comme source des routes par "
-    "crawl des liens. C'est une décision écrite ici, plus une découverte au premier run"
+    "crawl des liens. C'est une décision écrite ici, plus une découverte au premier run. "
+    "LEVÉE PARTIELLE le 23/08 (TF-0470) : les routes attendues par locale se DÉCLARENT dans un "
+    "fichier JSON versionné désigné par FORGE_TESTS_I18N_ROUTES — la parité entre locales est "
+    "alors jugée SANS arborescence, et le déclaré est confronté au servi quand un build existe. "
+    "Rien de déclaré, rien de jugé"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
@@ -563,6 +567,118 @@ def constats_metadonnees(
     return constats
 
 
+def routes_de_reference() -> dict[str, list[str]]:
+    """Routes ATTENDUES par locale, déclarées par le projet dans un fichier versionné.
+
+    POURQUOI CETTE DÉCLARATION EXISTE (TF-0470, 23/08/2026). La parité de routes se mesurait
+    contre l UNION des routes SERVIES — donc contre une arborescence. Un produit rendu côté
+    serveur (`output: 'standalone'`) n émet aucune arborescence : le pan sortait en SKIP sur la
+    parité de routes, et c était le constat FONDATEUR du pan qui devenait invisible — une route
+    sur 201 existait en FR et pas en EN, sur le produit même où le pan a été conçu.
+
+    Trois options ont été pesées par l étude du 22/08 ; deux sont écartées et le motif est écrit
+    ici pour qu il ne se reperde pas. Un TROISIÈME POINT D OBSERVATION « site en ligne » aurait
+    introduit une dépendance réseau dans un pan hors-ligne et un troisième calibrage — exactement
+    le mécanisme qui a produit le trou. Lire les routes DEPUIS LA SOURCE du dépôt demanderait un
+    extracteur par framework, avec le risque de dire faux sur les routes dynamiques.
+
+    Reste la déclaration, au patron déjà éprouvé de `FORGE_TESTS_I18N_CHAINES` : RIEN DE DÉCLARÉ,
+    RIEN DE JUGÉ. `FORGE_TESTS_I18N_ROUTES` désigne un fichier JSON `{"fr": ["/", "/a-propos"],
+    "en": ["/en", "/en/about"]}` — ou, plus simple, des chemins SANS préfixe de locale, le pan
+    les préfixant lui-même. Le fichier est versionné avec le produit : c est une donnée
+    périssable, elle vit datée et éditable, jamais en dur dans un contrôle (loi n° 4).
+
+    CE QUE LA DÉCLARATION PROUVE, ET CE QU ELLE NE PROUVE PAS. Elle prouve une INTENTION : ce que
+    le produit dit devoir exister. L asymétrie DANS la déclaration est donc déjà un constat, sans
+    aucun build — une route promise en FR et pas en EN est un trou que le produit déclare
+    lui-même. Elle ne prouve RIEN de l existence réelle : quand un build est lu, le déclaré est
+    confronté au servi, et l écart part dans les deux sens.
+    """
+    chemin = (os.environ.get("FORGE_TESTS_I18N_ROUTES") or "").strip()
+    if not chemin or not Path(chemin).is_file():
+        return {}
+    try:
+        donnees = json.loads(Path(chemin).read_text(encoding="utf-8", errors="replace"))
+    except Exception:  # noqa: BLE001 — une déclaration illisible se DÉCLARE, elle n emporte rien
+        return {}
+    if not isinstance(donnees, dict):
+        return {}
+    propres: dict[str, list[str]] = {}
+    for code, valeurs in donnees.items():
+        if not isinstance(valeurs, list) or not isinstance(code, str):
+            continue
+        routes = sorted({
+            ("/" + str(r).strip().strip("/")).replace("//", "/") or "/"
+            for r in valeurs if isinstance(r, str) and r.strip()
+        })
+        if routes:
+            propres[code.strip()] = routes
+    return propres
+
+
+def constats_routes_declarees(
+    declarees: dict[str, list[str]], servies: dict[str, dict[str, object]] | None = None,
+) -> tuple[list[tuple[str, str]], list[str]]:
+    """Confronte les routes DÉCLARÉES entre elles, puis au servi quand il existe.
+
+    Rend `(constats, motifs)` — un constat est `(identifiant, message)`. La fonction est pure :
+    elle ne lit ni disque ni réseau, ce qui la rend jouable en recette sans build.
+    """
+    constats: list[tuple[str, str]] = []
+    motifs: list[str] = []
+    if len(declarees) < 2:
+        if declarees:
+            motifs.append(
+                "i18n : routes declarees pour UNE SEULE locale "
+                f"({', '.join(declarees)}) — aucune parite a mesurer entre locales"
+            )
+        return constats, motifs
+
+    # Les chemins sont compares SANS leur prefixe de locale : `/en/about` et `/a-propos` ne se
+    # comparent pas par leur texte. On rapproche donc par POSITION dans la liste declaree quand
+    # les listes ont la meme longueur, et par COMPTE sinon — c est ce que le produit peut
+    # promettre sans dictionnaire de traduction, et le declarer evite de faire croire mieux.
+    tailles = {code: len(routes) for code, routes in declarees.items()}
+    reference = max(tailles.values())
+    for code, taille in sorted(tailles.items()):
+        if taille == reference:
+            continue
+        manquantes = reference - taille
+        constats.append((
+            f"i18n:routes-declarees:{code}",
+            f"la locale « {code} » declare {taille} route(s) quand la locale la plus fournie en "
+            f"declare {reference} : {manquantes} route(s) promise(s) ailleurs et pas ici. "
+            "C est le defaut fondateur du pan — une route sur 201 existait en FR et pas en EN, "
+            "et aucune mesure ne pouvait le dire sur un produit sans arborescence servie. "
+            f"Fichier : FORGE_TESTS_I18N_ROUTES"
+        ))
+    motifs.append(
+        "i18n : routes DECLAREES confrontees entre locales — "
+        + ", ".join(f"{code} ({taille})" for code, taille in sorted(tailles.items()))
+        + ". La declaration prouve une INTENTION, jamais une existence : ce qui n est pas "
+        "declare n est pas juge"
+    )
+
+    if servies:
+        for code, routes in sorted(declarees.items()):
+            connues = servies.get(code)
+            if connues is None:
+                motifs.append(
+                    f"i18n : locale « {code} » declaree et ABSENTE du build servi — "
+                    "confrontation declare/servi non jouee pour elle"
+                )
+                continue
+            absentes = [r for r in routes if r not in connues]
+            for route in absentes:
+                constats.append((
+                    f"i18n:route-declaree-absente:{code}:{route}",
+                    f"route « {route} » DECLAREE pour la locale « {code} » et ABSENTE du build "
+                    "servi : le produit promet une page qu il ne sert pas. Un lien vers elle "
+                    "rend 404, et un plan de site la reference"
+                ))
+    return constats, motifs
+
+
 def chaines_de_reference() -> dict[str, list[str]]:
     """Chaînes littérales dont la PRÉSENCE est un constat, par locale, déclarées par le projet.
 
@@ -791,9 +907,32 @@ def analyser(cible: Path) -> SortieAdaptateur:
     findings_catalogue, motifs_catalogue = _findings_catalogue(cible)
     non_juge.extend(motifs_catalogue)
 
+    # TF-0470 — les ROUTES DECLAREES se jugent AVANT le build, et sans lui. C est tout le sujet :
+    # un produit rendu cote serveur n emet aucune arborescence, et la parite de routes sortait en
+    # SKIP alors que le constat fondateur du pan vivait en production.
+    declarees = routes_de_reference()
+    findings_routes: list[Finding] = []
+    if declarees:
+        constats_decl, motifs_decl = constats_routes_declarees(declarees)
+        non_juge.extend(motifs_decl)
+        for identifiant, message in constats_decl:
+            findings_routes.append(Finding(
+                id=identifiant, classe=classes.DIVERGENCE, localisation="routes declarees",
+                message=message, severite="bloquant",
+                risque=coter(PAN, identifiant, str(cible)),
+            ))
+    else:
+        non_juge.append(
+            "i18n : AUCUNE route declaree (FORGE_TESTS_I18N_ROUTES) — la parite de routes n est "
+            "jugee QUE contre l arborescence servie. Sur un produit rendu cote serveur "
+            "(`output: 'standalone'`), il n y a donc rien de juge : declarer les routes attendues "
+            "par locale dans un fichier JSON versionne, `{\"fr\": [\"/\", …], \"en\": […]}`. "
+            "Rien de declare, rien de juge — le pan ne devine pas les routes d un produit"
+        )
+
     build = build_servi(cible)
     if build is None:
-        if findings_catalogue or any("catalogue `" in m for m in motifs_catalogue):
+        if findings_catalogue or findings_routes or any("catalogue `" in m for m in motifs_catalogue):
             # Le catalogue a parle : le pan MESURE, meme sans build. Le build reste nomme comme
             # ce qui manque pour juger la parite de routes et la langue servie.
             non_juge.append(
@@ -804,8 +943,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
             )
             return SortieAdaptateur(
                 NOM, PAN, str(cible),
-                "FAIL" if findings_catalogue else "PASS",
-                findings=findings_catalogue,
+                "FAIL" if (findings_catalogue or findings_routes) else "PASS",
+                findings=[*findings_catalogue, *findings_routes],
                 non_juge=non_juge,
             )
         motif = sans_objet(cible)
