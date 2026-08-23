@@ -64,7 +64,7 @@ def test_un_debordement_horizontal_est_bloquant_et_localise(monkeypatch) -> None
     # une information de premier ordre — le meme ecran est sain en FR et casse en EN.
     assert unique.localisation == "/en"
     assert "/en" in unique.message
-    assert "débordement horizontal" in unique.message
+    assert "V1 débordement horizontal" in unique.message
     assert "1680px" in unique.message
 
 
@@ -74,7 +74,7 @@ def test_un_chevauchement_de_blocs_est_bloquant(monkeypatch) -> None:
     })
     sortie = plancher.analyser(CIBLE)
     assert sortie.verdict == "FAIL"
-    assert "chevauchement de blocs" in sortie.findings[0].message
+    assert "V4 chevauchement de blocs" in sortie.findings[0].message
 
 
 def test_les_familles_d_AVERTISSEMENT_ne_bloquent_pas_mais_sont_PUBLIEES(monkeypatch) -> None:
@@ -88,8 +88,8 @@ def test_les_familles_d_AVERTISSEMENT_ne_bloquent_pas_mais_sont_PUBLIEES(monkeyp
     # tu n existerait pas. Les deux erreurs sont refusees ici.
     assert sortie.verdict == "PASS"
     assert sortie.findings == []
-    assert any("alignement entre frères empilés" in l for l in sortie.non_juge)
-    assert any("rythme d'espacement" in l for l in sortie.non_juge)
+    assert any("L2 alignement entre frères empilés" in l for l in sortie.non_juge)
+    assert any("V7 rythme d'espacement" in l for l in sortie.non_juge)
 
 
 def test_la_BORNE_du_socle_est_reportee_quand_l_inventaire_est_tronque(monkeypatch) -> None:
@@ -116,6 +116,21 @@ def test_front_non_servi_donne_un_SKIP_motive_pas_un_PASS(monkeypatch) -> None:
     sortie = plancher.analyser(CIBLE)
     assert sortie.verdict == "SKIP"
     assert any("front non servi" in l for l in sortie.non_juge)
+
+
+def test_le_POIDS_et_le_LIBELLE_viennent_du_SOCLE_jamais_d_une_copie_locale() -> None:
+    # Choix humain du 23/08 : source unique. Le pan ne tient plus de dictionnaire de familles ;
+    # il lit celui que le socle publie. Sans cela, une famille bloquante nee apres la copie
+    # arrivait ici en simple avertissement — c'est ce qui s'est produit chez forge-design.
+    bloquantes, averties = plancher._familles_du_socle()
+    if not bloquantes:
+        return                      # socle absent du poste : la borne est deja testee ailleurs
+    assert "v1_overflow" in bloquantes and "etat_muet" in bloquantes
+    assert "l2_freres" in averties and "v7_spacing" in averties
+    # Le contraste a son pan : il est explicitement hors plancher, et c'est declare.
+    assert "v2_contrast" not in bloquantes and "v2_contrast" not in averties
+    # Le libelle DIT ce qui se corrige, il ne repete pas la cle.
+    assert bloquantes["v1_overflow"] != "v1_overflow"
 
 
 def test_les_etats_apres_interaction_sont_DECLARES_hors_mesure() -> None:
