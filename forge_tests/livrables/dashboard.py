@@ -318,9 +318,19 @@ _STYLE = f"""
       background:var(--surface); color:var(--ink); border-radius:999px; padding:4px 14px;
       cursor:pointer; }}
     .zone-tableau {{ overflow-x:auto; }}
+    /* Le chapeau d ouverture d un panneau (L7 : un chapitre dit ce qu on va y apprendre).
+       La classe etait posee dans le marquage et visee par AUCUNE regle : L21 le refuse, et il
+       a raison — un composant annonce sans style est un composant qui n existe pas. */
+    .ch-apprend {{ color:var(--muted); margin:.2em 0 1.1em; }}
     table {{ border-collapse:collapse; width:100%; font-size:.88rem; table-layout:fixed; }}
     th, td {{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--line);
-             vertical-align:top; overflow-wrap:anywhere; }}
+             vertical-align:top; overflow-wrap:break-word; }}
+    /* L19 (socle, 23/08) : `anywhere` casse un mot AU MILIEU D UNE LIGNE (« Utilisabl/e »).
+       Il est necessaire sur un identifiant technique et ravageur sur de la prose. Il vit donc
+       la ou vivent les identifiants — code, chemins, cellules d identifiants — et nulle part
+       ailleurs. `break-word` suffit partout ailleurs : il coupe un mot TROP LONG pour sa
+       boite, et seulement celui-la. */
+    td code, td .ident, th code {{ overflow-wrap:anywhere; }}
     th {{ font-family:var(--head); font-size:.78rem; text-transform:uppercase;
          letter-spacing:.03em; color:var(--muted); }}
     th[data-tri] {{ cursor:pointer; }}
@@ -415,7 +425,7 @@ _STYLE = f"""
     figure.graphe .g-sous {{ color:var(--muted); font-size:.84rem; margin:0 0 12px; }}
     .g-ligne {{ display:grid; grid-template-columns:minmax(110px, 30%) 1fr auto; gap:10px;
       align-items:center; margin:0 0 7px; font-size:.84rem; }}
-    .g-nom {{ overflow-wrap:anywhere; }}
+    .g-nom {{ overflow-wrap:break-word; }}
     /* La PISTE est le fond du svg (CSS), jamais un second rect : deux rects superposés dans
        un même svg sont un chevauchement, et le contrôle de rendu du socle le refuse. */
     .g-piste {{ display:block; width:100%; height:10px; background:var(--line);

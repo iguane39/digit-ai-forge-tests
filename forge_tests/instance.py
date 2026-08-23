@@ -1,6 +1,10 @@
 """Cycle de vie et PROVENANCE de l instance servie — TF-0340 (cycle) / TF-0341 (provenance).
 
-Quatre pans exigent une instance SERVIE : `front`, `qualif`, `accessibilite`, `visuel`. Le
+Six pans exigent une instance SERVIE : `front`, `qualif`, `accessibilite`, `visuel`,
+`contraste` et `plancher`. Les deux derniers ont ete ajoutes le 23/08 (TF-0480) : `contraste`
+mesurait deja les styles RENDUS depuis TF-0409 sans figurer ici — un pan qui exige une instance
+servie et que le cycle de vie ignore, c est une instance qu on ne monte pas pour lui et qu on ne
+demonte pas apres lui. Le
 MONTAGE est délégué au projet, et c est le bon partage — lui seul sait ce que « peuplée » veut
 dire chez lui. Mais jusqu au 18/08 le DÉMONTAGE n était délégué à personne, et aucune ligne du
 rapport ne disait ce qui restait en service après l audit.
@@ -58,7 +62,7 @@ from pathlib import Path
 # Les pans qui ne peuvent RIEN mesurer sans une instance servie. Liste tenue ici parce que
 # c est ici qu on parle du cycle de vie de cette instance ; les adaptateurs, eux, revendiquent
 # leurs champs (`CHAMPS_REQUIS`) et ne savent rien du montage.
-PANS_SERVIS = ("front", "qualif", "accessibilite", "visuel")
+PANS_SERVIS = ("front", "qualif", "accessibilite", "visuel", "contraste", "plancher")
 
 # Le contrat que le PROJET déclare — deux commandes, comme l item l exige. Même canal que
 # l URL de l instance (`FORGE_TESTS_BASE_URL`) : ce sont des champs de configuration, et

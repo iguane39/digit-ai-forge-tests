@@ -46,6 +46,7 @@ _DOMAINES_PAR_PAN: dict[str, tuple[str, ...]] = {
     "front": ("front", "acces"),
     "accessibilite": ("front", "acces"),
     "visuel": ("front", "acces"),
+    "plancher": ("front", "acces"),
     # Le pan interface est un contrôle STATIQUE de fichiers : aucune configuration ne le débloque.
     "interface": (),
 }
