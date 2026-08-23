@@ -13,6 +13,7 @@ from forge_tests.adaptateurs import (
     interface,
     migrations,
     mutation,
+    plancher,
     prompts,
     qualif,
     securite,
@@ -38,10 +39,14 @@ REGISTRE = {
     "contraste-wcag": contraste,
     "clavier-focus": clavier,
     "visuel-golden": visuel,
+    # TF-0480 (23/08) : le PLANCHER visuel sur instance servie. La mesure tournait deja sur les
+    # routes depuis TF-0409 et rendait V1/V4/L2 en meme temps que le contraste — seul le
+    # contraste etait lu, le reste etait mesure puis JETE. Ce pan lit ce qui etait deja mesure.
+    "plancher-rendu": plancher,
     "i18n-build-servi": i18n,
 }
 
 PANS_ATTENDUS = [
     "front", "interface", "api", "data", "migrations", "batch", "fichiers", "back", "securite",
-    "accessibilite", "contraste", "clavier", "visuel", "qualif", "prompts", "i18n",
+    "accessibilite", "contraste", "clavier", "visuel", "plancher", "qualif", "prompts", "i18n",
 ]
