@@ -66,13 +66,20 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     # TF-0539 : la forge DEPOSE le gabarit de configuration qu'elle reclame, au lieu de laisser
     # le projet le reconstituer a la main depuis un rapport de 1,1 Mo. Elle n'ecrase jamais un
     # `.env.forge-tests` existant ni un gabarit deja annote — le dépôt se DIT, dans les trois cas.
+    # TF-0580 : une copie VENDORISEE qui a diverge de sa source sert des valeurs perimees en
+    # silence. Mesure du 24/08 : un site annoncait v1.6.2 et 80 services quand l'amont portait
+    # v1.8.0 et 83, sur un site dont l'argument entier est la preuve datee.
+    from forge_tests import vendorisation as _vend
+    _vendor = _vend.constats(cible)
+
     from forge_tests import gabarit_env as _gab
     _depot = _gab.deposer(cible)
 
     return rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins,
                    instance=instance_au_rapport(cible),
                    boucle=_boucle.verdict(_boucle.lire(cible)),
-                   gabarit_env=_depot)
+                   gabarit_env=_depot,
+                   vendorisation=_vendor)
 
 
 _DEBUT = _dt.datetime.now().astimezone()
