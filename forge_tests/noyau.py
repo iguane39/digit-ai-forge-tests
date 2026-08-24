@@ -392,6 +392,7 @@ def rapport(
     instance: dict | None = None,
     boucle: dict | None = None,
     gabarit_env: dict | None = None,
+    vendorisation: list[dict] | None = None,
 ) -> dict:
     """Assemble le rapport. Un pan sans adaptateur est NOMME, jamais omis.
 
@@ -507,6 +508,9 @@ def rapport(
         # TF-0539 : ce que la forge a depose (ou pourquoi elle ne l'a pas fait) — le lecteur
         # du rapport apprend qu'un gabarit l'attend, sans avoir a le deviner.
         "gabarit_env": gabarit_env if gabarit_env is not None else {"depose": False, "motif": "non mesure (audit hors flux principal)", "fichier": None},
+        # TF-0580 : les copies vendorisees et leur ecart a l amont — « non comparable » n est
+        # JAMAIS « a jour », sinon l outil reproduit le defaut qu il detecte.
+        "vendorisation": vendorisation if vendorisation is not None else [],
         "verdict": (
             "PARTIEL"
             if non_couverts
