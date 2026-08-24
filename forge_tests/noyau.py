@@ -391,6 +391,7 @@ def rapport(
     essais: list[Essai] | None = None,
     instance: dict | None = None,
     boucle: dict | None = None,
+    gabarit_env: dict | None = None,
 ) -> dict:
     """Assemble le rapport. Un pan sans adaptateur est NOMME, jamais omis.
 
@@ -503,6 +504,9 @@ def rapport(
         # faute du 12/08 : un rapport PARTIEL conforme, 121 findings, produit inchangé. Section
         # toujours présente : « pas de journal » se lit, il ne se devine pas.
         "boucle": boucle if boucle is not None else _boucle_non_mesuree(),
+        # TF-0539 : ce que la forge a depose (ou pourquoi elle ne l'a pas fait) — le lecteur
+        # du rapport apprend qu'un gabarit l'attend, sans avoir a le deviner.
+        "gabarit_env": gabarit_env if gabarit_env is not None else {"depose": False, "motif": "non mesure (audit hors flux principal)", "fichier": None},
         "verdict": (
             "PARTIEL"
             if non_couverts

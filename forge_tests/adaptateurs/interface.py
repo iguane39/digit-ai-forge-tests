@@ -51,6 +51,7 @@ from pathlib import Path
 from forge_tests import classes
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
+from forge_tests import exclusions
 
 NOM, PAN, SEUIL = "interface-statique", "interface", 1.0
 
@@ -105,6 +106,12 @@ _EXCLUS = {
     # meme remede : la mesure est POLLUEE et, pire, CROISSANTE a chaque cycle — un produit
     # inchange verrait sa surface grossir indefiniment du seul fait d avoir ete audite.
     "forge",
+    # TF-0536/0542/0543 (lot AuxPortesDeLaBaie 20260823) : le SOCLE commun vient desormais
+    # d'une source unique. Le depot portait DIX listes divergentes (7 a 31 entrees) et
+    # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
+    # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees
+    # ci-dessus restent ecrites ici : elles portent le motif de CE pan.
+    *exclusions.socle(),
 }
 _PLAFOND_JS = 8_000_000  # octets de corpus JS lus ; au-delà, la troncature est DÉCLARÉE
 

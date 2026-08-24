@@ -42,6 +42,7 @@ from forge_tests.noyau import (
     evaluer_surface,
 )
 from forge_tests.risque import coter
+from forge_tests import exclusions
 
 NOM, PAN, SEUIL = "prompts-statique", "prompts", 1.0
 
@@ -108,6 +109,12 @@ _EXCLUS = {
     ".next", ".nuxt", ".svelte-kit", ".visuel", "htmlcov", "coverage", ".tox", ".mypy_cache",
     ".ruff_cache", ".pytest_cache", "vendor", ".forge", "forge", "output", "old", "Old",
     ".oracles",
+    # TF-0536/0542/0543 (lot AuxPortesDeLaBaie 20260823) : le SOCLE commun vient desormais
+    # d'une source unique. Le depot portait DIX listes divergentes (7 a 31 entrees) et
+    # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
+    # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees
+    # ci-dessus restent ecrites ici : elles portent le motif de CE pan.
+    *exclusions.socle(),
 }
 
 # Un fichier au-delà de ce volume n est pas un prompt ni une configuration : c est un artefact.

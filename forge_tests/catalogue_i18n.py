@@ -47,6 +47,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from forge_tests import exclusions
 
 #: Dossiers où un catalogue de chaînes vit conventionnellement. Découverts sur le disque, jamais
 #: supposés — un dossier ajouté demain est vu sans qu'une ligne change ici.
@@ -58,6 +59,12 @@ _EXCLUS = {
     "node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build", "out", ".next",
     ".nuxt", ".svelte-kit", "coverage", "htmlcov", ".pytest_cache", ".ruff_cache", "vendor",
     ".forge", "site-packages",
+    # TF-0536/0542/0543 (lot AuxPortesDeLaBaie 20260823) : le SOCLE commun vient desormais
+    # d'une source unique. Le depot portait DIX listes divergentes (7 a 31 entrees) et
+    # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
+    # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees
+    # ci-dessus restent ecrites ici : elles portent le motif de CE pan.
+    *exclusions.socle(),
 }
 
 #: Un nom de fichier de locale : `fr.json`, `en-GB.json`, `pt_BR.json`.

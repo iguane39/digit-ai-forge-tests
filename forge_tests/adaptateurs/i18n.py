@@ -39,6 +39,7 @@ from forge_tests import catalogue_i18n as _catalogue
 from forge_tests import classes, seuils
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
+from forge_tests import exclusions
 
 NOM, PAN = "i18n-build-servi", "i18n"
 SEUIL = seuils.valeur("couverture_surface_i18n")
@@ -107,6 +108,12 @@ _EXCLUS = {
     "node_modules", ".venv", "venv", ".git", "__pycache__", "site-packages", ".next", ".nuxt",
     ".svelte-kit", ".visuel", "htmlcov", "coverage", ".tox", ".mypy_cache", ".ruff_cache",
     ".pytest_cache", "vendor", ".forge", "forge", "output", "old", "Old", ".oracles",
+    # TF-0536/0542/0543 (lot AuxPortesDeLaBaie 20260823) : le SOCLE commun vient desormais
+    # d'une source unique. Le depot portait DIX listes divergentes (7 a 31 entrees) et
+    # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
+    # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees
+    # ci-dessus restent ecrites ici : elles portent le motif de CE pan.
+    *exclusions.socle(),
 }
 # Pages de service : servies, mais ce ne sont pas des routes du produit.
 _PAGES_DE_SERVICE = ("404", "500", "403", "offline")

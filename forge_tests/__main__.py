@@ -63,9 +63,16 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     # rien. Absent, le rapport le DIT (« aucun journal de boucle »), il ne se tait pas.
     from forge_tests import boucle as _boucle
 
+    # TF-0539 : la forge DEPOSE le gabarit de configuration qu'elle reclame, au lieu de laisser
+    # le projet le reconstituer a la main depuis un rapport de 1,1 Mo. Elle n'ecrase jamais un
+    # `.env.forge-tests` existant ni un gabarit deja annote — le dépôt se DIT, dans les trois cas.
+    from forge_tests import gabarit_env as _gab
+    _depot = _gab.deposer(cible)
+
     return rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins,
                    instance=instance_au_rapport(cible),
-                   boucle=_boucle.verdict(_boucle.lire(cible)))
+                   boucle=_boucle.verdict(_boucle.lire(cible)),
+                   gabarit_env=_depot)
 
 
 _DEBUT = _dt.datetime.now().astimezone()

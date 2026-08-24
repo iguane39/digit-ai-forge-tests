@@ -28,6 +28,7 @@ import re
 from pathlib import Path
 
 from forge_tests import classes
+from forge_tests import exclusions
 
 NON_JUGE = [
     "declencheurs : la decouverte est STATIQUE et bornee aux formes reconnues (cron d un "
@@ -51,6 +52,12 @@ NON_JUGE = [
 _EXCLUS = {
     "node_modules", ".venv", "venv", ".git", "__pycache__", "site-packages", "dist", "build",
     "output", "old", "Old", ".oracles", ".forge",
+    # TF-0536/0542/0543 (lot AuxPortesDeLaBaie 20260823) : le SOCLE commun vient desormais
+    # d'une source unique. Le depot portait DIX listes divergentes (7 a 31 entrees) et
+    # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
+    # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees
+    # ci-dessus restent ecrites ici : elles portent le motif de CE pan.
+    *exclusions.socle(),
 }
 
 # --- Reconnaissance des formes ------------------------------------------------------------------

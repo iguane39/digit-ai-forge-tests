@@ -22,6 +22,7 @@ from forge_tests import classes
 from forge_tests.disposition import motif_racine_execution, racine_execution
 from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
+from forge_tests import exclusions
 
 NOM, PAN = "securite-oracles", "securite"
 
@@ -149,6 +150,12 @@ _EXCLUS_DEPENDANCES = (
     # jamais servi) produisait a lui seul 114 constats — 112 secrets, 2 SAST — soit un rapport
     # dont le lecteur devait ecarter la quasi-totalite a la main avant d apercevoir le produit.
     _VENDORISE,
+    # TF-0536/0542/0543 (lot AuxPortesDeLaBaie 20260823) : le SOCLE commun vient desormais
+    # d'une source unique. Le depot portait DIX listes divergentes (7 a 31 entrees) et
+    # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
+    # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees
+    # ci-dessus restent ecrites ici : elles portent le motif de CE pan.
+    *exclusions.socle(),
 )
 
 
