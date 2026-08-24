@@ -61,7 +61,25 @@ HORS_PRODUIT: frozenset[str] = frozenset({
 # --- artefacts de sauvegarde navigateur ---------------------------------------------------------
 # Une page « enregistrée sous » depuis un navigateur produit un `<nom>_files\` plein de CSS et de
 # JS réécrits par le navigateur lui-même. Les juger, c'est auditer Chrome.
-MOTIFS_ASPIRES: tuple[str, ...] = ("_files", ".telechargement", ".download", ".crdownload")
+# TF-0537 (lot AuxPortesDeLaBaie du 23/08) : L ACCENT MANQUAIT, et il coutait NEUF constats
+# bloquants. Le navigateur francais nomme le fichier en cours de telechargement
+# « weglot.min.js.telechargement » AVEC ses accents ; le motif ecrit sans accent ne
+# correspondait a rien. Les deux graphies sont donc declarees, et la lecon vaut au-dela de ce
+# motif : un nom de fichier produit par un logiciel LOCALISE ne s ecrit pas de memoire.
+MOTIFS_ASPIRES: tuple[str, ...] = (
+    "_files",
+    ".telechargement", ".téléchargement",
+    ".download", ".crdownload",
+)
+
+# Les MEMES artefacts, en motifs de nom de FICHIER cette fois. `dossier_exclu` ne juge que des
+# noms de dossier ; un `weglot.min.js.telechargement` pose a plat, ou un `saved_resource` sans
+# extension, traversait donc le filtre. Ces motifs se donnent tels quels a
+# `shutil.ignore_patterns`, qui les applique aux fichiers comme aux dossiers.
+MOTIFS_FICHIERS_ASPIRES: tuple[str, ...] = (
+    "*.telechargement", "*.téléchargement", "*.download", "*.crdownload",
+    "*_files", "saved_resource*",
+)
 
 # Marqueur que les navigateurs écrivent en tête d'une page sauvegardée. Sa présence dit, sans
 # ambiguïté et sans configuration, que ce fichier vient d'ailleurs.

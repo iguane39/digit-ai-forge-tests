@@ -156,6 +156,15 @@ _EXCLUS_DEPENDANCES = (
     # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees
     # ci-dessus restent ecrites ici : elles portent le motif de CE pan.
     *exclusions.socle(),
+    # TF-0537 (lot AuxPortesDeLaBaie du 23/08) : LES ARTEFACTS DE SAUVEGARDE NAVIGATEUR. Le pan
+    # sortait FAIL sur NEUF « secrets » qui etaient les cles Google Maps et Weglot embarquees dans
+    # `weglot.min.js.telechargement` et `saved_resource` — du JavaScript minifie DE TIERS, capture
+    # par « Enregistrer la page sous… ». Aucun n appartient au projet, aucun n est revocable par
+    # lui, aucun ne peut fuiter par son fait : ils sont PUBLICS dans le HTML du site d origine.
+    # L oracle savait deja discriminer (3 des 9 etaient classes « valeur non reelle — OK ») : il
+    # savait distinguer, il ne savait pas s abstenir. Ces motifs valent pour les FICHIERS, la ou
+    # les entrees ci-dessus ne nomment que des dossiers.
+    *exclusions.MOTIFS_FICHIERS_ASPIRES,
 )
 
 
@@ -164,6 +173,7 @@ def _sources_du_produit(
     tmp: Path,
     vendorises: list[str] | None = None,
     bancs: list[str] | None = None,
+    aspires: list[str] | None = None,
 ) -> Path:
     """Copie FILTRÉE de `application`, sans les dossiers de dépendances.
 
@@ -185,6 +195,17 @@ def _sources_du_produit(
 
     def tracant(dossier: str, noms: list[str]) -> set[str]:
         exclus = set(filtre(dossier, noms))
+        # LE MARQUEUR PLUTOT QUE LE NOM (TF-0537). Un `saved_resource` sans extension, ou un
+        # fichier renomme a la main, echappe a tout motif de nom. Les navigateurs ecrivent
+        # « saved from url » en tete d une page sauvegardee : sa presence dit d ou vient le
+        # fichier, sans configuration. Ce helper existait dans `exclusions` depuis TF-0536 et
+        # N ETAIT APPELE PAR PERSONNE — une regle morte de plus, reveillee par le constat.
+        for nom in noms:
+            chemin = Path(dossier) / nom
+            if nom not in exclus and chemin.is_file() and exclusions.est_page_aspiree(chemin):
+                exclus.add(nom)
+                if aspires is not None:
+                    aspires.append(str(chemin.relative_to(application)))
         if forge and Path(dossier) == Path(application):
             for nom in noms:
                 if nom in _MATIERE_DE_TEST_DE_LA_FORGE and (application / nom).is_dir():
@@ -301,9 +322,10 @@ def analyser(cible: Path) -> SortieAdaptateur:
     joues: list[str] = []
 
     vendorises: list[str] = []
+    aspires: list[str] = []
     bancs: list[str] = []
     with tempfile.TemporaryDirectory(prefix="forge-tests-securite-") as brouillon:
-        scan = _sources_du_produit(application, Path(brouillon), vendorises, bancs)
+        scan = _sources_du_produit(application, Path(brouillon), vendorises, bancs, aspires)
         # TF-0291 : la MESURE de l exclusion — ce que CE scan a reellement ecarte parce que le
         # projet audite est la forge elle-meme. La regle vit dans `NON_JUGE` ; ici on nomme les
         # dossiers, et seulement s il y en a. Un lecteur doit pouvoir distinguer « rien a
@@ -325,6 +347,16 @@ def analyser(cible: Path) -> SortieAdaptateur:
         # elle se compte au registre de dette). Ce qui reste ici est la MESURE — les dossiers
         # que CE scan a reellement ecartes — et elle ne s emet que s il y en a : declarer une
         # exclusion qui n a rien exclu serait du bruit, et un rapport se lit.
+        if aspires:
+            # Une exclusion se DIT au rapport, jamais en silence (meme doctrine que le vendorise) :
+            # sans cette ligne, un lecteur ne distingue pas « aucun secret dans la page aspiree » de
+            # « la page aspiree n a pas ete lue ».
+            non_juge.append(
+                "securite : ARTEFACTS DE SAUVEGARDE NAVIGATEUR ecartes de ce scan — "
+                + ", ".join(sorted(aspires))
+                + " — reconnus a leur marqueur « saved from url » : du code de tiers reecrit par un "
+                "navigateur, que le projet ne peut ni revoquer ni corriger"
+            )
         if vendorises:
             non_juge.append(
                 "securite : code VENDORISE ECARTE de ce scan — " + ", ".join(sorted(vendorises))
