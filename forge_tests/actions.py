@@ -281,6 +281,16 @@ def _action_configuration(
             f"Champs à fournir ({len(champs)}) : "
             f"{', '.join(champs) or 'la configuration manquante'}"
         ),
+        # R-48 (retour humain du 23/08) : une sollicitation dit pourquoi la reponse NE SE DEDUIT
+        # PAS du contexte. Sans cette phrase, un lecteur ne distingue pas ce que l outil aurait pu
+        # trancher seul de ce que lui seul peut fournir — et il apprend a survoler la liste.
+        "non_deductible": (
+            "ces valeurs sont des ACCES au systeme sous test — hote, jeton, entrepot, identifiant. "
+            "Aucune information du depot ne permet de les deduire : deux personnes competentes "
+            "n arriveraient pas a la meme valeur sans les avoir, et un defaut invente ferait "
+            "mesurer autre chose que le produit. C est la seule categorie de manque que l outil ne "
+            "peut pas combler de lui-meme"
+        ),
     }
 
 
@@ -379,6 +389,18 @@ def classifier(
                     f"couvrir le pan « {pan} », aujourd'hui NON MESURÉ. Pourquoi : "
                     f"{entree.get('motif') or 'sans motif'}. Comment (vous obtiendrez le pan "
                     f"mesuré au prochain audit) : {chemin}"
+                ),
+                # R-48 : la non-deductibilite depend du DESTINATAIRE, et la confondre serait
+                # reproduire le defaut que ce bloc corrige plus haut.
+                "non_deductible": (
+                    "l acces au systeme sous test manque : aucun agent ne peut inventer un hote, "
+                    "un jeton ou une base, et personne d autre que qui tient l environnement ne "
+                    "peut les fournir"
+                    if categorie == "manuelle_utilisateur"
+                    else "ecrire la couverture d un pan est un ARBITRAGE de conception : quoi "
+                    "mesurer, a quel niveau, avec quel cout de maintenance. Deux developpeurs "
+                    "competents ne trancheraient pas identiquement, et l outil ne dispose pas de "
+                    "l intention du projet"
                 ),
             }
         )
