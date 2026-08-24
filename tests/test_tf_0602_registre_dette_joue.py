@@ -1,4 +1,4 @@
-"""TF-0587 — le registre de dette est vérifié par la suite unitaire, pas seulement par la recette.
+"""TF-0602 — le registre de dette est vérifié par la suite unitaire, pas seulement par la recette.
 
 LE FAIT. Le `registre-dette.json` commité manquait de QUINZE entrées que le code déclarait :
 `clavier-focus-001` à `-005`, `contraste-wcag-001` à `-005`, `plancher-rendu-001` à `-004` et
@@ -9,7 +9,7 @@ réapparu deux jours après sa correction, par une autre cause.
 CE QUI MANQUAIT N'ÉTAIT PAS LE CONTRÔLE. `dette.verifier()` fonctionne, son code de sortie est
 juste, et son message donne la commande qui répare. Il manquait son DÉCLENCHEUR : son seul
 appelant était `recette/verifier_corpus.py`, qui dure plus de deux minutes et dont le verdict
-était de toute façon refusé (TF-0586). La porte la plus fine du dépôt vivait derrière la plus
+était de toute façon refusé (TF-0601). La porte la plus fine du dépôt vivait derrière la plus
 lourde et la plus cassée.
 
 Ce test le fait descendre là où il coûte une seconde et se joue à chaque `pytest`. C'est la même

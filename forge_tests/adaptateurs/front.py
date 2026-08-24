@@ -189,7 +189,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     from forge_tests import couverture, revue
 
     faux_verts = revue.analyser_suite(cible)
-    # TF-0589 (24/08) — la CONFIGURATION qui produit le chiffre, lue avant le chiffre lui-meme.
+    # TF-0604 (24/08) — la CONFIGURATION qui produit le chiffre, lue avant le chiffre lui-meme.
     # Meme raison que la revue de suite : elle ne depend ni de l instance servie ni de l execution,
     # et le projet dont la couverture est mal configuree est justement celui dont le chiffre
     # rassure le plus. Trois defauts vivaient ensemble sous un seuil VERT le 24/08.

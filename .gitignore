@@ -26,7 +26,7 @@ resultat-playwright.json
 !forge/**/*.oracles.json
 !forge/**/*.oracles-historique.jsonl
 
-# TF-0586 (24/08/2026) — le gabarit de configuration que la RECETTE dépose sur ses propres bancs.
+# TF-0601 (24/08/2026) — le gabarit de configuration que la RECETTE dépose sur ses propres bancs.
 # `gabarit_env.deposer()` est un acquis de TF-0539 : la forge dépose le fichier qu'elle réclame,
 # au lieu de laisser le projet le reconstituer à la main depuis un rapport de 1,1 Mo. C'est juste,
 # et ça vaut aussi quand le « projet audité » est un banc d'essai de la forge elle-même.

@@ -707,21 +707,21 @@
       "domaine": "revue",
       "enonce": "revue de suite (piege 7, session fabriquee) : la PROVENANCE reelle de la valeur ecrite. L oracle distingue une valeur composee SUR PLACE (litteral, objet serialise) d une valeur issue d un APPEL, et il ne peut pas savoir si cet appel touche le produit ou compose la session ailleurs. Le second cas est SIGNALE, jamais mis en echec — c est exactement ce que fait le harnais de cette forge (`forge_tests/authentification.py`), ou le jeton vient d une authentification reelle et son audience est verifiee par le serveur qui l a emis",
       "statut": "assume",
-      "note": "Limite DECLAREE par la regle a sa creation (TF-0578, 24/08) : la justification vit dans son NON_JUGE avec le fait qui l a motivee. Elle est ASSUMEE et non a outiller — distinguer statiquement une session composee d un jeton obtenu par un appel opaque demanderait une analyse de flot, et le prix de l approximation a ete choisi : mieux vaut SIGNALER le cas douteux que mettre en echec le harnais de cette forge elle-meme, ce qui ferait desactiver la regle (R-33 bis)."
+      "note": "Limite DECLAREE par la regle a sa creation (TF-0593, 24/08) : la justification vit dans son NON_JUGE avec le fait qui l a motivee. Elle est ASSUMEE et non a outiller — distinguer statiquement une session composee d un jeton obtenu par un appel opaque demanderait une analyse de flot, et le prix de l approximation a ete choisi : mieux vaut SIGNALER le cas douteux que mettre en echec le harnais de cette forge elle-meme, ce qui ferait desactiver la regle (R-33 bis)."
     },
     {
       "id": "revue-005",
       "domaine": "revue",
       "enonce": "revue de suite (piege 7) : les cles de session sont une liste FERMEE de fragments. Une cle de session dont le nom n en porte aucun passe, et c est assume : un controle qui attraperait toute cle de stockage attraperait les preferences d affichage, et se ferait desactiver",
       "statut": "assume",
-      "note": "Limite DECLAREE par la regle a sa creation (TF-0578, 24/08) : la justification vit dans son NON_JUGE avec le fait qui l a motivee. Elle est ASSUMEE et non a outiller — distinguer statiquement une session composee d un jeton obtenu par un appel opaque demanderait une analyse de flot, et le prix de l approximation a ete choisi : mieux vaut SIGNALER le cas douteux que mettre en echec le harnais de cette forge elle-meme, ce qui ferait desactiver la regle (R-33 bis)."
+      "note": "Limite DECLAREE par la regle a sa creation (TF-0593, 24/08) : la justification vit dans son NON_JUGE avec le fait qui l a motivee. Elle est ASSUMEE et non a outiller — distinguer statiquement une session composee d un jeton obtenu par un appel opaque demanderait une analyse de flot, et le prix de l approximation a ete choisi : mieux vaut SIGNALER le cas douteux que mettre en echec le harnais de cette forge elle-meme, ce qui ferait desactiver la regle (R-33 bis)."
     },
     {
       "id": "revue-006",
       "domaine": "revue",
       "enonce": "revue de suite (piege 8) : le rapprochement `storageState` / `sessionStorage` est fait sur le CORPUS, pas sur le flot — une recette qui persiste son etat dans un projet et ecrit le sessionStorage dans un autre serait signalee a tort. Le cas ne s est jamais presente, et l ecart est declare plutot que couvert par une heuristique de plus",
       "statut": "assume",
-      "note": "Limite DECLAREE par la regle a sa creation (TF-0578, 24/08) : la justification vit dans son NON_JUGE avec le fait qui l a motivee. Elle est ASSUMEE et non a outiller — distinguer statiquement une session composee d un jeton obtenu par un appel opaque demanderait une analyse de flot, et le prix de l approximation a ete choisi : mieux vaut SIGNALER le cas douteux que mettre en echec le harnais de cette forge elle-meme, ce qui ferait desactiver la regle (R-33 bis)."
+      "note": "Limite DECLAREE par la regle a sa creation (TF-0593, 24/08) : la justification vit dans son NON_JUGE avec le fait qui l a motivee. Elle est ASSUMEE et non a outiller — distinguer statiquement une session composee d un jeton obtenu par un appel opaque demanderait une analyse de flot, et le prix de l approximation a ete choisi : mieux vaut SIGNALER le cas douteux que mettre en echec le harnais de cette forge elle-meme, ce qui ferait desactiver la regle (R-33 bis)."
     },
     {
       "id": "risque-001",
