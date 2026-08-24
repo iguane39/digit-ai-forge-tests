@@ -1,11 +1,13 @@
 """Revue statique de la suite de tests du projet — les faux verts, avant de les payer.
 
-TF-0344 / TF-0345 (campagne du 17/08/2026).
+TF-0344 / TF-0345 (campagne du 17/08/2026), puis TF-0396, TF-0395 et TF-0578.
 
 Un contre-oracle mesure ce que la suite ATTEINT et ce qu'elle VÉRIFIE. Aucun ne regardait la
 suite elle-même **en tant que texte** — or trois faux verts sont tombés le même jour, sur la
-même campagne, et aucun oracle ne les a vus. Ils ont trois formes, et deux d'entre elles sont
-détectables sans rien exécuter. C'est cette moitié-là que ce module rend mécanique.
+même campagne, et aucun oracle ne les a vus. C'est cette moitié-là que ce module rend mécanique.
+Le module a grandi par CAS RÉELS : huit règles à ce jour, sept mécanisées et une déclarée
+non détectable ici. Chacune porte son fait fondateur et sa mesure — un contrôle dont personne
+ne sait plus ce qu'il a coûté est le premier qu'une campagne pressée désactive.
 
 **(1) Assertion d'ABSENCE sans preuve de PRÉSENCE.** `toHaveCount(0)` passe sur une page encore
 en chargement : il n'y a rien parce que rien n'est encore là. Le test du passage de main
@@ -56,6 +58,30 @@ APPLICATIF affirmé par une suite sœur (répertoire frère du même dossier de 
 mentionné ici est signalé comme trou de couverture — signal nommé, jamais bloquant : deux
 variantes peuvent différer LÉGITIMEMENT, mais l'écart se lit, il ne se découvre pas en
 production.*
+
+**(7) SESSION FABRIQUÉE, au lieu d'être JOUÉE (TF-0578, lot Approval2 20260824c).** Quand
+l'authentification réelle est indisponible — un fournisseur d'entreprise dont on ne peut pas
+obtenir N identités sans N comptes réels — la solution tentante est d'écrire la session
+directement dans le stockage du navigateur. C'est rapide, ça marche tout de suite, et ça saute
+LE SEUL MÉCANISME QUI AURAIT DÉTECTÉ L'ERREUR : le contrôle d'audience de la bibliothèque
+cliente, qu'une session désérialisée ne rejoue jamais. Mesuré : audience sautée pour les 5
+profils de recette, `client_id` faux survivant NEUF JOURS, trois fichiers portant trois valeurs
+du même identifiant, cinq workflows inter-profils échouant au PREMIER passage réel (run 13894)
+après n'avoir jamais été verts, une demi-journée de diagnostic. *Règle : dans une recette de
+bout en bout, une session s'obtient par le PARCOURS D'ENTRÉE RÉEL du produit ; toute session
+écrite directement dans un stockage est un défaut.* Deux niveaux, parce que les confondre
+rendrait la règle bruyante donc contournable : valeur composée SUR PLACE = session fabriquée,
+bloquant ; valeur issue d'un APPEL = plausiblement un vrai jeton injecté, signalé — c'est ce que
+fait le harnais de cette forge elle-même, où l'audience est vérifiée par le serveur émetteur.
+
+**(8) LA CLÉ DE RELECTURE HORS DU STOCKAGE DE LA SESSION (TF-0578, corollaire).** Le premier
+correctif d'Approval2 avait remplacé la fabrication par une vraie connexion par profil — et
+cassait quand même les cinq workflows : le choix de profil vivait dans `sessionStorage`, que le
+`storageState` de Playwright NE SAUVEGARDE PAS. Perdu au rejeu, l'application retombait
+SILENCIEUSEMENT sur son identité nominale. Ce défaut passait `tsc`, `eslint`, 137 tests
+unitaires ET le harnais de connexion lui-même ; seule l'exécution réelle des cinq workflows l'a
+montré. *Règle : la clé qui permet de RELIRE une session vit au même endroit que la session —
+les séparer recrée la divergence qu'on corrige, sous une forme moins visible.*
 """
 
 from __future__ import annotations
@@ -93,6 +119,27 @@ NON_JUGE = [
     "suites Python ne le sont pas, faute de cas reel sur leurs idiomes",
     "revue de suite : lecture TEXTUELLE, pas d analyse de flot — un motif construit a "
     "l execution (variable, gabarit) echappe a ces regles",
+    "revue de suite (piege 7, session fabriquee) : la PROVENANCE reelle de la valeur ecrite. "
+    "L oracle distingue une valeur composee SUR PLACE (litteral, objet serialise) d une valeur "
+    "issue d un APPEL, et il ne peut pas savoir si cet appel touche le produit ou compose la "
+    "session ailleurs. Le second cas est SIGNALE, jamais mis en echec — c est exactement ce que "
+    "fait le harnais de cette forge (`forge_tests/authentification.py`), ou le jeton vient d une "
+    "authentification reelle et son audience est verifiee par le serveur qui l a emis",
+    "revue de suite (piege 7) : les cles de session sont une liste FERMEE de fragments. Une cle "
+    "de session dont le nom n en porte aucun passe, et c est assume : un controle qui attraperait "
+    "toute cle de stockage attraperait les preferences d affichage, et se ferait desactiver",
+    "revue de suite (piege 9, saut conditionnel) : la LICEITE d un saut. L oracle distingue une "
+    "forme CONDITIONNELLE d une forme inconditionnelle motivee ; il ne peut pas savoir si le "
+    "prealable d un saut conditionnel est en realite garanti par le harnais — auquel cas le saut "
+    "ne se declenchera jamais et le constat est excedentaire. Le declarer coute une ligne de "
+    "reponse ; le taire coute des mois de tests ignores en silence",
+    "revue de suite (piege 9) : les sauts construits a l EXECUTION (une variable qui porte la "
+    "condition, un decorateur compose) echappent a la lecture ligne a ligne. C est la limite "
+    "commune a tout ce module, et elle vaut ici comme ailleurs",
+    "revue de suite (piege 8) : le rapprochement `storageState` / `sessionStorage` est fait sur "
+    "le CORPUS, pas sur le flot — une recette qui persiste son etat dans un projet et ecrit le "
+    "sessionStorage dans un autre serait signalee a tort. Le cas ne s est jamais presente, et "
+    "l ecart est declare plutot que couvert par une heuristique de plus",
 ]
 
 _TEST = re.compile(r"^\s*(?:test|it)(?:\.\w+)*\s*\(\s*[\"'`](?P<nom>[^\"'`]+)", re.MULTILINE)
@@ -404,12 +451,302 @@ def trous_de_couverture_inter_suites(cible: Path) -> list[Finding]:
     return findings
 
 
+#: TF-0578 (retour Approval2 du 24/08) — piège (7), LA SESSION FABRIQUÉE.
+#:
+#: Quand l'authentification réelle est indisponible — un fournisseur d'entreprise, Entra ID,
+#: Google Workspace, Okta, dont on ne peut pas obtenir N identités sans N comptes réels — la
+#: solution tentante est d'écrire la session DIRECTEMENT dans le stockage du navigateur : une
+#: clé calculée à la main, la redirection sautée. C'est rapide, ça marche tout de suite, et ça
+#: saute LE SEUL MÉCANISME QUI AURAIT DÉTECTÉ L'ERREUR — le contrôle d'audience de la
+#: bibliothèque cliente, qu'une session désérialisée ne rejoue jamais.
+#:
+#: MESURÉ : contrôle d'audience sauté pour les 5 profils de recette · un `client_id` FAUX
+#: survivant NEUF JOURS (12/08 au 21/08) · trois fichiers portant trois valeurs du même
+#: identifiant, deux fausses · les 5 workflows inter-profils échouant au PREMIER passage réel
+#: en intégration continue (run 13894) après n'avoir jamais été verts, ni à leur écriture ni
+#: depuis · une demi-journée de diagnostic.
+#:
+#: DEUX NIVEAUX, et les confondre rendrait la règle bruyante — donc contournable (R-33 bis).
+#: Une valeur COMPOSÉE SUR PLACE (littéral, objet littéral passé à `JSON.stringify`) est une
+#: session fabriquée : bloquant. Une valeur qui vient d'un APPEL est plausiblement un vrai
+#: jeton obtenu du produit puis injecté — c'est ce que fait le harnais de cette forge
+#: elle-même (`forge_tests/authentification.py`), où l'audience est vérifiée par le serveur qui
+#: l'a émis. Ce cas est SIGNALÉ, pas mis en échec : l'écart se lit, il ne s'accuse pas.
+_STOCKAGE_ECRITURE = re.compile(
+    r'(?P<stockage>localStorage|sessionStorage)\s*\.\s*setItem\s*\(\s*'
+    r'["\'`](?P<cle>[^"\'`]{1,80})["\'`]\s*,\s*(?P<valeur>[^;]{0,200})',
+    re.DOTALL,
+)
+#: Un cookie de session posé par le harnais plutôt que par le parcours : même geste, autre porte.
+_COOKIE_POSE = re.compile(
+    r'addCookies\s*\(\s*\[?[^;]{0,200}?name\s*:\s*["\'`](?P<cle>[^"\'`]{1,80})["\'`]',
+    re.DOTALL,
+)
+#: Les fragments de clé qui désignent une session. Liste FERMÉE, même construction que les
+#: termes ambigus de la conception : une clé de préférence d'affichage n'est pas une session, et
+#: un contrôle qui les confond se fait contourner au lieu de se corriger.
+_CLES_DE_SESSION = (
+    "token", "session", "auth", "jwt", "bearer", "credential", "identity", "identite",
+    "msal", "oidc", "oauth", "account", "compte", "login", "connexion", "profil", "profile",
+    "user", "utilisateur", "claims", "principal",
+)
+#: Une valeur COMPOSÉE sur place : un littéral nu, ou l'objet/tableau littéral lui-même.
+#: `JSON.stringify(…)` est retiré AVANT ce test — c'est le cas fondateur, et le compter comme un
+#: appel classerait la session la plus manifestement inventée du lot parmi les jetons obtenus.
+_VALEUR_COMPOSEE = re.compile(r'^\s*(?:["\'`]|[{\[])')
+#: L'enveloppe de sérialisation, retirée pour lire ce qu'elle sérialise.
+_SERIALISATION = re.compile(r'^\s*JSON\s*\.\s*(?:stringify)\s*\(')
+#: Une valeur qui vient d'un APPEL — donc potentiellement du produit lui-même.
+_VALEUR_OBTENUE = re.compile(r"\bawait\b|\w\s*\(")
+
+
+def _valeur_composee_sur_place(valeur: str) -> bool:
+    """Vrai si la valeur écrite est fabriquée ICI, faux si elle vient d'un appel.
+
+    L'enveloppe `JSON.stringify(` est retirée d'abord : ce qui compte est ce qu'elle sérialise.
+    Un objet littéral reste une session inventée ; un objet qui contient un appel ne l'est pas.
+    """
+    nue = _SERIALISATION.sub("", valeur, count=1).strip()
+    return bool(_VALEUR_COMPOSEE.match(nue)) and not _VALEUR_OBTENUE.search(nue)
+
+
+def _cle_de_session(cle: str) -> str | None:
+    plie = cle.lower()
+    for fragment in _CLES_DE_SESSION:
+        if fragment in plie:
+            return fragment
+    return None
+
+
+def session_fabriquee(cible: Path) -> list[Finding]:
+    """Piège 7 — une session écrite dans un stockage au lieu d'être JOUÉE par le parcours réel.
+
+    *Règle : dans une recette de bout en bout, une session s'obtient par le parcours d'entrée
+    réel du produit ; toute session écrite directement dans un stockage est un défaut.*
+    """
+    findings: list[Finding] = []
+    for fichier in _specs(cible):
+        relatif = fichier.relative_to(cible).as_posix()
+        texte = fichier.read_text(encoding="utf-8", errors="replace")
+        for nom, corps in _blocs_de_test(texte) or [("(hors bloc de test)", texte)]:
+            for trouve in _STOCKAGE_ECRITURE.finditer(corps):
+                fragment = _cle_de_session(trouve.group("cle"))
+                if fragment is None:
+                    continue
+                valeur = trouve.group("valeur").strip()
+                composee = _valeur_composee_sur_place(valeur)
+                identifiant = (
+                    f"revue:session-fabriquee:{relatif}:{nom}:{trouve.group('cle')}"
+                )
+                findings.append(
+                    Finding(
+                        id=identifiant,
+                        classe=classes.SESSION_FABRIQUEE,
+                        localisation=relatif,
+                        severite="bloquant" if composee else "signale",
+                        message=(
+                            f"« {nom} » ecrit la cle « {trouve.group('cle')} » "
+                            f"(fragment de session « {fragment} ») DIRECTEMENT dans "
+                            f"{trouve.group('stockage')}"
+                            + (
+                                " avec une valeur COMPOSEE SUR PLACE : c est une session "
+                                "FABRIQUEE, et une session deserialisee ne rejoue jamais le "
+                                "controle d audience de la bibliotheque cliente. Une session "
+                                "s obtient par le PARCOURS D ENTREE REEL du produit. Mesure "
+                                "le 24/08 : client_id faux survivant neuf jours, cinq "
+                                "workflows inter-profils jamais verts, echec au premier "
+                                "passage reel (run 13894), demi-journee de diagnostic"
+                                if composee
+                                else " avec une valeur issue d un APPEL — plausiblement un "
+                                "vrai jeton obtenu du produit puis injecte, ce que fait le "
+                                "harnais de cette forge elle-meme. SIGNALE et non bloquant : "
+                                "l ecart se lit, il ne s accuse pas. Ce qui reste a verifier "
+                                "a la main : que le jeton vient bien du parcours d entree, et "
+                                "non d une composition locale passee par une fonction"
+                            )
+                        ),
+                        risque=coter(PAN, identifiant, relatif),
+                    )
+                )
+            for trouve in _COOKIE_POSE.finditer(corps):
+                fragment = _cle_de_session(trouve.group("cle"))
+                if fragment is None:
+                    continue
+                identifiant = (
+                    f"revue:session-fabriquee-cookie:{relatif}:{nom}:{trouve.group('cle')}"
+                )
+                findings.append(
+                    Finding(
+                        id=identifiant,
+                        classe=classes.SESSION_FABRIQUEE,
+                        localisation=relatif,
+                        severite="signale",
+                        message=(
+                            f"« {nom} » POSE le cookie « {trouve.group('cle')} » (fragment de "
+                            f"session « {fragment} ») au lieu de le laisser naitre du parcours "
+                            "d entree. Meme geste que l ecriture en localStorage, autre porte : "
+                            "SIGNALE, parce qu un cookie pose peut porter une vraie valeur de "
+                            "session obtenue ailleurs"
+                        ),
+                        risque=coter(PAN, identifiant, relatif),
+                    )
+                )
+    return findings
+
+
+#: Le COROLLAIRE de (7), et le plus coûteux des deux : *la clé qui permet de RELIRE une session
+#: doit vivre au même endroit que la session*. Le premier correctif d'Approval2 avait remplacé la
+#: fabrication par une vraie connexion par profil — et cassait quand même les cinq workflows,
+#: parce que le choix de profil était mémorisé dans `sessionStorage`, que le `storageState` de
+#: Playwright NE SAUVEGARDE PAS. Perdu au rejeu, l'application retombait SILENCIEUSEMENT sur son
+#: identité nominale. Ce second défaut passait `tsc`, `eslint`, 137 tests unitaires ET le harnais
+#: de connexion lui-même ; seule l'exécution réelle des cinq workflows l'a montré.
+_STORAGE_STATE = re.compile(r"\bstorageState\b")
+_SESSION_STORAGE_ECRITURE = re.compile(r"\bsessionStorage\s*\.\s*setItem\s*\(")
+#: Les fichiers de configuration de recette où `storageState` se déclare une fois pour toutes.
+_CONFIGS = ("playwright.config.ts", "playwright.config.js", "playwright.config.mjs")
+
+
+def cle_de_relecture_separee_de_la_session(cible: Path) -> list[Finding]:
+    """Corollaire de (7) — un état persisté par `storageState` et une clé écrite ailleurs."""
+    specs = _specs(cible)
+    if not specs:
+        return []
+    configs = [
+        chemin
+        for chemin in sorted(cible.rglob("*"))
+        if chemin.is_file() and chemin.name in _CONFIGS and "node_modules" not in chemin.parts
+    ]
+    textes = {
+        f.relative_to(cible).as_posix(): f.read_text(encoding="utf-8", errors="replace")
+        for f in [*specs, *configs]
+    }
+    persiste = sorted(o for o, t in textes.items() if _STORAGE_STATE.search(t))
+    if not persiste:
+        return []
+    findings: list[Finding] = []
+    for ou, texte in sorted(textes.items()):
+        if not _SESSION_STORAGE_ECRITURE.search(texte):
+            continue
+        identifiant = f"revue:cle-hors-session:{ou}"
+        findings.append(
+            Finding(
+                id=identifiant,
+                classe=classes.SESSION_ET_CLE_SEPAREES,
+                localisation=ou,
+                message=(
+                    f"la recette persiste son etat par `storageState` ({persiste[0]}"
+                    f"{' et ' + str(len(persiste) - 1) + ' autre(s)' if len(persiste) > 1 else ''})"
+                    f" et ECRIT dans `sessionStorage` ici — or `storageState` ne sauvegarde PAS "
+                    "le sessionStorage. La cle est donc PERDUE au rejeu, et l application "
+                    "retombe SILENCIEUSEMENT sur son comportement par defaut. La cle qui permet "
+                    "de RELIRE une session doit vivre au meme endroit que la session ; les "
+                    "separer recree la divergence qu on corrige, sous une forme moins visible. "
+                    "Mesure le 24/08 : ce defaut passait tsc, eslint, 137 tests unitaires et le "
+                    "harnais de connexion lui-meme"
+                ),
+                risque=coter(PAN, identifiant, ou),
+            )
+        )
+    return findings
+
+
+#: TF-0590 (lot Approval2 20260824d) — piège (9), LE SAUT CONDITIONNEL.
+#:
+#: QUATRE OCCURRENCES DISTINCTES SUR UN MÊME PRODUIT, toutes vertes. Trois tests d'intégration
+#: silencieusement ignorés EN INTÉGRATION CONTINUE PENDANT DES MOIS — leurs gardes les faisaient
+#: disparaître et l'affichage compact noyait les trois « s » dans 364 points ; l'un d'eux existait
+#: *parce qu'une régression réelle était déjà passée*. Puis un saut conditionnel dans la recette
+#: d'accessibilité : le rapport disait « 27 passés, 1 sauté » et personne ne regardait lequel.
+#:
+#: LA DISTINCTION QUI FAIT LA RÈGLE, et sans elle elle serait fausse : un saut INCONDITIONNEL et
+#: motivé reste licite. C'est une décision lisible — quelqu'un a écrit « ce test ne tourne pas, et
+#: voici pourquoi ». Un saut CONDITIONNEL, lui, peut cesser de tester sans que rien ne change dans
+#: le fichier : la condition devient vraie un jour, sur une machine, et le test disparaît. *Un test
+#: qui peut cesser de tester sans le dire ment sur la couverture.*
+#:
+#: PORTÉE ÉLARGIE POUR CETTE RÈGLE SEULE, et le motif est écrit plutôt que subi : les six premières
+#: ne lisent que les suites de NAVIGATEUR, faute de cas réel sur les idiomes Python. Ici le cas
+#: réel est justement Python (`skipif` sur des tests d'intégration), donc la règle lit les DEUX.
+_SUFFIXES_PYTHON = ("_test.py", "test_.py")
+_SAUT_CONDITIONNEL = re.compile(
+    r"@pytest\.mark\.skipif\s*\("                       # Python : la forme du cas fondateur
+    r"|\bpytest\.skip\s*\([^)]*\)\s*if\b"
+    r"|\btest\.skip\s*\(\s*(?!\s*\))[^)]*[<>=!]"        # Playwright : test.skip(<condition>)
+    r"|\btest\.skip\s*\(\s*(?:!|Boolean\(|process\.env|await |[a-z_$][\w.$]*\s*(?:\)|,))",
+    re.IGNORECASE,
+)
+#: Un saut INCONDITIONNEL — licite, et donc explicitement reconnu pour ne pas être confondu.
+_SAUT_ASSUME = re.compile(
+    r"@pytest\.mark\.skip\s*\(\s*reason\s*="
+    r"|\btest\.skip\s*\(\s*\)"
+    r"|\bit\.skip\s*\(|\bdescribe\.skip\s*\(",
+)
+
+
+def _fichiers_de_test(cible: Path) -> list[Path]:
+    """Les suites de navigateur ET les suites Python — pour la règle (9) seulement."""
+    fichiers = list(_specs(cible))
+    for chemin in sorted(cible.rglob("*.py")):
+        if "node_modules" in chemin.parts or ".venv" in chemin.parts:
+            continue
+        nom = chemin.name
+        if nom.startswith("test_") or nom.endswith("_test.py"):
+            fichiers.append(chemin)
+    return fichiers
+
+
+def saut_conditionnel(cible: Path) -> list[Finding]:
+    """Piège 9 — un saut qui peut cesser de tester sans que rien ne le dise.
+
+    *Règle : un saut CONDITIONNEL est interdit en intégration continue. Ou le préalable est
+    garanti par le harnais, ou son absence est un ÉCHEC EXPLICITE qui nomme ce qui manque. Un
+    saut inconditionnel et motivé reste licite : c'est une décision, pas une disparition.*
+    """
+    findings: list[Finding] = []
+    for fichier in _fichiers_de_test(cible):
+        relatif = fichier.relative_to(cible).as_posix()
+        texte = fichier.read_text(encoding="utf-8", errors="replace")
+        for numero, ligne in enumerate(texte.splitlines(), start=1):
+            if not _SAUT_CONDITIONNEL.search(ligne):
+                continue
+            if _SAUT_ASSUME.search(ligne):
+                continue
+            identifiant = f"revue:saut-conditionnel:{relatif}:{numero}"
+            findings.append(
+                Finding(
+                    id=identifiant,
+                    classe=classes.SAUT_CONDITIONNEL,
+                    localisation=f"{relatif}:{numero}",
+                    message=(
+                        f"saut CONDITIONNEL ligne {numero} : « {ligne.strip()[:90]} ». Un test qui "
+                        "peut cesser de tester sans que rien ne change dans le fichier MENT sur la "
+                        "couverture — la condition devient vraie un jour, sur une machine, et le "
+                        "cas disparait. Ou le prealable est GARANTI par le harnais, ou son absence "
+                        "est un ECHEC EXPLICITE qui nomme ce qui manque. Un saut INCONDITIONNEL et "
+                        "motive reste licite : c est une decision lisible, pas une disparition. "
+                        "Mesure : trois tests d integration ignores en integration continue "
+                        "PENDANT DES MOIS, dont un ecrit parce qu une regression reelle etait "
+                        "deja passee ; et un rapport disant « 27 passes, 1 saute » que personne "
+                        "ne lisait"
+                    ),
+                    risque=coter(PAN, identifiant, relatif),
+                )
+            )
+    return findings
+
+
 def analyser_suite(cible: Path) -> list[Finding]:
-    """Les cinq règles mécanisables, sur les specs du projet. Aucune exécution, aucun réseau."""
+    """Les huit règles mécanisables (sur neuf), sur les suites du projet. Aucune exécution,
+    aucun réseau — un projet dont la suite ne peut pas tourner est justement celui où un faux
+    vert dort le plus longtemps."""
     return [
         *absence_sans_presence(cible),
         *motif_satisfait_par_le_declencheur(cible),
         *donnees_recopiees(cible),
         *prefixe_d_un_chemin_valide(cible),
         *trous_de_couverture_inter_suites(cible),
+        *session_fabriquee(cible),
+        *cle_de_relecture_separee_de_la_session(cible),
+        *saut_conditionnel(cible),
     ]

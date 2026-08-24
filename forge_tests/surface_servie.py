@@ -68,8 +68,8 @@ _URL_CSS = re.compile(r"""url\(\s*['"]?([^'")\s]+)['"]?\s*\)""")
 # faux positifs sur le banc vert dès le premier passage — `/en/blog` cherché comme un fichier.
 # On ne retient donc que les balises qui chargent un FICHIER, nommément.
 _RESSOURCE_HTML = re.compile(
-    r"""<(?:link|img|script|source|video|audio|track|embed|use)[^>]*?"""
-    r"""(?:src|href|xlink:href)\s*=\s*['"]([^'"]+)['"]""",
+    r"""<(?:link|img|script|source|video|audio|track|embed|use)\b[^>]*?"""
+    r"""\b(?:src|href|xlink:href)\s*=\s*['"]([^'"]+)['"]""",
     re.I | re.S,
 )
 

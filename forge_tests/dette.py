@@ -375,7 +375,35 @@ def resume() -> dict[str, int]:
 if __name__ == "__main__":
     import sys
 
-    if "--verifier" in sys.argv[1:]:
+    # TF-0587 (24/08) — UN OUTIL DONT L'APPEL LE PLUS INOFFENSIF ECRIT EST UN OUTIL QU'ON
+    # DECLENCHE PAR ACCIDENT. Ce bloc ne lisait qu'un seul argument : `--verifier`. Tout le reste,
+    # `--help` compris, tombait dans la branche de REGENERATION et reecrivait le registre. C'est
+    # litteralement comme cela que l'ecart de quinze entrees a ete trouve — par un `--help` qui a
+    # regenere le fichier au lieu d'afficher une aide. La regeneration reste le geste par defaut
+    # d'un appel NU, parce que c'est son usage, mais un argument inconnu est desormais refuse
+    # plutot qu'interprete comme « fais quelque chose ».
+    args = sys.argv[1:]
+    CONNUS = {"--verifier", "--aide", "--help", "-h"}
+    inconnus = [a for a in args if a not in CONNUS]
+    if inconnus or {"--aide", "--help", "-h"} & set(args):
+        aide = (
+            "usage : python -m forge_tests.dette [--verifier]\n"
+            "\n"
+            "  (sans argument)  REGENERE le registre depuis les NON_JUGE declares par le code,\n"
+            "                   en conservant statut, preuve et note de chaque entree existante.\n"
+            "  --verifier       compare le registre commite a sa projection et NE MODIFIE RIEN.\n"
+            "                   exit 1 et nomme les ecarts si le registre a derive, 0 sinon.\n"
+            "\n"
+            "Ce mode d'emploi existe parce que `--help` REGENERAIT le fichier (TF-0587)."
+        )
+        if inconnus:
+            print(f"argument inconnu : {' '.join(inconnus)}\n", file=sys.stderr)
+            print(aide, file=sys.stderr)
+            sys.exit(2)
+        print(aide)
+        sys.exit(0)
+
+    if "--verifier" in args:
         ecarts = verifier()
         if ecarts:
             print(f"registre de dette DESYNCHRONISE : {len(ecarts)} ecart(s)")

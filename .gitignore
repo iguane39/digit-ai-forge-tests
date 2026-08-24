@@ -25,3 +25,19 @@ resultat-playwright.json
 *.oracles-historique.jsonl
 !forge/**/*.oracles.json
 !forge/**/*.oracles-historique.jsonl
+
+# TF-0586 (24/08/2026) — le gabarit de configuration que la RECETTE dépose sur ses propres bancs.
+# `gabarit_env.deposer()` est un acquis de TF-0539 : la forge dépose le fichier qu'elle réclame,
+# au lieu de laisser le projet le reconstituer à la main depuis un rapport de 1,1 Mo. C'est juste,
+# et ça vaut aussi quand le « projet audité » est un banc d'essai de la forge elle-même.
+#
+# Mais le contrôle de stabilité d'arbre (TF-0294) voyait apparaître ces deux fichiers PENDANT la
+# recette et REFUSAIT le verdict — « il n'est ni TENU ni NON TENU ». Mesuré : deux exécutions
+# consécutives, deux refus, la seconde sur un arbre nettoyé à la main juste avant. Sur un arbre
+# parfaitement propre, la recette ne pouvait donc JAMAIS rendre de verdict, et trois familles de
+# contrôles rouges vivaient sous ce refus sans que personne puisse les voir bouger.
+#
+# Le remède est celui que le contrôle documente lui-même : ce que la recette écrit légitimement
+# est IGNORÉ, comme `test-results/` et les caches. La portée est bornée AUX BANCS — chez un vrai
+# produit, le dépôt du gabarit doit rester visible, c'est tout son intérêt.
+fixtures/banc-*/.env.forge-tests.exemple

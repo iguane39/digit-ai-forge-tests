@@ -186,9 +186,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # TF-0344/0345 — la revue STATIQUE de la suite tourne d abord, et surtout : elle ne depend
     # ni de l instance servie ni de l execution de la suite. Un projet dont la suite ne peut pas
     # tourner est justement celui ou un faux vert dort le plus longtemps.
-    from forge_tests import revue
+    from forge_tests import couverture, revue
 
     faux_verts = revue.analyser_suite(cible)
+    # TF-0589 (24/08) — la CONFIGURATION qui produit le chiffre, lue avant le chiffre lui-meme.
+    # Meme raison que la revue de suite : elle ne depend ni de l instance servie ni de l execution,
+    # et le projet dont la couverture est mal configuree est justement celui dont le chiffre
+    # rassure le plus. Trois defauts vivaient ensemble sous un seuil VERT le 24/08.
+    faux_verts = faux_verts + couverture.analyser_configuration(cible)
     inv = inventaire(cible)
     couvert = exerces(cible, inv)
     if couvert is None:
@@ -199,13 +204,15 @@ def analyser(cible: Path) -> SortieAdaptateur:
             non_juge=[
                 *NON_JUGE,
                 *revue.NON_JUGE,
+                *couverture.NON_JUGE,
                 f"front : {len(inv)} elements INVENTORIES ({routes} routes, "
                 f"{len(inv) - routes} elements interactifs) mais couverture non mesurable — "
                 + motif_indisponibilite(cible, "front", "suite e2e non executee"),
             ],
         )
     sortie = evaluer_surface(
-        NOM, PAN, str(cible), inv, couvert, SEUIL, [*NON_JUGE, *revue.NON_JUGE],
+        NOM, PAN, str(cible), inv, couvert, SEUIL,
+        [*NON_JUGE, *revue.NON_JUGE, *couverture.NON_JUGE],
         sans_objet=sans_objet(cible),
     )
     if faux_verts:

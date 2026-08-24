@@ -24,13 +24,6 @@
       "note": "instruite le 2026-08-14 (lot COMPTA) : limite declaree par le correctif lui-meme — perimetre du garde-fou, provenance des routes, racine d execution decouverte. Reevaluer si un run reel prouve que la limite coute."
     },
     {
-      "id": "accessibilite-a11y-005",
-      "domaine": "accessibilite-a11y",
-      "enonce": "accessibilite : perimetre du seul oracle structurel. La NAVIGATION CLAVIER, les pieges de focus et l ARIA avance (roles, ordre de focus) ne sont couverts par AUCUN oracle du parc a ce jour — pour un site public francais, RGAA 4.1 est une obligation legale et cet ecart se declare au dossier MEP, il ne se tait pas (RF-6, 20/08/2026). Le CONTRASTE a, lui, une mesure existante mais NON CABLEE a cet audit : render_page.py V2 du socle digit-ai-page-html (luminance WCAG sur styles rendus, deja jouee contre des ecrans produits le 11/08) — l executer separement en attendant son cablage. Et l audit RGAA complet reste un livrable HUMAIN : un tiers des criteres n est pas mecanisable, la machine prepare l audit, elle ne rend pas la declaration",
-      "statut": "assume",
-      "note": "Limite DECLAREE, chantier decide ailleurs : RF-6 (lot SCC-FR 20260820a) porte les trois temps — declarer (fait, 20/08), cabler render_page V2 puis pan axe-core + clavier (O3 de l etude RGAA 20260820a), design accessible a la source (O4). La lever ici sans le pan serait le mensonge inverse."
-    },
-    {
       "id": "actions-001",
       "domaine": "actions",
       "enonce": "actions : la categorie et l etape sont derivees de la CLASSE du finding, pas de son contenu — deux findings de meme classe recoivent la meme suite, meme si l un est trivial et l autre profond ; l attendu, lui, cite l element",
@@ -710,6 +703,27 @@
       "note": "Limite DECLAREE par le module a sa creation (la justification vit dans son NON_JUGE, avec le fait qui l a motivee) — entree au registre par la DECOUVERTE de TF-0384 : neuf modules portaient des limites qu aucun domaine ne collectait, catalogue_i18n n etait que celui qu on avait vu."
     },
     {
+      "id": "revue-004",
+      "domaine": "revue",
+      "enonce": "revue de suite (piege 7, session fabriquee) : la PROVENANCE reelle de la valeur ecrite. L oracle distingue une valeur composee SUR PLACE (litteral, objet serialise) d une valeur issue d un APPEL, et il ne peut pas savoir si cet appel touche le produit ou compose la session ailleurs. Le second cas est SIGNALE, jamais mis en echec — c est exactement ce que fait le harnais de cette forge (`forge_tests/authentification.py`), ou le jeton vient d une authentification reelle et son audience est verifiee par le serveur qui l a emis",
+      "statut": "assume",
+      "note": "Limite DECLAREE par la regle a sa creation (TF-0578, 24/08) : la justification vit dans son NON_JUGE avec le fait qui l a motivee. Elle est ASSUMEE et non a outiller — distinguer statiquement une session composee d un jeton obtenu par un appel opaque demanderait une analyse de flot, et le prix de l approximation a ete choisi : mieux vaut SIGNALER le cas douteux que mettre en echec le harnais de cette forge elle-meme, ce qui ferait desactiver la regle (R-33 bis)."
+    },
+    {
+      "id": "revue-005",
+      "domaine": "revue",
+      "enonce": "revue de suite (piege 7) : les cles de session sont une liste FERMEE de fragments. Une cle de session dont le nom n en porte aucun passe, et c est assume : un controle qui attraperait toute cle de stockage attraperait les preferences d affichage, et se ferait desactiver",
+      "statut": "assume",
+      "note": "Limite DECLAREE par la regle a sa creation (TF-0578, 24/08) : la justification vit dans son NON_JUGE avec le fait qui l a motivee. Elle est ASSUMEE et non a outiller — distinguer statiquement une session composee d un jeton obtenu par un appel opaque demanderait une analyse de flot, et le prix de l approximation a ete choisi : mieux vaut SIGNALER le cas douteux que mettre en echec le harnais de cette forge elle-meme, ce qui ferait desactiver la regle (R-33 bis)."
+    },
+    {
+      "id": "revue-006",
+      "domaine": "revue",
+      "enonce": "revue de suite (piege 8) : le rapprochement `storageState` / `sessionStorage` est fait sur le CORPUS, pas sur le flot — une recette qui persiste son etat dans un projet et ecrit le sessionStorage dans un autre serait signalee a tort. Le cas ne s est jamais presente, et l ecart est declare plutot que couvert par une heuristique de plus",
+      "statut": "assume",
+      "note": "Limite DECLAREE par la regle a sa creation (TF-0578, 24/08) : la justification vit dans son NON_JUGE avec le fait qui l a motivee. Elle est ASSUMEE et non a outiller — distinguer statiquement une session composee d un jeton obtenu par un appel opaque demanderait une analyse de flot, et le prix de l approximation a ete choisi : mieux vaut SIGNALER le cas douteux que mettre en echec le harnais de cette forge elle-meme, ce qui ferait desactiver la regle (R-33 bis)."
+    },
+    {
       "id": "risque-001",
       "domaine": "risque",
       "enonce": "risque : la criticité et le coût de détection tardive sont DÉCLARÉS par pan, pas mesurés — un projet dont les enjeux diffèrent doit redéclarer la table COTATION_PAN",
@@ -834,6 +848,13 @@
       "enonce": "accessibilite : perimetre du seul oracle structurel — ni audit axe-core complet, ni contraste, ni navigation clavier (limites propres de l oracle, reprises telles quelles)",
       "statut": "retiree",
       "note": "limite propre de oracle-a11y, reprise telle quelle : audit axe-core complet, contraste et navigation clavier sortent de son contrat."
+    },
+    {
+      "id": "accessibilite-a11y-005",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : perimetre du seul oracle structurel. La NAVIGATION CLAVIER, les pieges de focus et l ARIA avance (roles, ordre de focus) ne sont couverts par AUCUN oracle du parc a ce jour — pour un site public francais, RGAA 4.1 est une obligation legale et cet ecart se declare au dossier MEP, il ne se tait pas (RF-6, 20/08/2026). Le CONTRASTE a, lui, une mesure existante mais NON CABLEE a cet audit : render_page.py V2 du socle digit-ai-page-html (luminance WCAG sur styles rendus, deja jouee contre des ecrans produits le 11/08) — l executer separement en attendant son cablage. Et l audit RGAA complet reste un livrable HUMAIN : un tiers des criteres n est pas mecanisable, la machine prepare l audit, elle ne rend pas la declaration",
+      "statut": "retiree",
+      "note": "Limite DECLAREE, chantier decide ailleurs : RF-6 (lot SCC-FR 20260820a) porte les trois temps — declarer (fait, 20/08), cabler render_page V2 puis pan axe-core + clavier (O3 de l etude RGAA 20260820a), design accessible a la source (O4). La lever ici sans le pan serait le mensonge inverse."
     },
     {
       "id": "api-fastapi-002",
@@ -998,9 +1019,99 @@
       "statut": "retiree"
     },
     {
+      "id": "accessibilite-a11y-006",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : perimetre du seul oracle structurel. Le CONTRASTE est mesure par le pan `contraste` (render_page.py V2, luminance WCAG sur styles rendus) et la NAVIGATION CLAVIER par le pan `clavier` (focus visible, pieges de focus, lien d evitement). Restent DECOUVERTS : l ARIA avance (roles, ordre de focus coherent avec l ordre de lecture) et les etats atteints apres interaction — pour un site public francais, RGAA 4.1 est une obligation legale et ces ecarts se declarent au dossier MEP, ils ne se taisent pas. Et l audit RGAA complet reste un livrable HUMAIN : un tiers des criteres n est pas mecanisable, la machine prepare l audit, elle ne rend pas la declaration",
+      "statut": "todo"
+    },
+    {
       "id": "adoption-003",
       "domaine": "adoption",
       "enonce": "adoption : un cas `non_testable` ou `ecarte` (R-40) est pris au mot — ce module exige que le motif soit NOMME (champs_requis, ou qui/quand/pourquoi) et jamais que la raison soit bonne ; le solde compte des etats declares, il ne juge pas un arbitrage humain",
+      "statut": "todo"
+    },
+    {
+      "id": "clavier-focus-001",
+      "domaine": "clavier-focus",
+      "enonce": "clavier : mesure a l etat INITIAL de chaque route — un piege de focus qui n apparait qu apres ouverture d une modale ou d un menu n est pas atteint",
+      "statut": "todo"
+    },
+    {
+      "id": "clavier-focus-002",
+      "domaine": "clavier-focus",
+      "enonce": "clavier : K1 juge qu une apparence CHANGE au focus, pas que le changement soit SUFFISAMMENT visible — le contraste de l anneau se juge en amont, au contrat de tokens (oracle-tokens T8 de forge-design) ; ici, un changement imperceptible passerait",
+      "statut": "todo"
+    },
+    {
+      "id": "clavier-focus-003",
+      "domaine": "clavier-focus",
+      "enonce": "clavier : l ORDRE de tabulation (coherence avec l ordre de lecture) n est pas juge — il demande de comprendre l intention de la page, ce qu aucune mesure ne fait",
+      "statut": "todo"
+    },
+    {
+      "id": "clavier-focus-004",
+      "domaine": "clavier-focus",
+      "enonce": "clavier : les raccourcis, la gestion du focus au changement de route et les regions ARIA live ne sont pas mesures",
+      "statut": "todo"
+    },
+    {
+      "id": "clavier-focus-005",
+      "domaine": "clavier-focus",
+      "enonce": "clavier : l audit RGAA complet reste un livrable HUMAIN — la machine prepare l audit, elle ne rend pas la declaration",
+      "statut": "todo"
+    },
+    {
+      "id": "contraste-wcag-001",
+      "domaine": "contraste-wcag",
+      "enonce": "contraste : mesure a l etat INITIAL de chaque route — les etats atteints apres interaction (menu ouvert, modale, message d erreur) ne sont pas mesures",
+      "statut": "todo"
+    },
+    {
+      "id": "contraste-wcag-002",
+      "domaine": "contraste-wcag",
+      "enonce": "contraste : un texte pose sur une IMAGE de fond n est pas mesurable par calcul — la mesure le declare `non mesure` au lieu de l approuver, et il reste a verifier a l oeil",
+      "statut": "todo"
+    },
+    {
+      "id": "contraste-wcag-003",
+      "domaine": "contraste-wcag",
+      "enonce": "contraste : le seuil applique est WCAG AA (4.5:1, ou 3:1 pour le texte large tel que le socle le qualifie). AAA (7:1) n est pas jugé ici",
+      "statut": "todo"
+    },
+    {
+      "id": "contraste-wcag-004",
+      "domaine": "contraste-wcag",
+      "enonce": "contraste : la NAVIGATION CLAVIER et les pieges de focus relevent du pan `clavier` ; l ARIA avance (roles, ordre de focus) n est couvert par aucun oracle du parc a ce jour",
+      "statut": "todo"
+    },
+    {
+      "id": "contraste-wcag-005",
+      "domaine": "contraste-wcag",
+      "enonce": "contraste : l audit RGAA complet reste un livrable HUMAIN — un tiers des criteres n est pas mecanisable, la machine prepare l audit, elle ne rend pas la declaration",
+      "statut": "todo"
+    },
+    {
+      "id": "couverture-001",
+      "domaine": "couverture",
+      "enonce": "couverture : la configuration est lue comme du TEXTE, sans evaluer le JavaScript. Un perimetre construit a l execution (variable, fonction, fusion de configurations) echappe aux trois regles — elles verront « pas de perimetre declare » la ou il y en a un",
+      "statut": "todo"
+    },
+    {
+      "id": "couverture-002",
+      "domaine": "couverture",
+      "enonce": "couverture : le NIVEAU ATTEINT n est pas connu en lisant une configuration, donc la regle « le plancher se cale SOUS le niveau atteint, pas dessus » ne peut pas etre mecanisee ici. Elle est ecrite dans le message de la regle du seuil par fichier, la ou quelqu un s apprete a choisir un chiffre — c est le seul endroit ou elle sert",
+      "statut": "todo"
+    },
+    {
+      "id": "couverture-003",
+      "domaine": "couverture",
+      "enonce": "couverture : la JUSTESSE d un perimetre declare. L oracle constate qu un `include` existe, jamais qu il vise le bon dossier — un perimetre declare et faux passe, et c est deja infiniment mieux qu un perimetre absent, qui derive a chaque fichier ajoute ou retire",
+      "statut": "todo"
+    },
+    {
+      "id": "couverture-004",
+      "domaine": "couverture",
+      "enonce": "couverture : les outils hors de la liste fermee CONFIGS ne sont pas juges. Un projet qui configure sa couverture ailleurs (script npm, arguments de ligne de commande, CI) n est pas vu — la configuration en ligne de commande est le trou connu de cette famille",
       "statut": "todo"
     },
     {
@@ -1148,6 +1259,30 @@
       "statut": "todo"
     },
     {
+      "id": "plancher-rendu-001",
+      "domaine": "plancher-rendu",
+      "enonce": "plancher : mesure a l etat INITIAL de chaque route — les etats atteints apres interaction (menu ouvert, modale, filtre, message d erreur) ne sont pas mesures ici. La matrice d etats du socle (render_page.py --matrice-etats, TF-0493) les joue sur un FICHIER, elle n est pas cablee sur une instance servie",
+      "statut": "todo"
+    },
+    {
+      "id": "plancher-rendu-002",
+      "domaine": "plancher-rendu",
+      "enonce": "plancher : V5 croisements de fleches et V6 images deformees restent une inspection HUMAINE sur captures — ce pan ne produit pas d image, il lit des mesures du DOM",
+      "statut": "todo"
+    },
+    {
+      "id": "plancher-rendu-003",
+      "domaine": "plancher-rendu",
+      "enonce": "plancher : la largeur de fenetre est celle du parcours servi (une seule) — les breakpoints se jouent au pan `front` et par oracle-mobile, pas ici",
+      "statut": "todo"
+    },
+    {
+      "id": "plancher-rendu-004",
+      "domaine": "plancher-rendu",
+      "enonce": "plancher : ce pan juge un PLANCHER, jamais une intention graphique. « Ce n est pas desirable » n est decidable par aucun script (doctrine du socle de marque)",
+      "statut": "todo"
+    },
+    {
       "id": "qualif-navigateur-002",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",
@@ -1181,6 +1316,18 @@
       "id": "qualif-navigateur-009",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : un refus rendu par une page MAISON n est reconnu que si sa route est DECLAREE (FORGE_TESTS_QUALIF_REFUS) ou si un de ses segments nomme l erreur d autorisation (403, acces-refuse, forbidden…). Un produit qui refuse en servant `/oups` ou `/erreur` sans plus de precision garde ce refus COMPTE COMME PARCOURU : le non-jugement est prefere au faux refus, qui sortirait du ratio une route peut-etre cassee. Declarer la route leve la limite",
+      "statut": "todo"
+    },
+    {
+      "id": "revue-007",
+      "domaine": "revue",
+      "enonce": "revue de suite (piege 9, saut conditionnel) : la LICEITE d un saut. L oracle distingue une forme CONDITIONNELLE d une forme inconditionnelle motivee ; il ne peut pas savoir si le prealable d un saut conditionnel est en realite garanti par le harnais — auquel cas le saut ne se declenchera jamais et le constat est excedentaire. Le declarer coute une ligne de reponse ; le taire coute des mois de tests ignores en silence",
+      "statut": "todo"
+    },
+    {
+      "id": "revue-008",
+      "domaine": "revue",
+      "enonce": "revue de suite (piege 9) : les sauts construits a l EXECUTION (une variable qui porte la condition, un decorateur compose) echappent a la lecture ligne a ligne. C est la limite commune a tout ce module, et elle vaut ici comme ailleurs",
       "statut": "todo"
     },
     {
