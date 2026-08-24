@@ -1,4 +1,4 @@
-"""TF-0590 — les tests qui ne s'exécutent pas, et que le reporting rend invisibles.
+"""TF-0605 — les tests qui ne s'exécutent pas, et que le reporting rend invisibles.
 
 Lot Approval2 20260824d. Quatre occurrences distinctes sur un même produit, toutes vertes :
 trois tests d'intégration silencieusement ignorés en intégration continue PENDANT DES MOIS —

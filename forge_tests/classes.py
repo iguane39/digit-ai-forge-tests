@@ -54,16 +54,16 @@ FAUX_VERT_MOTIF = "faux-vert-motif-du-declencheur"
 DONNEE_DE_TEST_RECOPIEE = "donnee-de-test-recopiee"
 FAUX_VERT_PREFIXE = "faux-vert-prefixe-d-un-chemin-valide"
 TROU_DE_COUVERTURE_SOEUR = "trou-de-couverture-inter-suites"
-# TF-0578 (retour Approval2 du 24/08) : la session FABRIQUEE, et son corollaire de stockage.
+# TF-0593 (retour Approval2 du 24/08) : la session FABRIQUEE, et son corollaire de stockage.
 SESSION_FABRIQUEE = "session-fabriquee-hors-parcours-d-entree"
 SESSION_ET_CLE_SEPAREES = "cle-de-relecture-hors-du-stockage-de-la-session"
 
-# --- Configuration de couverture : le chiffre avant la mesure (TF-0589) -------------------------
+# --- Configuration de couverture : le chiffre avant la mesure (TF-0604) -------------------------
 COUVERTURE_PERIMETRE_NON_DECLARE = "couverture-perimetre-non-declare"
 COUVERTURE_SEUIL_GLOBAL_SEUL = "couverture-seuil-global-sans-seuil-par-fichier"
 COUVERTURE_FONCTIONS_SANS_SEUIL = "couverture-fonctions-sans-seuil"
 
-# --- Les tests qui ne s'executent pas, et que le reporting rend invisibles (TF-0590) ---------
+# --- Les tests qui ne s'executent pas, et que le reporting rend invisibles (TF-0605) ---------
 SAUT_CONDITIONNEL = "saut-conditionnel-en-integration-continue"
 
 # --- Aller-retour écriture/relecture (TF-0369) ---------------------------------------------------

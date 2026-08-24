@@ -1,6 +1,6 @@
 """Revue statique de la CONFIGURATION de couverture — le chiffre avant la mesure.
 
-TF-0589 (lot Approval2 20260824d, 24/08/2026).
+TF-0604 (lot Approval2 20260824d, 24/08/2026).
 
 Un contre-oracle mesure ce que la suite atteint. Aucun ne regardait le RÉGLAGE qui produit ce
 chiffre — or trois défauts y vivaient en même temps, tous sous un seuil VERT, et c'est leur

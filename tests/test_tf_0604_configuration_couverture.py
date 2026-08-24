@@ -1,4 +1,4 @@
-"""TF-0589 — la configuration de couverture, lue avant le chiffre qu'elle produit.
+"""TF-0604 — la configuration de couverture, lue avant le chiffre qu'elle produit.
 
 Lot Approval2 20260824d. Trois défauts vivaient ensemble sous un seuil VERT : un dénominateur
 non déclaré (75,33 % affiché pour 84,68 % réels), un seuil global incapable d'échouer sur un

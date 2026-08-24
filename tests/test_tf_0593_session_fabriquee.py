@@ -1,4 +1,4 @@
-"""TF-0578 — la session FABRIQUÉE, et la clé de relecture séparée de sa session.
+"""TF-0593 — la session FABRIQUÉE, et la clé de relecture séparée de sa session.
 
 Lot Approval2 20260824c. Un produit à identité déléguée ne peut pas authentifier N identités
 sans N comptes réels chez son fournisseur ; la solution tentante est d'écrire la session

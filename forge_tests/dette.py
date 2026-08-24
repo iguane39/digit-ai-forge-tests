@@ -375,7 +375,7 @@ def resume() -> dict[str, int]:
 if __name__ == "__main__":
     import sys
 
-    # TF-0587 (24/08) — UN OUTIL DONT L'APPEL LE PLUS INOFFENSIF ECRIT EST UN OUTIL QU'ON
+    # TF-0602 (24/08) — UN OUTIL DONT L'APPEL LE PLUS INOFFENSIF ECRIT EST UN OUTIL QU'ON
     # DECLENCHE PAR ACCIDENT. Ce bloc ne lisait qu'un seul argument : `--verifier`. Tout le reste,
     # `--help` compris, tombait dans la branche de REGENERATION et reecrivait le registre. C'est
     # litteralement comme cela que l'ecart de quinze entrees a ete trouve — par un `--help` qui a
@@ -394,7 +394,7 @@ if __name__ == "__main__":
             "  --verifier       compare le registre commite a sa projection et NE MODIFIE RIEN.\n"
             "                   exit 1 et nomme les ecarts si le registre a derive, 0 sinon.\n"
             "\n"
-            "Ce mode d'emploi existe parce que `--help` REGENERAIT le fichier (TF-0587)."
+            "Ce mode d'emploi existe parce que `--help` REGENERAIT le fichier (TF-0602)."
         )
         if inconnus:
             print(f"argument inconnu : {' '.join(inconnus)}\n", file=sys.stderr)

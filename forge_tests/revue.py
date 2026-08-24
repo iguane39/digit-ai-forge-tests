@@ -1,6 +1,6 @@
 """Revue statique de la suite de tests du projet — les faux verts, avant de les payer.
 
-TF-0344 / TF-0345 (campagne du 17/08/2026), puis TF-0396, TF-0395 et TF-0578.
+TF-0344 / TF-0345 (campagne du 17/08/2026), puis TF-0396, TF-0395 et TF-0593.
 
 Un contre-oracle mesure ce que la suite ATTEINT et ce qu'elle VÉRIFIE. Aucun ne regardait la
 suite elle-même **en tant que texte** — or trois faux verts sont tombés le même jour, sur la
@@ -59,7 +59,7 @@ mentionné ici est signalé comme trou de couverture — signal nommé, jamais b
 variantes peuvent différer LÉGITIMEMENT, mais l'écart se lit, il ne se découvre pas en
 production.*
 
-**(7) SESSION FABRIQUÉE, au lieu d'être JOUÉE (TF-0578, lot Approval2 20260824c).** Quand
+**(7) SESSION FABRIQUÉE, au lieu d'être JOUÉE (TF-0593, lot Approval2 20260824c).** Quand
 l'authentification réelle est indisponible — un fournisseur d'entreprise dont on ne peut pas
 obtenir N identités sans N comptes réels — la solution tentante est d'écrire la session
 directement dans le stockage du navigateur. C'est rapide, ça marche tout de suite, et ça saute
@@ -74,7 +74,7 @@ rendrait la règle bruyante donc contournable : valeur composée SUR PLACE = ses
 bloquant ; valeur issue d'un APPEL = plausiblement un vrai jeton injecté, signalé — c'est ce que
 fait le harnais de cette forge elle-même, où l'audience est vérifiée par le serveur émetteur.
 
-**(8) LA CLÉ DE RELECTURE HORS DU STOCKAGE DE LA SESSION (TF-0578, corollaire).** Le premier
+**(8) LA CLÉ DE RELECTURE HORS DU STOCKAGE DE LA SESSION (TF-0593, corollaire).** Le premier
 correctif d'Approval2 avait remplacé la fabrication par une vraie connexion par profil — et
 cassait quand même les cinq workflows : le choix de profil vivait dans `sessionStorage`, que le
 `storageState` de Playwright NE SAUVEGARDE PAS. Perdu au rejeu, l'application retombait
@@ -451,7 +451,7 @@ def trous_de_couverture_inter_suites(cible: Path) -> list[Finding]:
     return findings
 
 
-#: TF-0578 (retour Approval2 du 24/08) — piège (7), LA SESSION FABRIQUÉE.
+#: TF-0593 (retour Approval2 du 24/08) — piège (7), LA SESSION FABRIQUÉE.
 #:
 #: Quand l'authentification réelle est indisponible — un fournisseur d'entreprise, Entra ID,
 #: Google Workspace, Okta, dont on ne peut pas obtenir N identités sans N comptes réels — la
@@ -651,7 +651,7 @@ def cle_de_relecture_separee_de_la_session(cible: Path) -> list[Finding]:
     return findings
 
 
-#: TF-0590 (lot Approval2 20260824d) — piège (9), LE SAUT CONDITIONNEL.
+#: TF-0605 (lot Approval2 20260824d) — piège (9), LE SAUT CONDITIONNEL.
 #:
 #: QUATRE OCCURRENCES DISTINCTES SUR UN MÊME PRODUIT, toutes vertes. Trois tests d'intégration
 #: silencieusement ignorés EN INTÉGRATION CONTINUE PENDANT DES MOIS — leurs gardes les faisaient

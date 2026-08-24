@@ -49,7 +49,7 @@ def _essai_non_passant(identifiant: str, pan: str, enfant: ET.Element) -> Essai:
 def depuis_junit(xml_texte: str, pan: str) -> list[Essai]:
     """Un `Essai` par `<testcase>` du rapport JUnit fourni.
 
-    Un rapport SANS AUCUN cas est REFUSÉ (TF-0590) : un exécuteur qui ne collecte rien n est pas
+    Un rapport SANS AUCUN cas est REFUSÉ (TF-0605) : un exécuteur qui ne collecte rien n est pas
     un succès, c est une mesure absente — et une liste vide se lirait « aucun défaut ».
 
     Règle de traduction, dans l ordre : un `<skipped>` -> `non_execute` (le cas n a jamais
@@ -63,7 +63,7 @@ def depuis_junit(xml_texte: str, pan: str) -> list[Essai]:
     except ET.ParseError as erreur:
         raise JunitIllisible(f"XML JUnit invalide : {erreur}") from erreur
 
-    # TF-0590 (lot Approval2 20260824d) — UN EXECUTEUR QUI NE COLLECTE RIEN N EST PAS UN SUCCES.
+    # TF-0605 (lot Approval2 20260824d) — UN EXECUTEUR QUI NE COLLECTE RIEN N EST PAS UN SUCCES.
     # Le fait : `npx playwright test` a rendu « No tests found » avec un CODE DE SORTIE 0, sur un
     # conflit de motif entre deux executeurs. Une suite ENTIERE etait absente, et la chaine l a
     # rapportee comme un succes. C est le defaut le plus silencieux de toute la famille des faux
