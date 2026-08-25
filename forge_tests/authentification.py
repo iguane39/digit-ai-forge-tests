@@ -7,7 +7,15 @@ declencher d action mutante : le seul appel emis est l authentification elle-mem
 modifie aucune donnee metier.
 
 Les identifiants ne vivent JAMAIS dans le code ni dans un commit : ils sont lus dans un `.env`
-gitignore que l operateur remplit. Aucune valeur n est journalisee.
+gitignore. Aucune valeur n est journalisee.
+
+Et depuis TF-0620 (mesure du pilot du 25/08/2026), la ligne qui l ignore est LIVREE par la forge
+et non supposee remplie par l operateur : `gabarit_env.proteger()` l ajoute au `.gitignore` du
+projet audite, denonce une negation `!.env.forge-tests` sans jamais la retirer, et le flux
+d audit l appelle a chaque passage. La phrase precedente disait « gitignore que l operateur
+remplit » : c etait une protection SUPPOSEE, et le tirage a rendu 1 projet conforme sur 3 —
+les deux autres versionnes, l un publie sur origin/main. Une affordance est cablee ou elle
+n existe pas.
 """
 
 from __future__ import annotations

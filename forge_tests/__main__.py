@@ -74,11 +74,16 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
 
     from forge_tests import gabarit_env as _gab
     _depot = _gab.deposer(cible)
+    # TF-0620 (mesure du pilot du 25/08) : la forge PRESCRIT `.env.forge-tests` chez le projet, et
+    # ce fichier porte des identifiants. La protection etait SUPPOSEE — « gitignore que l'operateur
+    # remplit » — et le tirage a rendu 1 projet conforme sur 3, les deux autres versionnes, l'un
+    # publie sur origin/main. Une affordance est cablee ou elle n'existe pas (loi transverse n° 1).
+    _protection = _gab.proteger(cible)
 
     return rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins,
                    instance=instance_au_rapport(cible),
                    boucle=_boucle.verdict(_boucle.lire(cible)),
-                   gabarit_env=_depot,
+                   gabarit_env={**_depot, "protection_gitignore": _protection},
                    vendorisation=_vendor)
 
 
