@@ -11,6 +11,25 @@ Le choix qui compte ici : les clés sont **dérivées du code** par balayage des
 de clé, en silence, et personne ne s'en aperçoit avant qu'un projet cherche une option qui
 n'existe plus — c'est la même classe de défaut que les dix listes d'exclusion de TF-0543.
 
+Ce qu'il livre AUSSI, depuis TF-0620 (mesure du pilot du 25/08). Ce module PRESCRIT le nom
+`.env.forge-tests` chez le projet audité, et ce fichier porte, par construction, les éléments
+d'authentification de l'application. Jusqu'ici la protection était SUPPOSÉE : le docstring
+d'`authentification.py` écrivait « gitignore que l'opérateur remplit », et le mot `gitignore`
+n'apparaissait nulle part ailleurs dans le paquet. Une convention qui repose sur un geste
+d'opérateur non outillé ne produit pas « souvent conforme » — elle produit un TIRAGE. Le tirage a
+été mesuré sur les trois projets du parc qui portent le fichier réel : **un seul l'ignorait**. Le
+deuxième n'avait aucune ligne, et le troisième portait `!.env.forge-tests`, une NÉGATION écrite
+exprès pour que git suive ce fichier — ce qui interdit de conclure à l'étourderie. Les deux étaient
+versionnés, et l'un PUBLIÉ sur `origin/main`. Loi transverse n° 1, mot pour mot : *toute affordance
+est câblée ou n'existe pas.*
+
+Où s'arrête ce module, et pourquoi la frontière est là. Il AJOUTE la ligne manquante — un geste
+additif, réversible, dans un fichier dont il connaît déjà l'usage. Il ne RETIRE jamais une négation
+existante : quelqu'un l'a écrite, éventuellement pour une raison, et l'effacer serait décider à sa
+place. Il la DÉNONCE, avec son numéro de ligne. Et il ne retire jamais du suivi un fichier déjà
+versionné : cela relève de l'humain (R-29), et pour un fichier déjà publié, seule une rotation
+d'identifiant réduit le risque — le retirer du disque n'y change rien.
+
 Ce que ce module NE fait PAS : écraser un fichier existant. Le projet renomme et remplit
 `.env.forge-tests.exemple` en `.env.forge-tests` ; ce dernier lui appartient et n'est jamais
 touché. Un exemple qui écraserait une configuration réelle coûterait plus qu'il ne rend.
@@ -84,6 +103,60 @@ def rendre(cles: list[str]) -> str:
         lignes.append(f"{cle}=")
         lignes.append("")
     return "\n".join(lignes)
+
+
+#: Le nom prescrit au projet. Une seule source pour ce nom : le répéter en littéral dans deux
+#: fonctions ferait diverger la ligne écrite au `.gitignore` de celle qui est cherchée.
+CONFIG = ".env.forge-tests"
+
+
+def proteger(cible: Path | str) -> dict:
+    """Garantit que le `.gitignore` du projet couvre `.env.forge-tests`, ou DIT pourquoi il ne l'est pas.
+
+    Quatre issues, toutes nommées — un silence ne se distinguerait pas d'un oubli :
+      · `deja` — une ligne le couvre déjà, rien à faire ;
+      · `negation` — le `.gitignore` porte `!.env.forge-tests`, qui DÉS-IGNORE le fichier exprès.
+        Elle n'est PAS retirée : quelqu'un l'a écrite. Elle est dénoncée avec sa ligne ;
+      · `ajoutee` — la ligne manquait, elle est ajoutée (geste additif et réversible) ;
+      · `impossible` — l'écriture a échoué, et l'erreur est rendue plutôt qu'avalée.
+    """
+    racine = Path(cible)
+    chemin = racine / ".gitignore"
+    lignes: list[str] = []
+    if chemin.exists():
+        try:
+            lignes = chemin.read_text(encoding="utf-8").splitlines()
+        except OSError as erreur:
+            return {"etat": "impossible", "motif": f"`.gitignore` illisible : {erreur}", "ligne": None}
+
+    for numero, brute in enumerate(lignes, start=1):
+        nue = brute.strip()
+        if nue == f"!{CONFIG}":
+            return {
+                "etat": "negation",
+                "motif": (
+                    f"`.gitignore:{numero}` porte `!{CONFIG}` — une NÉGATION, qui dés-ignore exprès "
+                    f"un fichier porteur d'identifiants. Elle n'est pas retirée par la forge : "
+                    f"quelqu'un l'a écrite et l'effacer serait décider à sa place. À retirer, puis "
+                    f"`git rm --cached {CONFIG}` ; si le fichier est déjà publié, seule une rotation "
+                    f"d'identifiant réduit le risque"
+                ),
+                "ligne": numero,
+            }
+        if nue == CONFIG or nue == f"/{CONFIG}":
+            return {"etat": "deja", "motif": f"`.gitignore:{numero}` couvre déjà `{CONFIG}`", "ligne": numero}
+
+    entete = "" if not lignes or lignes[-1].strip() == "" else "\n"
+    ajout = (
+        f"{entete}# Configuration d'audit forge-tests : porte des identifiants, jamais versionnée (TF-0620).\n"
+        f"{CONFIG}\n"
+    )
+    try:
+        with chemin.open("a", encoding="utf-8") as f:
+            f.write(ajout)
+    except OSError as erreur:
+        return {"etat": "impossible", "motif": f"écriture impossible dans `.gitignore` : {erreur}", "ligne": None}
+    return {"etat": "ajoutee", "motif": f"`{CONFIG}` ajouté au `.gitignore` du projet", "ligne": len(lignes) + 2}
 
 
 def deposer(cible: Path | str, *, racine_forge: Path | str | None = None) -> dict:
