@@ -1133,6 +1133,30 @@
       "statut": "todo"
     },
     {
+      "id": "glossaire-001",
+      "domaine": "glossaire",
+      "enonce": "glossaire : la JUSTESSE d un fait declare n est pas jugee. Ce module confronte une chaine a un nombre DECLARE par le produit ; si la declaration est fausse, l ecart rendu est faux dans l autre sens. C est un point fixe assume, pas une verite mesuree",
+      "statut": "todo"
+    },
+    {
+      "id": "glossaire-002",
+      "domaine": "glossaire",
+      "enonce": "glossaire : un PLURIEL IRREGULIER n est pas vu. Le terme retenu est cherche suivi d au plus deux caracteres de mot — ce qui couvre -s, -es, -en, -i. Inventer une morphologie par locale serait affirmer ce que la donnee ne porte pas ; le manque est donc declare plutot que comble au jugé",
+      "statut": "todo"
+    },
+    {
+      "id": "glossaire-003",
+      "domaine": "glossaire",
+      "enonce": "glossaire : un nombre ECRIT EN LETTRES (« huit gites ») n est pas vu. Le lexique des nombres varie par langue et le deduire du glossaire n a pas de sens",
+      "statut": "todo"
+    },
+    {
+      "id": "glossaire-004",
+      "domaine": "glossaire",
+      "enonce": "glossaire : la comparaison ENTRE LOCALES ne remplace pas cette confrontation et c est mesure — le defaut fondateur disait « 8 » dans les SEPT langues, parfaitement coherent entre locales et integralement faux. Il faut un point fixe HORS du catalogue",
+      "statut": "todo"
+    },
+    {
       "id": "i18n-build-servi-001",
       "domaine": "i18n-build-servi",
       "enonce": "i18n : le pan lit un BUILD SERVI (dossier de pages), jamais un site distant ni le code source — une locale declaree dans la configuration mais jamais construite est invisible ici, et c est voulu : ce qui n est pas servi n est pas ce que le visiteur recoit",

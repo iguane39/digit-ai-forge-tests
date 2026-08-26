@@ -58,6 +58,8 @@ GLOSES: dict[str, str] = {
     "FORGE_TESTS_I18N_ROUTES": "routes attendues par locale (TF-0470)",
     "FORGE_TESTS_I18N_CHAINES": "lexique de chaînes littérales à surveiller (TF-0465)",
     "FORGE_TESTS_LOGIN": "identifiants de démonstration, JAMAIS un compte réel",
+    "FORGE_TESTS_GLOSSAIRE": "glossaire du projet (TF-0644) — defaut `docs/projet/GLOSSAIRE.md` ; il donne, par locale, le TERME retenu, sans quoi « 8 gites » et « 8 cottages » ne se rapprochent pas",
+    "FORGE_TESTS_FAITS": "JSON `{\"<pivot>\": <nombre>}` — la DONNEE du produit, seul point fixe hors du catalogue. Le defaut fondateur disait « 8 » dans les SEPT langues : coherentes entre elles, et toutes fausses",
     "FORGE_TESTS_AVANCEMENT_S": "période d'émission de l'avancement, en secondes",
 }
 
