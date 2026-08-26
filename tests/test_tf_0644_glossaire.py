@@ -175,6 +175,52 @@ def test_le_pluriel_court_est_reconnu_le_terme_au_singulier_aussi():
     assert {e["cle"] for e in ecarts} == {"a", "b"}
 
 
+# ---------------------------------------------------------------------------------------------
+# TF-0656 — LE TERME RETENU EST-IL RÉELLEMENT EMPLOYÉ ?
+#
+# Le fait, parti en production dans trois langues sur sept : le retenu employé ZÉRO fois quand le
+# proscrit l'était 82, 79 et 82 fois. Le glossaire avait été corrigé la veille ; les chaînes n'ont
+# jamais suivi, et la règle était « non jugée — à relire à l'œil ».
+# ---------------------------------------------------------------------------------------------
+
+def _terme_proscrit():
+    return [{"nom": "hebergement", "categorie": "contractuel", "pivot": "gîte",
+             "lignes": [{"locale": "de", "retenu": "Ferienhaus", "proscrits": "`Gite` — mot français"}]}]
+
+
+def test_le_retenu_a_zero_emploi_pendant_que_le_proscrit_regne_est_un_ECHEC():
+    par_locale = {"de": {"a": "Unser Gite in der Normandie", "b": "Das Gite ist gemütlich",
+                         "c": "Gite mit Pool"}}
+    ecarts = glossaire.confronter_emploi(par_locale, _terme_proscrit())
+    assert len(ecarts) == 1, f"attendu 1 ecart, obtenu {ecarts}"
+    assert ecarts[0]["retenu"] == "Ferienhaus" and ecarts[0]["proscrit"] == "Gite"
+    assert ecarts[0]["vus_proscrit"] == 3, "le compte du proscrit n est pas rendu — un total anonyme ne se corrige pas"
+
+
+def test_le_retenu_employe_ne_declenche_rien_meme_si_le_proscrit_traine():
+    """Contre-épreuve : sans elle, une règle qui crierait dès qu'un proscrit apparaît passerait le cas rouge."""
+    par_locale = {"de": {"a": "Unser Ferienhaus in der Normandie", "b": "Das Gite ist gemütlich"}}
+    assert glossaire.confronter_emploi(par_locale, _terme_proscrit()) == []
+
+
+def test_BORNE_une_locale_qui_ne_parle_pas_du_concept_n_est_pas_accusee():
+    """Le retenu à zéro n'est un défaut QUE si le proscrit règne : les deux conditions ensemble."""
+    par_locale = {"de": {"a": "Nichts zu diesem Thema"}}
+    assert glossaire.confronter_emploi(par_locale, _terme_proscrit()) == []
+
+
+def test_BORNE_un_proscrit_sans_accents_graves_n_est_pas_un_terme():
+    """La convention du gabarit : un mot proscrit s'écrit `ainsi`, sa glose non.
+
+    Sans cette borne, la glose « ne pas employer le mot allemand courant » ferait chercher des
+    mots qui ne sont pas des termes proscrits.
+    """
+    termes = [{"nom": "h", "categorie": "contractuel", "pivot": "gîte",
+               "lignes": [{"locale": "de", "retenu": "Ferienhaus", "proscrits": "Gite est proscrit"}]}]
+    par_locale = {"de": {"a": "Unser Gite in der Normandie"}}
+    assert glossaire.confronter_emploi(par_locale, termes) == []
+
+
 def test_les_faits_declares_ignorent_les_valeurs_non_entieres_et_le_disent(tmp_path):
     chemin = _ecrire(tmp_path, "FAITS.json", json.dumps({"gîte": 5, "prix": "cinq"}))
     lu = glossaire.faits_declares(chemin)
