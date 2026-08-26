@@ -935,6 +935,40 @@ def _findings_catalogue(cible: Path) -> tuple[list[Finding], list[str]]:
             # qu on la delegue quand meme. Un terme retenu a zero emploi la ou le concept est
             # employe 82 fois est un ECHEC, pas une nuance : aucune information supplementaire n est
             # necessaire pour trancher, donc ce n est pas un arbitrage.
+        # (j) UN DETERMINANT EST-IL RESTE AU GENRE D'ORIGINE ? — TF-0660.
+        #
+        # LE FAIT : onze fautes d'accord — cinq en espagnol, cinq en portugais — sont parties EN
+        # PRODUCTION derriere une CI verte et SIX controleurs au vert. Le run avait substitue le
+        # terme d'hebergement, `gite` (m.) devenant `casa rural` (f.). Les accords ADJACENTS au
+        # nom ont ete traites par la passe de substitution ; ceux qui en etaient SEPARES DE
+        # PLUSIEURS MOTS ont survecu : « NINGUN casa rural disponible ».
+        #
+        # Aucun controleur ne pouvait le voir : ils comparent des arborescences de cles, cherchent
+        # la presence d'un terme, mesurent l'ecart au francais, comptent des caracteres. AUCUN NE
+        # LIT UNE PHRASE. Une langue peut etre structurellement conforme, terminologiquement
+        # exacte, dimensionnee pour la SERP — et fautive.
+        #
+        # CE CONTROLE NE SE DECLENCHE QUE SI LE GLOSSAIRE DECLARE UN `genre`. Sans declaration il
+        # se tait, et c'est la bonne reponse : le genre est le point fixe, et un point fixe
+        # devine ne vaut rien. La colonne est OPTIONNELLE (TF-0660) — son absence n'est pas un
+        # defaut du produit, c'est une mesure qui n'est pas outillee ici.
+        for ecart in _glossaire.confronter_genre(par_locale, lu_glossaire["termes"]):
+            findings.append(
+                Finding(
+                    id=f"i18n:genre:{dossier}:{ecart['locale']}:{ecart['cle']}",
+                    classe=classes.I18N,
+                    localisation=f"{dossier}/{ecart['locale']}.json:{ecart['cle']}",
+                    message=(
+                        f"« {ecart['vu']} » : le determinant « {ecart['determinant']} » est reste au "
+                        f"genre oppose alors que le glossaire declare « {ecart['retenu']} » du genre "
+                        f"{ecart['genre']} en « {ecart['locale']} ». Une substitution de terme qui "
+                        "change le genre laisse survivre les accords SEPARES du nom — onze sont "
+                        "parties en production derriere une CI verte (TF-0660)"
+                    ),
+                    risque=coter(PAN, "i18n:genre", dossier),
+                )
+            )
+
         # (i) UNE LOCALE SE CONTREDIT-ELLE AVEC ELLE-MEME ? — TF-0663.
         #
         # LE FAIT : un audit a compare six familles de faits sur SEPT LANGUES et rendu ZERO ecart ;
