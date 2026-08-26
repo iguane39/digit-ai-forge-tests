@@ -923,6 +923,34 @@ def _findings_catalogue(cible: Path) -> tuple[list[Finding], list[str]]:
             lus_faits = _glossaire.faits_declares(_glossaire.chemin_faits(cible))
             if lus_faits["motif"]:
                 motifs.append(f"i18n : {lus_faits['motif']}")
+            # (h) LE TERME RETENU EST-IL EMPLOYE ? — TF-0656.
+            #
+            # LE FAIT, parti EN PRODUCTION dans trois langues sur sept. Un controle de glossaire
+            # rendait « glossaire OK, aucun ecart », puis listait A PART dix regles « non juge — a
+            # relire a l oeil ». Trois portaient le terme d hebergement : le retenu y etait employe
+            # ZERO fois quand le proscrit l etait 82, 79 et 82 fois. Le glossaire avait ete corrige
+            # la veille ; les chaines n ont jamais suivi, et aucun oeil ne l a relu.
+            #
+            # LE POINT N EST PAS QUE LA REGLE SOIT CONDITIONNELLE, c est qu elle soit MESURABLE et
+            # qu on la delegue quand meme. Un terme retenu a zero emploi la ou le concept est
+            # employe 82 fois est un ECHEC, pas une nuance : aucune information supplementaire n est
+            # necessaire pour trancher, donc ce n est pas un arbitrage.
+            for ecart in _glossaire.confronter_emploi(par_locale, lu_glossaire["termes"]):
+                findings.append(
+                    Finding(
+                        id=f"i18n:glossaire:{dossier}:{ecart['locale']}:{ecart['pivot']}",
+                        classe=classes.I18N,
+                        localisation=f"{dossier}/{ecart['locale']}.json",
+                        message=(
+                            f"« {ecart['locale']} » : le terme RETENU « {ecart['retenu']} » est employe "
+                            f"ZERO fois, quand le terme PROSCRIT « {ecart['proscrit']} » l est "
+                            f"{ecart['vus_proscrit']} fois. Le glossaire a ete corrige, les chaines n ont "
+                            "pas suivi — et un terme retenu a zero emploi n est pas une nuance a relire, "
+                            "c est un echec (TF-0656)"
+                        ),
+                        risque=coter(PAN, "i18n:glossaire", dossier),
+                    )
+                )
             for ecart in _glossaire.confronter(par_locale, lu_glossaire["termes"], lus_faits["faits"]):
                 findings.append(
                     Finding(

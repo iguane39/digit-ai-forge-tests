@@ -1157,6 +1157,18 @@
       "statut": "todo"
     },
     {
+      "id": "glossaire-005",
+      "domaine": "glossaire",
+      "enonce": "glossaire : un terme employe UNIQUEMENT sous une forme flechie eloignee (pluriel irregulier, declinaison) compte ZERO emploi. Inventer une morphologie par langue serait affirmer ce que la donnee ne porte pas ; le manque est declare plutot que comble au juge",
+      "statut": "todo"
+    },
+    {
+      "id": "glossaire-006",
+      "domaine": "glossaire",
+      "enonce": "glossaire : le controle d emploi ne se declenche que si le retenu est a ZERO **et** qu un proscrit est employe. Un retenu a zero dans une locale qui ne parle pas du concept n est pas un defaut, et un proscrit employe a cote d un retenu employe peut etre une citation",
+      "statut": "todo"
+    },
+    {
       "id": "i18n-build-servi-001",
       "domaine": "i18n-build-servi",
       "enonce": "i18n : le pan lit un BUILD SERVI (dossier de pages), jamais un site distant ni le code source — une locale declaree dans la configuration mais jamais construite est invisible ici, et c est voulu : ce qui n est pas servi n est pas ce que le visiteur recoit",

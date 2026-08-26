@@ -202,6 +202,73 @@ def confronter(par_locale: dict[str, dict[str, str]], termes: list[dict],
     return ecarts
 
 
+def _occurrences(plat: dict[str, str], mot: str) -> int:
+    """Combien de fois `mot` apparaît dans les chaînes servies d'une locale.
+
+    Comparaison insensible à la casse, bornée aux frontières de mot quand la langue le permet.
+    On ne cherche PAS une forme fléchie : un terme employé au pluriel uniquement compterait zéro,
+    et c'est déclaré au `non_juge` plutôt que deviné par une morphologie inventée par langue.
+    """
+    if not mot:
+        return 0
+    motif = re.compile(rf"(?<!\w){re.escape(mot)}\w{{0,2}}(?!\w)", re.IGNORECASE | re.UNICODE)
+    return sum(len(motif.findall(v)) for v in plat.values() if isinstance(v, str))
+
+
+def confronter_emploi(par_locale: dict[str, dict[str, str]], termes: list[dict]) -> list[dict]:
+    """Le terme RETENU est-il réellement employé, ou le proscrit règne-t-il encore ?
+
+    ============================================================================================
+    POURQUOI CE CONTRÔLE EST DUR ET NON CONDITIONNEL (TF-0656, 26/08/2026)
+    ============================================================================================
+
+    LE FAIT, mesuré sur un produit et parti EN PRODUCTION. Un contrôle de glossaire rendait
+    « glossaire OK — 8 termes × 7 langues, aucun écart », puis listait À PART dix règles « non
+    jugé — à relire à l'œil ». Trois d'entre elles portaient le terme d'hébergement en `de`, `es`
+    et `pt`. Mesure : le terme RETENU y était employé **zéro** fois, quand le mot qu'il devait
+    remplacer l'était **82, 79 et 82** fois. Le glossaire avait été corrigé la veille, motif rédigé
+    et sonde citée ; les chaînes n'ont jamais suivi. Aucun œil ne l'a relu — l'audit du lendemain
+    l'a trouvé en une commande.
+
+    LE POINT N'EST PAS QUE LA RÈGLE SOIT CONDITIONNELLE, c'est qu'elle soit MESURABLE et qu'on la
+    délègue quand même. *Un terme retenu à zéro emploi dans une langue où le concept est employé 82
+    fois est un échec, pas une nuance* : aucune information supplémentaire n'est nécessaire pour
+    trancher, donc ce n'est pas un arbitrage.
+
+    CE QUI DÉCLENCHE, ET RIEN DE PLUS : le retenu à ZÉRO **et** un proscrit employé au moins une
+    fois. Les deux conditions ensemble, parce que chacune seule serait fausse — un retenu à zéro
+    dans une locale qui ne parle pas du concept n'est pas un défaut, et un proscrit employé à côté
+    d'un retenu employé peut être une citation ou un titre d'œuvre.
+    """
+    ecarts: list[dict] = []
+    for terme in termes:
+        for ligne in terme["lignes"]:
+            locale = ligne["locale"].strip()
+            plat = par_locale.get(locale)
+            if not plat:
+                continue
+            retenu = (ligne.get("retenu") or "").strip().strip("`")
+            if not retenu:
+                continue
+            vus_retenu = _occurrences(plat, retenu)
+            if vus_retenu:
+                continue
+            # Le mot proscrit s'écrit entre accents graves : c'est la convention du gabarit, et
+            # c'est ce qui le distingue de la glose qui l'explique.
+            for proscrit in re.findall(r"`([^`]+)`", ligne.get("proscrits") or ""):
+                vus_proscrit = _occurrences(plat, proscrit.strip())
+                if not vus_proscrit:
+                    continue
+                ecarts.append({
+                    "locale": locale,
+                    "pivot": (terme.get("pivot") or "").strip(),
+                    "retenu": retenu,
+                    "proscrit": proscrit.strip(),
+                    "vus_proscrit": vus_proscrit,
+                })
+    return ecarts
+
+
 def chemin_glossaire(cible: Path) -> Path:
     """Le glossaire du projet : la variable d'environnement, sinon le chemin prescrit par R-53."""
     declare = os.environ.get("FORGE_TESTS_GLOSSAIRE")
@@ -227,6 +294,12 @@ NON_JUGE = [
     "au jugé",
     "glossaire : un nombre ECRIT EN LETTRES (« huit gites ») n est pas vu. Le lexique des nombres "
     "varie par langue et le deduire du glossaire n a pas de sens",
+    "glossaire : un terme employe UNIQUEMENT sous une forme flechie eloignee (pluriel irregulier, "
+    "declinaison) compte ZERO emploi. Inventer une morphologie par langue serait affirmer ce que la "
+    "donnee ne porte pas ; le manque est declare plutot que comble au juge",
+    "glossaire : le controle d emploi ne se declenche que si le retenu est a ZERO **et** qu un "
+    "proscrit est employe. Un retenu a zero dans une locale qui ne parle pas du concept n est pas "
+    "un defaut, et un proscrit employe a cote d un retenu employe peut etre une citation",
     "glossaire : la comparaison ENTRE LOCALES ne remplace pas cette confrontation et c est mesure "
     "— le defaut fondateur disait « 8 » dans les SEPT langues, parfaitement coherent entre locales "
     "et integralement faux. Il faut un point fixe HORS du catalogue",
