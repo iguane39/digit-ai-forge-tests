@@ -1169,6 +1169,18 @@
       "statut": "todo"
     },
     {
+      "id": "glossaire-007",
+      "domaine": "glossaire",
+      "enonce": "glossaire : la coherence interne ne voit un fait que si le NOM PROPRE PRECEDE le nombre dans la meme phrase — « a 45 minutes de Granville » n est pas rapproche de « Granville : 40 minutes ». Elargir l ordre ferait rapprocher des sujets differents ; le manque est declare plutot que comble au juge",
+      "statut": "todo"
+    },
+    {
+      "id": "glossaire-008",
+      "domaine": "glossaire",
+      "enonce": "glossaire : seules les unites de DISTANCE et de DUREE sont confrontees. Un fait chiffre sans unite (« 23 personnes ») n est pas juge : sans unite, deux nombres attaches au meme nom propre peuvent parler de deux grandeurs differentes",
+      "statut": "todo"
+    },
+    {
       "id": "i18n-build-servi-001",
       "domaine": "i18n-build-servi",
       "enonce": "i18n : le pan lit un BUILD SERVI (dossier de pages), jamais un site distant ni le code source — une locale declaree dans la configuration mais jamais construite est invisible ici, et c est voulu : ce qui n est pas servi n est pas ce que le visiteur recoit",

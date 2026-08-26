@@ -935,6 +935,34 @@ def _findings_catalogue(cible: Path) -> tuple[list[Finding], list[str]]:
             # qu on la delegue quand meme. Un terme retenu a zero emploi la ou le concept est
             # employe 82 fois est un ECHEC, pas une nuance : aucune information supplementaire n est
             # necessaire pour trancher, donc ce n est pas un arbitrage.
+        # (i) UNE LOCALE SE CONTREDIT-ELLE AVEC ELLE-MEME ? — TF-0663.
+        #
+        # LE FAIT : un audit a compare six familles de faits sur SEPT LANGUES et rendu ZERO ecart ;
+        # un controle mecanique des nombres l a confirme. La comparaison interlangue etait SAINE, et
+        # elle a laisse passer deux faits FAUX — parce qu ils etaient faux de la MEME FACON dans les
+        # sept langues. Une ville annoncee a 40 minutes dans une cle et a 45 dans deux autres.
+        #
+        # Verifier que sept langues disent la meme chose ne verifie pas qu UNE SEULE soit coherente
+        # avec elle-meme. Ce controle ne compare donc pas les locales entre elles : il regarde DANS
+        # chacune. Il ne demande AUCUNE declaration — la contradiction se lit dans le catalogue.
+        for ecart in _glossaire.confronter_coherence_interne(par_locale):
+            details = " · ".join(
+                f"{v} ({', '.join(cles[:2])})" for v, cles in sorted(ecart["valeurs"].items()))
+            findings.append(
+                Finding(
+                    id=f"i18n:coherence:{dossier}:{ecart['locale']}:{ecart['sujet']}",
+                    classe=classes.I18N,
+                    localisation=f"{dossier}/{ecart['locale']}.json",
+                    message=(
+                        f"« {ecart['locale']} » se contredit sur « {ecart['sujet']} » en {ecart['unite']}(s) : "
+                        f"{details}. Verifier que sept langues disent la meme chose ne verifie pas qu une seule "
+                        "soit coherente avec elle-meme — un fait faux de la MEME facon partout passe toutes les "
+                        "comparaisons interlangues (TF-0663)"
+                    ),
+                    risque=coter(PAN, "i18n:coherence", dossier),
+                )
+            )
+
             for ecart in _glossaire.confronter_emploi(par_locale, lu_glossaire["termes"]):
                 findings.append(
                     Finding(

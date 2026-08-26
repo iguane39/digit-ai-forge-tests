@@ -269,6 +269,64 @@ def confronter_emploi(par_locale: dict[str, dict[str, str]], termes: list[dict])
     return ecarts
 
 
+#: Un fait chiffré attaché à un NOM PROPRE : « Granville … 45 minutes ». Le nom propre est ce qui
+#: rend deux affirmations comparables — sans lui, « 3 chambres » et « 2 chambres » parlent de deux
+#: logements différents et les rapprocher serait inventer une contradiction.
+_FAIT_NOMME = re.compile(
+    r"(?<![\w'’])([A-ZÀÂÄÉÈÊËÎÏÔÖÙÛÜÇ][\wÀ-ÿ'’-]{2,})[^.;!?\n]{0,60}?"
+    r"(?<![\w.,])(\d{1,4})\s*(minutes?|min\b|heures?|h\b|km\b|kilom[èe]tres?|m\b|m[èe]tres?)",
+    re.UNICODE,
+)
+
+
+def confronter_coherence_interne(par_locale: dict[str, dict[str, str]]) -> list[dict]:
+    """Une MÊME locale se contredit-elle sur un fait chiffré attaché à un nom propre ?
+
+    ============================================================================================
+    POURQUOI (TF-0663, 26/08/2026)
+    ============================================================================================
+
+    LE FAIT. Un audit a comparé six familles de faits sur SEPT LANGUES et rendu **zéro écart** ; un
+    contrôle mécanique des nombres l'a confirmé, 25 divergences sur 735 chaînes dont 22 étaient des
+    formats de localisation légitimes. *La comparaison interlangue était saine.* Elle a pourtant
+    laissé passer deux faits FAUX — parce qu'ils étaient faux **de la même façon dans les sept
+    langues**.
+
+    Le plus net : une ville annoncée à **40 minutes** dans une clé et à **45 minutes** dans deux
+    autres, dans les sept langues à la fois. Deux affirmations contre une, et rien pour les
+    départager parce que rien ne regardait UNE langue avec elle-même.
+
+    *Vérifier que sept langues disent la même chose ne vérifie pas qu'une seule soit cohérente avec
+    elle-même.* C'est la même leçon que la confrontation des nombres à la donnée déclarée
+    (TF-0644), sur un autre axe : là il fallait un point fixe HORS du catalogue, ici il faut
+    regarder DANS une locale au lieu d'entre les locales.
+
+    CE QUI DÉCLENCHE : le même nom propre, la même unité, et **deux valeurs différentes** dans la
+    même locale. Le nom propre est ce qui rend les deux affirmations comparables — sans lui,
+    « 3 chambres » et « 2 chambres » parlent de deux logements différents, et les rapprocher serait
+    inventer une contradiction là où il n'y en a pas.
+    """
+    ecarts: list[dict] = []
+    for locale, plat in sorted(par_locale.items()):
+        vus: dict[tuple[str, str], dict[str, list[str]]] = {}
+        for cle, valeur in sorted(plat.items()):
+            if not isinstance(valeur, str):
+                continue
+            for nom, nombre, unite in _FAIT_NOMME.findall(valeur):
+                sujet = (nom.casefold(), unite.casefold().rstrip("s"))
+                vus.setdefault(sujet, {}).setdefault(nombre, []).append(cle)
+        for (nom, unite), valeurs in sorted(vus.items()):
+            if len(valeurs) < 2:
+                continue
+            ecarts.append({
+                "locale": locale,
+                "sujet": nom,
+                "unite": unite,
+                "valeurs": {v: cles for v, cles in sorted(valeurs.items())},
+            })
+    return ecarts
+
+
 def chemin_glossaire(cible: Path) -> Path:
     """Le glossaire du projet : la variable d'environnement, sinon le chemin prescrit par R-53."""
     declare = os.environ.get("FORGE_TESTS_GLOSSAIRE")
@@ -294,6 +352,13 @@ NON_JUGE = [
     "au jugé",
     "glossaire : un nombre ECRIT EN LETTRES (« huit gites ») n est pas vu. Le lexique des nombres "
     "varie par langue et le deduire du glossaire n a pas de sens",
+    "glossaire : la coherence interne ne voit un fait que si le NOM PROPRE PRECEDE le nombre dans "
+    "la meme phrase — « a 45 minutes de Granville » n est pas rapproche de « Granville : 40 minutes ». "
+    "Elargir l ordre ferait rapprocher des sujets differents ; le manque est declare plutot que "
+    "comble au juge",
+    "glossaire : seules les unites de DISTANCE et de DUREE sont confrontees. Un fait chiffre sans "
+    "unite (« 23 personnes ») n est pas juge : sans unite, deux nombres attaches au meme nom propre "
+    "peuvent parler de deux grandeurs differentes",
     "glossaire : un terme employe UNIQUEMENT sous une forme flechie eloignee (pluriel irregulier, "
     "declinaison) compte ZERO emploi. Inventer une morphologie par langue serait affirmer ce que la "
     "donnee ne porte pas ; le manque est declare plutot que comble au juge",
