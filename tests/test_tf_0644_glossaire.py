@@ -308,3 +308,78 @@ def test_BORNE_une_contradiction_dans_une_locale_n_accuse_pas_les_autres():
     }
     ecarts = glossaire.confronter_coherence_interne(par_locale)
     assert [e["locale"] for e in ecarts] == ["fr"]
+
+
+# ---------------------------------------------------------------------------------------------
+# (j) UN DETERMINANT RESTE AU GENRE D'ORIGINE — TF-0660
+#
+# ONZE fautes d'accord sont parties EN PRODUCTION derriere une CI verte et SIX controleurs au
+# vert. Le run avait substitue le terme d'hebergement : `gite` (m.) devient `casa rural` (f.).
+# Les accords ADJACENTS ont ete traites par la passe ; ceux SEPARES DE PLUSIEURS MOTS ont
+# survecu. Aucun controleur ne LIT UNE PHRASE — ils comparent des cles, cherchent un terme,
+# comptent des caracteres.
+# ---------------------------------------------------------------------------------------------
+
+def _terme_genre(locale="es", retenu="casa rural", genre="f"):
+    return [{"nom": "logement", "categorie": "contractuel", "pivot": "gite",
+             "lignes": [{"locale": locale, "retenu": retenu, "genre": genre}]}]
+
+
+def test_un_determinant_masculin_colle_a_un_nom_feminin_est_un_ECHEC():
+    """« NINGUN casa rural » : le cas exact parti en production."""
+    par_locale = {"es": {"dispo.vide": "Ningun casa rural disponible en estas fechas."}}
+    ecarts = glossaire.confronter_genre(par_locale, _terme_genre())
+    assert len(ecarts) == 1, ecarts
+    assert ecarts[0]["determinant"].lower() == "ningun"
+    assert ecarts[0]["cle"] == "dispo.vide"
+
+
+def test_l_accentuation_ne_fait_pas_manquer_la_faute():
+    """Le corpus servi n'est pas garanti accentue : NINGUN et NINGUN-accentue se valent."""
+    par_locale = {"es": {"a": "NINGÚN casa rural disponible.",
+                         "b": "1 otro casa rural ya reservado."}}
+    ecarts = glossaire.confronter_genre(par_locale, _terme_genre())
+    assert sorted(e["cle"] for e in ecarts) == ["a", "b"]
+
+
+def test_le_determinant_JUSTE_ne_declenche_rien():
+    par_locale = {"es": {"a": "Ninguna casa rural disponible.",
+                         "b": "Nuestras casas rurales son espaciosas.",
+                         "c": "La casa rural esta abierta."}}
+    assert glossaire.confronter_genre(par_locale, _terme_genre()) == []
+
+
+def test_BORNE_sans_genre_declare_le_controle_SE_TAIT():
+    """Le genre est LE point fixe. Un point fixe devine ne vaut rien : pas de declaration, pas
+    de verdict. C'est aussi pourquoi la colonne du gabarit est OPTIONNELLE."""
+    termes = _terme_genre()
+    del termes[0]["lignes"][0]["genre"]
+    par_locale = {"es": {"a": "Ningun casa rural disponible."}}
+    assert glossaire.confronter_genre(par_locale, termes) == []
+
+
+def test_BORNE_une_locale_hors_table_de_determinants_n_est_pas_jugee():
+    """L'allemand et l'anglais n'entrent pas dans une opposition binaire de determinants.
+    Declarer ce qu'on ne juge pas coute moins cher que de le juger mal."""
+    termes = _terme_genre(locale="de", retenu="Ferienhaus", genre="n")
+    par_locale = {"de": {"a": "Kein Ferienhaus verfugbar."}}
+    assert glossaire.confronter_genre(par_locale, termes) == []
+
+
+def test_BORNE_le_determinant_doit_etre_COLLE_au_nom():
+    """L'adjacence est ce qui rend l'accusation sure. « otro tipo de casa rural » est JUSTE :
+    le determinant s'y rapporte a `tipo`, pas au logement."""
+    par_locale = {"es": {"a": "Otro tipo de casa rural existe en la region."}}
+    assert glossaire.confronter_genre(par_locale, _terme_genre()) == []
+
+
+def test_les_deux_listes_de_determinants_ne_se_recouvrent_JAMAIS_apres_pli_des_accents():
+    """Le garde qui rend l'expansion sans accents sure — il s'execute a l'import, ce cas le NOMME.
+
+    Retirer les accents peut faire se rejoindre deux mots de genres OPPOSES, et le controle
+    accuserait alors une phrase juste. La mesure de TF-0660 a vu ce piege une fois : en
+    portugais, `e`-accentue (copule) ecrase sur `e` (« et ») avait produit quatre accusations,
+    toutes fausses.
+    """
+    for locale, genres in glossaire.DETERMINANTS.items():
+        assert not (set(genres["m"]) & set(genres["f"])), locale

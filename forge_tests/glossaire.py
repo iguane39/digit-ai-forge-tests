@@ -64,6 +64,10 @@ from pathlib import Path
 #: Les colonnes du tableau d'un terme, dans l'ordre où le gabarit du pilot les pose.
 COLONNES = ("locale", "retenu", "proscrits", "portee", "preuve", "verifie_le")
 
+#: `genre` est une SEPTIÈME colonne, OPTIONNELLE (TF-0660). Un glossaire écrit avant le 26/08
+#: n'en porte pas et reste valide : c'est la règle qui a bougé, pas le dépôt.
+COLONNE_GENRE = "genre"
+
 _CHAMP = re.compile(r"^\s*-\s+\*\*(categorie|pivot)\*\*\s*:\s*(.+?)\s*$", re.IGNORECASE)
 _TITRE = re.compile(r"^##\s+(.+?)\s*$")
 
@@ -94,6 +98,7 @@ def lire(chemin: Path | str) -> dict:
         return {"termes": [], "motif": f"{p} ne déclare pas `role:` … glossaire/terminologie"}
 
     termes: list[dict] = []
+    illisibles: list[tuple] = []
     courant: dict | None = None
     for brute in texte.splitlines():
         titre = _TITRE.match(brute)
@@ -110,18 +115,31 @@ def lire(chemin: Path | str) -> dict:
             continue
         if brute.lstrip().startswith("|"):
             cellules = [c.strip() for c in brute.strip().strip("|").split("|")]
-            if len(cellules) != len(COLONNES):
+            # SIX colonnes, ou SEPT avec `genre`. Une AUTRE largeur n'est pas sautée en
+            # silence : le silence d'une sonde n'est pas un verdict, et une ligne ignorée
+            # sans mot dire fait rendre PASS à un tableau que l'oracle du pilot, lui,
+            # refuse bruyamment. Les deux analyseurs doivent être d'accord sur ce point.
+            if len(cellules) not in (len(COLONNES), len(COLONNES) + 1):
+                illisibles.append((courant["nom"], len(cellules)))
                 continue
             if cellules[0].lower() == "locale":
                 continue
             if set(cellules[0].replace(":", "").replace(" ", "")) <= {"-"}:
                 continue
-            courant["lignes"].append(dict(zip(COLONNES, cellules)))
+            ligne = dict(zip(COLONNES, cellules))
+            if len(cellules) == len(COLONNES) + 1:
+                ligne[COLONNE_GENRE] = cellules[len(COLONNES)]
+            courant["lignes"].append(ligne)
     if courant:
         termes.append(courant)
     # Seules les sections qui portent une `categorie` sont des TERMES : les sections de doctrine
     # du gabarit n'en sont pas, et les lire comme tels inventerait du vocabulaire.
-    return {"termes": [t for t in termes if t["categorie"]], "motif": None}
+    motif = None
+    if illisibles:
+        detail = " · ".join("%s (%d colonnes)" % (n, v) for n, v in illisibles[:4])
+        motif = ("%d ligne(s) de tableau à largeur inattendue, DONC NON LUES : %s. "
+                 "Six colonnes attendues, sept avec `genre`" % (len(illisibles), detail))
+    return {"termes": [t for t in termes if t["categorie"]], "motif": motif}
 
 
 def faits_declares(chemin: Path | str | None) -> dict:
@@ -279,6 +297,137 @@ _FAIT_NOMME = re.compile(
 )
 
 
+#: Les DÉTERMINANTS, par locale et par genre. C'est une classe FERMÉE — quelques dizaines de
+#: mots énumérables —, et c'est précisément ce qui rend le contrôle publiable. La règle large
+#: (« tout mot en -o/-os dans une chaîne portant un terme féminin ») a été MESURÉE sur le corpus
+#: réel d'un produit : 268 accusations, à précision ~0 — `minutos`, `seminarios`, `invierno`,
+#: `carro` sont des noms masculins parfaitement légitimes. Un suffixe ne distingue pas
+#: `adaptados` (participe, faux) de `descuentos` (nom, juste). Elle a donc été REFUSÉE.
+DETERMINANTS = {
+    "es": {"m": ["el", "los", "un", "unos", "ningún", "ninguno", "otro", "otros", "todo",
+                 "todos", "algún", "alguno", "algunos", "este", "estos", "ese", "esos",
+                 "aquel", "aquellos", "nuestro", "nuestros", "mucho", "muchos", "poco",
+                 "pocos", "tanto", "tantos", "cuánto", "mismo", "mismos"],
+           "f": ["la", "las", "una", "unas", "ninguna", "otra", "otras", "toda", "todas",
+                 "alguna", "algunas", "esta", "estas", "esa", "esas", "aquella", "aquellas",
+                 "nuestra", "nuestras", "mucha", "muchas", "poca", "pocas", "tanta",
+                 "tantas", "cuánta", "misma", "mismas"]},
+    "pt": {"m": ["o", "os", "um", "uns", "nenhum", "nenhuns", "outro", "outros", "todo",
+                 "todos", "algum", "alguns", "este", "estes", "esse", "esses", "aquele",
+                 "aqueles", "nosso", "nossos", "muito", "muitos", "pouco", "poucos",
+                 "tanto", "tantos", "mesmo", "mesmos"],
+           "f": ["a", "as", "uma", "umas", "nenhuma", "nenhumas", "outra", "outras", "toda",
+                 "todas", "alguma", "algumas", "esta", "estas", "essa", "essas", "aquela",
+                 "aquelas", "nossa", "nossas", "muita", "muitas", "pouca", "poucas",
+                 "tanta", "tantas", "mesma", "mesmas"]},
+    "it": {"m": ["il", "lo", "i", "gli", "un", "uno", "nessun", "nessuno", "altro", "altri",
+                 "tutto", "tutti", "questo", "questi", "quello", "quegli", "nostro",
+                 "nostri", "molto", "molti", "poco", "pochi", "tanto", "tanti"],
+           "f": ["la", "le", "una", "un'", "nessuna", "altra", "altre", "tutta", "tutte",
+                 "questa", "queste", "quella", "quelle", "nostra", "nostre", "molta",
+                 "molte", "poca", "poche", "tanta", "tante"]},
+    "fr": {"m": ["le", "un", "ce", "cet", "tout", "tous", "aucun", "notre", "nos", "quel",
+                 "quels", "chaque", "certains", "plusieurs", "mon", "son"],
+           "f": ["la", "une", "cette", "toute", "toutes", "aucune", "quelle", "quelles",
+                 "certaines", "ma", "sa"]},
+}
+
+#: Le genre déclaré, ramené à `m` / `f`. `n` et `invariable` ne sont PAS jugés : le contrôle
+#: repose sur une opposition binaire de déterminants, et l'allemand ou l'anglais n'entrent pas
+#: dans ce moule. Déclarer ce qu'on ne juge pas coûte moins cher que de le juger mal.
+_GENRES_JUGES = ("m", "f")
+
+_ACCENTS = str.maketrans("áàâäéèêëíìîïóòôöúùûüçãõñ", "aaaaeeeeiiiioooouuuucaon")
+
+
+def _sans_accents(mot: str) -> str:
+    return mot.translate(_ACCENTS)
+
+
+def _avec_variantes(mots: list[str]) -> list[str]:
+    """Chaque déterminant, plus sa forme sans accents — « NINGÚN » et « Ningun » se valent.
+
+    Le corpus servi n'est pas garanti accentué : un catalogue peut porter les deux formes, et
+    un contrôle qui n'en voit qu'une se tait sur l'autre en silence.
+    """
+    return sorted({m for mot in mots for m in (mot, _sans_accents(mot))})
+
+
+DETERMINANTS = {loc: {g: _avec_variantes(mots) for g, mots in genres.items()}
+                for loc, genres in DETERMINANTS.items()}
+
+# LE GARDE QUI REND CETTE EXPANSION SÛRE. Retirer les accents peut faire se rejoindre deux mots
+# de genres OPPOSÉS — et le contrôle accuserait alors une phrase juste. La mesure de TF-0660 a
+# vu exactement ce piège une fois : en portugais, `é` (copule) écrasé sur `e` (« et ») avait
+# produit quatre accusations, toutes fausses. Ici la collision est VÉRIFIÉE, pas espérée.
+for _loc, _g in DETERMINANTS.items():
+    _collision = set(_g["m"]) & set(_g["f"])
+    if _collision:                                                       # pragma: no cover
+        raise AssertionError(
+            "locale %s : %s appartiennent aux DEUX genres une fois les accents retirés — "
+            "le contrôle d'accord accuserait des phrases justes" % (_loc, sorted(_collision)))
+
+
+
+def confronter_genre(par_locale: dict, termes: list[dict]) -> list[dict]:
+    """Un DÉTERMINANT resté au genre d'origine, COLLÉ devant le terme retenu. TF-0660.
+
+    LE FAIT. Onze fautes d'accord — cinq en espagnol, cinq en portugais — sont parties EN
+    PRODUCTION derrière une CI verte et six contrôleurs au vert. Le run avait substitué le
+    terme d'hébergement : `gîte` (m.) devient `casa rural` (f.), `casa de férias` (f.). Les
+    accords ADJACENTS au nom ont été traités par la passe de substitution ; ceux qui en
+    étaient SÉPARÉS DE PLUSIEURS MOTS ont survécu — « NINGÚN casa rural disponible »,
+    « 1 OTRO casa rural … ya está RESERVADO ».
+
+    Aucun contrôleur ne pouvait le voir : ils comparent des arborescences de clés, cherchent
+    la présence d'un terme, mesurent l'écart au français, comptent des caractères. AUCUN NE
+    LIT UNE PHRASE. Une langue peut être structurellement conforme, terminologiquement
+    exacte, dimensionnée pour la SERP — et fautive.
+
+    CE QUI EST JUGÉ, ET RIEN D'AUTRE : un déterminant du genre OPPOSÉ, immédiatement suivi du
+    terme retenu. L'adjacence et la classe fermée sont ce qui rend l'accusation sûre. Mesuré
+    sur le corpus réel relu : 0 accusation — le contrôle se tait quand il n'y a rien.
+
+    CE QUI EST ÉCARTÉ, ET LE MOTIF VAUT D'ÊTRE LU : le participe après copule (« están
+    especialmente ADAPTADOS ») se chercherait bien, la copule étant elle aussi une classe
+    fermée — mais LA COPULE NE NOMME PAS SON SUJET. Le corpus a exhibé le contre-exemple :
+    « A Irène e o Samuel SÃO verdadeiramente acolhedores e SIMPÁTICOS » — masculin pluriel
+    JUSTE, dans une chaîne qui parle par ailleurs du logement. Un contrôle qui ne sait pas de
+    QUI on parle accuserait cette phrase. Il n'est donc pas écrit.
+
+    Ne remplace pas une relecture humaine : attrape la classe qui est passée ici.
+    """
+    ecarts: list[dict] = []
+    for terme in termes:
+        for ligne in terme.get("lignes", []):
+            loc = (ligne.get("locale") or "").strip().lower()
+            genre = (ligne.get(COLONNE_GENRE) or "").strip().lower()
+            retenu = (ligne.get("retenu") or "").replace("`", "").strip()
+            if loc not in DETERMINANTS or genre not in _GENRES_JUGES or not retenu:
+                continue
+            oppose = "f" if genre == "m" else "m"
+            fautifs = DETERMINANTS[loc][oppose]
+            # `_formes()` rend deja des fragments d'expression PRETS (mot echappe + pluriel
+            # court). Les re-echapper les rendait litteraux et le motif ne trouvait plus rien —
+            # une regle muette, exactement ce qu'un controle ne doit jamais etre en silence.
+            formes = "|".join(sorted(_formes(retenu), key=len, reverse=True))
+            dets = "|".join(re.escape(d) for d in sorted(fautifs, key=len, reverse=True))
+            # `\s+` et non `\s*` : un déterminant élidé (« un'casa ») n'est pas de la même
+            # classe et se juge mal — on ne l'accuse pas.
+            motif = re.compile(r"(?<![\w'’])(%s)\s+(%s)(?![\wÀ-ÿ])" % (dets, formes),
+                               re.IGNORECASE | re.UNICODE)
+            for cle, valeur in sorted((par_locale.get(loc) or {}).items()):
+                if not isinstance(valeur, str):
+                    continue
+                for m in motif.finditer(valeur):
+                    ecarts.append({
+                        "locale": loc, "cle": cle, "terme": terme.get("nom"),
+                        "retenu": retenu, "genre": genre,
+                        "vu": m.group(0), "determinant": m.group(1),
+                    })
+    return ecarts
+
+
 def confronter_coherence_interne(par_locale: dict[str, dict[str, str]]) -> list[dict]:
     """Une MÊME locale se contredit-elle sur un fait chiffré attaché à un nom propre ?
 
@@ -352,6 +501,14 @@ NON_JUGE = [
     "au jugé",
     "glossaire : un nombre ECRIT EN LETTRES (« huit gites ») n est pas vu. Le lexique des nombres "
     "varie par langue et le deduire du glossaire n a pas de sens",
+    "glossaire : le controle d accord ne juge QUE le determinant colle au terme retenu. Le "
+    "PARTICIPE APRES COPULE (« estan especialmente adaptados ») est ECARTE : la copule ne "
+    "nomme pas son sujet, et le corpus a exhibe le contre-exemple — « A Irene e o Samuel sao "
+    "verdadeiramente acolhedores e simpaticos », masculin JUSTE dans une chaine qui parle par "
+    "ailleurs du logement. Un controle qui ne sait pas de QUI on parle accuserait cette phrase",
+    "glossaire : le controle d accord ne connait de determinants que pour es, pt, it et fr. Une "
+    "locale hors de cette table n est pas jugee — l allemand et l anglais n entrent pas dans une "
+    "opposition binaire de determinants, et les y forcer inventerait des fautes",
     "glossaire : la coherence interne ne voit un fait que si le NOM PROPRE PRECEDE le nombre dans "
     "la meme phrase — « a 45 minutes de Granville » n est pas rapproche de « Granville : 40 minutes ». "
     "Elargir l ordre ferait rapprocher des sujets differents ; le manque est declare plutot que "

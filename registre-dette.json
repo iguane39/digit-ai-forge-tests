@@ -1181,6 +1181,18 @@
       "statut": "todo"
     },
     {
+      "id": "glossaire-009",
+      "domaine": "glossaire",
+      "enonce": "glossaire : le controle d accord ne juge QUE le determinant colle au terme retenu. Le PARTICIPE APRES COPULE (« estan especialmente adaptados ») est ECARTE : la copule ne nomme pas son sujet, et le corpus a exhibe le contre-exemple — « A Irene e o Samuel sao verdadeiramente acolhedores e simpaticos », masculin JUSTE dans une chaine qui parle par ailleurs du logement. Un controle qui ne sait pas de QUI on parle accuserait cette phrase",
+      "statut": "todo"
+    },
+    {
+      "id": "glossaire-010",
+      "domaine": "glossaire",
+      "enonce": "glossaire : le controle d accord ne connait de determinants que pour es, pt, it et fr. Une locale hors de cette table n est pas jugee — l allemand et l anglais n entrent pas dans une opposition binaire de determinants, et les y forcer inventerait des fautes",
+      "statut": "todo"
+    },
+    {
       "id": "i18n-build-servi-001",
       "domaine": "i18n-build-servi",
       "enonce": "i18n : le pan lit un BUILD SERVI (dossier de pages), jamais un site distant ni le code source — une locale declaree dans la configuration mais jamais construite est invisible ici, et c est voulu : ce qui n est pas servi n est pas ce que le visiteur recoit",
