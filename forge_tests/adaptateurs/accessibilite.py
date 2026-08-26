@@ -321,6 +321,41 @@ def _code_visible(cible: Path) -> bool:
     )
 
 
+#: La TROISIEME FORME DE RENDU (TF-0667). Un site statique genere ne presente AUCUN des trois
+#: signaux historiques — pas de `frontend/`, pas d instance servie, pas de routes declarees — et
+#: rend pourtant des pages. Le dossier construit est deja DESIGNE par le produit, dans la meme
+#: cle que le pan i18n lit ; les cinq pans qui regardent une page l ignoraient parce qu ils
+#: interrogeaient une autre cle.
+_CLE_BUILD = "FORGE_TESTS_I18N_BUILD"
+_CANDIDATS_BUILD = ("site", "build", "dist", "public", "_site", "out")
+
+
+def _html_genere(cible: Path) -> tuple[Path | None, int]:
+    """Le dossier de HTML genere que le PRODUIT declare, et combien de pages il porte.
+
+    On ne devine pas : la cle declaree passe en premier. Les emplacements usuels ne sont
+    consultes qu a defaut, et le compte est rendu dans les deux cas — c est lui qui rend le
+    motif FALSIFIABLE.
+    """
+    import os
+
+    declare = os.environ.get(_CLE_BUILD)
+    ordre = []
+    if declare:
+        ordre.append(cible / declare if not Path(declare).is_absolute() else Path(declare))
+    ordre.extend(cible / c for c in _CANDIDATS_BUILD)
+    for d in ordre:
+        try:
+            if not d.is_dir():
+                continue
+            pages = sum(1 for _ in d.rglob("*.html"))
+        except OSError:
+            continue
+        if pages:
+            return d, pages
+    return None, 0
+
+
 def sans_objet(cible: Path) -> str | None:
     """PREUVE POSITIVE qu il n y a AUCUNE page à rendre — pas une supposition (TF-0217).
 
@@ -342,11 +377,34 @@ def sans_objet(cible: Path) -> str | None:
         return None
     if _routes_declarees(cible):
         return None
+    # TF-0667 — LA TROISIEME FORME DE RENDU, et le point de doctrine qu elle porte.
+    #
+    # LE FAIT : cinq pans qui regardent une page rendue — visuel, accessibilite, contraste,
+    # clavier, plancher — ont ete declares SANS OBJET sur un projet de 203 FICHIERS HTML, au
+    # motif litteral « ce projet ne rend aucune page ». La contradiction etait INTERNE AU MEME
+    # RAPPORT : le pan i18n y annoncait 203 elements inventories, ratio 1.0, lus dans ce meme
+    # dossier via la cle que le produit declarait deja. Deux pans du meme audit en desaccord sur
+    # l existence des pages du produit, et un seul avait raison.
+    #
+    # SANS OBJET EST PLUS GRAVE QUE NON COUVERT. Un pan non couvert est un trou qui demande a
+    # etre comble et qui FIGURE au verdict ; un pan sans objet est un trou DECLARE INEXISTANT,
+    # qui disparait du raisonnement de qui lit le rapport. C est ce trou qui a laisse passer un
+    # surtitre identique repete sur la meme page — visible de n importe quel oeil, invisible de
+    # toute la chaine, pendant que le verdict affichait une couverture de 100 %.
+    dossier, pages = _html_genere(cible)
+    if dossier is not None:
+        return None
     if not _code_visible(cible):
         return None
+    # ET LE MOTIF EST FALSIFIABLE. Si un SANS OBJET repose sur une INFERENCE et non sur un fait
+    # declare par le produit, il doit porter de quoi le renverser. Ici : le compte de pages
+    # cherchees et les emplacements consultes — un simple decompte l aurait retourne.
     return (
-        "aucun dossier `frontend\\`, aucune instance servie (FORGE_TESTS_BASE_URL) et aucune "
-        "route déclarée (FORGE_TESTS_QUALIF_ROUTES) : ce projet ne rend aucune page"
+        "aucun dossier `frontend\\`, aucune instance servie (FORGE_TESTS_BASE_URL), aucune "
+        "route déclarée (FORGE_TESTS_QUALIF_ROUTES) et AUCUN fichier .html sous les dossiers "
+        "construits cherchés (" + _CLE_BUILD + " puis " + ", ".join(_CANDIDATS_BUILD) + ") : "
+        "ce projet ne rend aucune page. CE MOTIF EST UNE INFERENCE, et il est falsifiable — "
+        "déclarer le dossier construit dans " + _CLE_BUILD + " suffit à le renverser"
     )
 
 
