@@ -232,3 +232,79 @@ def test_aucun_fait_declare_rend_un_motif_et_non_une_exception():
     lu = glossaire.faits_declares(None)
     assert lu["faits"] == {}
     assert "FORGE_TESTS_FAITS" in (lu["motif"] or "")
+
+
+# ---------------------------------------------------------------------------------------------
+# (i) UNE LOCALE SE CONTREDIT-ELLE AVEC ELLE-MEME ? — TF-0663
+#
+# LE FAIT : un audit a compare six familles de faits sur SEPT langues et rendu ZERO ecart. Les
+# sept locales etaient parfaitement d'accord — et deux faits etaient FAUX, de la MEME facon
+# partout. Une ville annoncee a 40 minutes dans une cle, a 45 dans deux autres.
+#
+# Verifier que sept langues disent la meme chose ne verifie pas qu'UNE SEULE soit coherente avec
+# elle-meme. Ce controle ne compare donc RIEN entre locales : il regarde DANS chacune.
+# ---------------------------------------------------------------------------------------------
+
+def test_une_locale_qui_annonce_40_puis_45_minutes_pour_la_meme_ville_est_un_ECHEC():
+    """Le cas fondateur, et il a franchi sept comparaisons interlangues sans en heurter une."""
+    par_locale = {"fr": {
+        "listing.intro": "Granville est a 40 minutes de la maison.",
+        "contact.distances": "Granville : 45 minutes en voiture.",
+    }}
+    ecarts = glossaire.confronter_coherence_interne(par_locale)
+    assert len(ecarts) == 1, ecarts
+    assert ecarts[0]["sujet"] == "granville"
+    assert ecarts[0]["unite"] == "minute"
+    # L'ecart NOMME les cles en desaccord : sans elles, le rapport dit qu'il y a un probleme
+    # sans dire ou, et la correction redevient une chasse.
+    assert set(ecarts[0]["valeurs"]) == {"40", "45"}
+    assert ecarts[0]["valeurs"]["40"] == ["listing.intro"]
+
+
+def test_une_locale_coherente_avec_elle_meme_ne_declenche_rien():
+    par_locale = {"fr": {
+        "listing.intro": "Granville est a 45 minutes de la maison.",
+        "contact.distances": "Granville : 45 minutes en voiture.",
+    }}
+    assert glossaire.confronter_coherence_interne(par_locale) == []
+
+
+def test_BORNE_un_fait_chiffre_SANS_unite_n_est_pas_juge():
+    """Sans unite, deux nombres attaches au meme nom propre peuvent parler de deux grandeurs.
+
+    « Granville compte 13 000 habitants » et « Granville, 4 plages » ne se contredisent pas. Le
+    controle prefere ne rien dire plutot que d'accuser une phrase juste.
+    """
+    par_locale = {"fr": {
+        "a": "Granville compte 13 000 habitants.",
+        "b": "Granville offre 4 plages.",
+    }}
+    assert glossaire.confronter_coherence_interne(par_locale) == []
+
+
+def test_BORNE_deux_unites_differentes_sur_le_meme_sujet_ne_se_contredisent_pas():
+    """45 minutes et 30 km decrivent le meme trajet sans desaccord : l'unite fait partie du sujet."""
+    par_locale = {"fr": {
+        "a": "Granville est a 45 minutes.",
+        "b": "Granville est a 30 km.",
+    }}
+    assert glossaire.confronter_coherence_interne(par_locale) == []
+
+
+def test_BORNE_deux_villes_differentes_ne_sont_pas_rapprochees():
+    """C'est le NOM PROPRE qui rend deux enonces comparables — sans lui, on compare des trajets."""
+    par_locale = {"fr": {
+        "a": "Granville est a 45 minutes.",
+        "b": "Avranches est a 20 minutes.",
+    }}
+    assert glossaire.confronter_coherence_interne(par_locale) == []
+
+
+def test_BORNE_une_contradiction_dans_une_locale_n_accuse_pas_les_autres():
+    """Le controle regarde DANS chaque locale : l'ecart porte le nom de celle qui se contredit."""
+    par_locale = {
+        "fr": {"a": "Granville est a 40 minutes.", "b": "Granville : 45 minutes."},
+        "en": {"a": "Granville is 45 minutes away.", "b": "Granville: 45 minutes by car."},
+    }
+    ecarts = glossaire.confronter_coherence_interne(par_locale)
+    assert [e["locale"] for e in ecarts] == ["fr"]
