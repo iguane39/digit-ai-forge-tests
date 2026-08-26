@@ -36,6 +36,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from forge_tests import catalogue_i18n as _catalogue
+from forge_tests import glossaire as _glossaire
 from forge_tests import classes, seuils
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
@@ -901,6 +902,43 @@ def _findings_catalogue(cible: Path) -> tuple[list[Finding], list[str]]:
                     risque=coter(PAN, "i18n:constance", dossier),
                 )
             )
+
+        # (g) LES NOMBRES SERVIS, CONFRONTES A LA DONNEE — TF-0644, decision humaine voie (b).
+        #
+        # LE FAIT : « 8 gites » dans les SEPT langues, francais compris, quand la donnee du
+        # produit en declare 5. Neuf controles projet ne l ont pas vu, dont ce pan meme — il
+        # verifiait la completude des cles, jamais leur CONTENU.
+        #
+        # ET LES CONTROLES (d) A (f) CI-DESSUS N AURAIENT PAS PU LE VOIR : ils comparent les
+        # locales ENTRE ELLES, or les sept disaient toutes « 8 ». Elles etaient parfaitement
+        # coherentes, et toutes fausses. Il faut un point fixe HORS du catalogue — c est
+        # pourquoi ce controle demande une DECLARATION du produit plutot qu une majorite.
+        #
+        # Le mot a chercher par locale vient du GLOSSAIRE du projet (R-53 du pilot) : sans lui,
+        # « 8 gites » et « 8 cottages » ne se rapprochent pas.
+        lu_glossaire = _glossaire.lire(_glossaire.chemin_glossaire(cible))
+        if lu_glossaire["motif"]:
+            motifs.append(f"i18n : nombres NON confrontes — {lu_glossaire['motif']}")
+        else:
+            lus_faits = _glossaire.faits_declares(_glossaire.chemin_faits(cible))
+            if lus_faits["motif"]:
+                motifs.append(f"i18n : {lus_faits['motif']}")
+            for ecart in _glossaire.confronter(par_locale, lu_glossaire["termes"], lus_faits["faits"]):
+                findings.append(
+                    Finding(
+                        id=f"i18n:nombre:{dossier}:{ecart['locale']}:{ecart['cle']}",
+                        classe=classes.I18N,
+                        localisation=f"{dossier}/{ecart['locale']}.json",
+                        message=(
+                            f"« {ecart['cle']} » en « {ecart['locale']} » annonce {ecart['vu']} "
+                            f"{ecart['terme']}(s) quand la donnee declaree en compte "
+                            f"{ecart['attendu']} — « {ecart['extrait']} ». Un nombre ecrit dans "
+                            "une chaine ne se met pas a jour tout seul, et les locales peuvent "
+                            "toutes s accorder sur le meme chiffre faux"
+                        ),
+                        risque=coter(PAN, "i18n:nombre", dossier),
+                    )
+                )
     return findings, motifs
 
 
