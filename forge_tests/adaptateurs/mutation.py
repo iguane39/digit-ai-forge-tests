@@ -27,10 +27,12 @@ from __future__ import annotations
 
 import ast
 import fnmatch
+import json
 import os
 import shutil
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from forge_tests import classes, seuils
@@ -434,6 +436,14 @@ def _suite_verte_ou_injouable(racine: Path, python: Path) -> bool:
 # `FORGE_TESTS_MUTATION_CIBLAGE=1`. Il ne deviendra le defaut qu apres une campagne ou les deux
 # verdicts auront ete compares.
 #
+# CE QUE LA DECISION D-34 DU 01/09 A CHANGE POUR CE PALIER, le jour meme de son ecriture. La
+# mutation est devenue une campagne A LA DEMANDE, jouee avant une mise en production et non plus
+# a chaque audit : le ciblage n'est donc plus ce qui rend le pan tenable, il ne fait qu'abaisser
+# le prix d'une porte qu'on franchit rarement. La meme decision dit par ailleurs que « tous les
+# tests sont pleinement executes tout le temps » — une phrase qui ferme la selection sur la suite
+# ORDINAIRE et ne dit rien du rejeu d'un mutant. Le ciblage reste donc ECRIT, EPROUVE et ETEINT,
+# et son sort est pose en decision ouverte plutot que tranche ici a la place de l'humain.
+#
 # POURQUOI UNE PASSE DE COUVERTURE DEDIEE, et non la mesure deja produite par `execution.mesurer`.
 # Il faut ici la couverture PAR TEST (quel test touche quelle ligne), que coverage ne produit
 # qu avec `dynamic_context = test_function`. L activer dans la passe partagee changerait la
@@ -539,6 +549,151 @@ def _entier_env(nom: str, defaut: int) -> int:
     if not brut.lstrip("-").isdigit():
         return defaut
     return int(brut)
+
+
+# --- D-34 (decision humaine du 01/09/2026) — LA MUTATION EST UNE CAMPAGNE A LA DEMANDE --------
+#
+# LA REGLE, mot pour mot : « Tous les tests sont pleinement executes tout le temps, sauf les tests
+# sur les mutants qui sont executes a la demande, lors d un passage en Prod sur proposition de
+# l IA, et uniquement s ils n ont ete executes depuis plusieurs modifications de code. »
+#
+# CE QU ELLE TRANCHE, et ce n est aucune des trois options qui lui etaient proposees. L etude du
+# 01/09 cherchait a rendre la mutation MOINS CHERE ; la decision la rend PLUS RARE. Le raisonnement
+# est plus solide que celui de l etude, et il faut le dire : le cout d une campagne de mutation ne
+# devient un probleme que parce qu on la joue a chaque fois. Joue une fois avant une mise en
+# production, apres plusieurs modifications, 54 minutes ne sont plus un cout — c est le prix d une
+# porte, et une porte se franchit rarement.
+#
+# CE QU ELLE INTERDIT, et c est le versant le plus important : « pleinement executes tout le temps »
+# ferme la porte a toute selection sur la suite ORDINAIRE. Le palier 3 de l etude — ne rejouer que
+# les tests touches par un changement — est donc REFUSE, et il ne se representera pas sous un autre
+# nom. La suite entiere reste la mesure de chaque changement.
+#
+# TROIS CONDITIONS, toutes portees ici :
+#   1. A LA DEMANDE — le pan ne se joue plus par defaut. `FORGE_TESTS_MUTATION=1` le demande.
+#      Sans elle, le pan rend SKIP en DISANT ce qu il n a pas mesure : un pan silencieux et un pan
+#      non demande sont deux choses differentes, et le rapport ne doit jamais les confondre.
+#   2. SUR PROPOSITION DE L IA, au passage en production — la proposition est ce message meme. Un
+#      pan qui se contente de se taire ne propose rien : il faut que le texte du rapport porte la
+#      recommandation, sinon la condition « sur proposition » n a aucun executant.
+#   3. SEULEMENT SI PERIMEE — « depuis plusieurs modifications de code ». La derniere campagne est
+#      NOTEE chez le produit, et le nombre de modifications depuis se COMPTE : commits touchant le
+#      paquet de sources. « Plusieurs » est un mot ; le seuil est un chiffre, il vaut 10 par defaut
+#      et se change par `FORGE_TESTS_MUTATION_PEREMPTION`. Le chiffre est DECLARE au rapport plutot
+#      que cache : un seuil qu on ne lit pas est un seuil qu on ne discute pas.
+#
+# CE QUI N EST PAS MESURABLE SE DIT. Sans depot git, sans campagne anterieure notee, ou si `git`
+# refuse, le compte des modifications est INCONNU — et l inconnu se propose, il ne se tait pas :
+# une campagne dont on ignore l anciennete est traitee comme perimee. Le contraire ferait passer un
+# projet neuf entre les mailles pour toujours.
+
+_PEREMPTION_DEFAUT = 10
+
+
+def _mutation_demandee() -> bool:
+    """Le pan mutation ne se joue que sur demande explicite (D-34)."""
+    return (os.environ.get("FORGE_TESTS_MUTATION") or "").strip() in {"1", "oui", "true"}
+
+
+def _marqueur_campagne(cible: Path) -> Path:
+    """Ou la derniere campagne est notee, chez le produit — a cote de son dossier de run."""
+    return cible / "forge" / "mutation-derniere-campagne.json"
+
+
+def _derniere_campagne(cible: Path) -> dict | None:
+    fichier = _marqueur_campagne(cible)
+    try:
+        return json.loads(fichier.read_text(encoding="utf-8")) if fichier.is_file() else None
+    except (OSError, ValueError):
+        return None
+
+
+def _sha_courant(racine: Path) -> str | None:
+    try:
+        r = subprocess.run(["git", "-C", str(racine), "rev-parse", "HEAD"],
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
+
+
+def _modifications_depuis(racine: Path, dossier: Path, sha: str) -> int | None:
+    """Commits touchant le PAQUET DE SOURCES depuis `sha`. None si le compte n est pas mesurable.
+
+    Le perimetre du compte est celui de la mutation elle-meme : un commit qui ne touche que la
+    documentation ou la suite n a pas altere le code que la mutation eprouve, et le compter
+    ferait proposer une campagne pour un changement de README.
+    """
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(racine), "rev-list", "--count", f"{sha}..HEAD", "--", str(dossier)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    brut = r.stdout.strip()
+    return int(brut) if brut.isdigit() else None
+
+
+def _etat_peremption(cible: Path, racine: Path, dossier: Path) -> dict:
+    """L etat de la derniere campagne, le compte des modifications depuis, et la PROPOSITION."""
+    seuil = _entier_env("FORGE_TESTS_MUTATION_PEREMPTION", _PEREMPTION_DEFAUT)
+    derniere = _derniere_campagne(cible)
+    sha = (derniere or {}).get("sha")
+    modifications = _modifications_depuis(racine, dossier, sha) if sha else None
+    if derniere is None:
+        perimee, pourquoi = True, "aucune campagne anterieure notee chez ce produit"
+    elif modifications is None:
+        perimee, pourquoi = True, (
+            "anciennete NON MESURABLE (pas de depot git, ou reference introuvable) — "
+            "une campagne dont on ignore l age est traitee comme perimee"
+        )
+    elif modifications >= seuil:
+        perimee, pourquoi = True, (
+            f"{modifications} modification(s) du code source depuis la derniere campagne, "
+            f"seuil {seuil}"
+        )
+    else:
+        perimee, pourquoi = False, (
+            f"{modifications} modification(s) du code source depuis la derniere campagne, "
+            f"sous le seuil de {seuil}"
+        )
+    proposition = (
+        "PROPOSITION — jouer la campagne de mutation AVANT ce passage en production : "
+        f"{pourquoi}. Commande : `FORGE_TESTS_MUTATION=1` puis relancer l audit. "
+        "La decision de la jouer est humaine (R-29)."
+        if perimee else
+        f"campagne de mutation NON proposee : {pourquoi}"
+    )
+    return {
+        "regle": "campagne a la demande (decision humaine du 01/09/2026)",
+        "variable": "FORGE_TESTS_MUTATION",
+        "seuil_peremption": seuil,
+        "variable_seuil": "FORGE_TESTS_MUTATION_PEREMPTION",
+        "derniere_campagne": derniere,
+        "modifications_depuis": modifications,
+        "perimee": perimee,
+        "proposition": proposition,
+    }
+
+
+def _noter_campagne(cible: Path, racine: Path, resume: dict) -> str | None:
+    """Note la campagne qui vient d etre jouee. Rend le motif d echec, ou None si c est ecrit.
+
+    Sans cette note, la condition « depuis plusieurs modifications » n a AUCUN point de depart et
+    la troisieme condition de D-34 serait decorative : elle proposerait la campagne a chaque fois.
+    """
+    fichier = _marqueur_campagne(cible)
+    try:
+        fichier.parent.mkdir(parents=True, exist_ok=True)
+        fichier.write_text(json.dumps(resume, ensure_ascii=False, indent=1), encoding="utf-8")
+        return None
+    except OSError as erreur:
+        return f"campagne NON notee ({type(erreur).__name__}) — la prochaine sera proposee a tort"
+
 
 
 def _inventaire_modules(
@@ -722,6 +877,28 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # La couverture se lit AVANT toute mutation : la suite doit être mesurée sur le code
     # d origine, jamais sur un arbre en cours d altération.
     couverture = resume_fichiers(cible)
+
+    # D-34 — LA PORTE. Le pan ne se joue plus par defaut ; non demande, il DIT ce qu il n a pas
+    # mesure et PROPOSE la campagne quand elle est perimee. L inventaire des modules est publie
+    # quand meme (principe A-2) : un pan non joue ne doit pas faire disparaitre les modules du
+    # rapport, sinon le silence du pan devient le silence du projet.
+    if not _mutation_demandee():
+        etat = _etat_peremption(cible, racine, dossier)
+        inventaire = _inventaire_modules(racine, retenus, exclus, couverture, {})
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP",
+            findings=_findings_modules(dossier, inventaire),
+            non_juge=[
+                *non_juge,
+                "mutation : pan NON JOUE — campagne a la demande depuis la decision humaine du "
+                "01/09/2026 (`FORGE_TESTS_MUTATION=1` pour la demander). Le seuil bloquant "
+                f"`mutation_globale` ({SEUIL:.2f}) n a donc PAS de porteur sur cet audit, et "
+                "aucun score de mutation n est publie : ce n est pas un score de zero.",
+                f"mutation : {etat['proposition']}",
+            ],
+            modules=inventaire,
+            mutation={"a_la_demande": etat},
+        )
 
     if not python.exists():
         inventaire = _inventaire_modules(racine, retenus, exclus, couverture, {})
@@ -916,6 +1093,21 @@ def analyser(cible: Path) -> SortieAdaptateur:
     inventaire = _inventaire_modules(racine, retenus, exclus, couverture, scores)
     tues = viables - len(survivants)
     score = tues / viables if viables else 0.0
+    # D-34, troisieme condition — LA CAMPAGNE JOUEE SE NOTE, sinon « depuis plusieurs
+    # modifications de code » n a pas de point de depart et la porte proposerait la campagne a
+    # chaque passage. Le resume note porte le point de reference (le commit) ET le verdict rendu :
+    # c est aussi le corpus auquel une campagne ulterieure se compare.
+    note_campagne = _noter_campagne(cible, racine, {
+        "sha": _sha_courant(racine),
+        "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "mutants_viables": viables,
+        "tues": tues,
+        "score": round(score, 4),
+        "survivants": [m.id for m in survivants],
+        "paquet_source": dossier.relative_to(racine).as_posix() if dossier.is_relative_to(racine) else str(dossier),
+    })
+    if note_campagne:
+        non_juge.append(f"mutation : {note_campagne}")
     findings = [
         Finding(
             id=m.id,
@@ -967,6 +1159,12 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 e["module"]: e["score_mutation"] for e in mutes if "score_mutation" in e
             },
             "survivants": [m.id for m in survivants],
+            "a_la_demande": {
+                "regle": "campagne a la demande (decision humaine du 01/09/2026)",
+                "demandee_par": "FORGE_TESTS_MUTATION",
+                "notee": note_campagne is None,
+                "motif_non_notee": note_campagne,
+            },
             "ciblage": {
                 "actif": _ciblage_demande(),
                 "variable": "FORGE_TESTS_MUTATION_CIBLAGE",
