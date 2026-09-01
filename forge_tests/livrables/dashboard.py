@@ -259,6 +259,15 @@ _STYLE = f"""
     }}
     :root[data-theme="sombre"] {{{_TOKENS_SOMBRES}}}
     * {{ box-sizing:border-box; }}
+    /* L23 (TF-0733) — LA GARDE DE L ATTRIBUT `hidden`, et elle n est pas cosmetique. Ce
+       tableau de bord masque par PROPRIETE : `p.hidden` pour les panneaux d onglet,
+       `tr.hidden` pour le filtrage des lignes, `d.hidden` pour les details replies. Or tout
+       `display` explicite pose par une classe l emporte sur l attribut : le noeud reste dans
+       le flux, invisible, et INTERCEPTE LES CLICS. Mesure a l origine de la regle : une page
+       entiere rendue inutilisable par un voile transparent, seize oracles au vert. Les regles
+       d impression qui reveillent volontairement les lignes masquees vivent plus bas, dans
+       leur media query, et l emportent donc sur celle-ci — le papier deplie tout, a dessein. */
+    [hidden] {{ display:none !important; }}
     body {{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
            line-height:1.55; font-size:16px; }}
     /* E4 : 75-100 % de la fenêtre, toujours — 92vw sous ~1826px, plafond confort 1680px,
