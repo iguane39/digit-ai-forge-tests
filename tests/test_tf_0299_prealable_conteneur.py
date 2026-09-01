@@ -147,6 +147,11 @@ def _pan_back_sur_suite_non_verte(
     (tmp_path / ".venv" / "Scripts" / "python.exe").write_bytes(b"")
 
     _mesurer_avec(tmp_path, monkeypatch, trace)  # c est elle qui DÉCLARE le motif
+    # D-34 (01/09/2026) — la campagne de mutation est A LA DEMANDE depuis la décision humaine du
+    # jour. Ce test porte sur ce que le pan dit QUAND IL SE JOUE : sans cette demande explicite,
+    # il rendrait le SKIP de la porte et ce banc mesurerait la porte au lieu du motif. La
+    # précondition est donc DÉCLARÉE ici plutôt que le test affaibli.
+    monkeypatch.setenv("FORGE_TESTS_MUTATION", "1")
     monkeypatch.setattr(mutation, "_suite_verte_ou_injouable", lambda *_a: False)
     sortie = mutation.analyser(tmp_path)
 

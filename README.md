@@ -572,6 +572,43 @@ l'exigence. Sont réputés infrastructure les modules nommés `main`, `db`, `dat
 `fournisseurs/`, `auth`, `rbac`, adaptateurs — est soumis au seuil par module. Un projet dont
 l'architecture diffère redéclare la liste ; il ne la contourne pas silencieusement.
 
+## La mutation est une campagne À LA DEMANDE (D-34, décision humaine du 01/09/2026)
+
+**La règle, mot pour mot** : « Tous les tests sont pleinement exécutés tout le temps, sauf les
+tests sur les mutants qui sont exécutés à la demande, lors d'un passage en Prod sur proposition de
+l'IA, et uniquement s'ils n'ont été exécutés depuis plusieurs modifications de code. »
+
+Elle répond à une mesure : une campagne réelle du 01/09 tenait 67 minutes, dont **54 de mutation**,
+à 28,2 s par mutant — chaque mutant relance la suite entière. L'étude qui l'a instruite cherchait à
+rendre la mutation moins CHÈRE ; la décision la rend plus RARE, et le raisonnement est le plus
+solide des deux : le coût d'une campagne ne devient un problème que parce qu'on la joue à chaque
+fois. Jouée une fois avant une mise en production, 54 minutes ne sont plus un coût — c'est le prix
+d'une porte, et une porte se franchit rarement.
+
+**Ce que la règle interdit, et c'est le versant qu'on oublierait** : « pleinement exécutés tout le
+temps » ferme la porte à toute SÉLECTION sur la suite ordinaire. Ne rejouer que les tests touchés
+par un changement est **refusé**, et ne se représentera pas sous un autre nom.
+
+| Variable | Défaut | Effet |
+|---|---|---|
+| `FORGE_TESTS_MUTATION` | absente | demande la campagne. Sans elle, le pan rend `SKIP` en DISANT ce qu'il n'a pas mesuré, publie quand même `modules[]`, et le seuil bloquant `mutation_globale` est déclaré **sans porteur** |
+| `FORGE_TESTS_MUTATION_PEREMPTION` | `10` | nombre de commits touchant le **paquet de sources** au-delà duquel la campagne est proposée. « Plusieurs » est un mot ; le seuil est un chiffre, et il est publié au rapport |
+
+La campagne jouée se **note** chez le produit (`forge\mutation-derniere-campagne.json` : commit,
+date, score, survivants). Sans ce point de départ, « depuis plusieurs modifications » n'a rien à
+compter et la porte proposerait la campagne à chaque passage — c'est-à-dire redeviendrait du bruit.
+
+**Une ancienneté inconnue vaut périmée** — pas de dépôt git, pas de campagne antérieure notée, ou
+compte en échec : la campagne est proposée. Le choix inverse ferait passer un projet neuf entre les
+mailles pour toujours, sans que rien ne le dise.
+
+Le rapport publie l'état complet sous `mutation.a_la_demande` — dernière campagne, modifications
+depuis, seuil retenu, et la **proposition** rédigée. « Sur proposition de l'IA » n'a d'exécutant que
+si le texte porte la proposition : un pan qui se contente de se taire ne propose rien.
+
+> Un pan **non demandé** et un pan dont le score est **nul** sont deux choses différentes. Les
+> confondre au tableau de bord ferait lire une absence de mesure comme un échec de mesure.
+
 ## Périmètre de mutation total et inventaire des modules
 
 **Le périmètre n'est plus une liste blanche.** L'adaptateur de mutation lisait
