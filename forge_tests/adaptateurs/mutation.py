@@ -371,11 +371,19 @@ class InterpreteurInutilisable(RuntimeError):
     mesurable, il ne fait pas perdre les onze autres."""
 
 
-def _suite_verte(racine: Path, python: Path) -> bool:
+def _suite_verte(racine: Path, python: Path, cibles: list[str] | None = None) -> bool:
+    """Vert / rouge de la suite, ou de la SELECTION de tests passee en `cibles`.
+
+    `cibles` a None ou vide rejoue la suite entiere — le comportement d avant le palier 1,
+    inchange. Une selection non vide passe les identifiants a pytest a la place du dossier :
+    c est le seul point ou le palier 1 touche l execution, et il ne retire jamais un test
+    d une selection qu il n a pas su calculer (voir `_tests_pour`).
+    """
     _purger_bytecode(racine)
+    quoi = list(cibles) if cibles else [SUITE]
     resultat = subprocess.run(
         [
-            str(python), "-m", "pytest", SUITE, "-q", "--no-header",
+            str(python), "-m", "pytest", *quoi, "-q", "--no-header",
             "-p", "no:cacheprovider", "-p", "no:warnings", "-x",
         ],
         cwd=racine,
@@ -399,6 +407,131 @@ def _suite_verte_ou_injouable(racine: Path, python: Path) -> bool:
             f"({type(erreur).__name__}: {erreur}) — venv construit ailleurs, lien mort ou "
             "binaire tronqué. Recréer l environnement virtuel du projet, puis rejouer"
         ) from erreur
+
+
+# --- Palier 1 de la strategie de tests (etude du 01/09/2026) : ne rejouer que les tests qui
+# COUVRENT la ligne mutee ----------------------------------------------------------------------
+#
+# LA CAUSE, etablie par le calcul et lue dans le code. Aucun test n est couteux individuellement
+# (0,38 s au maximum sur le corpus mesure, 0,053 s en moyenne) : c est le NOMBRE DE REJEUX qui
+# fait le cout. Chaque mutant relance la suite ENTIERE — 984 tests sur le produit mesure, pour une
+# poignee qui touchent reellement la ligne alteree. Mesure du 01/09 sur une campagne reelle :
+# 67 min de campagne dont 54 de mutation, 28,2 s par mutant.
+#
+# LE SURCOUT FIXE, la valeur que l etude declarait NON MESUREE et posait en critere d abandon
+# (« si le surcout fixe depasse 10 s, le gain tombe sous un facteur trois et le palier 4 devient
+# prioritaire »). Mesure le 01/09, trois repetitions, memes drapeaux que `_suite_verte`, sur une
+# suite de 1 174 tests : demarrage de l interpreteur + import des plugins + collecte + UN test
+# selectionne = 0,386 s (0,361 / 0,386 / 0,414). Le critere d abandon n est pas atteint, et de
+# loin : le palier tient.
+#
+# CE QUI N EST PAS PROUVE ICI, et se declare plutot que se promet. La CONDITION DE NON-PERTE de
+# l etude — la campagne ciblee rend EXACTEMENT la meme liste de survivants que la campagne
+# pleine — exige un projet reel dote de `coverage`. Le poste sur lequel ce palier a ete ecrit n en
+# a pas (`import coverage` echoue dans le venv de la forge). Seules les fonctions PURES de
+# selection sont donc eprouvees ici, en rouge et en vert ; la chaine complete ne l est pas.
+# Le ciblage entre en consequence DERRIERE UN DRAPEAU ABSENT PAR DEFAUT — loi transverse n° 2 :
+# `FORGE_TESTS_MUTATION_CIBLAGE=1`. Il ne deviendra le defaut qu apres une campagne ou les deux
+# verdicts auront ete compares.
+#
+# POURQUOI UNE PASSE DE COUVERTURE DEDIEE, et non la mesure deja produite par `execution.mesurer`.
+# Il faut ici la couverture PAR TEST (quel test touche quelle ligne), que coverage ne produit
+# qu avec `dynamic_context = test_function`. L activer dans la passe partagee changerait la
+# mesure de DOUZE pans pour le besoin d un seul. Une passe dediee coute une execution de suite
+# (52 s sur le produit mesure) contre 54 min de mutation : le rapport est de 1 a 60.
+
+
+def _lire_contextes(donnees: dict) -> dict[str, dict[int, list[str]]]:
+    """La carte { fichier relatif : { ligne (1-based) : [identifiants de test] } }.
+
+    Fonction PURE : elle prend le JSON que `coverage json --show-contexts` publie et n execute
+    rien. C est elle qui porte les deux pieges du format, et c est pour cela qu elle est isolee.
+
+    PIEGE 1 — le contexte porte un SUFFIXE de phase. coverage ecrit `tests/test_x.py::test_y|run`,
+    et aussi `|setup` / `|teardown` pour ce qu une fixture execute. L identifiant utile est ce qui
+    precede la barre ; le garder entier ferait passer a pytest un nodeid inexistant, donc une
+    selection vide, donc un mutant « tue » sans qu aucun test ne l ait vu — un faux vert.
+    PIEGE 2 — le contexte VIDE existe et ne se jette pas par distraction : c est ce qui a ete
+    execute HORS d un test (import du module a la collecte, code de niveau module). Une ligne qui
+    n a que ce contexte-la n a AUCUN test propre ; elle rend une carte sans entree, et l appelant
+    retombe alors sur la suite entiere. C est le choix conservateur, et il est motive : muter une
+    ligne executee a l import peut casser la collecte de toute la suite.
+    """
+    carte: dict[str, dict[int, list[str]]] = {}
+    for chemin, bloc in (donnees.get("files") or {}).items():
+        par_ligne: dict[int, list[str]] = {}
+        for ligne, contextes in (bloc.get("contexts") or {}).items():
+            noms = sorted({c.split("|")[0] for c in (contextes or []) if c.split("|")[0]})
+            if noms:
+                par_ligne[int(ligne)] = noms
+        if par_ligne:
+            carte[Path(chemin).as_posix()] = par_ligne
+    return carte
+
+
+def _tests_pour(
+    carte: dict[str, dict[int, list[str]]] | None, relatif: str, ligne: int
+) -> list[str] | None:
+    """Les tests a rejouer pour un mutant, ou None quand il faut rejouer la suite entiere.
+
+    None n est pas « aucun test » : c est « je ne sais pas », et les deux ne se confondent
+    jamais. Sans carte, ou sur une ligne qu aucun test ne couvre nommement, le comportement
+    d avant le palier est repris tel quel — la suite entiere. Le palier ACCELERE ce qu il sait
+    cibler et ne change RIEN au reste : c est ce qui rend la condition de non-perte tenable.
+    """
+    if carte is None:
+        return None
+    return carte.get(relatif, {}).get(ligne) or None
+
+
+def _carte_tests(racine: Path, python: Path, paquet: Path) -> dict[str, dict[int, list[str]]] | None:
+    """Une passe de couverture PAR TEST sur la suite d origine. None si elle n aboutit pas.
+
+    Jouee AVANT la premiere mutation, sur le code intact — la carte d un arbre en cours
+    d alteration ne voudrait rien dire. Un echec (coverage absent, suite rouge, delai depasse)
+    rend None et n arrete rien : la campagne repart en suite entiere, plus lente et identique.
+    """
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as temporaire:
+        rc = Path(temporaire) / "contextes.rc"
+        rc.write_text("[run]\ndynamic_context = test_function\n", encoding="utf-8")
+        env = {
+            **os.environ,
+            "PYTHONDONTWRITEBYTECODE": "1",
+            # G-1 (lecture seule) : sans cela coverage depose son `.coverage` DANS le projet.
+            "COVERAGE_FILE": str(Path(temporaire) / ".coverage"),
+        }
+        try:
+            passe = subprocess.run(
+                [
+                    str(python), "-m", "coverage", "run", f"--rcfile={rc}",
+                    f"--source={paquet.name}", "-m", "pytest", SUITE,
+                    "-q", "--no-header", "-p", "no:cacheprovider", "-p", "no:warnings",
+                ],
+                cwd=racine, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=1800, env=env,
+            )
+            if passe.returncode != 0:
+                return None
+            rapport = subprocess.run(
+                [str(python), "-m", "coverage", "json", f"--rcfile={rc}",
+                 "--show-contexts", "-o", "-", "--quiet"],
+                cwd=racine, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=600, env=env,
+            )
+            if rapport.returncode != 0:
+                return None
+            return _lire_contextes(json.loads(rapport.stdout))
+        except (OSError, subprocess.TimeoutExpired, ValueError):
+            return None
+
+
+def _ciblage_demande() -> bool:
+    """Loi transverse n° 2 : la voie neuve vit derriere un drapeau ABSENT par defaut, tant que
+    la condition de non-perte de l etude n a pas ete jouee une fois sur un projet reel."""
+    return (os.environ.get("FORGE_TESTS_MUTATION_CIBLAGE") or "").strip() in {"1", "oui", "true"}
 
 
 def _entier_env(nom: str, defaut: int) -> int:
@@ -686,6 +819,21 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 ],
                 modules=inventaire,
             )
+        # Palier 1 — la carte des tests par ligne se calcule ICI : la suite vient d etre
+        # declaree verte, et aucune source n a encore ete alteree.
+        carte_tests = _carte_tests(racine, python, dossier) if _ciblage_demande() else None
+        if _ciblage_demande():
+            non_juge.append(
+                "mutation : CIBLAGE par ligne mutee ACTIF (palier 1, drapeau "
+                "`FORGE_TESTS_MUTATION_CIBLAGE`) — "
+                + ("carte de couverture par test obtenue ; un mutant dont la ligne n est "
+                   "couverte par aucun test nomme rejoue quand meme la suite entiere"
+                   if carte_tests is not None else
+                   "carte NON obtenue (coverage absent, suite rouge ou delai depasse) : la "
+                   "campagne repart en suite entiere, plus lente et identique")
+                + ". La CONDITION DE NON-PERTE de l etude du 01/09 — meme liste de survivants "
+                "que la campagne pleine — n a pas encore ete jouee sur ce projet"
+            )
         fichier_courant: Path | None = None
         joues_module = 0
         for fichier, mutant in plan:
@@ -707,7 +855,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
             viables += 1
             viables_par_fichier[fichier] = viables_par_fichier.get(fichier, 0) + 1
             poser(fichier, mute)
-            if _suite_verte(racine, python):
+            # `mutant.ligne` est 0-based (voir `Mutant.id`), coverage numerote a partir de 1.
+            selection = _tests_pour(carte_tests, mutant.fichier, mutant.ligne + 1)
+            if _suite_verte(racine, python, selection):
                 survivants.append(mutant)
                 survivants_par_fichier.setdefault(fichier, []).append(mutant)
             restaurer({fichier: octets[fichier]})
@@ -817,6 +967,12 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 e["module"]: e["score_mutation"] for e in mutes if "score_mutation" in e
             },
             "survivants": [m.id for m in survivants],
+            "ciblage": {
+                "actif": _ciblage_demande(),
+                "variable": "FORGE_TESTS_MUTATION_CIBLAGE",
+                "surcout_fixe_mesure_s": 0.386,
+                "non_perte_jouee": False,
+            },
         },
         modules=inventaire,
     )
