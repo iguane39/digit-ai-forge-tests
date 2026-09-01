@@ -609,6 +609,42 @@ si le texte porte la proposition : un pan qui se contente de se taire ne propose
 > Un pan **non demandé** et un pan dont le score est **nul** sont deux choses différentes. Les
 > confondre au tableau de bord ferait lire une absence de mesure comme un échec de mesure.
 
+## Le ciblage par ligne mutée : écrit, éprouvé, ÉTEINT (D-36 (a), 01/09/2026)
+
+À l'intérieur d'une campagne, chaque mutant relance aujourd'hui la suite ENTIÈRE — 984 tests
+sur le produit mesuré, pour une poignée qui touchent la ligne altérée. Le ciblage ne rejoue que
+les tests couvrant cette ligne, à partir d'une passe de couverture **par test**
+(`dynamic_context`). Surcoût fixe mesuré le 01/09 : **0,386 s** par mutant (médiane de trois,
+suite de 1 174 tests), contre un critère d'abandon posé à 10 s.
+
+Il vit derrière `FORGE_TESTS_MUTATION_CIBLAGE=1`, **absent par défaut**, et la décision humaine
+du 01/09 l'y maintient : il se vérifie d'abord, il ne se suppose pas. La décision d'hier disait
+« tous les tests sont pleinement exécutés tout le temps » — une phrase qui vise la suite
+ordinaire et reste muette sur le rejeu d'un mutant ; l'ambiguïté a été portée à l'humain plutôt
+que tranchée à sa place.
+
+**La condition de non-perte est JOUABLE, et c'est ce qui rend la décision opposable.** Deux
+campagnes sur le même code, l'une pleine, l'autre ciblée, doivent rendre **exactement la même
+liste de survivants** — pas un score proche, la même liste aux mêmes identifiants :
+
+```
+python recette/non_perte_ciblage.py <projet>
+```
+
+Sortie JSON, exit `0` tenue · `1` perte mesurée · `2` rien à comparer. Trois choix y sont
+portés, et chacun contre un verdict faux dans le sens qui rassure :
+
+- **le sens de l'écart n'est pas symétrique.** Un survivant que la ciblée liste EN PLUS coûte du
+  temps ; un survivant qu'elle PERD est un **faux vert** — un mutant déclaré tué par une
+  sélection qui n'a jamais joué le test qui l'aurait tué. Les deux échouent, le rapport les
+  nomme séparément ;
+- **deux campagnes vides se ressemblent parfaitement.** Aucun mutant viable des deux côtés rend
+  `SANS_OBJET`, jamais `PASS` : déclarer tenue une condition jamais éprouvée serait pire que ne
+  pas la jouer ;
+- **l'échantillon est figé des deux côtés.** Le tirage des mutants est déterministe, mais
+  seulement si ses variables ne bougent pas entre les deux passes : elles sont fixées par la
+  recette et publiées au rapport.
+
 ## Périmètre de mutation total et inventaire des modules
 
 **Le périmètre n'est plus une liste blanche.** L'adaptateur de mutation lisait
