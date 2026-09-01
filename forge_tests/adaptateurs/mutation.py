@@ -444,6 +444,14 @@ def _suite_verte_ou_injouable(racine: Path, python: Path) -> bool:
 # ORDINAIRE et ne dit rien du rejeu d'un mutant. Le ciblage reste donc ECRIT, EPROUVE et ETEINT,
 # et son sort est pose en decision ouverte plutot que tranche ici a la place de l'humain.
 #
+# TRANCHE LE 01/09 — D-36, option (a) : le ciblage RESTE ETEINT et se VERIFIE a la prochaine
+# campagne reelle. « On verifiera » n etant pas un mecanisme, la verification est desormais
+# JOUABLE : `python recette/non_perte_ciblage.py <projet>` joue les deux campagnes sur le meme
+# code et compare les listes de survivants — meme liste aux memes identifiants, ou echec. Le
+# comparateur nomme separement ce qui est PERDU (faux vert : un mutant declare tue par une
+# selection qui n a jamais joue le test qui l aurait tue) et ce qui est AJOUTE (du temps perdu),
+# et rend SANS_OBJET plutot que PASS quand les deux campagnes n ont mute aucun mutant.
+#
 # POURQUOI UNE PASSE DE COUVERTURE DEDIEE, et non la mesure deja produite par `execution.mesurer`.
 # Il faut ici la couverture PAR TEST (quel test touche quelle ligne), que coverage ne produit
 # qu avec `dynamic_context = test_function`. L activer dans la passe partagee changerait la
