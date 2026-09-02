@@ -609,6 +609,21 @@ si le texte porte la proposition : un pan qui se contente de se taire ne propose
 > Un pan **non demandé** et un pan dont le score est **nul** sont deux choses différentes. Les
 > confondre au tableau de bord ferait lire une absence de mesure comme un échec de mesure.
 
+**L'exception, et elle est unique : la recette de la forge DEMANDE la campagne** (TF-0763). D-34
+porte sur les **produits audités** — « avant un passage en production, après plusieurs
+modifications ». Elle ne dit rien de `recette/verifier_corpus.py`, qui n'audite aucun produit :
+il met le pan à l'épreuve. Livrée sans ce mot le 01/09, la recette a perdu le jour même deux
+défauts de son corpus — **H-08** (assertions permissives) et **A-3** (seuil de mutation par
+module), les deux seuls que la mutation porte — et sortait `ECHEC` **21/23** pour une raison qui
+n'était pas un défaut du framework : le pan n'était simplement plus joué. La recette pose donc
+`FORGE_TESTS_MUTATION=1` sur ses deux bancs, le temps de l'analyse et sans toucher
+l'environnement de l'opérateur. Le coût est assumé : la recette est une porte, pas une boucle.
+
+*Ce que la campagne écrit chez le banc* — le marqueur `forge/mutation-derniere-campagne.json` et
+`forge/avancement.jsonl` — est **ignoré par git, aux bancs seulement** : son contenu change à
+chaque campagne, et TF-0294 le voyait apparaître pendant la recette et REFUSAIT le verdict. Chez
+un vrai produit, ces fichiers restent visibles : c'est tout leur intérêt.
+
 ## Le coût du pan, réconcilié avec lui-même (TF-0744, 02/09/2026)
 
 Le rapport de campagne du 31/08 publiait quatre valeurs : 115 mutants, ~54 min de mutation,
@@ -1416,6 +1431,40 @@ Sections : `corpus`, `unitaire`, `sql`, `qualification`, `dette`, `divergences`,
 PRONONCÉ` en nommant les sections non jouées : un « vert » sur trois sections et un silence sur
 toutes les autres serait exactement le mensonge que le sélecteur rendrait facile. Le critère de
 sortie reste la recette entière ; le sélecteur sert la boucle de correction, pas le verdict.
+
+### S-01 — ce que le critère couvre, et où il en est (mesuré le 02/09/2026)
+
+**Ce que S-01 affirme, exactement** : « la forge attrape ce qu'elle doit, et se tait sur ce qui
+va bien ». Deux moitiés, et les deux sont opposables — chacune des entrées de `CORPUS` produit
+au banc **rouge** un finding *nommé* par SON propre défaut (pas un total, pas un défaut voisin :
+préfixe **et** classe), et le banc **vert** ne lève **aucun finding bloquant**. Autour de ce
+cœur, douze sections sur pièces : suite unitaire, linter, lecteur SQL, qualification, registre de
+dette, divergences, chemins de couverture, restauration byte-exacte, `actions[]`, jeux de
+données, cahiers, dashboard. **Les treize doivent être vertes** ; une seule rouge, et S-01 est
+NON TENU.
+
+**Un verdict qu'on ne peut pas prononcer et qu'on tait passe pour un verdict tenu.** Cette
+section existe pour que cela n'arrive plus : elle porte l'état MESURÉ, pas l'intention.
+
+| Ce qui empêchait S-01 | Depuis | Mesure | État |
+|---|---|---|---|
+| `corpus` : banc rouge **21/23** — H-08 (assertions permissives) et A-3 (seuil de mutation par module) manquants | 01/09, livraison de D-34 : le pan `mutation` cessait de se jouer par défaut, et la recette qui attend ses constats ne les voyait plus | 23/23 après que la recette **demande** la campagne sur ses propres bancs | **fermé** (TF-0763) |
+| `corpus` : banc vert **3 findings bloquants** sur 5 routes | l'arrivée du pan `clavier` : K2 identifiait l'élément focalisé par sa FORME (`button`), jamais par son identité — trois boutons frères se lisaient « la tabulation n'avance plus » | 60 % de bruit sur un bloquant WCAG ; **0 bloquant** après que la clé devienne le chemin DOM | **fermé** (TF-0763) |
+| verdict REFUSÉ, « arbre instable » | la recette dépose légitimement chez ses bancs ce qu'elle prescrit (`.gitignore` de TF-0620, marqueur de campagne de D-34, `forge/avancement.jsonl`) — TF-0294 les voyait apparaître PENDANT la recette | 2 fichiers, puis 2 autres ; verdict rendu après ignorance bornée aux bancs | **fermé** (TF-0763) |
+| `lint` : **100** constats `ruff` (69 × E501, 12 × E741, 7 × I001, …) | non daté — **antérieur** à la campagne du 02/09 : 101 constats mesurés sur l'arbre de `623a618` | le pas est rouge, la section aussi | **ouvert** |
+| `dashboard` : `check_html.py` sort en code 1 (**L17**, lignes de détail sans `id` dans les tables de chapitres T6 à T8) | non daté — mesuré rouge à `77ffbac` **avant** toute correction de TF-0763 | le pas est rouge, la section aussi | **ouvert** |
+
+**Donc, au 02/09/2026 : S-01 est NON TENU**, sur `lint` et `dashboard` — 11 sections vertes sur
+13, `corpus` compris. Le dire ici est le prix de la loi : tant que les deux dernières ne sont
+pas soldées, aucune restitution ne peut écrire « la forge attrape ce qu'elle doit ». Ce qui a
+changé le 02/09 n'est pas le verdict, c'est sa **lisibilité** — les deux causes restantes sont
+nommées, datées et hors du corpus, au lieu d'être noyées dans un « ECHEC corpus » qui accusait le
+framework d'une régression qu'il n'avait pas.
+
+*Ce que la recette dit désormais d'elle-même* : les findings **bloquants** du banc vert sont
+listés un par un, avec leur pan, leur classe et leur message — comme les `signale` l'étaient
+déjà. Un « 3 finding(s) bloquant(s) » sans nom ne s'instruit pas : il oblige à rejouer l'audit à
+la main hors recette pour savoir lesquels, et c'est ce qui a laissé ce rouge vivre un mois.
 
 Elle exige un venv sous `fixtures/banc-*/backend` (`uv sync --directory
 fixtures/banc-rouge/backend`), les dépendances des fronts (`npm ci` puis `npm run build` dans
