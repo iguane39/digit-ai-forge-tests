@@ -146,7 +146,7 @@ def test_l_attente_expiree_rend_None_sans_faire_tomber_le_pan() -> None:
     assert qualif._attendre(_PageSPA(monte=False), qualif._SELECTEUR_MOTDEPASSE) is None
 
 
-# --- 2. La mire tardive est OUVERTE (le cas Produit-11) ----------------------------------------------
+# --- 2. La mire tardive est OUVERTE (le cas Produit-11) ---------------------------------------
 def test_la_mire_montee_APRES_le_chargement_est_trouvee_et_remplie() -> None:
     page = _PageSPA(monte=True)
 
@@ -238,7 +238,8 @@ class _FausseRequete:
 
 
 class _PageInstance(_PageSPA):
-    """L instance Produit-11 : toute route est refusée en 401 TANT QUE la mire n a pas été soumise."""
+    """L instance Produit-11 : toute route est refusée en 401 TANT QUE la mire n est pas
+    soumise."""
 
     def __init__(self, contexte: _FauxContexte, monte: bool) -> None:
         super().__init__(monte=monte)
