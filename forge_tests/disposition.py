@@ -7,7 +7,7 @@ autrement voyait donc SIX pans plafonnés à `SKIP` quelles que soient sa suite 
 — et le motif publié parlait d un environnement Python absent, ce qui envoyait chercher un
 problème qui n existait pas.
 
-Constaté le 12/08/2026 sur Produit-11 2, dont le paquet s appelle `src` : suite verte
+Constaté le 12/08/2026 sur Produit-11, dont le paquet s appelle `src` : suite verte
 de 116 tests, couverture de branches à 94 %, et pourtant `mutation : aucun dossier de sources
 sous backend/app`. La preuve que seul le NOM était en cause a été faite par contre-oracle —
 le moteur de mutation joué sur `backend/src` puis sur une copie renommée `backend/app` rend

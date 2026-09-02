@@ -1452,10 +1452,12 @@ section existe pour que cela n'arrive plus : elle porte l'état MESURÉ, pas l'i
 | `corpus` : banc vert **3 findings bloquants** sur 5 routes | l'arrivée du pan `clavier` : K2 identifiait l'élément focalisé par sa FORME (`button`), jamais par son identité — trois boutons frères se lisaient « la tabulation n'avance plus » | 60 % de bruit sur un bloquant WCAG ; **0 bloquant** après que la clé devienne le chemin DOM | **fermé** (TF-0763) |
 | verdict REFUSÉ, « arbre instable » | la recette dépose légitimement chez ses bancs ce qu'elle prescrit (`.gitignore` de TF-0620, marqueur de campagne de D-34, `forge/avancement.jsonl`) — TF-0294 les voyait apparaître PENDANT la recette | 2 fichiers, puis 2 autres ; verdict rendu après ignorance bornée aux bancs | **fermé** (TF-0763) |
 | `lint` : **100** constats `ruff` (69 × E501, 12 × E741, 7 × I001, …) | non daté — **antérieur** à la campagne du 02/09 : 101 constats mesurés sur l'arbre de `623a618` | le pas est rouge, la section aussi | **ouvert** |
-| `dashboard` : `check_html.py` sort en code 1 (**L17**, lignes de détail sans `id` dans les tables de chapitres T6 à T8) | non daté — mesuré rouge à `77ffbac` **avant** toute correction de TF-0763 | le pas est rouge, la section aussi | **ouvert** |
+| `dashboard` : les oracles de charte du socle sortent en code 1 — `check_html.py` (**L17** lignes de détail sans `id`, **L25** sommaire incomplet) puis `render_page.py` | non daté — mesuré rouge à `77ffbac` **avant** toute correction de TF-0763. Ces oracles vivent **hors du dépôt** (`~/.claude/skills/digit-ai-page-html/`) : leur jeu de règles a bougé pendant la session du 02/09 (L25 et `render_page` sont apparus entre deux exécutions, à empreinte de règles `c16177d42a88`) | le pas est rouge, la section aussi | **ouvert** |
 
 **Donc, au 02/09/2026 : S-01 est NON TENU**, sur `lint` et `dashboard` — 11 sections vertes sur
-13, `corpus` compris. Le dire ici est le prix de la loi : tant que les deux dernières ne sont
+13, `corpus` compris. Une dépendance d'oracle **hors dépôt** dont la version bouge sans que rien
+du dépôt ne change est elle-même une dette : elle rend le verdict non reproductible d'une heure à
+l'autre, et le pas ne peut pas la mesurer puisqu'il l'appelle sans épingler ce qu'il appelle. Le dire ici est le prix de la loi : tant que les deux dernières ne sont
 pas soldées, aucune restitution ne peut écrire « la forge attrape ce qu'elle doit ». Ce qui a
 changé le 02/09 n'est pas le verdict, c'est sa **lisibilité** — les deux causes restantes sont
 nommées, datées et hors du corpus, au lieu d'être noyées dans un « ECHEC corpus » qui accusait le
