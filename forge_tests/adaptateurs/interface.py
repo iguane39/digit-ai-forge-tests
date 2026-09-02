@@ -44,6 +44,7 @@ sur un ancêtre — est déclaré en `non_juge`, jamais deviné dans un sens ni 
 
 from __future__ import annotations
 
+import os
 import re
 from html.parser import HTMLParser
 from pathlib import Path
@@ -970,6 +971,182 @@ def _juger_lien(lien: dict, locale_composant: str | None, arbre: dict) -> str | 
 CLASSE_ECART_SERVI = "ecart-servi-versionne"
 
 
+# --- TF-0708 : DEUX motifs legitimes d ecran de creation, pas un seul impose partout ----------
+#
+# LE FAIT (lot Produit-12, 16/08/2026). Une exigence d interface imposait a TOUS les ecrans le
+# motif « formulaire replie toujours present » : un `<details>` et l attribut `data-cible` qui le
+# vise. Le motif est bon quand le formulaire est COURT et UNIQUE — il garde la creation sous la
+# main sans quitter la liste. Il devient NUISIBLE des que le formulaire porte des BRANCHES
+# EXCLUSIVES : le repli masque alors la contradiction au lieu de la resoudre, et l utilisateur
+# remplit des champs qui s annulent. Le test a du etre ASSOUPLI pour laisser passer la refonte de
+# l ecran des connexions — c est-a-dire qu une regle a ete affaiblie pour livrer une CORRECTION.
+#
+# UN TEST QU ON ASSOUPLIT POUR LAISSER PASSER UNE AMELIORATION VISE LE MAUVAIS INVARIANT. Ce qui
+# doit tenir n est pas « ce motif-ci partout », c est « la creation a une forme DECLAREE, et pas
+# n importe laquelle ». Deux formes sont legitimes, et le controle les admet toutes les deux :
+#
+#   (a) FORMULAIRE REPLIE — `<details>` + `data-cible`. Pour une creation SIMPLE : un formulaire
+#       court, sans branche, qu on ouvre sans perdre le contexte de la liste ;
+#   (b) PANNEAU ADRESSABLE — une destination portant `?<param>=...`. Pour une tache A BRANCHES :
+#       chaque branche a son ADRESSE, donc son etat partageable, son retour arriere et son
+#       rechargement. Le repli n a rien a masquer puisque la branche est choisie avant.
+#
+# LE CRITERE DE CHOIX, ecrit une fois ici et repete au finding : le formulaire porte-t-il des
+# BRANCHES EXCLUSIVES ? Non -> (a). Oui -> (b). La forge ne TRANCHE pas ce critere — elle ne sait
+# pas si deux champs s excluent — et c est justement pourquoi elle admet les deux formes au lieu
+# d en imposer une. Ce qu elle refuse est l ABSENCE DES DEUX : un ecran qui annonce une creation
+# sans en porter la forme laisse l utilisateur devant une promesse sans lieu.
+
+#: Le parametre d URL qui rend un panneau de creation ADRESSABLE. DECLARABLE par le projet :
+#: `nouveau` est la convention du produit qui a paye le defaut, pas une loi universelle.
+VARIABLE_PARAM_CREATION = "FORGE_TESTS_PARAM_CREATION"
+PARAM_CREATION_DEFAUT = "nouveau"
+
+MOTIF_FORMULAIRE_REPLIE = "formulaire-replie"
+MOTIF_PANNEAU_ADRESSABLE = "panneau-adressable"
+
+#: Ce qui fait d une affordance une ANNONCE de creation. Classe volontairement etroite : le
+#: controle ne se declenche que sur un ecran qui PROMET de creer quelque chose, jamais sur un
+#: gabarit quelconque.
+_ANNONCE_CREATION = re.compile(
+    r"(?<![\w-])(nouveau|nouvelle|nouveaux|nouvelles|cr[eé]er|cr[eé]ation|ajouter|"
+    r"new|create)(?![\w-])",
+    re.IGNORECASE | re.UNICODE,
+)
+
+#: Les balises dont le TEXTE est une promesse faite a l utilisateur. Chercher l annonce dans le
+#: document entier ferait d un paragraphe (« vous pouvez creer un compte ») un ecran de creation.
+_PORTEUSES = re.compile(r"<(button|a|summary)\b[^>]*>(.*?)</\1>", re.IGNORECASE | re.DOTALL)
+
+_BALISES = re.compile(r"<[^>]+>")
+
+#: LES DEUX BORNES QUI RENDENT LE DECLENCHEUR PUBLIABLE, et elles sont MESUREES, pas supposees.
+#: Version naive (le mot n importe ou dans le libelle, libelle de n importe quelle longueur),
+#: passee sur le corpus reel de 220 gabarits d un produit servi : SEPT accusations, les sept
+#: FAUSSES — toutes sur « Open the booking engine in a NEW tab », ou `new` qualifie un onglet et
+#: pas une creation. Precision mesuree : 0 %. Un controle qui accuse a cote ne se publie pas.
+#:
+#: Les deux bornes viennent de ce que sont REELLEMENT les libelles de creation : ils sont COURTS
+#: (« Nouveau lot », « + Ajouter une connexion ») et le verbe y vient EN TETE. Une phrase de sept
+#: mots n est pas un bouton de creation, et « … in a new tab » ne commence pas par `new`.
+#: Meme corpus, memes 220 gabarits, apres bornage : ZERO accusation. Precision : plus de faux.
+_MOTS_MAXIMUM_LIBELLE = 4
+_MOTS_DE_TETE = 2
+
+
+def param_creation() -> str:
+    """Le parametre qui rend un panneau adressable — declare par le projet, sinon la convention."""
+    declare = (os.environ.get(VARIABLE_PARAM_CREATION) or "").strip()
+    return declare or PARAM_CREATION_DEFAUT
+
+
+def annonce_une_creation(html: str) -> bool:
+    """L ecran PROMET-il de creer quelque chose ? Lu sur le TEXTE des affordances, pas du document.
+
+    C est le declencheur du controle, et il est etroit a dessein : sans lui, tout gabarit sans
+    `<details>` deviendrait un ecart, ce qui est exactement l inverse du defaut a corriger.
+    """
+    for _balise, contenu in _PORTEUSES.findall(html):
+        mots = re.sub(r"\s+", " ", _BALISES.sub(" ", contenu)).strip().split()
+        if not mots or len(mots) > _MOTS_MAXIMUM_LIBELLE:
+            continue
+        if _ANNONCE_CREATION.search(" ".join(mots[:_MOTS_DE_TETE])):
+            return True
+    return False
+
+
+def motifs_de_creation(html: str, param: str | None = None) -> set[str]:
+    """Les motifs de creation que ce gabarit porte — zero, un, ou les deux. Fonction pure."""
+    param = param or param_creation()
+    presents: set[str] = set()
+    # (a) Le repli : les DEUX moities. Un `<details>` sans `data-cible` est un accordeon de
+    # contenu, pas un formulaire replie vise par une affordance — les confondre validerait un
+    # ecran sur la seule presence d une balise de mise en forme.
+    if re.search(r"<details\b", html, re.IGNORECASE) and re.search(
+        r"data-cible\s*=", html, re.IGNORECASE
+    ):
+        presents.add(MOTIF_FORMULAIRE_REPLIE)
+    # (b) L adresse : le parametre porte par une destination (href, action, data-*). Cherche
+    # apres un `?` ou un `&` — un mot isole ne fait pas une adresse.
+    if re.search(rf"[?&]{re.escape(param)}=", html, re.IGNORECASE):
+        presents.add(MOTIF_PANNEAU_ADRESSABLE)
+    return presents
+
+
+def juger_ecran_de_creation(html: str, param: str | None = None) -> str | None:
+    """Le motif de l ecart, ou None. Un ecran qui ne promet pas de creation n est pas juge."""
+    if not annonce_une_creation(html):
+        return None
+    if motifs_de_creation(html, param):
+        return None
+    param = param or param_creation()
+    return (
+        "ecran annoncant une creation sans AUCUN des deux motifs legitimes : ni formulaire "
+        f"replie (`<details>` + `data-cible`), ni panneau adressable (`?{param}=`). Le critere "
+        "de choix est le formulaire lui-meme — sans branche exclusive, le repli garde la "
+        "creation sous la main ; avec des branches exclusives, il MASQUE la contradiction au "
+        "lieu de la resoudre et l adresse est la bonne forme. La forge admet les deux et n en "
+        "impose aucune ; elle refuse leur absence (TF-0708)"
+    )
+
+
+def _findings_ecrans_de_creation(cible: Path) -> tuple[list[Finding], list[str]]:
+    """Le controle applique aux gabarits du projet, avec ce qu il a REGARDE au `non_juge`."""
+    param = param_creation()
+    findings: list[Finding] = []
+    annoncants = 0
+    par_motif = {MOTIF_FORMULAIRE_REPLIE: 0, MOTIF_PANNEAU_ADRESSABLE: 0}
+    for fichier in _fichiers(cible, EXTENSIONS):
+        try:
+            html = fichier.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if not annonce_une_creation(html):
+            continue
+        annoncants += 1
+        for nom in motifs_de_creation(html, param):
+            par_motif[nom] += 1
+        motif = juger_ecran_de_creation(html, param)
+        if not motif:
+            continue
+        relatif = fichier.relative_to(cible).as_posix()
+        findings.append(
+            Finding(
+                id=f"creation:{relatif}",
+                classe=classes.ECRAN_DE_CREATION_SANS_MOTIF,
+                localisation=str(fichier),
+                message=motif,
+                severite="signale",
+                risque=coter(PAN, f"creation:{relatif}", str(fichier)),
+            )
+        )
+    if annoncants:
+        non_juge = [
+            f"interface/creation : {annoncants} gabarit(s) annoncant une creation — "
+            f"{par_motif[MOTIF_FORMULAIRE_REPLIE]} en formulaire replie, "
+            f"{par_motif[MOTIF_PANNEAU_ADRESSABLE]} en panneau adressable "
+            f"(`?{param}=`, declarable par {VARIABLE_PARAM_CREATION}), "
+            f"{len(findings)} sans aucun des deux. LES DEUX MOTIFS SONT LEGITIMES : le repli "
+            "pour une creation simple, l adresse pour une tache a branches exclusives — "
+            "imposer le premier partout a deja fait ASSOUPLIR un test pour laisser passer une "
+            "refonte qui corrigeait une ergonomie reelle (TF-0708)",
+            "interface/creation : le declencheur est le TEXTE des affordances (`<button>`, "
+            "`<a>`, `<summary>`), borne aux libelles de "
+            f"{_MOTS_MAXIMUM_LIBELLE} mots au plus dont l annonce est dans les "
+            f"{_MOTS_DE_TETE} premiers — un ecran dont la creation est annoncee par une icone "
+            "seule, un libelle long, un libelle traduit hors du gabarit ou un composant compile "
+            "n est PAS juge ici. Les deux bornes sont MESUREES : sans elles, 7 accusations sur "
+            "un corpus reel de 220 gabarits, les 7 fausses (« … in a NEW tab ») ; avec elles, "
+            "zero sur le meme corpus",
+        ]
+    else:
+        non_juge = [
+            "interface/creation : AUCUN gabarit n annonce de creation — le controle des deux "
+            "motifs (TF-0708) ne s applique a rien sur ce projet, ce n est pas un vert"
+        ]
+    return findings, non_juge
+
+
 def _entree_delocalisee(destination: str, locales: set[str]) -> str:
     """Clé comparable d une entrée de menu — le pendant SOURCE d `i18n.entrees_de_menu`."""
     chemin = _normaliser(destination)
@@ -1449,6 +1626,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
     ecart = ecart_servi_versionne(cible)
     non_juge.append(f"interface/{ecart['verdict'].lower()} — {ecart['motif']}")
     findings_ecart = _findings_ecart(cible, ecart)
+
+    # TF-0708 — LA FORME DE L ECRAN DE CREATION, deux motifs legitimes plutot qu un impose. Le
+    # controle se DIT dans les deux cas, y compris quand aucun gabarit n annonce de creation :
+    # « le controle ne s applique a rien » et « le controle a rendu vert » ne sont pas la meme
+    # phrase, et les confondre ferait lire une absence de mesure comme un verdict.
+    findings_creation, non_juge_creation = _findings_ecrans_de_creation(cible)
+    findings_ecart.extend(findings_creation)
+    non_juge.extend(non_juge_creation)
 
     # TF-0371 — DEUX PAIRES DE TERMES DE PLUS, par le même mécanisme (`confrontation`). Elles
     # entrent ici parce que c est ce pan qui porte déjà « servi ↔ versionné » : un troisième

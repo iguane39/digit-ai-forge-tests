@@ -1100,6 +1100,41 @@ Les quatre dernières lignes sont la **contrainte résiduelle**, déclarée auss
 dette : dans ces cas le code déclaré paraîtra « jamais levé ». Le remède côté projet est
 d'écrire la levée dans la route, ou dans un helper local appelé par son nom.
 
+### Deux motifs légitimes d'écran de création (TF-0708)
+
+Une exigence d'interface imposait à **tous** les écrans le motif « formulaire replié toujours
+présent » — un `<details>` et le `data-cible` qui le vise. Le motif est bon quand le formulaire
+est **court et unique** ; il devient **nuisible** dès qu'il porte des **branches exclusives**,
+car le repli masque la contradiction au lieu de la résoudre. Le test a dû être **assoupli**
+pour laisser passer une refonte qui corrigeait une ergonomie réelle — *un test qu'on assouplit
+pour livrer une amélioration vise le mauvais invariant.*
+
+Ce qui doit tenir n'est pas « ce motif-ci partout » mais « la création a une **forme
+déclarée** ». Deux formes sont légitimes, et le pan `interface` les admet toutes les deux :
+
+| Motif | Marque dans le gabarit | Quand c'est le bon |
+|---|---|---|
+| **formulaire replié** | `<details>` **et** `data-cible` | création **simple** : formulaire court, sans branche, ouvert sans quitter la liste |
+| **panneau adressable** | une destination portant `?nouveau=…` (paramètre déclarable par `FORGE_TESTS_PARAM_CREATION`) | tâche **à branches exclusives** : chaque branche a son adresse, donc son état partageable et son retour arrière |
+
+**Le critère de choix** — *le formulaire porte-t-il des branches exclusives ?* — n'est pas
+tranché par la forge : elle ne sait pas si deux champs s'excluent, et c'est précisément pour
+cela qu'elle admet les deux formes. Elle refuse **l'absence des deux** : un écran qui annonce
+une création sans en porter la forme laisse l'utilisateur devant une promesse sans lieu.
+Le finding est `signale`, classé `manuelle_dev` / `design` — un arbitrage de conception ne se
+dérive pas.
+
+**Le déclencheur est borné, et les bornes sont MESURÉES.** L'annonce se lit sur le **texte des
+affordances** (`<button>`, `<a>`, `<summary>`), dans un libellé de **4 mots au plus** dont
+l'annonce est dans les **2 premiers**. Sans ces bornes, la version naïve passée sur un corpus
+réel de **220 gabarits** rendait **7 accusations, les 7 fausses** — toutes sur « Open the
+booking engine in a **new** tab ». Avec elles, sur le même corpus : **0 accusation**. Un écran
+dont la création est annoncée par une icône seule, un libellé long ou un composant compilé
+n'est **pas** jugé ici, et c'est déclaré en `non_juge`.
+
+> Un projet dont **aucun** gabarit n'annonce de création le **dit** au rapport. « Le contrôle
+> ne s'applique à rien » et « le contrôle a rendu vert » ne sont pas la même phrase.
+
 #### Le constat statique se croise avec la mesure dynamique (TF-0728)
 
 Les quatre lignes ci-dessus sont des **limites de lecture**, et une lecture peut se tromper

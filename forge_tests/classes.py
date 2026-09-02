@@ -33,6 +33,9 @@ SONDE_MUETTE = "sonde-muette"
 AFFORDANCE_INERTE = "affordance-inerte"
 LIEN_CASSE = "lien-casse"
 ECART_SERVI_VERSIONNE = "ecart-servi-versionne"
+# TF-0708 : un ecran de creation qui ne porte AUCUN des deux motifs legitimes. Classe distincte
+# d `affordance-inerte` : ici les affordances sont cablees, c est la FORME de l ecran qui manque.
+ECRAN_DE_CREATION_SANS_MOTIF = "ecran-de-creation-sans-motif"
 
 # --- Instance servie (qualif) ------------------------------------------------------------------
 ROUTE_EN_DEFAUT = "route-en-defaut"
