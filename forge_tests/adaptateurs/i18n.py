@@ -37,6 +37,7 @@ from pathlib import Path
 
 from forge_tests import catalogue_i18n as _catalogue
 from forge_tests import glossaire as _glossaire
+from forge_tests import orphelins as _orphelins
 from forge_tests import classes, seuils
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
@@ -1029,6 +1030,96 @@ def _findings_catalogue(cible: Path) -> tuple[list[Finding], list[str]]:
                         risque=coter(PAN, "i18n:nombre", dossier),
                     )
                 )
+
+        # (k) UN NOMBRE QUE RIEN DU DEPOT NE REND — TF-0665, quatrieme controle de la famille.
+        #
+        # LE FAIT : une capacite annoncee a 23 dans la meta et a 30 dans l intro, SUR LA MEME
+        # PAGE, quand la donnee en donne 22 pour les trois hebergements que ce profil selectionne.
+        # 23 ne correspond a AUCUNE SOURCE : ni juste, ni recopie de travers — sans origine.
+        #
+        # POURQUOI LES TROIS CONTROLES CI-DESSUS LE MANQUENT TOUS, chacun pour sa raison : (d)-(f)
+        # comparent les locales entre elles et les sept disaient 23 ; (i) ne juge que distance et
+        # duree — borne DECLAREE, pas oubliee ; (g) ne confronte que les pivots DECLARES au
+        # glossaire, et la capacite n en est pas un.
+        #
+        # CE CONTROLE EST D UNE AUTRE NATURE : les trois lisent un catalogue et comparent, celui-ci
+        # RECALCULE depuis la donnee — la somme des capacites des hebergements que la selection
+        # designe. Sa PRECISION est mesuree (0 % sur 4 886 chaines reelles) et c est elle qui le
+        # tient ETEINT par defaut : sans FORGE_TESTS_ORPHELINS, il compte et DECLARE, il n accuse
+        # pas. Voir `forge_tests/orphelins.py` pour la mesure et pour ce qui manque a le rendre
+        # bloquant.
+        findings_orph, motifs_orph = _findings_orphelins(cible, par_locale, dossier)
+        findings.extend(findings_orph)
+        motifs.extend(motifs_orph)
+    return findings, motifs
+
+
+def _findings_orphelins(
+    cible: Path, par_locale: dict[str, dict[str, str]], dossier: str
+) -> tuple[list[Finding], list[str]]:
+    """TF-0665 — les nombres attaches a un denombrable DECLARE que rien du depot ne rend."""
+    declaration = _orphelins.lire_declaration(_orphelins.chemin_declaration(cible))
+    if declaration["motif"]:
+        return [], [f"i18n : nombres orphelins NON juges — {declaration['motif']}"]
+    fichiers = _orphelins.fichiers_de_donnees(cible)
+    if not fichiers:
+        return [], [
+            "i18n : nombres orphelins NON juges — aucun fichier de donnees declare "
+            f"({_orphelins.VARIABLE_DONNEES}). Deviner rendrait ce controle ACCUSATEUR, pas muet"
+        ]
+    lus, anonymes = _orphelins.enregistrements(fichiers)
+    findings: list[Finding] = []
+    motifs = list(_orphelins.NON_JUGE)
+    if anonymes:
+        motifs.append(
+            f"i18n/orphelins : {len(anonymes)} enregistrement(s) SANS cle nommante — leurs "
+            "valeurs comptent dans les agregats globaux, mais aucune selection declaree ne peut "
+            "les viser"
+        )
+    for nom, denombrable in sorted(declaration["denombrables"].items()):
+        rendues = _orphelins.valeurs_rendues(
+            lus, denombrable["champ"], denombrable.get("selections")
+        )
+        resultat = _orphelins.confronter(par_locale, denombrable, rendues)
+        motifs.append(
+            f"i18n/orphelins : denombrable « {nom} » — {resultat['juges']} nombre(s) attache(s) "
+            f"juge(s) sur {sum(len(v) for v in par_locale.values())} chaine(s), "
+            f"{len(resultat['orphelins'])} sans origine dans la donnee "
+            f"({len(rendues)} valeur(s) rendue(s) par `{denombrable['champ']}` et ses agregats). "
+            + (
+                "Drapeau FORGE_TESTS_ORPHELINS ACTIF : les candidats sortent en findings `signale`"
+                if _orphelins.actif()
+                else "Drapeau FORGE_TESTS_ORPHELINS ABSENT : candidats DECLARES, aucun finding — "
+                f"precision mesuree {_orphelins.PRECISION_MESUREE:.0%}, seuil de publication "
+                f"bloquante {_orphelins.SEUIL_PRECISION_BLOQUANTE:.0%}"
+            )
+        )
+        if not _orphelins.actif():
+            for candidat in resultat["orphelins"][:5]:
+                motifs.append(
+                    f"i18n/orphelins : candidat « {candidat['cle']} » en « {candidat['locale']} » "
+                    f"annonce {candidat['vu']} {candidat['terme']} — aucune valeur, somme, compte "
+                    f"ni borne de la donnee ne rend ce nombre : « {candidat['extrait']} »"
+                )
+            continue
+        for candidat in resultat["orphelins"]:
+            findings.append(
+                Finding(
+                    id=f"i18n:orphelin:{dossier}:{candidat['locale']}:{candidat['cle']}",
+                    classe=classes.I18N,
+                    localisation=f"{dossier}/{candidat['locale']}.json:{candidat['cle']}",
+                    message=(
+                        f"« {candidat['cle']} » en « {candidat['locale']} » annonce "
+                        f"{candidat['vu']} {candidat['terme']}, et AUCUNE source du depot ne rend "
+                        f"ce nombre — ni une valeur de `{denombrable['champ']}`, ni une somme, ni "
+                        f"un compte, ni une borne, ni la somme sur une selection declaree. "
+                        f"« {candidat['extrait']} ». Un nombre que rien ne rend n a pas d origine "
+                        "(TF-0665)"
+                    ),
+                    severite="signale",
+                    risque=coter(PAN, "i18n:orphelin", dossier),
+                )
+            )
     return findings, motifs
 
 

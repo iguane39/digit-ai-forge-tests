@@ -577,6 +577,41 @@
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : jeu d opérateurs et échantillonnage déclarés au rapport ; exercé ≠ vérifié est précisément le rôle du score. Réévaluer si un run réel prouve que la limite coûte."
     },
     {
+      "id": "orphelins-001",
+      "domaine": "orphelins",
+      "enonce": "orphelins : la PRECISION de ce controle est MESUREE, et elle est de 0 % sur le corpus reel de 4 886 chaines sur lequel il a ete eprouve — 6 accusations, aucune n etant un defaut. Il vit donc derriere FORGE_TESTS_ORPHELINS=1, ABSENT PAR DEFAUT : sans le drapeau il compte, mesure et DECLARE ses candidats, il n emet aucun finding. Le seuil de publication bloquante est de 80 %",
+      "statut": "assume",
+      "note": "instruite le 2026-09-02 (TF-0665) : la precision est MESUREE sur un corpus reel de 4 886 chaines, pas estimee. Le drapeau eteint par defaut EST la consequence de la mesure — la limite est le fait, pas un manque d outillage. Rebasculer le jour ou une precision >= 80 % est remesuree."
+    },
+    {
+      "id": "orphelins-003",
+      "domaine": "orphelins",
+      "enonce": "orphelins : sans DECLARATION de denombrables, le controle ne juge rien. La version naive (tout nombre absent de la donnee) a ete mesuree sur le meme corpus : 405 accusations, 0 defaut — elle accuse des heures, des prix et des faits editoriaux tiers. Elle est REFUSEE, pas remise a plus tard",
+      "statut": "assume",
+      "note": "instruite le 2026-09-02 (TF-0665) : la version naive a ete MESUREE (405 accusations, 0 defaut) et REFUSEE sur mesure. Exiger une declaration est le prix de la precision, pas un outillage manquant."
+    },
+    {
+      "id": "orphelins-004",
+      "domaine": "orphelins",
+      "enonce": "orphelins : les fichiers de donnees sont DECLARES (FORGE_TESTS_DONNEES), jamais devines. Un fichier de donnees oublie ne rend pas ce controle muet, il le rend ACCUSATEUR — tout ce que ce fichier rendait deviendrait orphelin",
+      "statut": "assume",
+      "note": "instruite le 2026-09-02 (TF-0665) : deviner les fichiers de donnees rendrait le controle ACCUSATEUR et non muet — asymetrie qui interdit le repli silencieux."
+    },
+    {
+      "id": "orphelins-005",
+      "domaine": "orphelins",
+      "enonce": "orphelins : seuls les objets litteraux PLATS sont lus comme enregistrements. Un objet a accolades imbriquees n est pas decoupe, donc ses valeurs n entrent dans aucun agregat — un enregistrement mal decoupe fabriquerait des sommes fausses, ce qui est pire qu un manque",
+      "statut": "assume",
+      "note": "instruite le 2026-09-02 (TF-0665) : un enregistrement mal decoupe fabriquerait des SOMMES FAUSSES, ce qui est pire qu un manque. Limite de lecture assumee."
+    },
+    {
+      "id": "orphelins-006",
+      "domaine": "orphelins",
+      "enonce": "orphelins : un nombre ECRIT EN LETTRES, ou attache au denombrable par plus d un mot intercale, n est pas vu. Elargir la fenetre rapprocherait deux propositions differentes",
+      "statut": "assume",
+      "note": "instruite le 2026-09-02 (TF-0665) : meme famille que la limite de pluriel de `glossaire` — elargir la fenetre rapprocherait deux propositions differentes."
+    },
+    {
       "id": "prompts-statique-001",
       "domaine": "prompts-statique",
       "enonce": "prompts : la v0 est STATIQUE et GRATUITE — le volet execute (rejeu N fois pour mesurer la stabilite d une reponse, jugement semantique par un juge) est HORS PERIMETRE : il depense des jetons, donc il releve d un mandat humain (regle 29). `mesure_d_instabilite` en porte la mesure, testee sur donnees figees et JAMAIS appelee par l audit",
@@ -1317,6 +1352,13 @@
       "domaine": "interface-statique",
       "enonce": "interface/ecart-servi : les deux termes delocalisent leurs cles, le servi avec les locales qu il PREFIXE et la source avec celles qu on lui donne. Les locales du servi sont donc rendues a la lecture de la source (alignement). Reste indeterminable une entree source `/xx/…` dont `xx` est une locale CONNUE que ni l arborescence source ni le build servi ne nomme : son espace de cles n est pas etablissable, le jugement y est SUSPENDU et l entree NOMMEE au motif — un deploiement correct accuse coute plus cher qu une entree non jugee",
       "statut": "todo"
+    },
+    {
+      "id": "orphelins-002",
+      "domaine": "orphelins",
+      "enonce": "orphelins : les six accusations mesurees sont le MEME fait dans six locales — « grande piece de vie avec espace repas (12 personnes) ». Ce n est pas un nombre orphelin, c est un DENOMBRABLE HOMONYME : 12 places a table, pas 12 couchages. Le discriminant n est donc ni le nombre ni le nom commun, c est le SUJET que le nom qualifie — et la declaration ne le porte pas. C est ce qui manque pour rendre le controle bloquant",
+      "statut": "todo",
+      "note": "instruite le 2026-09-02 (TF-0665) : c est le SEUL vrai reste de l item. Rendre le controle bloquant demande que la declaration porte la PORTEE du denombrable (quelles cles du catalogue parlent d hebergement), sinon un homonyme — 12 places a table — reste indiscernable d une capacite de couchage."
     },
     {
       "id": "plancher-rendu-001",

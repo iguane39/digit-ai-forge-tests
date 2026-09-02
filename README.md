@@ -1100,6 +1100,63 @@ Les quatre dernières lignes sont la **contrainte résiduelle**, déclarée auss
 dette : dans ces cas le code déclaré paraîtra « jamais levé ». Le remède côté projet est
 d'écrire la levée dans la route, ou dans un helper local appelé par son nom.
 
+### Le nombre orphelin — et pourquoi il est livré ÉTEINT (TF-0665)
+
+Sur une page de profil d'un produit servi, la capacité était annoncée à **23 personnes** dans
+la méta-description et à **30** dans l'introduction — *sur la même page* —, quand la donnée du
+dépôt en donne **22** pour les trois hébergements que ce profil sélectionne. **23 ne correspond
+à aucune source du dépôt** : ni juste, ni recopié de travers. Il n'a pas d'origine.
+
+**Trois contrôles livrés le manquent tous, chacun pour sa raison** — et c'est ce qui fait de
+celui-ci un contrôle d'une autre nature :
+
+| Contrôle | Pourquoi il ne le voit pas |
+|---|---|
+| cohérence interlangue | les sept langues disent 23, unanimement |
+| cohérence interne (TF-0663) | « personnes » n'est ni une distance ni une durée — borne **déclarée** |
+| nombres confrontés à la donnée (TF-0644) | ne juge que les **pivots déclarés au glossaire** ; la capacité n'en est pas un |
+
+Les trois lisent un catalogue et comparent. Celui-ci **recalcule depuis la donnée** : pour un
+champ numérique, il rend la valeur par enregistrement, la **somme**, le **compte**, le **min**,
+le **max** — et surtout la **somme sur chaque sélection déclarée**. Sur le cas fondateur la
+table vaut `2, 6, 8, 10, 22, 30` : **22 y est** (les trois hébergements du profil), **23 n'y est
+pas**. Sans les sélections, 22 lui-même deviendrait orphelin — c'est le point dur de l'item, et
+il a son propre cas de test.
+
+#### La précision est MESURÉE, et c'est elle qui décide de la forme du contrôle
+
+Corpus réel d'un produit servi : **4 886 chaînes, 7 locales**, données du dépôt lues.
+
+| Version | Ce qu'elle juge | Accusations | Défauts trouvés | Précision |
+|---|---|---|---|---|
+| naïve | tout nombre absent littéralement de la donnée | **405** | 0 | **0 %** |
+| bornée | nombre suivi d'un nom, hors heures / années / prix | **67** | 0 | **0 %** |
+| **ciblée** | nombre attaché à un **dénombrable DÉCLARÉ** | **6** | 0 | **0 %** |
+
+*Un contrôle qui accuse à côté ne se publie pas.* Les trois sont à précision nulle, mais elles
+n'échouent pas de la même façon. La naïve accuse des heures (« de 11 à **22** Uhr »), des prix
+(« dont € **50** de caution ») et des faits éditoriaux tiers (« l'aquarium et ses **600**
+espèces ») : elle est **refusée**, pas remise à plus tard. La ciblée n'accuse plus que **six
+chaînes, qui sont le même fait dans six locales** : « Grande pièce de vie avec espace repas
+(**12** personnes) » — un **dénombrable homonyme**, 12 places à table et non 12 couchages.
+
+**Ce qui manque pour le rendre bloquant, dit précisément** : le discriminant n'est ni le nombre
+ni le nom commun, c'est **le sujet que le nom qualifie**. Il faudrait que la déclaration porte
+la **portée** du dénombrable. C'est l'entrée `orphelins-002` du registre de dette, en `todo` —
+la seule à outiller ; les autres sont des limites assumées, chacune avec son motif.
+
+**Conséquence câblée** : le contrôle vit derrière **`FORGE_TESTS_ORPHELINS=1`, absent par
+défaut** (loi transverse n° 2). Sans le drapeau il compte, mesure et **déclare** ses candidats
+en `non_juge`, avec la précision mesurée et le seuil de publication bloquante (80 %) ; il
+n'émet aucun finding. Avec le drapeau, les candidats sortent en `signale`, jamais bloquants.
+Ce qu'il ne fait dans aucun des deux cas : se taire.
+
+| Variable | Défaut | Effet |
+|---|---|---|
+| `FORGE_TESTS_DENOMBRABLES` | `docs/projet/DENOMBRABLES.json` | `{"<nom>": {"champ": "capMax", "termes": {"fr": "personnes", …}, "selections": {"seminaire": ["familial", …]}}}`. Absente, le contrôle **ne juge rien** et le dit |
+| `FORGE_TESTS_DONNEES` | *(aucune)* | fichiers de données du produit, séparés par une virgule (globs admis). **Déclarés, jamais devinés** : un fichier oublié ne rend pas ce contrôle muet, il le rend **accusateur** |
+| `FORGE_TESTS_ORPHELINS` | absente | fait sortir les candidats en findings `signale` au lieu de `non_juge` |
+
 ### Deux motifs légitimes d'écran de création (TF-0708)
 
 Une exigence d'interface imposait à **tous** les écrans le motif « formulaire replié toujours
