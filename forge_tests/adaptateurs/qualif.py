@@ -242,12 +242,12 @@ def _entete_autorisation(valeur: str) -> str:
 # --- État de session : CONSTATÉ, jamais déduit (TF-0314) ---------------------------------------
 # `provenance_session` ne consultait que le dictionnaire de CONFIGURATION : elle ne pouvait
 # structurellement pas savoir si la session avait été ouverte, elle constatait seulement qu un
-# login et un mot de passe avaient été fournis. Payé dans le rapport BAV2 du 17/08 : non_juge[0]
-# annonçait « session ouverte PAR LA FORGE elle-même » pendant que non_juge[1] disait « aucune
-# mire de connexion trouvée » — deux phrases contradictoires, et c est la première qui se lit en
-# tête. La phrase de provenance dépend désormais du RÉSULTAT de `_connecter`, et l ouverture se
-# CONSTATE (un cookie de session posé, ou la mire qui rend la main) au lieu de se déduire d un
-# clic émis.
+# login et un mot de passe avaient été fournis. Payé dans le rapport Produit-11 du 17/08 :
+# non_juge[0] annonçait « session ouverte PAR LA FORGE elle-même » pendant que non_juge[1]
+# disait « aucune mire de connexion trouvée » — deux phrases contradictoires, et c est la
+# première qui se lit en tête. La phrase de provenance dépend désormais du RÉSULTAT de
+# `_connecter`, et l ouverture se CONSTATE (un cookie de session posé, ou la mire qui rend la
+# main) au lieu de se déduire d un clic émis.
 SESSION_SANS_COMPTE = "sans_compte"  # aucun compte fourni : rien n a été tenté
 SESSION_OUVERTE = "ouverte"  # tentée ET constatée
 SESSION_ECHOUEE = "echouee"  # mire trouvée, remplie, soumise — ouverture NON constatée
@@ -1301,8 +1301,8 @@ def _a_un_effet(descripteur: dict, types: set[str] | None) -> str | None:
 # --- Parcours ---------------------------------------------------------------------------------
 # TF-0313 : `domcontentloaded` ne dit RIEN du rendu d une application qui rend en JavaScript, et
 # la SPA est le cas MAJORITAIRE de la cible de ce pan. Rejoué à l identique contre l instance
-# servie de BAV2 (React 18 + Ant Design, `/login`) : à l instant du `domcontentloaded` le DOM est
-# vide — ni champ mot de passe, ni identifiant, pas même un `button`. Le pan épuisait ses
+# servie de Produit-11 (React 18 + Ant Design, `/login`) : à l instant du `domcontentloaded` le
+# DOM est vide — ni champ mot de passe, ni identifiant, pas même un `button`. Le pan épuisait ses
 # candidats et concluait « aucune mire de connexion trouvée » sur la BONNE route, avec un compte
 # VALIDE. Contre-épreuve : la même mire, attendue, s ouvre (deux cookies JWT posés). L absence de
 # mire ne se constate donc qu APRÈS expiration d une attente d APPARITION, jamais à l instant du
@@ -1354,8 +1354,8 @@ def _constater_ouverture(
     """L ouverture de session se CONSTATE (TF-0314) — deux attestations, aucune déduction.
 
     Dans l ordre de force :
-      - un cookie de session a été POSÉ pendant la soumission (cas réel BAV2 : deux cookies JWT,
-        `access_token_cookie` et `refresh_token_cookie`) ;
+      - un cookie de session a été POSÉ pendant la soumission (cas réel Produit-11 : deux
+        cookies JWT `access_token_cookie` et `refresh_token_cookie`) ;
       - la mire a RENDU LA MAIN : la page a quitté la route de la mire et n y rend plus de champ
         de mot de passe — un jeton peut vivre en stockage local, où aucun cookie ne l atteste.
 

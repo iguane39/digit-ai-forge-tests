@@ -79,7 +79,7 @@ class _PageSoumise:
 
 # --- 1. L ouverture se CONSTATE — les deux attestations ----------------------------------------
 def test_un_cookie_de_session_pose_ATTESTE_l_ouverture() -> None:
-    """Le cas réel BAV2 : deux cookies JWT posés par la soumission de `/login`."""
+    """Le cas réel Produit-11 : deux cookies JWT posés par la soumission de `/login`."""
     page = _PageSoumise(
         cookies=["access_token_cookie", "refresh_token_cookie"],
         url=f"{BASE}/trouver-une-annonce",

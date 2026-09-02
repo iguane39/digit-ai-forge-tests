@@ -72,7 +72,7 @@ def _sceller(projet: Path, relatifs: list[str]) -> Path:
 
 
 def _projet(tmp_path: Path) -> Path:
-    projet = tmp_path / "bav2"
+    projet = tmp_path / "produit-11"
     (projet / "src").mkdir(parents=True)
     (projet / "src" / "02_get_advert.py").write_text("def get(): return 1\n", encoding="utf-8")
     return projet

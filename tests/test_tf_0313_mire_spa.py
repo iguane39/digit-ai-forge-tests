@@ -2,7 +2,7 @@
 pan la lit, et le pan en concluait qu il n y en avait pas.
 
 `_connecter()` naviguait en `wait_until="domcontentloaded"` puis interrogeait le DOM
-IMMÉDIATEMENT. Rejoué à l identique contre l instance servie de BAV2 (React 18 + Ant Design,
+IMMÉDIATEMENT. Rejoué à l identique contre l instance servie de Produit-11 (React 18 + Ant Design,
 `http://localhost:8092/login`) : `input[type=password]` ABSENT, champ identifiant ABSENT, et même
 `button` ABSENT — à cet instant le bundle n a rien monté. La boucle épuisait ses candidats et
 sortait sur « aucune mire de connexion trouvee (routes essayees : /login) », alors que `/login`
@@ -76,7 +76,7 @@ class _PageSPA:
       - `wait_for_selector` = l attente d apparition — rend le champ si le bundle le monte,
         et expire sinon.
 
-    La soumission reproduit ce que l instance BAV2 fait réellement : deux cookies JWT posés et
+    La soumission reproduit ce que l instance Produit-11 fait réellement : deux cookies JWT posés et
     une redirection vers `/trouver-une-annonce`.
     """
 
@@ -146,7 +146,7 @@ def test_l_attente_expiree_rend_None_sans_faire_tomber_le_pan() -> None:
     assert qualif._attendre(_PageSPA(monte=False), qualif._SELECTEUR_MOTDEPASSE) is None
 
 
-# --- 2. La mire tardive est OUVERTE (le cas BAV2) ----------------------------------------------
+# --- 2. La mire tardive est OUVERTE (le cas Produit-11) ---------------------------------------
 def test_la_mire_montee_APRES_le_chargement_est_trouvee_et_remplie() -> None:
     page = _PageSPA(monte=True)
 
@@ -238,7 +238,8 @@ class _FausseRequete:
 
 
 class _PageInstance(_PageSPA):
-    """L instance BAV2 : toute route est refusée en 401 TANT QUE la mire n a pas été soumise."""
+    """L instance Produit-11 : toute route est refusée en 401 TANT QUE la mire n est pas
+    soumise."""
 
     def __init__(self, contexte: _FauxContexte, monte: bool) -> None:
         super().__init__(monte=monte)

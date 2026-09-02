@@ -9,7 +9,7 @@ MONTAGE est délégué au projet, et c est le bon partage — lui seul sait ce q
 dire chez lui. Mais jusqu au 18/08 le DÉMONTAGE n était délégué à personne, et aucune ligne du
 rapport ne disait ce qui restait en service après l audit.
 
-**Ce que ça a coûté, mesuré le 17/08 sur BAV2.** `node e2e/preparer.mjs` monte 3 conteneurs et
+**Ce que ça a coûté, mesuré le 17/08 sur Produit-11.** `node e2e/preparer.mjs` monte 3 conteneurs et
 un réseau (~4 min à froid) ; l audit se termine à 11:30 ; les conteneurs tiennent les ports
 8091, 8092 et 5544 jusqu à 13:55 — 2 h 25 sans le moindre usage, jusqu à ce qu un humain s en
 étonne. Au-delà de l encombrement, les ports sont pris : un second projet audité sur le même

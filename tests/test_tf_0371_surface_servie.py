@@ -1,6 +1,6 @@
 """TF-0371 — ce que le code APPELLE et RÉFÉRENCE, contre ce que l'instance SERT.
 
-Deux défauts mesurés en direct le 18/08 sur l'instance dev de BAV2, qu'aucun parcours ne
+Deux défauts mesurés en direct le 18/08 sur l'instance dev de Produit-11, qu'aucun parcours ne
 pouvait voir, et qui sont rejoués ici tels quels :
 
   (a) le blueprint `push_subscriptions` absent des `endpoint_modules` de l'hôte déployé →

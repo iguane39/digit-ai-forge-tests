@@ -6,8 +6,8 @@ jouables là où un audit ne peut rien mesurer d'autre — la propriété qui a 
 revue de suite (TF-0344), et la raison pour laquelle les deux défauts fondateurs ont pu être
 constatés « en trois appels fetch, sans authentification ».
 
-**Les deux défauts fondateurs**, mesurés en direct le 18/08 sur l'instance dev de BAV2, qu'aucun
-parcours ne pouvait voir :
+**Les deux défauts fondateurs**, mesurés en direct le 18/08 sur l'instance dev de Produit-11,
+qu'aucun parcours ne pouvait voir :
 
   (a) **une route appelée que l'hôte n'enregistre pas.** Le blueprint `alerts/08_push_subscriptions`
       n'est pas dans `endpoint_modules` de `azure/standalone_backend.py` : `GET /api/c13s/vapid/
