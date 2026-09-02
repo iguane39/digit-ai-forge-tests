@@ -41,3 +41,20 @@ resultat-playwright.json
 # est IGNORÉ, comme `test-results/` et les caches. La portée est bornée AUX BANCS — chez un vrai
 # produit, le dépôt du gabarit doit rester visible, c'est tout son intérêt.
 fixtures/banc-*/.env.forge-tests.exemple
+
+# TF-0763 (02/09/2026) — MÊME défaut que ci-dessus, sur l'AUTRE fichier que la recette dépose.
+# `gabarit_env.proteger()` (TF-0620) ajoute `.env.forge-tests` au `.gitignore` du projet audité,
+# et CRÉE ce `.gitignore` quand il n'existe pas. Sur les bancs, il n'existait pas : deux fichiers
+# apparaissaient donc PENDANT la recette et TF-0294 refusait le verdict — « ni TENU ni NON TENU »,
+# mesuré sur un arbre propre. La ligne du 24/08 ne couvrait que le gabarit `.exemple` ; celle-ci
+# couvre la protection. Portée bornée aux bancs, pour la même raison : chez un vrai produit, le
+# `.gitignore` que la forge écrit DOIT rester visible et se committer.
+fixtures/banc-*/.gitignore
+
+# TF-0763 (02/09/2026) — MÊME classe encore, sur ce que la CAMPAGNE DE MUTATION note chez le
+# projet audité : `forge/mutation-derniere-campagne.json` (D-34, marqueur de péremption). La
+# recette demande désormais la campagne sur ses deux bancs (la mutation est à la demande pour les
+# produits, obligatoire pour la recette qui la met à l'épreuve) : le marqueur apparaissait donc
+# pendant la recette, et TF-0294 refusait le verdict. Son contenu change à CHAQUE campagne (sha,
+# date, score) — versionné, il serait une instabilité permanente. Portée bornée aux bancs.
+fixtures/banc-*/forge/

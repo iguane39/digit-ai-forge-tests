@@ -236,11 +236,27 @@ def analyser_servi(banc: Path) -> dict:
         # test_tf_0136) et polluerait leur process pytest entier — constate en fixture rouge
         # sur `tests/test_tf_0132.py`, qui verifie precisement l ABSENCE de cette variable.
         os.environ["FORGE_TESTS_PLAYWRIGHT_TRACE"] = "on"
+        # TF-0763 — D-34 (01/09) a rendu le pan `mutation` A LA DEMANDE. La decision porte sur
+        # les PRODUITS audites : « une campagne se joue avant un passage en production, apres
+        # plusieurs modifications ». Elle ne dit rien de la RECETTE DE LA FORGE, qui n audite pas
+        # un produit mais prouve que le pan attrape ce qu il doit attraper. Livree sans ce mot,
+        # la recette a perdu le meme jour deux defauts du corpus — H-08 (assertions permissives)
+        # et A-3 (seuil de mutation par module) — et rendait ECHEC 21/23 pour une raison qui
+        # n etait PAS un defaut du framework : le pan n etait simplement plus joue. La recette
+        # DEMANDE donc la campagne, explicitement, sur les deux bancs — c est le seul endroit du
+        # depot ou la mutation n est pas « a la demande » mais OBLIGATOIRE, parce que c est elle
+        # qui la met a l epreuve. Le cout est assume : la recette est une porte, pas une boucle.
+        mutation_avant = os.environ.get("FORGE_TESTS_MUTATION")
+        os.environ["FORGE_TESTS_MUTATION"] = "1"
         try:
             return analyser(banc)
         finally:
             os.environ.pop("FORGE_TESTS_QUALIF_URL", None)
             os.environ.pop("FORGE_TESTS_PLAYWRIGHT_TRACE", None)
+            if mutation_avant is None:
+                os.environ.pop("FORGE_TESTS_MUTATION", None)
+            else:
+                os.environ["FORGE_TESTS_MUTATION"] = mutation_avant
 
 
 def verifier_divergences() -> int:
@@ -1584,6 +1600,16 @@ def verifier_corpus_des_bancs(
     bloquants_vert = [f for f in vert["findings"] if f.get("severite") == "bloquant"]
     signales_vert = [f for f in vert["findings"] if f.get("severite") != "bloquant"]
     print(f"  banc VERT  : {len(bloquants_vert)} finding(s) bloquant(s) — attendu 0")
+    # TF-0763 — les bloquants du vert se NOMMENT, comme les `signale` deux lignes plus bas. Un
+    # chiffre nu (« 3 finding(s) bloquant(s) ») ne s instruit pas : pendant tout le mois d aout
+    # la seule facon de savoir LESQUELS etait de rejouer l audit a la main hors recette. Le pan,
+    # la classe et le message sont dits avec l identifiant — c est ce qui distingue « la fixture
+    # verte porte un vrai defaut » de « la regle est trop large ».
+    for f in bloquants_vert:
+        print(
+            f"                 ! {f['id']} [{f.get('pan', '?')}/{f.get('classe', '?')}] "
+            f"{str(f.get('message', '')).splitlines()[0][:120]}"
+        )
     # TF-0299 — « 0 bloquant » sur un banc dont des pans n ont pas ete mesures est un vert
     # partiel : le dire est le meme devoir que pour le rouge, sinon la moitie saine du critere
     # se lit comme une preuve alors qu elle n en est pas une.

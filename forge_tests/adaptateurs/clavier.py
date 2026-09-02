@@ -121,14 +121,32 @@ _JS_FOCUS = """
 """
 
 # Element actif courant, releve entre deux tabulations REELLES.
+#
+# TF-0763 — ce releve rendait la FORME de l element (`button`, `a`), jamais son IDENTITE. Trois
+# boutons freres sans `id` ni classe — « Trier », « Nouvelle », « Exporter » — se relevaient donc
+# `button`, `button`, `button` : la regle des trois pas identiques y lisait « la tabulation
+# n avance plus » et accusait un PIEGE DE FOCUS la ou le focus avancait normalement. Mesure sur
+# le banc VERT (une interface conforme, servie, tabulee pour de vrai) : 3 routes sur 5 accusees a
+# tort — 60 % de bruit sur un finding BLOQUANT, et le banc vert de la recette ne pouvait plus
+# sortir a zero depuis que ce pan existe. Le chemin DOM (rang parmi les freres, de la racine a
+# l element) distingue ce que la forme confond ; le libelle lisible est rendu A COTE, pour que le
+# message reste celui d un humain et non celui d un selecteur.
 _JS_ACTIF = """
 () => {
   const el = document.activeElement;
-  if (!el || el === document.body) return 'body';
+  if (!el || el === document.body) return { cle: 'body', libelle: 'body' };
   const id = el.id ? '#' + el.id : '';
   const cls = (el.className && typeof el.className === 'string')
     ? '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.') : '';
-  return el.tagName.toLowerCase() + id + cls;
+  const chemin = [];
+  for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+    const parent = n.parentElement;
+    const rang = parent ? [].indexOf.call(parent.children, n) + 1 : 1;
+    chemin.unshift(n.tagName.toLowerCase() + ':' + rang);
+    if (!parent) break;
+  }
+  return { cle: chemin.join('>') || 'inconnu',
+           libelle: el.tagName.toLowerCase() + id + cls };
 }
 """
 
@@ -168,21 +186,41 @@ def _mesurer(page: Any, _route: str) -> tuple[Any, str | None]:
     # K2 — piege de focus, mesure par tabulations REELLES : `el.focus()` en JS contourne
     # justement ce qui pourrait pieger l utilisateur (gestionnaire de touche, focus force).
     parcours: list[str] = []
+    libelles: dict[str, str] = {}
     piege: str | None = None
+    hors_page = False
     try:
         page.evaluate("() => document.body.focus()")
         for _ in range(min(MAX_TABULATIONS, max(4, int(releve.get("examines", 0)) * 2 + 4))):
             page.keyboard.press("Tab")
-            parcours.append(str(page.evaluate(_JS_ACTIF)))
-            # Trois pas d affilee sur le meme element : la tabulation n avance plus.
+            actif = page.evaluate(_JS_ACTIF)
+            # Le relevé rend `{cle, libelle}` depuis TF-0763. La forme texte est celle d avant :
+            # l accepter garde l adaptateur lisible par un relevé plus ancien plutôt que de
+            # planter dessus — mais elle ne distingue alors pas deux frères identiques, et c est
+            # justement le défaut corrigé, donc elle ne sert que de repli.
+            cle = str(actif.get("cle", "inconnu")) if isinstance(actif, dict) else str(actif)
+            libelles[cle] = (
+                str(actif.get("libelle") or cle) if isinstance(actif, dict) else cle
+            )
+            parcours.append(cle)
+            # Trois pas d affilee sur le MEME element : la tabulation n avance plus.
             if len(parcours) >= 3 and parcours[-1] == parcours[-2] == parcours[-3]:
-                piege = parcours[-1]
+                # `body` n est pas un element de l interface : le focus qui y reste est sorti de
+                # la page (barre du navigateur, ou page sans aucun tabulable). Ce n est PAS un
+                # piege — un piege retient l utilisateur SUR quelque chose. L accuser ici
+                # ferait sortir un bloquant WCAG 2.1.2 sur une page qui n a rien a pieger ; le
+                # cas est declare au rapport (`non_juge`), jamais tu.
+                if cle == "body":
+                    hors_page = True
+                    break
+                piege = libelles[cle]
                 break
     except Exception as erreur:  # noqa: BLE001 — la route porte son motif, l audit continue
         return {**releve, "k2": None, "k2_motif": type(erreur).__name__}, None
 
     return {**releve, "k2": {"piege": piege, "pas": len(parcours),
-                             "distincts": len(set(parcours))}}, None
+                             "distincts": len(set(parcours)),
+                             "hors_page": hors_page}}, None
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
@@ -253,6 +291,12 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 severite="bloquant",
                 risque=coter(PAN, identifiant, str(cible / "frontend")),
             ))
+        elif k2.get("hors_page"):
+            non_juge.append(
+                f"clavier : [{route}] K2 NON CONCLUANT — apres trois tabulations le focus est "
+                "hors de la page (barre du navigateur, ou aucun element tabulable) : il n y a "
+                "rien a pieger, et rien n est donc juge sur cette route"
+            )
 
         evitement = releve.get("evitement")
         if evitement == "absent" and total > 0:
