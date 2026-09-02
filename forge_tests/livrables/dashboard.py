@@ -566,6 +566,10 @@ _SCRIPT = """
 
   // Sommaire → onglets : une ancre vers un panneau masqué serait morte ; le clic bascule.
   document.querySelectorAll('nav.toc a').forEach(function (a) {
+    // TF-0763 : une entree d ANCRE (le manifeste, hors onglets) n est pas une vue. Lui
+    // demander un onglet masquerait TOUS les panneaux — l ancre suffit, et le navigateur
+    // la suit tout seul.
+    if (a.dataset.ancre) { return; }
     a.addEventListener('click', function () { montrer(a.getAttribute('href').slice(1)); });
   });
 
@@ -1264,13 +1268,25 @@ def _manifeste_ecarts(ecarts: list[str]) -> str:
         "toutes accessibles."
     ]
     return (
-        '<footer class="ecarts">'
+        # TF-0763 — l id porte sur un CONTENEUR, pas sur le h2 : L25 accepte l ancre du chapitre
+        # sur une `section|article|div|main` englobante, et L7 cherche le chapeau PARMI LES
+        # DESCENDANTS de l element ancre. Un id pose sur le h2 satisfaisait la premiere et
+        # echouait la seconde — mesure faite, les deux verdicts a la suite.
+        '<footer class="ecarts"><div id="manifeste-ecarts">'
+        # TF-0763 — L25 du socle : « chaque h2 porte un id et son entrée dans le nav ».
+        # Ce h2 vivait hors des onglets, sans id et sans entrée : le sommaire annonçait six
+        # vues pour sept titres, et un sommaire partiel est pire qu aucun — le lecteur croit
+        # tenir le plan de la page. L id est ici, l entrée est posée par `construire()`.
         "<h2>Ce que cette page ne fait pas — manifeste d écarts</h2>"
+        # L7 du socle : un chapitre ouvre par un chapeau qui dit ce qu on va y apprendre.
+        '<p class="discret ch-apprend">Ce chapitre présente les limites de cette page : '
+        "ce qu elle n a pas pu établir sur CE rapport, puis ce qu elle ne juge jamais, quel "
+        "que soit le rapport. Une limite tue se lirait comme une absence de limite.</p>"
         "<h3>Sur ce rapport</h3><ul>"
         + "".join(f"<li>{_e(x)}</li>" for x in items)
         + "</ul><h3>Par construction, quel que soit le rapport</h3><ul>"
         + "".join(f"<li>{_e(x)}</li>" for x in NON_JUGE)
-        + "</ul></footer>"
+        + "</ul></div></footer>"
     )
 
 
@@ -2744,6 +2760,16 @@ def construire(
         f'<span class="toc-d">{_e(annonces[identifiant])}</span></a>'
         for rang, (identifiant, libelle, _) in enumerate(panneaux)
     )
+    # TF-0763 — l entrée du manifeste, qui vit hors des onglets. Pas de `data-vue` : ce n est
+    # pas une VUE (TF-0235 exige qu une vue annoncée existe comme panneau), c est une ancre —
+    # `data-ancre` le dit au script, qui laisse alors l ancre faire son travail au lieu de
+    # demander un onglet qui n existe pas (ce qui masquerait tous les panneaux d un coup).
+    toc += (
+        f'<a href="#manifeste-ecarts" data-ancre="1"><strong>{len(panneaux) + 1} · '
+        "Ce que cette page ne fait pas</strong> "
+        '<span class="toc-d">écarts déclarés sur ce rapport, et ce que la page ne juge '
+        "jamais, quel que soit le rapport</span></a>"
+    )
     nav = "".join(
         # L16 du socle (TF-0425, trouvé le 22/08 sur ce dashboard) : un `role="tab"` porte un
         # `id` et le panneau l'étiquette par `aria-labelledby`. Sans lui, un lecteur d'écran
@@ -2829,7 +2855,7 @@ def construire(
 <script>/* Composant filtres du socle — asset du skill installé ou copie D-12 du dépôt. */
 {_composant_filtres()}</script>
 <script>/* Initialisation D-12 : l API n auto-démarre pas — sans cet appel, les filtres de
-   colonne n existent pas (affordance morte constatée sur le dashboard BAV2 du 13/08).
+   colonne n existent pas (affordance morte constatée sur le dashboard Produit-11 du 13/08).
 
    `data-tf-count-for` rattache chaque table à son compte : c est le contrat que l oracle
    G5 vérifie, et le composant s en sert pour annoncer les lignes masquées. Mais il ne
