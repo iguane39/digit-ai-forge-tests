@@ -75,7 +75,7 @@ bloquant ; valeur issue d'un APPEL = plausiblement un vrai jeton injecté, signa
 fait le harnais de cette forge elle-même, où l'audience est vérifiée par le serveur émetteur.
 
 **(8) LA CLÉ DE RELECTURE HORS DU STOCKAGE DE LA SESSION (TF-0593, corollaire).** Le premier
-correctif d'Produit-01 avait remplacé la fabrication par une vraie connexion par profil — et
+correctif de Produit-01 avait remplacé la fabrication par une vraie connexion par profil — et
 cassait quand même les cinq workflows : le choix de profil vivait dans `sessionStorage`, que le
 `storageState` de Playwright NE SAUVEGARDE PAS. Perdu au rejeu, l'application retombait
 SILENCIEUSEMENT sur son identité nominale. Ce défaut passait `tsc`, `eslint`, 137 tests
@@ -595,7 +595,7 @@ def session_fabriquee(cible: Path) -> list[Finding]:
 
 
 #: Le COROLLAIRE de (7), et le plus coûteux des deux : *la clé qui permet de RELIRE une session
-#: doit vivre au même endroit que la session*. Le premier correctif d'Produit-01 avait remplacé la
+#: doit vivre au même endroit que la session*. Le premier correctif de Produit-01 avait remplacé la
 #: fabrication par une vraie connexion par profil — et cassait quand même les cinq workflows,
 #: parce que le choix de profil était mémorisé dans `sessionStorage`, que le `storageState` de
 #: Playwright NE SAUVEGARDE PAS. Perdu au rejeu, l'application retombait SILENCIEUSEMENT sur son

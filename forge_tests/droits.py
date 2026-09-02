@@ -2,7 +2,7 @@
 
 TF-0343 / TF-0342 (campagnes des 12 et 17/08/2026, produit Produit-01).
 
-**Le trou.** Le cahier d'Produit-01 porte une matrice de 10 actions × 4 profils. La suite
+**Le trou.** Le cahier de Produit-01 porte une matrice de 10 actions × 4 profils. La suite
 existante en couvrait les règles, mais **dispersées dans 13 fichiers, sous l'angle de chaque
 service** — donc sans jamais dire quelles CASES n'étaient pas couvertes. Deux ne l'étaient pas :
 
