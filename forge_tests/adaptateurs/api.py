@@ -317,17 +317,44 @@ def _divergences_gardes(
     table: dict[tuple[str, str], str],
     par_fonction: dict[str, set[int]],
     source: Path,
-) -> tuple[list[Finding], list[str]]:
+    exerces_dynamiquement: set[str] | None = None,
+) -> tuple[list[Finding], list[str], list[str]]:
     """Un code 400/409 declare sans garde qui le leve est une divergence — SAUF si l analyse
-    statique n a pas pu resoudre le handler (TF-0135).
+    statique n a pas pu resoudre le handler (TF-0135), et SAUF si la suite l a EMIS (TF-0728).
 
     Le `?()` qui apparaissait au message quand `fonction` valait None ne disait PAS que le
     projet avait tort : il etait la trace meme de l echec de resolution de l analyseur. Un
     handler non resolu degrade donc desormais en avertissement NON_JUGE, motive et nomme,
     jamais en finding BLOQUANT sur un code que personne n a pu verifier.
+
+    ==========================================================================================
+    TF-0728 — LE CONSTAT STATIQUE SE CROISE AVEC LA MESURE DYNAMIQUE AVANT PUBLICATION
+    ==========================================================================================
+
+    LE FAIT, mesure sur une campagne v0.4.0 du 31/08/2026. Ce controle publiait QUATRE
+    divergences, toutes sur des codes 400 neufs — et les quatre couples operation x code
+    etaient EXERCES par le pan `api` de la MEME campagne, qui rendait par ailleurs 483/483. Le
+    rapport se contredisait donc lui-meme d'une section a l'autre : la lecture statique disait
+    « aucune garde ne leve ce code », la mesure dynamique disait « l application vient de
+    l emettre ». Cout : quatre faux ecarts a analyser a la main a chaque campagne.
+
+    QUI A TORT, ET LA REPONSE N EST PAS SYMETRIQUE. La mesure dynamique est un FAIT constate —
+    la sonde a vu la reponse partir. L analyse statique est une LECTURE, et ses limites sont
+    deja declarees (RT-9 : un seul niveau d appel resolu, resolution par nom non qualifiee par
+    module, garde composee ou status_code calcule invisibles). Quand les deux se contredisent,
+    c est la lecture qui plie, jamais le fait.
+
+    CE QUI EST PUBLIE A LA PLACE : une CONFIRMATION DYNAMIQUE, nommee couple par couple. Le
+    silence aurait ete le mauvais remede — il aurait fait disparaitre du rapport quatre codes
+    dont on sait desormais quelque chose de plus, pas de moins.
+
+    CE QUI RESTE UN ECART : un code declare que NI la garde statique NI la suite n a produit.
+    La contradiction n existe plus, la divergence si.
     """
+    exerces_dynamiquement = exerces_dynamiquement or set()
     findings: list[Finding] = []
     non_juge: list[str] = []
+    confirmes: list[str] = []
     for element in inv:
         if not element.id.startswith("code:"):
             continue
@@ -345,6 +372,13 @@ def _divergences_gardes(
             )
             continue
         gardes = par_fonction.get(fonction, set())
+        if code not in gardes and element.id in exerces_dynamiquement:
+            # TF-0728 : la sonde a VU ce code partir pendant la suite. Le publier en ecart
+            # ferait contredire au rapport sa propre section `api`, et couterait une analyse
+            # manuelle par campagne pour aboutir a « la lecture statique n avait pas vu la
+            # garde ». Le fait constate prime sur la lecture, et la confirmation se DIT.
+            confirmes.append(f"{signature} -> {code}")
+            continue
         if code not in gardes:
             # TF-0244 — la localisation SUIT l élément, qui la tient du fichier où sa route est
             # écrite. `source` (le module principal) ne sert plus que d ancre de dernier
@@ -363,7 +397,17 @@ def _divergences_gardes(
                     risque=coter(PAN, element.id, ou),
                 )
             )
-    return findings, non_juge
+    if confirmes:
+        non_juge.append(
+            f"api : {len(confirmes)} code(s) declare(s) sans garde statique resolue mais "
+            "CONFIRME(S) DYNAMIQUEMENT — la suite les a emis pendant la campagne, ce ne sont "
+            f"donc pas des ecarts (TF-0728) : {', '.join(sorted(confirmes))}. LA BORNE DE CETTE "
+            "CONFIRMATION : elle etablit que le code SORT de l application, pas que la garde du "
+            "projet le leve — un code produit par le cadre (validation, middleware) confirmerait "
+            "de la meme facon. Elle ecarte une contradiction du rapport, elle ne prouve pas la "
+            "garde"
+        )
+    return findings, non_juge, confirmes
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
@@ -454,7 +498,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
     localisations = _localisation_par_route(sources)
     par_fonction = codes_par_fonction(sources)
     table = handlers(sources)
-    findings_gardes, non_juge_gardes = _divergences_gardes(inv, table, par_fonction, source)
+    findings_gardes, non_juge_gardes, _confirmes = _divergences_gardes(
+        inv, table, par_fonction, source, couvert
+    )
     sortie.findings.extend(findings_gardes)
     sortie.non_juge.extend(non_juge_gardes)
     if findings_gardes:

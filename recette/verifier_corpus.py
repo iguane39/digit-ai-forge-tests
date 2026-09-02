@@ -429,7 +429,12 @@ def verifier_gardes_multi_modules() -> int:
         sources = _fichiers_sources(racine)
         table = handlers(sources)
         gardes = codes_par_fonction(sources)
-        findings, non_juge = _divergences_gardes(inv, table, gardes, source_main)
+        # TF-0728 : le croisement avec la couverture DYNAMIQUE prend un quatrieme terme. Ce cas
+        # ne mesure QUE la resolution des gardes multi-modules : la couverture y est VIDE, sinon
+        # les deux mecanismes se masqueraient l un l autre.
+        findings, non_juge, _confirmes = _divergences_gardes(
+            inv, table, gardes, source_main, set()
+        )
 
         cas = [
             ("TEMOIN rouge : main.py seul -> 2 findings BLOQUANTS faux (le bug reel constate)",
