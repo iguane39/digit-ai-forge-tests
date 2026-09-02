@@ -122,6 +122,27 @@ def _resume(rap: dict) -> str:
                 else ""
             )
         )
+        # TF-0744 : le COUT du pan, decompose par classe. La moyenne globale seule a publie une
+        # valeur arithmetiquement impossible (115 x 37 s = 71 min pour 67 min de campagne) et
+        # ne decrit de toute facon aucun mutant reel : sous `-x`, un mutant tue s arrete au
+        # premier echec quand un survivant parcourt la suite entiere.
+        cout = mutation.get("cout") or {}
+        if cout.get("mesure"):
+            deco = cout["decomposition"]
+            lignes.append(
+                f"  {'':<12} cout {cout['duree_pan_s']:.0f} s / {cout['mutants_joues']} mutants "
+                f"= {cout['s_par_mutant']:.1f} s par mutant"
+            )
+            for nom_classe in ("tues", "survivants"):
+                classe = deco[nom_classe]
+                if not classe["mutants"]:
+                    continue
+                lignes.append(
+                    f"  {'':<12}   {nom_classe:<11} {classe['mutants']:>3} mutants "
+                    f"· {classe['moyenne_s']:.1f} s en moyenne "
+                    f"· {classe['part_du_pan']:.0%} du temps de mutation"
+                )
+            lignes.append(f"  {'':<12}   {cout['mecanisme']}")
     if rap.get("seuils"):
         lignes.append("")
         lignes.append("seuils opposables (versionnés dans forge_tests/seuils.py)")

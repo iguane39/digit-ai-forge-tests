@@ -609,6 +609,36 @@ si le texte porte la proposition : un pan qui se contente de se taire ne propose
 > Un pan **non demandé** et un pan dont le score est **nul** sont deux choses différentes. Les
 > confondre au tableau de bord ferait lire une absence de mesure comme un échec de mesure.
 
+## Le coût du pan, réconcilié avec lui-même (TF-0744, 02/09/2026)
+
+Le rapport de campagne du 31/08 publiait quatre valeurs : 115 mutants, ~54 min de mutation,
+67 min de campagne — et **« ~37 s par mutant »**. Les trois premières sont cohérentes entre
+elles (54 min / 115 = 28,2 s). La quatrième est **arithmétiquement impossible** : 115 × 37 s
+= 71 min, soit **plus que la campagne entière**. Elle n'avait pas été calculée depuis la
+mesure : elle avait été estimée. Toute estimation de gain bâtie dessus était surévaluée
+d'environ **31 %**.
+
+**Le remède est à la source, pas au libellé.** Le pan chronomètre désormais chaque rejeu et
+publie `mutation.cout`, dont la valeur par mutant est **dérivée** (`durée_pan / mutants`) et
+jamais saisie. `anomalies_cout()` refuse tout bloc dont `valeur × mutants` dépasse la durée
+mesurée — l'invariant du défaut fondateur, câblé (`tests/test_tf_0744_cout_mutation.py`,
+fixture rouge sur les chiffres du 31/08, fixture verte sur la valeur dérivée).
+
+**Et la moyenne globale, même juste, ne décrit aucun mutant réel** : `_suite_verte` passe `-x`
+à pytest, donc un mutant **tué** s'arrête au premier échec quand un **survivant** parcourt la
+suite entière. Le bloc publie la décomposition par classe — nombre, moyenne, part du temps de
+mutation — et le mécanisme en toutes lettres.
+
+| Classe | Mutants | Moyenne | Part du temps de mutation |
+|---|---|---|---|
+| survivants | 23 (20 %) | ~52 s | **37 %** |
+| tués | 92 (80 %) | ~22 s | 63 % |
+
+*Décomposition de la campagne fondatrice du 31/08.* **Le coût se concentre sur les mutants qui
+survivent** — c'est-à-dire sur ceux qui portent l'information utile. Un levier d'optimisation
+qui vise « le mutant moyen » vise une classe qui n'existe pas, et c'est ce que la valeur unique
+cachait.
+
 ## Le ciblage par ligne mutée : écrit, éprouvé, ÉTEINT (D-36 (a), 01/09/2026)
 
 À l'intérieur d'une campagne, chaque mutant relance aujourd'hui la suite ENTIÈRE — 984 tests
