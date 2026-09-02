@@ -1100,6 +1100,30 @@ Les quatre dernières lignes sont la **contrainte résiduelle**, déclarée auss
 dette : dans ces cas le code déclaré paraîtra « jamais levé ». Le remède côté projet est
 d'écrire la levée dans la route, ou dans un helper local appelé par son nom.
 
+#### Le constat statique se croise avec la mesure dynamique (TF-0728)
+
+Les quatre lignes ci-dessus sont des **limites de lecture**, et une lecture peut se tromper
+contre un **fait**. Mesuré sur une campagne du 31/08/2026 : ce contrôle publiait **4
+divergences** sur des codes 400 neufs, et les **4 couples opération × code étaient exercés
+dynamiquement par le pan `api` de la même campagne** (483/483). Le rapport se contredisait
+d'une section à l'autre, et coûtait **4 faux écarts à analyser à la main par campagne**.
+
+**La règle, et elle n'est pas symétrique.** La mesure dynamique est un fait constaté — la sonde
+a vu la réponse partir. L'analyse statique est une lecture, dont les limites sont déjà
+déclarées. Quand les deux se contredisent, **c'est la lecture qui plie** : un couple opération
+× code exercé pendant la suite se publie **« confirmé dynamiquement »**, nommé couple par
+couple en `non_juge`, jamais en écart. Un code que **ni** la garde statique **ni** la suite
+n'a produit **reste un écart**.
+
+**La borne de cette confirmation est déclarée avec elle** : elle établit que le code *sort* de
+l'application, pas que la garde du projet le lève — un code produit par le cadre (validation,
+middleware) confirmerait de la même façon. Elle écarte une contradiction du rapport, elle ne
+prouve pas la garde. Le silence aurait été le mauvais remède : il aurait retiré du rapport
+quatre codes dont on sait désormais quelque chose de **plus**.
+
+Fixture à double sens : `tests/test_tf_0728_croisement_statique_dynamique.py` — 4 statiques ×
+4 exercées → 0 écart et 4 confirmations ; une divergence non exercée reste un écart.
+
 #### Ce qui n'est pas une route (RT-10)
 
 Les montages — `app.mount("/static", StaticFiles(…))`, sous-application ASGI — sont **exclus du
