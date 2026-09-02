@@ -195,6 +195,19 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "un alias change le système sous test sans qu'aucun commit ne bouge, et la régression "
         "arrive un matin sans auteur ({message})",
     ),
+    # TF-0708 — la FORME de l ecran de creation. Ce n est pas une affordance inerte : tout est
+    # cable, c est le motif qui manque. Et c est un arbitrage de conception, pas une correction
+    # derivable : seul un humain sait si le formulaire porte des branches exclusives — donc
+    # lequel des deux motifs est le bon. `manuelle_dev` / `design`, jamais `auto_ia`.
+    "ecran-de-creation-sans-motif": (
+        "manuelle_dev",
+        "design",
+        "choisir et poser l'un des DEUX motifs de creation sur « {id} » : formulaire replie "
+        "(`<details>` + `data-cible`) si le formulaire est court et sans branche, panneau "
+        "adressable (`?nouveau=…`) s'il porte des branches exclusives — le repli les MASQUE "
+        "au lieu de les resoudre. Aucun agent ne peut trancher ce critere a la place de qui "
+        "connait la tache ({message})",
+    ),
     "sonde-muette": (
         "manuelle_utilisateur",
         "mep-config",
