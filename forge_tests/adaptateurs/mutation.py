@@ -31,6 +31,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -552,6 +553,119 @@ def _ciblage_demande() -> bool:
     return (os.environ.get("FORGE_TESTS_MUTATION_CIBLAGE") or "").strip() in {"1", "oui", "true"}
 
 
+# --- TF-0744 : LE COUT DU PAN, RECONCILIE AVEC LUI-MEME ---------------------------------------
+#
+# LE DEFAUT PAYE, mesure le 01/09/2026 en instruisant TF-0727. Un rapport de campagne publiait
+# quatre valeurs : 115 mutants, ~54 min de mutation, 67 min de campagne — et « ~37 s par mutant ».
+# Les trois premieres sont coherentes (54 min / 115 = 28,2 s). LA QUATRIEME EST ARITHMETIQUEMENT
+# IMPOSSIBLE : 115 x 37 s = 71 min, soit PLUS que la campagne entiere. Elle n avait pas ete
+# calculee depuis la mesure, elle avait ete ESTIMEE — et l argument de levier d une etude entiere
+# reposait dessus, surevalue d environ 31 %.
+#
+# LA CAUSE DE LA DISPERSION, et c est elle qui rend la moyenne globale trompeuse meme quand elle
+# est juste : `_suite_verte` passe `-x` a pytest. Un mutant TUE s arrete au PREMIER echec ; un
+# mutant SURVIVANT parcourt la suite ENTIERE. Les deux classes n ont donc pas le meme cout, et
+# une moyenne unique les melange. Decomposition mesuree sur la campagne fondatrice : 23
+# survivants a ~52 s (~20 min, 37 % du pan) et 92 tues a ~22 s (~34 min).
+#
+# CONSEQUENCE ACTIONNABLE, et c est la seule lecture utile du pan : le cout se concentre sur les
+# mutants qui SURVIVENT, c est-a-dire ceux qui portent l information. Un levier d optimisation
+# qui vise « le mutant moyen » vise une classe qui n existe pas.
+#
+# LA REGLE, desormais CABLEE : la valeur publiee n est jamais saisie, elle se DERIVE de la duree
+# mesuree du pan (`duree_pan_s / mutants_joues`), et `anomalies_cout` refuse tout bloc dont la
+# valeur publiee, multipliee par le nombre de mutants, depasse la duree du pan.
+
+
+def decomposer_cout(mesures: list[tuple[bool, float]], duree_pan_s: float) -> dict:
+    """Le cout du pan, decompose par CLASSE de mutant. Fonction pure — elle ne mesure rien.
+
+    `mesures` : un couple `(survivant, duree_s)` par mutant JOUE, dans l ordre du plan.
+    `duree_pan_s` : la duree du pan mesuree de bout en bout — elle englobe les mesures et le
+    fixe (suite verte prealable, carte de couverture, restaurations), donc elle leur est
+    superieure ou egale. C est elle qui fait foi pour la valeur publiee : une moyenne calculee
+    sur la seule somme des mutants ferait disparaitre le fixe du rapport.
+    """
+    joues = len(mesures)
+    if not joues:
+        return {
+            "mesure": False,
+            "motif_non_mesure": "aucun mutant joue — pas de cout a decomposer",
+        }
+    survivants = [d for survivant, d in mesures if survivant]
+    tues = [d for survivant, d in mesures if not survivant]
+    somme = sum(d for _, d in mesures)
+
+    def _classe(durees: list[float]) -> dict:
+        return {
+            "mutants": len(durees),
+            "duree_s": round(sum(durees), 1),
+            "moyenne_s": round(sum(durees) / len(durees), 1) if durees else None,
+            # Part du TEMPS DE MUTATION mesure (la somme des mutants), pas de la duree du pan :
+            # les deux classes doivent sommer a 100 %, sinon la part ne se lit pas.
+            "part_du_pan": round(sum(durees) / somme, 4) if somme else None,
+        }
+
+    return {
+        "mesure": True,
+        "duree_pan_s": round(duree_pan_s, 1),
+        "mutants_joues": joues,
+        # DERIVEE, jamais saisie : c est le correctif de TF-0744 a la source.
+        "s_par_mutant": round(duree_pan_s / joues, 1),
+        "duree_mutants_s": round(somme, 1),
+        "fixe_s": round(max(duree_pan_s - somme, 0.0), 1),
+        "decomposition": {"tues": _classe(tues), "survivants": _classe(survivants)},
+        "mecanisme": (
+            "pytest est lance avec `-x` : un mutant TUE s arrete au PREMIER echec, un mutant "
+            "SURVIVANT parcourt la suite ENTIERE. Les deux classes n ont donc pas le meme cout "
+            "et la moyenne globale ne decrit aucun mutant reel — le cout se concentre sur les "
+            "survivants, c est-a-dire sur ceux qui portent l information utile (TF-0744)"
+        ),
+    }
+
+
+#: Tolerance d arrondi, en secondes : `s_par_mutant` est publie au dixieme, donc son produit par
+#: le nombre de mutants peut depasser la duree d au plus un demi-dixieme par mutant.
+_TOLERANCE_ARRONDI_S = 0.05
+
+
+def anomalies_cout(cout: dict) -> list[str]:
+    """L ORACLE de reconciliation : ce que le bloc de cout doit tenir, ou il n est pas publiable.
+
+    Trois refus, et le premier est le defaut fondateur : une valeur par mutant qui, multipliee
+    par le nombre de mutants, depasse la duree mesuree du pan. Rendre la liste VIDE vaut PASS.
+    """
+    if not cout or not cout.get("mesure"):
+        return []
+    anomalies: list[str] = []
+    joues = cout.get("mutants_joues") or 0
+    duree = cout.get("duree_pan_s")
+    par_mutant = cout.get("s_par_mutant")
+    if not isinstance(duree, (int, float)) or not isinstance(par_mutant, (int, float)):
+        return ["cout : duree du pan ou valeur par mutant absente — rien a reconcilier"]
+    if par_mutant * joues > duree + _TOLERANCE_ARRONDI_S * joues:
+        anomalies.append(
+            f"cout : {par_mutant} s par mutant x {joues} mutants = "
+            f"{round(par_mutant * joues, 1)} s, soit PLUS que les {duree} s mesures du pan — "
+            "la valeur publiee ne se reconcilie pas avec la duree (defaut fondateur TF-0744)"
+        )
+    deco = cout.get("decomposition") or {}
+    classes_ = [deco.get("tues") or {}, deco.get("survivants") or {}]
+    total = sum(c.get("mutants") or 0 for c in classes_)
+    if total != joues:
+        anomalies.append(
+            f"cout : la decomposition porte {total} mutant(s) quand le pan en a joue {joues} — "
+            "tues + survivants doit rendre le compte, sinon la part par classe ne se lit pas"
+        )
+    parts = [c.get("part_du_pan") for c in classes_ if c.get("part_du_pan") is not None]
+    if parts and abs(sum(parts) - 1.0) > 0.01:
+        anomalies.append(
+            f"cout : les parts par classe somment a {round(sum(parts), 4)} au lieu de 1 — "
+            "une part qui ne somme pas a 100 % ne dit pas ou va le temps"
+        )
+    return anomalies
+
+
 def _entier_env(nom: str, defaut: int) -> int:
     brut = (os.environ.get(nom) or "").strip()
     if not brut.lstrip("-").isdigit():
@@ -959,6 +1073,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
     survivants_par_fichier: dict[Path, list[Mutant]] = {}
     viables = 0
     interrompu: str | None = None
+    # TF-0744 : un couple (survivant, duree) par mutant JOUE. C est la matiere de la
+    # decomposition tues/survivants — sans elle, la seule valeur publiable serait une moyenne
+    # globale, et une moyenne globale ne decrit aucun mutant reel sous `-x`.
+    mesures: list[tuple[bool, float]] = []
+    debut_pan = time.monotonic()
     # TF-0096 : la mutation était LE process silencieux d origine (~45 min sans un signal,
     # run Approval2 du 11/08). Unité = module ; sous-découpe = mutant k/n dans le module —
     # une unité qui occupe plus d une fenêtre montre son avancement INTERNE.
@@ -1042,7 +1161,12 @@ def analyser(cible: Path) -> SortieAdaptateur:
             poser(fichier, mute)
             # `mutant.ligne` est 0-based (voir `Mutant.id`), coverage numerote a partir de 1.
             selection = _tests_pour(carte_tests, mutant.fichier, mutant.ligne + 1)
-            if _suite_verte(racine, python, selection):
+            # TF-0744 : le chrono entoure le REJEU seul — ni la pose du mutant ni la
+            # restauration, qui appartiennent au fixe du pan et non au cout d une classe.
+            depart = time.monotonic()
+            survivant = _suite_verte(racine, python, selection)
+            mesures.append((survivant, time.monotonic() - depart))
+            if survivant:
                 survivants.append(mutant)
                 survivants_par_fichier.setdefault(fichier, []).append(mutant)
             restaurer({fichier: octets[fichier]})
@@ -1101,6 +1225,12 @@ def analyser(cible: Path) -> SortieAdaptateur:
     inventaire = _inventaire_modules(racine, retenus, exclus, couverture, scores)
     tues = viables - len(survivants)
     score = tues / viables if viables else 0.0
+    # TF-0744 — le cout du pan se DERIVE de la mesure, et il est reconcilie AVANT publication.
+    # Une anomalie de reconciliation est un defaut de l AUDITEUR : elle se dit au `non_juge`,
+    # comme les autres limites de ce pan, jamais en finding contre le projet.
+    cout = decomposer_cout(mesures, time.monotonic() - debut_pan)
+    for anomalie in anomalies_cout(cout):
+        non_juge.append(f"mutation : {anomalie}")
     # D-34, troisieme condition — LA CAMPAGNE JOUEE SE NOTE, sinon « depuis plusieurs
     # modifications de code » n a pas de point de depart et la porte proposerait la campagne a
     # chaque passage. Le resume note porte le point de reference (le commit) ET le verdict rendu :
@@ -1173,6 +1303,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 "notee": note_campagne is None,
                 "motif_non_notee": note_campagne,
             },
+            "cout": cout,
             "ciblage": {
                 "actif": _ciblage_demande(),
                 "variable": "FORGE_TESTS_MUTATION_CIBLAGE",
