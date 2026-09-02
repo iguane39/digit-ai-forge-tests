@@ -43,7 +43,7 @@ class Element:
     pan: str
     libelle: str
     source: str
-    #: TF-0380 (lot SCC_ALX 20260818b) — `produit` (le projet le fabrique et le modifie) ou
+    #: TF-0380 (lot Produit-10 20260818b) — `produit` (le projet le fabrique et le modifie) ou
     #: `entrant` (une donnee recue, que le projet ne produit ni ne modifie jamais). Laissee VIDE,
     #: elle est deduite du chemin par `provenance_de` au moment de l evaluation : aucun adaptateur
     #: n a a connaitre le mecanisme, et un adaptateur futur en herite sans une ligne (meme
@@ -104,7 +104,7 @@ class NonTestable:
     champs_requis: list[str]
     pan: str = ""
     motif: str = ""
-    #: TF-0381 (lot SCC_ALX 20260818b) — `element` nomme-t-il un élément INVENTORIÉ, ou est-il le
+    #: TF-0381 (lot Produit-10 20260818b) — `element` nomme-t-il un élément INVENTORIÉ, ou est-il le
     #: marque-place d un pan dont rien n est énumérable ? Nommer le pan reste juste (loi 3 : un
     #: silence ressemblerait à « rien à tester ici »), mais l APPELER un élément inventorié est
     #: faux, et c est ce que l action générée disait : « 1 élément(s) sont inventoriés » sur un

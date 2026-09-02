@@ -1,4 +1,4 @@
-"""TF-0122 — régression du correctif TF-0100, payée en réel sur Approval2 le 12/08.
+"""TF-0122 — régression du correctif TF-0100, payée en réel sur Produit-01 le 12/08.
 
 Deux défauts distincts, tous deux dans `forge_tests/adaptateurs/accessibilite.py` :
 
@@ -96,7 +96,7 @@ def test_capturer_une_route_isole_une_navigation_en_echec_au_lieu_de_lever(
     tmp_path: Path,
 ) -> None:
     """ROUGE implicite : avant le correctif, `page.goto` sans garde propageait cette exception
-    jusqu au noyau — c est exactement la panne Playwright constatee sur Approval2 (exit 2)."""
+    jusqu au noyau — c est exactement la panne Playwright constatee sur Produit-01 (exit 2)."""
     page = _PageFactice(echoue_sur={"/panne"})
 
     fichier, motif = accessibilite._capturer_une_route(page, "http://x", "/panne", tmp_path)
@@ -110,7 +110,7 @@ def test_capturer_une_route_isole_une_navigation_en_echec_au_lieu_de_lever(
 def test_analyser_isole_le_joker_et_continue_de_juger_les_autres_routes(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """Reproduit le cas constaté sur Approval2 : un inventaire portant `*` (route attrape-tout
+    """Reproduit le cas constaté sur Produit-01 : un inventaire portant `*` (route attrape-tout
     react-router) ET une route paramétrée (`:slug`). AVANT le correctif, la navigation sur `*`
     aurait levé une exception Playwright non rattrapée dans `_capturer`, faisant tomber
     `analyser()` — et avec lui l audit ENTIER (exit 2, zéro rapport). Ici, `*` sort NOMMÉ en

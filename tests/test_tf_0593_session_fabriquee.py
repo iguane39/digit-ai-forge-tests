@@ -1,6 +1,6 @@
 """TF-0593 — la session FABRIQUÉE, et la clé de relecture séparée de sa session.
 
-Lot Approval2 20260824c. Un produit à identité déléguée ne peut pas authentifier N identités
+Lot Produit-01 20260824c. Un produit à identité déléguée ne peut pas authentifier N identités
 sans N comptes réels chez son fournisseur ; la solution tentante est d'écrire la session
 directement dans le stockage du navigateur. Elle saute le seul mécanisme qui aurait vu l'erreur
 — le contrôle d'audience de la bibliothèque cliente, qu'une session désérialisée ne rejoue
@@ -147,7 +147,7 @@ test('le profil choisi survit au rechargement', async ({ page }) => {
 
 
 def test_storageState_et_sessionStorage_ensemble_sont_constates(tmp_path: Path) -> None:
-    """Le second défaut d'Approval2, celui qui passait tsc, eslint, 137 tests unitaires et le
+    """Le second défaut d'Produit-01, celui qui passait tsc, eslint, 137 tests unitaires et le
     harnais de connexion : `storageState` ne sauvegarde pas le sessionStorage, donc la clé est
     perdue au rejeu et l'application retombe silencieusement sur son identité nominale."""
     (tmp_path / "playwright.config.ts").write_text(_CONFIG_AVEC_STORAGE_STATE, encoding="utf-8")

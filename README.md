@@ -903,7 +903,7 @@ motivé**, jamais un vert par défaut.
 
 ## Matrice des droits exécutable et recette multi-profils (TF-0343 / TF-0342)
 
-**Un produit à rôles n'est pas vérifiable sous une identité unique.** Approval2 a passé un audit
+**Un produit à rôles n'est pas vérifiable sous une identité unique.** Produit-01 a passé un audit
 complet le 12/08 : *pan qualif 8/8, ratio 1,00, zéro finding · suite e2e 10/10 verte* — le tout
 sous **une** identité qui se désignait elle-même approbateur. Le cas nominal du cahier (« un
 approbateur décide, le suivant est sollicité ») n'avait donc jamais été exécuté. Le trou n'a pas
@@ -946,7 +946,7 @@ portées par le patron, pas par la vigilance :
   profil N ouvrait le tour du profil N+1, qui rendait 201 au lieu de 409) rendu **structurel**.
   C'est le seul des trois pièges qu'aucune revue statique ne sait voir.
 
-*Coût mesuré sur Approval2 : 15 tests, ~340 lignes, 2 écarts rendus exécutables, 13 cellules
+*Coût mesuré sur Produit-01 : 15 tests, ~340 lignes, 2 écarts rendus exécutables, 13 cellules
 vertes.*
 
 Dès qu'une matrice déclare des rôles, le pan `qualif` exige deux choses, et les constate sinon :
@@ -1035,7 +1035,7 @@ Aucune n'est obligatoire : ce qui manque produit un pan **motivé**, jamais un v
 
 Quatre pans exigent une instance **servie**. Le montage reste délégué au projet — lui seul sait ce que « peuplée » veut dire chez lui — mais jusqu'au 18/08 le **démontage** n'était délégué à personne, et le rapport ne disait pas ce qu'il laissait debout.
 
-*Mesuré le 17/08 sur bourse-aux-vacants : 3 conteneurs et un réseau laissés en service **2 h 25** après la fin de l'audit, tenant les ports 8091, 8092 et 5544, jusqu'à ce qu'un humain s'en étonne. Et la moitié grave : la topologie avait été bâtie à 10:47, le correctif D-14 écrit après — pendant cette fenêtre, un audit relancé aurait mesuré l'ancien code et publié ses chiffres comme l'état courant.*
+*Mesuré le 17/08 sur Produit-11 : 3 conteneurs et un réseau laissés en service **2 h 25** après la fin de l'audit, tenant les ports 8091, 8092 et 5544, jusqu'à ce qu'un humain s'en étonne. Et la moitié grave : la topologie avait été bâtie à 10:47, le correctif D-14 écrit après — pendant cette fenêtre, un audit relancé aurait mesuré l'ancien code et publié ses chiffres comme l'état courant.*
 
 La règle tient en une phrase, et le rapport la publie : **la forge démonte ce qu'elle a monté, et publie ce qu'elle laisse debout quand elle ne l'a pas monté.**
 

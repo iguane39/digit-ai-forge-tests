@@ -265,7 +265,7 @@ def _action_configuration(
     variables en tête, grammaire cassée). Structure fixe : quoi faire → pourquoi → ce qu'on
     obtient. Les CHAMPS restent nommés (jamais leurs valeurs), mais en fin de phrase.
 
-    TF-0381 (lot SCC_ALX 20260818b) : `elements` peut contenir des MARQUE-PLACES `pan:<x>`, posés
+    TF-0381 (lot Produit-10 20260818b) : `elements` peut contenir des MARQUE-PLACES `pan:<x>`, posés
     quand un pan n a rien d énumérable. Les compter comme des éléments inventoriés faisait dire à
     l action « 1 élément(s) sont inventoriés » alors que le motif du même pan, deux champs plus
     haut dans le même rapport, annonçait « 0 elements INVENTORIES ». Le rapport se contredisait

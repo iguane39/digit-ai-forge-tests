@@ -59,7 +59,7 @@ mentionné ici est signalé comme trou de couverture — signal nommé, jamais b
 variantes peuvent différer LÉGITIMEMENT, mais l'écart se lit, il ne se découvre pas en
 production.*
 
-**(7) SESSION FABRIQUÉE, au lieu d'être JOUÉE (TF-0593, lot Approval2 20260824c).** Quand
+**(7) SESSION FABRIQUÉE, au lieu d'être JOUÉE (TF-0593, lot Produit-01 20260824c).** Quand
 l'authentification réelle est indisponible — un fournisseur d'entreprise dont on ne peut pas
 obtenir N identités sans N comptes réels — la solution tentante est d'écrire la session
 directement dans le stockage du navigateur. C'est rapide, ça marche tout de suite, et ça saute
@@ -75,7 +75,7 @@ bloquant ; valeur issue d'un APPEL = plausiblement un vrai jeton injecté, signa
 fait le harnais de cette forge elle-même, où l'audience est vérifiée par le serveur émetteur.
 
 **(8) LA CLÉ DE RELECTURE HORS DU STOCKAGE DE LA SESSION (TF-0593, corollaire).** Le premier
-correctif d'Approval2 avait remplacé la fabrication par une vraie connexion par profil — et
+correctif d'Produit-01 avait remplacé la fabrication par une vraie connexion par profil — et
 cassait quand même les cinq workflows : le choix de profil vivait dans `sessionStorage`, que le
 `storageState` de Playwright NE SAUVEGARDE PAS. Perdu au rejeu, l'application retombait
 SILENCIEUSEMENT sur son identité nominale. Ce défaut passait `tsc`, `eslint`, 137 tests
@@ -451,7 +451,7 @@ def trous_de_couverture_inter_suites(cible: Path) -> list[Finding]:
     return findings
 
 
-#: TF-0593 (retour Approval2 du 24/08) — piège (7), LA SESSION FABRIQUÉE.
+#: TF-0593 (retour Produit-01 du 24/08) — piège (7), LA SESSION FABRIQUÉE.
 #:
 #: Quand l'authentification réelle est indisponible — un fournisseur d'entreprise, Entra ID,
 #: Google Workspace, Okta, dont on ne peut pas obtenir N identités sans N comptes réels — la
@@ -595,7 +595,7 @@ def session_fabriquee(cible: Path) -> list[Finding]:
 
 
 #: Le COROLLAIRE de (7), et le plus coûteux des deux : *la clé qui permet de RELIRE une session
-#: doit vivre au même endroit que la session*. Le premier correctif d'Approval2 avait remplacé la
+#: doit vivre au même endroit que la session*. Le premier correctif d'Produit-01 avait remplacé la
 #: fabrication par une vraie connexion par profil — et cassait quand même les cinq workflows,
 #: parce que le choix de profil était mémorisé dans `sessionStorage`, que le `storageState` de
 #: Playwright NE SAUVEGARDE PAS. Perdu au rejeu, l'application retombait SILENCIEUSEMENT sur son
@@ -651,7 +651,7 @@ def cle_de_relecture_separee_de_la_session(cible: Path) -> list[Finding]:
     return findings
 
 
-#: TF-0605 (lot Approval2 20260824d) — piège (9), LE SAUT CONDITIONNEL.
+#: TF-0605 (lot Produit-01 20260824d) — piège (9), LE SAUT CONDITIONNEL.
 #:
 #: QUATRE OCCURRENCES DISTINCTES SUR UN MÊME PRODUIT, toutes vertes. Trois tests d'intégration
 #: silencieusement ignorés EN INTÉGRATION CONTINUE PENDANT DES MOIS — leurs gardes les faisaient

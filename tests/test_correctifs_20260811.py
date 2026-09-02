@@ -1,4 +1,4 @@
-"""Quatre défauts payés en réel sur Approval2 le 11/08 (TF-0097 à TF-0100).
+"""Quatre défauts payés en réel sur Produit-01 le 11/08 (TF-0097 à TF-0100).
 
 Chaque défaut avait la même forme : l adaptateur suppose une arborescence ou une cause au lieu
 de lire ce que le projet déclare ou de constater les faits — d où un FAUX NÉGATIF (surface non
@@ -19,7 +19,7 @@ from forge_tests.adaptateurs import data, front, migrations, securite, visuel
 def test_script_location_lu_dans_alembic_ini(tmp_path: Path) -> None:
     """Alembic déclare son dossier via `script_location` — la forge doit le LIRE, pas le deviner.
 
-    Reproduit le cas Approval2 : `backend/alembic.ini` déclare `script_location = migrations`,
+    Reproduit le cas Produit-01 : `backend/alembic.ini` déclare `script_location = migrations`,
     ce qui pointe vers `backend/migrations/versions/` — un chemin qu AUCUN des trois motifs
     codés en dur (backend/app/alembic/versions, backend/alembic/versions, alembic/versions) ne
     couvre. Sans la lecture de la configuration, ces 9 migrations restaient invisibles.
@@ -103,7 +103,7 @@ def test_fichiers_modeles_trouve_db_models(tmp_path: Path) -> None:
     trouves = data._fichiers_modeles(tmp_path)
 
     # ROUGE implicite : le seul chemin conventionnel `backend/app/models.py` n existe pas ici —
-    # avant le correctif, cette liste aurait été vide (le défaut constaté sur Approval2).
+    # avant le correctif, cette liste aurait été vide (le défaut constaté sur Produit-01).
     assert trouves == [modeles]
 
 
@@ -175,7 +175,7 @@ def test_front_execute_avec_config_ne_confond_plus_les_deux_causes(
 
 # --- TF-0100 — front : reconnaître les routes react-router -------------------------------------
 def test_front_reconnait_les_routes_react_router(tmp_path: Path) -> None:
-    """8 routes déclarées en `<Route path="...">` (react-router) — comme sur Approval2."""
+    """8 routes déclarées en `<Route path="...">` (react-router) — comme sur Produit-01."""
     app_tsx = tmp_path / "frontend" / "src" / "App.tsx"
     app_tsx.parent.mkdir(parents=True)
     app_tsx.write_text(

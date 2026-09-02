@@ -52,7 +52,7 @@ POUR_COUVRIR = (
     "(`out/`, `dist/`, `_site/`… : l'arborescence de pages telle que le visiteur la reçoit). "
     "Le pan la découvre seul quand elle est à sa place conventionnelle sous la racine du "
     "projet ; il ne lit AUCUN site distant et n'ouvre aucun navigateur. DÉCISION (RF-7, lot "
-    "SCC-FR 20260820a) : les rendus SERVEUR / ISR qui n'émettent PAS d'arborescence (Next.js "
+    "Produit-09 20260820a) : les rendus SERVEUR / ISR qui n'émettent PAS d'arborescence (Next.js "
     "`output: 'standalone'`) sont HORS CHAMP de la parité de routes et de menus — le CATALOGUE "
     "SOURCE reste jugé (TF-0383), et la voie de levée est nommée : accepter une racine servie "
     "(FORGE_TESTS_BASE_URL, déjà employée par le pan accessibilité) comme source des routes par "
@@ -110,7 +110,7 @@ _EXCLUS = {
     "node_modules", ".venv", "venv", ".git", "__pycache__", "site-packages", ".next", ".nuxt",
     ".svelte-kit", ".visuel", "htmlcov", "coverage", ".tox", ".mypy_cache", ".ruff_cache",
     ".pytest_cache", "vendor", ".forge", "forge", "output", "old", "Old", ".oracles",
-    # TF-0536/0542/0543 (lot AuxPortesDeLaBaie 20260823) : le SOCLE commun vient desormais
+    # TF-0536/0542/0543 (lot Produit-02 20260823) : le SOCLE commun vient desormais
     # d'une source unique. Le depot portait DIX listes divergentes (7 a 31 entrees) et
     # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
     # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees

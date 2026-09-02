@@ -7,7 +7,7 @@ autrement voyait donc SIX pans plafonnés à `SKIP` quelles que soient sa suite 
 — et le motif publié parlait d un environnement Python absent, ce qui envoyait chercher un
 problème qui n existait pas.
 
-Constaté le 12/08/2026 sur Bourse aux Vacants 2, dont le paquet s appelle `src` : suite verte
+Constaté le 12/08/2026 sur Produit-11 2, dont le paquet s appelle `src` : suite verte
 de 116 tests, couverture de branches à 94 %, et pourtant `mutation : aucun dossier de sources
 sous backend/app`. La preuve que seul le NOM était en cause a été faite par contre-oracle —
 le moteur de mutation joué sur `backend/src` puis sur une copie renommée `backend/app` rend
@@ -111,7 +111,7 @@ def _indices(dossier: Path) -> list[str]:
     return trouves
 
 
-#: TF-0401 (RF-3, lot SCC-FR 20260820a) — le manifeste OPPOSABLE du projet. Le pilot présente
+#: TF-0401 (RF-3, lot Produit-09 20260820a) — le manifeste OPPOSABLE du projet. Le pilot présente
 #: P-18 comme primant sur toute détection ; jusqu'ici AUCUN code de cette forge ne le lisait
 #: (0 occurrence, relevé du 20/08) : les racines étaient en dur (`backend`, `.`, `frontend`),
 #: et une arborescence `back/` + `front/` — celle du produit SCC.FR — n'était pas vue, quel que

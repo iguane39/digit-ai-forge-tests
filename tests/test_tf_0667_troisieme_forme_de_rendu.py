@@ -1,6 +1,6 @@
 """TF-0667 — « sans objet » est plus grave que « non couvert ».
 
-LE FAIT (lot AuxPortesDeLaBaie 20260826h, 26/08/2026). Cinq pans qui regardent une page rendue
+LE FAIT (lot Produit-02 20260826h, 26/08/2026). Cinq pans qui regardent une page rendue
 — visuel, accessibilite, contraste, clavier, plancher — ont ete declares SANS OBJET sur un
 projet de **203 fichiers HTML**, au motif litteral « ce projet ne rend aucune page ».
 

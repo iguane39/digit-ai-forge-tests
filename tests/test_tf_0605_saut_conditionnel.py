@@ -1,6 +1,6 @@
 """TF-0605 — les tests qui ne s'exécutent pas, et que le reporting rend invisibles.
 
-Lot Approval2 20260824d. Quatre occurrences distinctes sur un même produit, toutes vertes :
+Lot Produit-01 20260824d. Quatre occurrences distinctes sur un même produit, toutes vertes :
 trois tests d'intégration silencieusement ignorés en intégration continue PENDANT DES MOIS —
 dont un écrit *parce qu'une régression réelle était déjà passée* ; un saut conditionnel dans la
 recette d'accessibilité rapporté « 27 passés, 1 sauté » sans que personne regarde lequel ; un

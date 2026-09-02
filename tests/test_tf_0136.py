@@ -7,7 +7,7 @@ Reproduit à l'identique avant ET après les correctifs TF-0132/0135 (git stash)
 préexistant, sans lien avec eux.
 
 Cause racine PROUVÉE par observation : un serveur `vite preview` d'un projet totalement
-étranger (`C:\\dev\\_Client-A\\Approval2\\frontend`) écoutait déjà sur le port 4173 — le port que
+étranger (`C:\\dev\\_Client-A\\Produit-01\\frontend`) écoutait déjà sur le port 4173 — le port que
 `fixtures/banc-rouge/frontend/playwright.config.js` et `fixtures/banc-vert/...` codent en dur,
 avec `webServer.reuseExistingServer: true`. Playwright constate que quelque chose répond déjà
 sur l URL configurée et s'abstient de démarrer SON PROPRE serveur : la suite e2e du banc

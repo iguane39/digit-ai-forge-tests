@@ -92,7 +92,7 @@ _EXCLUS = {
     "node_modules", ".venv", "venv", ".git", "__pycache__", "site-packages", "dist", "build",
     ".next", ".nuxt", ".svelte-kit", ".visuel", "htmlcov", "coverage", ".tox", ".mypy_cache",
     ".ruff_cache", ".pytest_cache", "vendor", ".forge",
-    # RT-9/RT-10 (lot bourse-aux-vacants 20260814a) : les dossiers d ARTEFACTS de la convention
+    # RT-9/RT-10 (lot Produit-11 20260814a) : les dossiers d ARTEFACTS de la convention
     # pilot — `output\` (regle 16 : tout livrable date y est copie), ses archives `old\`/`Old\`
     # et les PNG d oracles. Sans eux, ce pan inventoriait les DASHBOARDS produits par
     # forge-tests elle-meme : 6 -> 27 elements entre deux audits sans qu une ligne de gabarit
@@ -107,7 +107,7 @@ _EXCLUS = {
     # meme remede : la mesure est POLLUEE et, pire, CROISSANTE a chaque cycle — un produit
     # inchange verrait sa surface grossir indefiniment du seul fait d avoir ete audite.
     "forge",
-    # TF-0536/0542/0543 (lot AuxPortesDeLaBaie 20260823) : le SOCLE commun vient desormais
+    # TF-0536/0542/0543 (lot Produit-02 20260823) : le SOCLE commun vient desormais
     # d'une source unique. Le depot portait DIX listes divergentes (7 a 31 entrees) et
     # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
     # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees

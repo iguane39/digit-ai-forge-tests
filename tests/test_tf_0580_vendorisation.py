@@ -1,6 +1,6 @@
 """Une copie vendorisée qui a divergé de sa source sert des valeurs périmées en silence (TF-0580).
 
-Fait fondateur (lot AuxPortesDeLaBaie 20260824) : un `Dockerfile` posait `ENV FORGE_ROOT=/app/vendor`,
+Fait fondateur (lot Produit-02 20260824) : un `Dockerfile` posait `ENV FORGE_ROOT=/app/vendor`,
 donc en production la copie vendorisée ÉTAIT la source alimentant la base et les chiffres affichés.
 Rien ne la rafraîchissait, rien ne la comparait à l'amont. Le site annonçait v1.6.2 et 80 services
 quand le catalogue amont en portait v1.8.0 et 83 — deux versions de retard, sur un site dont

@@ -302,7 +302,7 @@ def _fichiers_sources(cible: Path) -> list[Path]:
     `app/api/routes_*.py` : main.py n y porte que les montages et les inclusions. Une table de
     handlers batie sur le seul main.py y ressortait donc VIDE, et `code in (400, 409) and code
     not in gardes` devenait vrai pour TOUT code declare — trois findings BLOQUANTS faux
-    constates sur Approval2, pour un code dont les trois handlers levent bien leur code dans
+    constates sur Produit-01, pour un code dont les trois handlers levent bien leur code dans
     leur PROPRE corps. Le paquet est DECOUVERT (`forge_tests.disposition.paquet_sources`),
     avec le meme repli que les autres pans (TF-0116/TF-0117) : `backend/app`.
     """
@@ -412,7 +412,7 @@ def _divergences_gardes(
 
 def analyser(cible: Path) -> SortieAdaptateur:
     inv = inventaire(cible)
-    # TF-0403 (RF-5, lot SCC-FR) — ce pan exige un objet ASGI importable (`FORGE_TESTS_APP`) là
+    # TF-0403 (RF-5, lot Produit-09) — ce pan exige un objet ASGI importable (`FORGE_TESTS_APP`) là
     # où il n'a besoin que d'une SURFACE (routes × codes). Un back Node/Koa (Strapi) n'est pas
     # un back mal configuré : aucun `module:attribut` Python n'existera jamais chez lui, et
     # réclamer cette configuration est une action sans issue. Le motif distingue donc les deux

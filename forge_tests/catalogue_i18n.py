@@ -59,7 +59,7 @@ _EXCLUS = {
     "node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build", "out", ".next",
     ".nuxt", ".svelte-kit", "coverage", "htmlcov", ".pytest_cache", ".ruff_cache", "vendor",
     ".forge", "site-packages",
-    # TF-0536/0542/0543 (lot AuxPortesDeLaBaie 20260823) : le SOCLE commun vient desormais
+    # TF-0536/0542/0543 (lot Produit-02 20260823) : le SOCLE commun vient desormais
     # d'une source unique. Le depot portait DIX listes divergentes (7 a 31 entrees) et
     # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
     # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees

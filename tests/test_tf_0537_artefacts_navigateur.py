@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """TF-0537 — UN ARTEFACT DE SAUVEGARDE NAVIGATEUR N'EST PAS DU CODE DU PROJET (24/08/2026).
 
-LE FAIT (lot AuxPortesDeLaBaie du 23/08). Le pan `securite` sortait FAIL sur NEUF « secrets », tous
+LE FAIT (lot Produit-02 du 23/08). Le pan `securite` sortait FAIL sur NEUF « secrets », tous
 situes dans une page aspiree : les cles Google Maps et Weglot embarquees dans
 `weglot.min.js.telechargement` et `saved_resource`, du JavaScript minifie DE TIERS capture par
 « Enregistrer la page sous… ». Aucun n'appartient au projet, aucun n'est revocable par lui, aucun ne

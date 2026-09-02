@@ -104,7 +104,7 @@ def test_aide_n_ecrit_rien_et_un_argument_inconnu_est_refuse() -> None:
 def test_le_verificateur_sait_ECHOUER_et_pas_seulement_passer() -> None:
     """Une porte neuve se valide en la faisant échouer une fois.
 
-    C'est la règle que le lot Approval2 du 24/08 a formulée, et elle vaut ici : sans ce cas, on
+    C'est la règle que le lot Produit-01 du 24/08 a formulée, et elle vaut ici : sans ce cas, on
     saurait que le contrôle rend vert, jamais qu'il sait rougir. Le registre réel n'est pas touché
     — la vérification travaille sur une copie amputée d'une entrée.
     """

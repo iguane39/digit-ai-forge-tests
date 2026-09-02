@@ -1,6 +1,6 @@
 """La forge dépose le gabarit de configuration qu'elle réclame (TF-0539).
 
-Fait fondateur (lot AuxPortesDeLaBaie 20260823a) : le rapport énumérait, pan par pan, les clés
+Fait fondateur (lot Produit-02 20260823a) : le rapport énumérait, pan par pan, les clés
 attendues ET le chemin exact du fichier — jusqu'à préciser quelles clés seraient inutiles sur la
 stack détectée. Le projet devait pourtant reconstituer le fichier à la main depuis un rapport de
 1,1 Mo. Coût forge du dépôt : nul.

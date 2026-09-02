@@ -62,7 +62,7 @@ NON_JUGE = [
     "apres interaction (menu ouvert, modale, message d erreur) ne sont pas audites",
     "accessibilite : sans compte configure (.env), les routes protegees redirigent vers la "
     "page publique — le nombre de PAGES DISTINCTES rendues le dit au rapport",
-    # RF-6a (lot SCC-FR 20260820a, gravite BLOQUANT) : la version precedente de cette limite
+    # RF-6a (lot Produit-09 20260820a, gravite BLOQUANT) : la version precedente de cette limite
     # disait « perimetre du seul oracle structurel », comme si la famille etait couverte
     # AILLEURS. Elle ne l est pas, et le lecteur cessait de la chercher — le mecanisme exact
     # de TF-0379 (oracle-calculs), paye cinq jours de run. Un non_juge est une promesse de

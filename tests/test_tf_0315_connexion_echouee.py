@@ -1,4 +1,4 @@
-"""TF-0315 (lot bourse-aux-vacants 20260817a) — `champs_requis` demandait de fournir ce qui était
+"""TF-0315 (lot Produit-11 20260817a) — `champs_requis` demandait de fournir ce qui était
 déjà fourni, et « pas de compte » ne se distinguait pas de « compte fourni, connexion échouée ».
 
 Les six `non_testables[]` du rapport du 17/08 publiaient

@@ -1,6 +1,6 @@
 """Un SECOND terme de comparaison externe : les anomalies déclarées — TF-0372.
 
-Lot bourse-aux-vacants 20260818a, 18/08/2026.
+Lot Produit-11 20260818a, 18/08/2026.
 
 **Le fait.** Le sceau de tous les cahiers du produit portait `exigences_source: (absent)` et la
 ligne « les cas sont dérivés de la SEULE SURFACE inventoriée ». C'est honnête, c'est déclaré, et

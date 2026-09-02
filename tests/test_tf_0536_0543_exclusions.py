@@ -1,6 +1,6 @@
 """Périmètre d'audit : `input\\` n'est pas du produit, et une seule liste en décide.
 
-Fait fondateur (lot AuxPortesDeLaBaie 20260823a/b, TF-0536 / TF-0542 / TF-0543) : sur un audit
+Fait fondateur (lot Produit-02 20260823a/b, TF-0536 / TF-0542 / TF-0543) : sur un audit
 réel, 12 des 15 constats portaient sur `input\\` — un site concurrent aspiré depuis un navigateur
 et une ancienne version du site gardée pour comparaison. Le pan `interface` sortait FAIL sur un
 ratio de 0,9998 : les trois affordances non exercées étaient les boutons de carrousel du

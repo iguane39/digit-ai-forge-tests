@@ -40,7 +40,7 @@ def test_empreintes_couvre_backend_app_quand_cest_la_convention(tmp_path: Path) 
 
 def test_empreintes_suit_la_decouverte_quand_le_paquet_sappelle_autrement(tmp_path: Path) -> None:
     """ROUGE implicite : une empreinte figée sur `backend/app` aurait rendu {} ici — un banc
-    dont le paquet s appelle `src` (cas Bourse aux Vacants 2, cf. `disposition.py`) resterait
+    dont le paquet s appelle `src` (cas Produit-11 2, cf. `disposition.py`) resterait
     hors de portée du contrôle G-1, muet sur exactement les fichiers que la mutation altère."""
     module = _poser_banc(tmp_path, "src")
     empreintes = vc._empreintes(tmp_path)

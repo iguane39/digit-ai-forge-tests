@@ -1,6 +1,6 @@
 """TF-0340 / TF-0341 — le cycle de vie de l instance servie, et de quoi elle a été bâtie.
 
-Faits mesurés le 17/08/2026 sur bourse-aux-vacants, sur pièces :
+Faits mesurés le 17/08/2026 sur Produit-11, sur pièces :
 
   - **TF-0340** — `node e2e/preparer.mjs` monte 3 conteneurs et un réseau ; l audit se termine
     à 11:30 ; les conteneurs tiennent les ports 8091, 8092 et 5544 jusqu à 13:55, soit 2 h 25

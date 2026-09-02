@@ -377,7 +377,7 @@ def _options_contexte(config: dict) -> tuple[dict, list[str]]:
 
 # --- Couverture PAR RÔLE : N sessions étiquetées, et ce qu aucune n a vu (TF-0316) -------------
 # `FORGE_TESTS_QUALIF_STORAGE_STATE` est un chemin UNIQUE : un seul storage state, un seul
-# contexte, donc une seule identité pour tout le parcours. Payé sur Approval2 le 12/08 : le pan a
+# contexte, donc une seule identité pour tout le parcours. Payé sur Produit-01 le 12/08 : le pan a
 # rendu « 8/8, ratio 1,00, ZÉRO finding » avec le compte unique `mock-user@example.com`, alors que
 # le produit réserve trois surfaces par rôle (console d administration derrière `RequireAdmin`,
 # écran de revue et décision, vue en lecture seule du destinataire en copie). Aucune n avait été

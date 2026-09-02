@@ -1,4 +1,4 @@
-"""TF-0314 (lot bourse-aux-vacants 20260817a) — le rapport affirmait une session qui n existait
+"""TF-0314 (lot Produit-11 20260817a) — le rapport affirmait une session qui n existait
 pas, parce que la provenance se DÉDUISAIT de la configuration.
 
 Dans le MÊME rapport du 17/08, `non_juge[0]` annonçait « PROVENANCE DE SESSION — session ouverte

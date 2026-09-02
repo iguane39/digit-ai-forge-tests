@@ -1,6 +1,6 @@
 """Adoption des cas dérivés — le contrat qui SOLDE les cas à adopter.
 
-RT-13 (lot bourse-aux-vacants 20260814a) : les cahiers dérivés sont déposés hors du projet
+RT-13 (lot Produit-11 20260814a) : les cahiers dérivés sont déposés hors du projet
 (G-1), et rien ne permettait au projet de dire « ce cas-là, je l'ai écrit, il vit ici ».
 Conséquence mesurée par le produit : après avoir écrit 11 tests couvrant exactement les axes
 proposés, le cahier suivant régénérait les mêmes cent cas en « non joué ».
@@ -18,7 +18,7 @@ pas un livrable, et « proposition » n'est plus un état terminal : le cas NAÎ
 Le solde `dérivés − adoptés − non_testables − écartés` est compté ET publié par ce module
 (`solde`, `cumuler`, `libelle_solde`). Un cahier dont ce solde n'est pas nul porte un
 reste-à-faire, pas un livrable clos. Le coût du statu quo est mesuré : 971 cas dérivés pour
-0 adopté (bourse-aux-vacants, 20260817b), 680 pour 0 (COMPTA, 20260814b).
+0 adopté (Produit-11, 20260817b), 680 pour 0 (COMPTA, 20260814b).
 
 **TF-0355 (18/08) — le solde des CAS ne solde pas la SURFACE.** Un élément déclaré
 `non_testable` ou `exclu` PAR LE RAPPORT ne produit aucun cas : il sort « non couvert », et

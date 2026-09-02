@@ -57,7 +57,7 @@ FAUX_VERT_MOTIF = "faux-vert-motif-du-declencheur"
 DONNEE_DE_TEST_RECOPIEE = "donnee-de-test-recopiee"
 FAUX_VERT_PREFIXE = "faux-vert-prefixe-d-un-chemin-valide"
 TROU_DE_COUVERTURE_SOEUR = "trou-de-couverture-inter-suites"
-# TF-0593 (retour Approval2 du 24/08) : la session FABRIQUEE, et son corollaire de stockage.
+# TF-0593 (retour Produit-01 du 24/08) : la session FABRIQUEE, et son corollaire de stockage.
 SESSION_FABRIQUEE = "session-fabriquee-hors-parcours-d-entree"
 SESSION_ET_CLE_SEPAREES = "cle-de-relecture-hors-du-stockage-de-la-session"
 

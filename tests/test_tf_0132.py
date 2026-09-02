@@ -1,4 +1,4 @@
-"""TF-0132 — payé en réel sur Approval2 le 12/08.
+"""TF-0132 — payé en réel sur Produit-01 le 12/08.
 
 `--trace on` était imposé en dur dans `execution.front_execute` : sur ce poste, l écriture de
 l archive de trace ne rend jamais la main, chaque test se déroule intégralement puis expire en
@@ -89,7 +89,7 @@ def _front_execute_avec(tmp_path: Path, monkeypatch, resultat, config_trace=None
 def test_code_non_nul_sans_trace_produite_nomme_la_trace_jamais_la_suite(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """Le cas RÉEL constaté sur Approval2 : mode `on`, code non nul, AUCUN trace.zip produit
+    """Le cas RÉEL constaté sur Produit-01 : mode `on`, code non nul, AUCUN trace.zip produit
     (l écriture a timeout) — la suite ne doit PAS être accusée.
 
     ROUGE implicite : avant le correctif, ce cas produisait exactement

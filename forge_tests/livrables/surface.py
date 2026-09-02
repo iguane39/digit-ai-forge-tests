@@ -219,7 +219,7 @@ def inventaire(rapport: dict) -> dict[str, list[dict]]:
     }
 
 
-# RT-12 (lot bourse-aux-vacants 20260814a) : le constat qui EXPLIQUE un élément vit souvent sur
+# RT-12 (lot Produit-11 20260814a) : le constat qui EXPLIQUE un élément vit souvent sur
 # la route qui le porte, deux sous-chapitres plus loin. Sur `qualif:effet:/:0:form`, la cellule
 # affichait « formulaire sans action ni écouteur » sans le `401` de `qualif:route:/` qui en est
 # la cause — le cahier imprimait les deux, la mise en écran perdait le lien. On rattache donc le

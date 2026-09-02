@@ -1,6 +1,6 @@
 """PRÉSENT puis PLAUSIBLE — le second contrôle par champ, jumeau du premier (TF-0370).
 
-Lot bourse-aux-vacants 20260818a, 18/08/2026.
+Lot Produit-11 20260818a, 18/08/2026.
 
 **Le fait.** Le second étage de la recette avait établi l'écart « 5 annonces sans commune » en
 testant `city-insee-code === null`. Or **11 annonces sur 1 249 portent latitude=0 ET

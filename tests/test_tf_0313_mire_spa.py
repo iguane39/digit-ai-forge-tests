@@ -1,4 +1,4 @@
-"""TF-0313 (lot bourse-aux-vacants 20260817a) — la mire d une SPA n existe pas encore quand le
+"""TF-0313 (lot Produit-11 20260817a) — la mire d une SPA n existe pas encore quand le
 pan la lit, et le pan en concluait qu il n y en avait pas.
 
 `_connecter()` naviguait en `wait_until="domcontentloaded"` puis interrogeait le DOM

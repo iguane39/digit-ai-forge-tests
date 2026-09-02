@@ -1,6 +1,6 @@
 """Aller-retour : ce que le produit accepte d'écrire est-il ce qu'il relit ? — TF-0369.
 
-Lot bourse-aux-vacants 20260818a, 18/08/2026.
+Lot Produit-11 20260818a, 18/08/2026.
 
 **La classe de défaut** : le produit répond 200 et range autre chose. Ni la couverture, ni la
 mutation (0,90 sur ce produit), ni un parcours ne la voient — **le parcours passe parce que le

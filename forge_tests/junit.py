@@ -63,7 +63,7 @@ def depuis_junit(xml_texte: str, pan: str) -> list[Essai]:
     except ET.ParseError as erreur:
         raise JunitIllisible(f"XML JUnit invalide : {erreur}") from erreur
 
-    # TF-0605 (lot Approval2 20260824d) — UN EXECUTEUR QUI NE COLLECTE RIEN N EST PAS UN SUCCES.
+    # TF-0605 (lot Produit-01 20260824d) — UN EXECUTEUR QUI NE COLLECTE RIEN N EST PAS UN SUCCES.
     # Le fait : `npx playwright test` a rendu « No tests found » avec un CODE DE SORTIE 0, sur un
     # conflit de motif entre deux executeurs. Une suite ENTIERE etait absente, et la chaine l a
     # rapportee comme un succes. C est le defaut le plus silencieux de toute la famille des faux

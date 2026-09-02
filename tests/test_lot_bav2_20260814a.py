@@ -1,4 +1,4 @@
-"""Lot de retours bourse-aux-vacants 20260814a — RT-9 à RT-13, un test par défaut constaté.
+"""Lot de retours Produit-11 20260814a — RT-9 à RT-13, un test par défaut constaté.
 
 Chaque test ci-dessous ÉCHOUAIT avant le correctif du 14/08 : c est ce qui les distingue d une
 description après coup. Les cas sont ceux que le produit a mesurés, pas des cas de laboratoire

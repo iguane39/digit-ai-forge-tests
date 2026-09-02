@@ -150,13 +150,13 @@ _EXCLUS_DEPENDANCES = (
     # jamais servi) produisait a lui seul 114 constats — 112 secrets, 2 SAST — soit un rapport
     # dont le lecteur devait ecarter la quasi-totalite a la main avant d apercevoir le produit.
     _VENDORISE,
-    # TF-0536/0542/0543 (lot AuxPortesDeLaBaie 20260823) : le SOCLE commun vient desormais
+    # TF-0536/0542/0543 (lot Produit-02 20260823) : le SOCLE commun vient desormais
     # d'une source unique. Le depot portait DIX listes divergentes (7 a 31 entrees) et
     # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
     # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees
     # ci-dessus restent ecrites ici : elles portent le motif de CE pan.
     *exclusions.socle(),
-    # TF-0537 (lot AuxPortesDeLaBaie du 23/08) : LES ARTEFACTS DE SAUVEGARDE NAVIGATEUR. Le pan
+    # TF-0537 (lot Produit-02 du 23/08) : LES ARTEFACTS DE SAUVEGARDE NAVIGATEUR. Le pan
     # sortait FAIL sur NEUF « secrets » qui etaient les cles Google Maps et Weglot embarquees dans
     # `weglot.min.js.telechargement` et `saved_resource` — du JavaScript minifie DE TIERS, capture
     # par « Enregistrer la page sous… ». Aucun n appartient au projet, aucun n est revocable par

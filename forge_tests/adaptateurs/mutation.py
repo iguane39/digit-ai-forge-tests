@@ -954,7 +954,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     python = racine / ".venv" / "Scripts" / "python.exe"
     if not python.exists():
         python = racine / ".venv" / "bin" / "python"
-    # TF-0402 (RF-4, lot SCC-FR) — « écosystème non couvert » et « configuration manquante » ne
+    # TF-0402 (RF-4, lot Produit-09) — « écosystème non couvert » et « configuration manquante » ne
     # sont pas le même verdict, et les confondre coûte double : une configuration réclamée pour
     # un pan structurellement inatteignable use la crédibilité des actions (TF-0381), et un
     # SEUIL BLOQUANT sans porteur est, au dashboard, indiscernable d'un seuil tenu — la pire des
@@ -1079,7 +1079,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     mesures: list[tuple[bool, float]] = []
     debut_pan = time.monotonic()
     # TF-0096 : la mutation était LE process silencieux d origine (~45 min sans un signal,
-    # run Approval2 du 11/08). Unité = module ; sous-découpe = mutant k/n dans le module —
+    # run Produit-01 du 11/08). Unité = module ; sous-découpe = mutant k/n dans le module —
     # une unité qui occupe plus d une fenêtre montre son avancement INTERNE.
     from forge_tests.avancement import Avancement
 

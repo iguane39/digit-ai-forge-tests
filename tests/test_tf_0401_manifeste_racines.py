@@ -1,4 +1,4 @@
-"""TF-0401 (RF-3, lot SCC-FR) — le manifeste opposable était lu par AUCUN code de la forge.
+"""TF-0401 (RF-3, lot Produit-09) — le manifeste opposable était lu par AUCUN code de la forge.
 
 Le fait, relevé au code le 20/08 sur HEAD 7d3ca37 : `profile.toml` = 0 occurrence dans le code
 (`--include=*.py`), alors que la doctrine de la forge DÉCRIT la cascade « manifeste → profil

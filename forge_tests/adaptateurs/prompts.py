@@ -95,7 +95,7 @@ NON_JUGE = [
 ]
 
 # Dossiers hors périmètre : dépendances et artefacts (mêmes exclusions que les pans `interface`
-# et `declencheurs` — RT-9/RT-10 du lot bourse-aux-vacants, convention `output\`/`old\` du pilot).
+# et `declencheurs` — RT-9/RT-10 du lot Produit-11, convention `output\`/`old\` du pilot).
 #
 # TF-0257, étage 1 — `forge\` est le dossier de convention du PILOT : le run y dépose le ledger,
 # les contestations, les rapports d étape, les dossiers de MEP. Ce sont les artefacts de
@@ -109,7 +109,7 @@ _EXCLUS = {
     ".next", ".nuxt", ".svelte-kit", ".visuel", "htmlcov", "coverage", ".tox", ".mypy_cache",
     ".ruff_cache", ".pytest_cache", "vendor", ".forge", "forge", "output", "old", "Old",
     ".oracles",
-    # TF-0536/0542/0543 (lot AuxPortesDeLaBaie 20260823) : le SOCLE commun vient desormais
+    # TF-0536/0542/0543 (lot Produit-02 20260823) : le SOCLE commun vient desormais
     # d'une source unique. Le depot portait DIX listes divergentes (7 a 31 entrees) et
     # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
     # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees

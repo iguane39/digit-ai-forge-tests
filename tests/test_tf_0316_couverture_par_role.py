@@ -1,8 +1,8 @@
-"""TF-0316 (lot Approval2 20260817b, étude d opportunité 20260817c — verdict O3) — le pan
+"""TF-0316 (lot Produit-01 20260817b, étude d opportunité 20260817c — verdict O3) — le pan
 n acceptait qu UNE session, et son ratio ne déclarait pas qu un seul rôle avait été visité.
 
 `FORGE_TESTS_QUALIF_STORAGE_STATE` est un chemin unique : un seul storage state, un seul contexte,
-donc une seule identité pour tout le parcours. Sur Approval2 le pan a rendu « 8/8, ratio 1,00,
+donc une seule identité pour tout le parcours. Sur Produit-01 le pan a rendu « 8/8, ratio 1,00,
 ZÉRO finding » (ledger seq 28) avec le compte unique `mock-user@example.com`. Or le produit réserve
 trois surfaces par rôle : la console d administration (`/admin` derrière `RequireAdmin`), l écran de
 revue et décision (réservé aux approbateurs), la vue en lecture seule du destinataire en copie.
@@ -213,7 +213,7 @@ def test_une_route_refusee_sort_du_RATIO_en_issue_distincte(tmp_path: Path) -> N
 
 
 def test_un_refus_joue_en_redirection_ne_compte_plus_pour_un_SUCCES(tmp_path: Path) -> None:
-    """Le défaut exact d Approval2 : la mire répond 200 avec un titre, donc la route comptait pour
+    """Le défaut exact d Produit-01 : la mire répond 200 avec un titre, donc la route comptait pour
     exercée — indiscernable d une route saine dans le ratio."""
     releve = [
         _page("/", corps="<h1>Accueil</h1>"),
@@ -356,7 +356,7 @@ class _FausseRequete:
 
 
 class _Page:
-    """L instance Approval2 : `/admin` est derrière `RequireAdmin`, tout le reste est ouvert."""
+    """L instance Produit-01 : `/admin` est derrière `RequireAdmin`, tout le reste est ouvert."""
 
     def __init__(self, contexte: _FauxContexte) -> None:
         self.contexte = contexte
@@ -461,7 +461,7 @@ def navigateur(monkeypatch: pytest.MonkeyPatch) -> _FauxNavigateur:
 def test_bout_en_bout_deux_roles_deux_contextes_et_une_couverture_par_role(
     tmp_path: Path, env_propre, navigateur: _FauxNavigateur
 ) -> None:
-    """Le cas d Approval2, rejoué : `/admin` est vue sous `admin`, refusée sous `lecteur`, et le
+    """Le cas d Produit-01, rejoué : `/admin` est vue sous `admin`, refusée sous `lecteur`, et le
     rapport le DIT au lieu de rendre « ratio 1,00 » pour une seule identité."""
     from forge_tests import qualification
 

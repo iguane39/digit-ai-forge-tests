@@ -329,7 +329,7 @@ app.mount("/static", StaticFiles(directory="ui/static"), name="static")
 def verifier_gardes_multi_modules() -> int:
     """TF-0135 — les gardes d une route sont lues sur TOUS les modules, jamais le seul main.py.
 
-    Repro Approval2 : une app a routeurs (main.py qui ne fait qu `include_router`, les GET/POST
+    Repro Produit-01 : une app a routeurs (main.py qui ne fait qu `include_router`, les GET/POST
     et leurs gardes vivant dans `app/api/routes_admin.py`) faisait ressortir la table des
     handlers VIDE — `fonction` valait None pour toute route, et `code in (400, 409) and code
     not in gardes` devenait vrai pour TOUT code declare. Trois findings BLOQUANTS faux sur un

@@ -1,6 +1,6 @@
 """TF-0343 / TF-0342 — la matrice des droits est exécutable, et un produit à rôles l'exige.
 
-TF-0343 : le cahier d'Approval2 porte 10 actions × 4 profils. La suite les couvrait *dispersées
+TF-0343 : le cahier d'Produit-01 porte 10 actions × 4 profils. La suite les couvrait *dispersées
 dans 13 fichiers, par service* — organisation qui ne peut PAS dire quelles cases manquent. Deux
 manquaient (« en copie » jamais testé en lecture, aucun admin instancié sur une décision), et
 deux autres cases ne sont pas tenues par le produit sans qu'aucun test ne le signale.

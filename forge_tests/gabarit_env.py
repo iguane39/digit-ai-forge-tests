@@ -1,6 +1,6 @@
 r"""Dépose `.env.forge-tests.exemple` chez le projet audité — dérivé du code, jamais recopié.
 
-Pourquoi (TF-0539, lot AuxPortesDeLaBaie 20260823a). Le rapport énumère, pan par pan, les clés
+Pourquoi (TF-0539, lot Produit-02 20260823a). Le rapport énumère, pan par pan, les clés
 attendues ET le chemin exact du fichier, jusqu'à préciser pour certains pans que « renseigner
 cette configuration ne le rendrait pas mesurable pour autant ». La forge sait donc aussi quelles
 clés seraient INUTILES sur la stack détectée. Le projet devait pourtant reconstituer le fichier

@@ -130,7 +130,7 @@ def inventaire(cible: Path) -> list[Element]:
 def motif_de_route(chemin: str) -> re.Pattern[str]:
     """Motif de route DÉCLARÉ -> expression qui apparie une URL, comme le routeur lui-même.
 
-    RT-11 (lot bourse-aux-vacants 20260814a) : une route déclarée est un MOTIF, pas une URL.
+    RT-11 (lot Produit-11 20260814a) : une route déclarée est un MOTIF, pas une URL.
     Comparer `/login/reset-password/:token/:email` à l'URL réellement visitée sans le templater
     ne rapproche jamais rien — toute route paramétrée d'une SPA sortait « inventoriée, jamais
     exercée » alors que la suite la visitait, jeton réel en main. Un `:param` capte un segment,

@@ -1,6 +1,6 @@
 r"""Lire le GLOSSAIRE d'un projet multilingue, et confronter les NOMBRES servis à la donnée.
 
-TF-0644 (lot AuxPortesDeLaBaie 20260825f, 26/08/2026), décision humaine « voie (b) ».
+TF-0644 (lot Produit-02 20260825f, 26/08/2026), décision humaine « voie (b) ».
 
 ============================================================================================
 LE FAIT, ET IL EST PARTI EN PRODUCTION

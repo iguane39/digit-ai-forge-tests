@@ -1,8 +1,8 @@
 """Matrice des droits — une action × un profil = une cellule = une assertion.
 
-TF-0343 / TF-0342 (campagnes des 12 et 17/08/2026, produit Approval2).
+TF-0343 / TF-0342 (campagnes des 12 et 17/08/2026, produit Produit-01).
 
-**Le trou.** Le cahier d'Approval2 porte une matrice de 10 actions × 4 profils. La suite
+**Le trou.** Le cahier d'Produit-01 porte une matrice de 10 actions × 4 profils. La suite
 existante en couvrait les règles, mais **dispersées dans 13 fichiers, sous l'angle de chaque
 service** — donc sans jamais dire quelles CASES n'étaient pas couvertes. Deux ne l'étaient pas :
 
@@ -30,10 +30,10 @@ avancer le circuit et ouvrait le tour du profil N+1, qui rendait 201 au lieu de 
 échec. Le patron le rend STRUCTUREL : une cellule déclarée `mute: true` reçoit un objet frais.
 C'est le seul des trois pièges qu'aucune revue statique ne sait voir (`forge_tests.revue`).
 
-**Coût mesuré sur Approval2** : 15 tests, ~340 lignes, 2 écarts rendus exécutables,
+**Coût mesuré sur Produit-01** : 15 tests, ~340 lignes, 2 écarts rendus exécutables,
 13 cellules vertes.
 
-**TF-0342 — la recette MULTI-PROFILS devient une exigence de socle.** Approval2 a passé un audit
+**TF-0342 — la recette MULTI-PROFILS devient une exigence de socle.** Produit-01 a passé un audit
 12 pans le 12/08 avec « pan qualif 8/8, ratio 1,00, ZÉRO finding » et « suite e2e 10/10 verte »,
 le tout sous UNE identité qui se désignait elle-même approbateur. Le cas NOMINAL du cahier — un
 approbateur décide, le suivant est sollicité — n'avait donc jamais été exécuté. Le trou n'a pas

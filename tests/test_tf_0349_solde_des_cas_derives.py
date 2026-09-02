@@ -2,7 +2,7 @@
 
 Fait mesuré le 17/08/2026, sur pièces et sur des produits réels : les « Cahiers de tests »
 livrés se déclaraient eux-mêmes PROPOSITIONS et sortaient avec **971 cas dérivés pour 0 adopté**
-(bourse-aux-vacants, 20260817b), **680 pour 0** (COMPTA, 20260814b), **176** (Approval2). Des
+(Produit-11, 20260817b), **680 pour 0** (COMPTA, 20260814b), **176** (Produit-01). Des
 contrôles jamais joués, livrés comme s'ils attestaient une couverture. La règle R-40 du pilot
 ferme cette voie : « proposition » n'est plus un état terminal.
 

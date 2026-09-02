@@ -1,6 +1,6 @@
 r"""Source UNIQUE des exclusions de périmètre — quels chemins ne sont pas du produit.
 
-Pourquoi ce module existe (TF-0536 / TF-0542 / TF-0543, lot AuxPortesDeLaBaie du 23/08).
+Pourquoi ce module existe (TF-0536 / TF-0542 / TF-0543, lot Produit-02 du 23/08).
 
 Le fait fondateur, mesuré : sur un audit réel, **12 des 15 constats portaient sur `input\\`** —
 un dossier dont le nom seul dit qu'il contient de la matière d'entrée. Ont été audités comme
@@ -13,7 +13,7 @@ dépouillement pour l'apprendre.
 Le fait aggravant, mesuré à la correction : le dépôt portait **DIX** listes d'exclusion
 divergentes (7 à 31 entrées), et `input` ne figurait dans **aucune**. `docs` n'était connu que
 d'une seule, `output` de cinq sur dix. Chaque liste avait été étendue au fil d'un retour, jamais
-les autres — RT-9/RT-10 du lot bourse-aux-vacants pour `output`, RT-4/TF-0218 du lot COMPTA pour
+les autres — RT-9/RT-10 du lot Produit-11 pour `output`, RT-4/TF-0218 du lot COMPTA pour
 `forge\\`. C'est la troisième occurrence de la famille : le remède n'est pas d'ajouter une entrée
 de plus à deux listes, c'est de n'en avoir qu'une.
 
@@ -50,7 +50,7 @@ OUTILLAGE: frozenset[str] = frozenset({
 # à reprocher au projet les défauts de quelqu'un d'autre.
 HORS_PRODUIT: frozenset[str] = frozenset({
     "input",      # matière d'entrée : jamais du produit (TF-0536, 12 constats sur 15)
-    "output",     # livrables générés (RT-9/RT-10, lot bourse-aux-vacants 20260814a)
+    "output",     # livrables générés (RT-9/RT-10, lot Produit-11 20260814a)
     "docs",       # documentation, jugée par ses propres règles et non par les pans de code
     "Old", "old",  # versions remplacées, gardées pour mémoire
     "forge",      # l'arbre de la forge chez le produit (RT-4/TF-0218, lot COMPTA 20260814a)
@@ -61,7 +61,7 @@ HORS_PRODUIT: frozenset[str] = frozenset({
 # --- artefacts de sauvegarde navigateur ---------------------------------------------------------
 # Une page « enregistrée sous » depuis un navigateur produit un `<nom>_files\` plein de CSS et de
 # JS réécrits par le navigateur lui-même. Les juger, c'est auditer Chrome.
-# TF-0537 (lot AuxPortesDeLaBaie du 23/08) : L ACCENT MANQUAIT, et il coutait NEUF constats
+# TF-0537 (lot Produit-02 du 23/08) : L ACCENT MANQUAIT, et il coutait NEUF constats
 # bloquants. Le navigateur francais nomme le fichier en cours de telechargement
 # « weglot.min.js.telechargement » AVEC ses accents ; le motif ecrit sans accent ne
 # correspondait a rien. Les deux graphies sont donc declarees, et la lecon vaut au-dela de ce

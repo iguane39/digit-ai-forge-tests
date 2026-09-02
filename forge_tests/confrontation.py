@@ -1,6 +1,6 @@
 """Confronter une PROMESSE à un SERVICE — le mécanisme, une seule fois.
 
-TF-0371 (lot bourse-aux-vacants 20260818a, 18/08/2026), et c'est l'item lui-même qui a nommé
+TF-0371 (lot Produit-11 20260818a, 18/08/2026), et c'est l'item lui-même qui a nommé
 le vrai sujet : « c'est la TROISIÈME généralisation demandée du même comparateur — il y a
 probablement un mécanisme unique à en tirer plutôt que trois ».
 

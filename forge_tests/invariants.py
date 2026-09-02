@@ -157,7 +157,7 @@ def handlers(source: Path | list[Path]) -> dict[tuple[str, str], str]:
     TF-0135 — `source` accepte aussi une LISTE de fichiers. Une app FastAPI a routeurs monte
     ses `include_router` depuis main.py, mais les decorateurs `@router.get/post/...` et leurs
     gardes vivent dans les modules du routeur (`app/api/routes_*.py`) : bornee au seul main.py,
-    cette table ressortait VIDE sur un projet ainsi organise (Approval2), et toute divergence
+    cette table ressortait VIDE sur un projet ainsi organise (Produit-01), et toute divergence
     verifiee plus loin (`codes_par_fonction`) devenait donc faussement injustifiable.
     """
     fichiers = [source] if isinstance(source, Path) else list(source)

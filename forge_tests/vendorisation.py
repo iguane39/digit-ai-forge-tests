@@ -1,4 +1,4 @@
-r"""Une copie VENDORISÉE a-t-elle divergé de sa source ? (TF-0580, lot AuxPortesDeLaBaie 20260824)
+r"""Une copie VENDORISÉE a-t-elle divergé de sa source ? (TF-0580, lot Produit-02 20260824)
 
 Le fait fondateur, mesuré : un `Dockerfile` posait `ENV FORGE_ROOT=/app/vendor`. En production,
 `vendor/digit-ai-factory/catalogues/catalogue.jsonl` ÉTAIT donc la source qui alimentait la base
