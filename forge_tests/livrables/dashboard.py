@@ -457,9 +457,14 @@ _STYLE = f"""
       margin:12px 0 0; padding:0; }}
     .chemin {{ background:var(--surface); border:1px solid var(--line);
       border-left:3px solid var(--blue); border-radius:var(--r-sm); padding:12px 14px;
-      font-size:.88rem; }}
+      font-size:.88rem; display:flex; flex-direction:column; }}
     .chemin b {{ display:block; font-family:var(--head); margin:0 0 3px; }}
     .chemin .c-question {{ display:block; color:var(--muted); margin:0 0 7px; }}
+    /* Les BOUTONS de deux cartes voisines s alignent : la grille étire les cartes à la même
+       hauteur, `margin-top:auto` colle le bloc d actions au bas de chacune, et deux textes
+       d introduction de longueurs différentes cessent de décaler les commandes l une par
+       rapport à l autre (constat render_page a 768 px : 22 px d ecart, tolerance 2 px). */
+    .chemin .c-actions {{ margin-top:auto; }}
     .chemin .c-va {{ display:block; margin:8px 0 0; text-decoration:none; }}
     .chemin .c-va:hover {{ text-decoration:underline; }}
     footer.ecarts {{ margin-top:32px; background:var(--surface); border:1px solid var(--line);
@@ -1205,7 +1210,8 @@ def _chemins() -> str:
         + "".join(
             f'<li class="chemin"><b>{_e(qui)}</b>'
             f'<span class="c-question">{_e(question)}</span>'
-            f"<span>{_e(conduite)}</span>{''.join(liens)}</li>"
+            f"<span>{_e(conduite)}</span>"
+            f'<span class="c-actions">{"".join(liens)}</span></li>'
             for qui, question, conduite, liens in entrees
         )
         + "</ul>"
@@ -1300,6 +1306,25 @@ _DESCRIBEDBY = {"sévérité": "note-severite", "risque": "note-risque"}
 _SEUIL_FILTRE = 8
 
 
+#: Le bouton de dépliage, tel que `_detail_element` le rend. C est ce préfixe — et lui seul —
+#: qui reçoit le `aria-controls` de sa ligne de détail : viser `<button` en général marquerait
+#: aussi les boutons de filtre ou de tri qui vivent dans la même cellule.
+_BOUTON_DETAIL = '<button type="button" class="btn-detail" '
+
+
+def _viser_detail(cellule: str, identifiant_detail: str) -> str:
+    """Rattache le bouton de dépliage d une cellule à SA ligne de détail (L17).
+
+    Rien à faire si la cellule ne porte pas de bouton de détail : la fonction est donc sûre sur
+    toute cellule, et le rattachement n existe que là où il a un sens.
+    """
+    if _BOUTON_DETAIL not in cellule:
+        return cellule
+    return cellule.replace(
+        _BOUTON_DETAIL, f'{_BOUTON_DETAIL}aria-controls="{identifiant_detail}" ', 1
+    )
+
+
 def _tableau(
     entetes: list[str],
     lignes: list[list[str]],
@@ -1337,20 +1362,36 @@ def _tableau(
         attribut += f' title="{_e(info)}"' if info else ""
         attribut += ' data-tri=""' if (outille or chapitre) else ""
         tete += f"<th{attribut}>{_e(affiche)}</th>"
+    # L identifiant est arrêté AVANT le corps : les lignes de détail s y accrochent (L17), et
+    # sa graine se prend sur les cellules D ORIGINE — la dériver après l injection des
+    # `aria-controls` la ferait dépendre d elle-même.
+    graine = " ".join([*entetes, *(c for ligne in lignes for c in ligne)])
+    derive = "table-" + hashlib.sha256(graine.encode("utf-8")).hexdigest()[:10]
+    socle_id = identifiant or derive
     corps = ""
     for rang, ligne in enumerate(lignes):
         ouverture = f"<tr{(attributs or [''] * len(lignes))[rang]}>"
-        cellules = "".join(
-            f'<td data-label="{_e(affiches[i]) if i < len(affiches) else ""}">{c}</td>'
-            for i, c in enumerate(ligne)
-        )
-        corps += ouverture + cellules + "</tr>"
         # Ligne de détail PLEINE LARGEUR (retour humain n°6) : le détail d'un cas ne vit
         # plus dans une cellule étroite — il se déplie sous la ligne, sur toute la largeur.
         detail = (details_lignes or [])[rang] if details_lignes else ""
+        # L17 (socle de pages) : la ligne de détail porte un `id`, et le bouton qui la déplie la
+        # VISE par `aria-controls`. Le composant maison la trouvait par voisinage DOM
+        # (`nextElementSibling`) — vrai pour la souris, muet pour un lecteur d écran : rien ne
+        # disait à quoi le bouton était rattaché, ni que la chose contrôlée venait de s ouvrir.
+        # 196 lignes du tableau de bord étaient dans ce cas au constat du 02/09.
+        identifiant_detail = f"{socle_id}-detail-{rang}" if detail else ""
+        cellules_source = (
+            [_viser_detail(c, identifiant_detail) for c in ligne] if identifiant_detail else ligne
+        )
+        cellules = "".join(
+            f'<td data-label="{_e(affiches[i]) if i < len(affiches) else ""}">{c}</td>'
+            for i, c in enumerate(cellules_source)
+        )
+        corps += ouverture + cellules + "</tr>"
         if detail:
             corps += (
-                f'<tr data-detail hidden><td colspan="{len(entetes)}" '
+                f'<tr data-detail id="{identifiant_detail}" hidden>'
+                f'<td colspan="{len(entetes)}" '
                 f'data-label="détail">{detail}</td></tr>'
             )
     filtre = outille or (chapitre and len(lignes) >= 4)
@@ -1359,8 +1400,7 @@ def _tableau(
     # donc il est stable d un audit à l autre — un id tiré au hasard aurait fait diverger deux
     # rendus du même rapport, et le déterminisme des livrables est vérifié en recette.
     if filtre and not identifiant:
-        graine = " ".join([*entetes, *(c for ligne in lignes for c in ligne)])
-        identifiant = "table-" + hashlib.sha256(graine.encode("utf-8")).hexdigest()[:10]
+        identifiant = derive
     marque = f' id="{identifiant}"' if identifiant else ""
     filtrable = " data-filterable" if filtre else ""
     table = (
@@ -2980,6 +3020,20 @@ _REGLES_CONDITIONNELLES: tuple[tuple[str, str, str], ...] = (
         r'<figure class="graphe"><figcaption>[^<]+\?</figcaption>',
         r'data-total="elements"[^>]*>[1-9]',
     ),
+    # TF-0786 (02/09) : les boutons de deux chemins de lecteur voisins tombaient sur deux
+    # hauteurs (22 px d écart mesurés à 768 px, tolérance 2 px du socle) parce que les textes
+    # d introduction n ont pas la même longueur. Le bloc d actions est donc collé au bas de sa
+    # carte. La règle ne se prononce que si la page porte des chemins de lecteur.
+    (
+        "L26bis-actions-alignees",
+        r"\.chemin \.c-actions \{ margin-top:auto",
+        r'<ul class="chemins">',
+    ),
+    (
+        "L26bis-bloc-actions",
+        r'<span class="c-actions">',
+        r'<ul class="chemins">',
+    ),
 )
 
 
@@ -3010,6 +3064,44 @@ def controle_pregeneration(page: str) -> list[str]:
             "fenêtre, token clamp(75vw,1680px,92vw))"
         )
     ecarts.extend(_ecarts_comptes_de_table(page))
+    ecarts.extend(_ecarts_lignes_de_detail(page))
+    return ecarts
+
+
+def _ecarts_lignes_de_detail(page: str) -> list[str]:
+    """L17 du socle : toute ligne de détail a un `id`, et un bouton la VISE par `aria-controls`.
+
+    Même classe que G4/G5 juste en dessous, et même raison d exister ici : c est un CROISEMENT
+    entre deux marquages, qu aucun motif de présence ne verrait. Le fait payé (TF-0786, 02/09) :
+    le composant maison retrouvait le détail par voisinage DOM (`nextElementSibling`) — vrai pour
+    la souris, muet pour l assistance technique. `check_html.py` a rendu 196 constats L17 sur le
+    tableau de bord de la forge ; la règle vit désormais ICI pour que la forge le constate à
+    chaque génération, sans dépendre d un oracle installé sur le poste.
+    """
+    lignes = re.findall(r"<tr\b[^>]*\bdata-detail\b[^>]*>", page)
+    if not lignes:
+        return []
+    vises = set(re.findall(r'<button[^>]*\baria-controls="([^"]+)"', page))
+    sans_id, orphelins = 0, []
+    for balise in lignes:
+        identifiant = re.search(r'\bid="([^"]+)"', balise)
+        if not identifiant:
+            sans_id += 1
+        elif identifiant.group(1) not in vises:
+            orphelins.append(identifiant.group(1))
+    ecarts = []
+    if sans_id:
+        ecarts.append(
+            f"règle « L17-detail-identifie » : {sans_id} ligne(s) de détail sans `id` sur "
+            f"{len(lignes)} — aucun bouton ne peut les viser, et l assistance technique n apprend "
+            "ni le rattachement ni l ouverture"
+        )
+    if orphelins:
+        ecarts.append(
+            f"règle « L17-detail-cible » : {len(orphelins)} ligne(s) de détail qu aucun "
+            f"`aria-controls` ne vise (par exemple « {orphelins[0]} ») — le dépliage n existe "
+            "que pour la souris"
+        )
     return ecarts
 
 

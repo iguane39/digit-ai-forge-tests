@@ -1479,6 +1479,143 @@ def verifier_cahiers(rouge: dict) -> int:
     return echecs
 
 
+#: Les oracles de rendu du socle, tels que la recette les joue : la copie INSTALLÉE sur le
+#: poste, pas une copie versionnée ici. C est précisément ce qui rend leur identité nécessaire.
+SCRIPTS_SOCLE = Path.home() / ".claude" / "skills" / "digit-ai-page-html" / "scripts"
+
+#: Le journal d une exécution à l autre : la seule mémoire dont la recette dispose pour dire si
+#: deux rapports sont comparables. Ignoré par git (comme le gabarit de TF-0601) — versionné, il
+#: rendrait l arbre instable sous son propre contrôle TF-0294.
+JOURNAL_ORACLES = RACINE / "recette" / ".empreintes-oracles.json"
+
+
+def empreinte_oracles_socle(scripts: Path | None = None) -> dict:
+    """L IDENTITÉ des oracles de rendu que la recette vient de jouer — TF-0786.
+
+    LE FAIT PAYÉ (02/09/2026). La section `dashboard` joue `check_html.py` et `render_page.py`
+    depuis `~/.claude/skills/digit-ai-page-html/scripts/` : la copie INSTALLÉE, qu un autre
+    chantier a mise à jour PENDANT la session. L empreinte des règles est passée de
+    `4b9b6179fb57` à `c16177d42a88` (31 → 36 règles, 14 → 18 familles de rendu) et la section
+    est passée de verte à rouge sans qu un octet du dépôt ne bouge. Un verdict qui dépend d un
+    oracle non épinglé n est pas reproductible — même classe que la dérive de ruff (TF-0785).
+
+    Ce que cette fonction rend n est donc pas un contrôle mais une CONSIGNE : l identité de ce
+    qui a jugé, à mettre au rapport. Un oracle absent est nommé absent — jamais confondu avec
+    un oracle vert, jamais confondu non plus avec un oracle d une autre version.
+    """
+    import hashlib
+    import json
+    import subprocess
+
+    base = scripts or SCRIPTS_SOCLE
+    identite: dict = {}
+    for nom, drapeau in (("check_html.py", "--version-regles"), ("render_page.py", "--familles")):
+        cle = nom.removesuffix(".py")
+        oracle = base / nom
+        if not oracle.exists():
+            identite[cle] = {"absent": f"{oracle} — oracle non installe sur ce poste"}
+            continue
+        try:
+            issue = subprocess.run(
+                [sys.executable, str(oracle), drapeau], capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=120,
+            )
+            publie = json.loads(issue.stdout)
+        except (OSError, subprocess.SubprocessError, ValueError) as erreur:
+            identite[cle] = {"absent": f"{drapeau} illisible : {type(erreur).__name__}: {erreur}"}
+            continue
+        if "empreinte" in publie:
+            # `check_html.py` publie SON empreinte : on la recopie plutôt que d en dériver une
+            # autre — deux empreintes du même objet finiraient par diverger.
+            identite[cle] = {"empreinte": publie["empreinte"],
+                             "regles": publie.get("nombre", len(publie.get("regles") or []))}
+        else:
+            # `render_page.py` publie sa table de familles sans empreinte : on la dérive de la
+            # table elle-même, canonisée — une famille ajoutée, retirée ou changée de sévérité
+            # change l empreinte, et c est exactement ce qu on veut détecter.
+            familles = publie.get("familles") or {}
+            canonique = json.dumps(familles, ensure_ascii=False, sort_keys=True)
+            identite[cle] = {
+                "empreinte": hashlib.sha256(canonique.encode("utf-8")).hexdigest()[:12],
+                "familles": len(familles),
+            }
+    canonique = json.dumps(identite, ensure_ascii=False, sort_keys=True)
+    identite["empreinte"] = hashlib.sha256(canonique.encode("utf-8")).hexdigest()[:12]
+    return identite
+
+
+def lignes_empreinte_oracles(identite: dict) -> list[str]:
+    """Ce que le rapport ÉCRIT de cette identité. Un rapport sans elle n est pas comparable."""
+    lignes = [f"  [CONSIGNE] oracles du socle joues — empreinte d ensemble {identite['empreinte']}"]
+    for cle in ("check_html", "render_page"):
+        detail = identite.get(cle) or {"absent": "non interroge"}
+        if "absent" in detail:
+            lignes.append(f"             {cle} : ABSENT — {detail['absent']}")
+        else:
+            compte = detail.get("regles", detail.get("familles"))
+            unite = "regles" if "regles" in detail else "familles"
+            lignes.append(
+                f"             {cle} : empreinte {detail['empreinte']} ({compte} {unite})"
+            )
+    return lignes
+
+
+def comparabilite(precedent: dict | None, courant: dict) -> tuple[bool, list[str]]:
+    """Deux rapports sont-ils comparables ? (verdict, ce que le rapport en DIT) — TF-0786.
+
+    La règle tient en une phrase : deux rapports rendus par des oracles d empreintes
+    différentes ne se comparent pas, et le taire ferait lire « régression » là où il n y a
+    qu une montée de version du socle. Ce n est pas un ÉCHEC de la recette — la section reste
+    jugée sur ses propres constats ; c est une DÉCLARATION, et son absence serait le défaut.
+
+    Aucun rapport antérieur : comparable par défaut ne veut rien dire, alors on le DIT aussi.
+    """
+    if not precedent:
+        return True, ["  [CONSIGNE] aucun rapport anterieur sur ce poste : rien a comparer "
+                      "(l empreinte ci-dessus devient la reference)"]
+    if precedent.get("empreinte") == courant.get("empreinte"):
+        return True, [f"  [CONSIGNE] meme empreinte d oracles qu au rapport precedent "
+                      f"({courant['empreinte']}) : les deux rapports SONT comparables"]
+    lignes = [
+        "  [CONSIGNE] RAPPORTS NON COMPARABLES : les oracles du socle ont change entre les deux",
+        f"             executions ({precedent.get('empreinte')} -> {courant.get('empreinte')}). "
+        "Un ecart de",
+        "             verdict entre ces deux rapports n est PAS forcement une regression du "
+        "depot.",
+    ]
+    for cle in ("check_html", "render_page"):
+        avant, apres = (precedent.get(cle) or {}), (courant.get(cle) or {})
+        if avant != apres:
+            lignes.append(
+                f"             {cle} : {avant.get('empreinte', avant.get('absent', '?'))} -> "
+                f"{apres.get('empreinte', apres.get('absent', '?'))}"
+            )
+    return False, lignes
+
+
+def lire_journal_oracles(chemin: Path | None = None) -> dict | None:
+    """L identite consignee au run precedent. `None` = aucun run precedent LISIBLE."""
+    import json
+
+    cible = chemin or JOURNAL_ORACLES
+    try:
+        return json.loads(cible.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def ecrire_journal_oracles(identite: dict, chemin: Path | None = None) -> None:
+    """Consigne l identite courante pour le run suivant. Un echec d ecriture ne casse rien."""
+    import json
+
+    cible = chemin or JOURNAL_ORACLES
+    with contextlib.suppress(OSError):
+        cible.write_text(
+            json.dumps(identite, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8", newline="\n",
+        )
+
+
 def verifier_dashboard(rouge: dict) -> int:
     """Mandat 2 — totaux strictement egaux au rapport, zero secret, charte PASS."""
     import subprocess
@@ -1490,6 +1627,18 @@ def verifier_dashboard(rouge: dict) -> int:
     echecs = 0
     print("-" * 78)
     print("  M2 — dashboard : totaux exacts, zero reseau, zero secret, charte PASS")
+
+    # TF-0786 — CONSIGNÉ AVANT le premier constat : le rapport dit PAR QUOI il a été jugé, et
+    # dit s il se compare au précédent. Sans cette ligne, deux rapports de cette section se
+    # lisent comme deux mesures du même objet ; ils peuvent être deux mesures d objets
+    # différents, et c est ce qui s est produit le 02/09.
+    identite = empreinte_oracles_socle()
+    for ligne in lignes_empreinte_oracles(identite):
+        print(ligne)
+    _, dit = comparabilite(lire_journal_oracles(), identite)
+    for ligne in dit:
+        print(ligne)
+    ecrire_journal_oracles(identite)
 
     cas: list[tuple[str, bool]] = []
     with tempfile.TemporaryDirectory() as temporaire:
@@ -1550,7 +1699,7 @@ def verifier_dashboard(rouge: dict) -> int:
         # Aucun des deux ne remplace l autre : `check_html` a longtemps sorti PASS sur une page
         # dont les pastilles etaient a 3,07:1 de contraste — un statut illisible, donc un statut
         # qu on ne lit pas. Absent l oracle, la non-mesure est DECLAREE, pas contournee.
-        scripts = Path.home() / ".claude" / "skills" / "digit-ai-page-html" / "scripts"
+        scripts = SCRIPTS_SOCLE
         for nom, arguments in (
             ("check_html.py", []),
             ("render_page.py", ["--widths", "1280,768,390"]),

@@ -1424,15 +1424,16 @@ elles ont besoin** :
 | `cahiers` ou `dashboard` | rouge seul | **100 s** |
 | `corpus` | rouge + vert | ~180 s |
 
-Sections : `corpus`, `unitaire`, `sql`, `qualification`, `dette`, `divergences`, `chemins`,
-`lecture-seule`, `actions`, `jeux`, `cahiers`, `dashboard` (`--help` les liste avec leur coût).
+Sections : `corpus`, `unitaire`, `lint`, `sql`, `qualification`, `dette`, `divergences`,
+`chemins`, `lecture-seule`, `actions`, `jeux`, `cahiers`, `dashboard` — **treize**, autant que
+le verdict en exige (`--help` les liste avec leur coût).
 
 **Une recette partielle ne prononce jamais S-01.** Elle sort `RECETTE PARTIELLE — S-01 NON
 PRONONCÉ` en nommant les sections non jouées : un « vert » sur trois sections et un silence sur
 toutes les autres serait exactement le mensonge que le sélecteur rendrait facile. Le critère de
 sortie reste la recette entière ; le sélecteur sert la boucle de correction, pas le verdict.
 
-### S-01 — ce que le critère couvre, et où il en est (mesuré le 02/09/2026)
+### S-01 — ce que le critère couvre, et où il en est (mesuré le 03/09/2026)
 
 **Ce que S-01 affirme, exactement** : « la forge attrape ce qu'elle doit, et se tait sur ce qui
 va bien ». Deux moitiés, et les deux sont opposables — chacune des entrées de `CORPUS` produit
@@ -1451,17 +1452,43 @@ section existe pour que cela n'arrive plus : elle porte l'état MESURÉ, pas l'i
 | `corpus` : banc rouge **21/23** — H-08 (assertions permissives) et A-3 (seuil de mutation par module) manquants | 01/09, livraison de D-34 : le pan `mutation` cessait de se jouer par défaut, et la recette qui attend ses constats ne les voyait plus | 23/23 après que la recette **demande** la campagne sur ses propres bancs | **fermé** (TF-0763) |
 | `corpus` : banc vert **3 findings bloquants** sur 5 routes | l'arrivée du pan `clavier` : K2 identifiait l'élément focalisé par sa FORME (`button`), jamais par son identité — trois boutons frères se lisaient « la tabulation n'avance plus » | 60 % de bruit sur un bloquant WCAG ; **0 bloquant** après que la clé devienne le chemin DOM | **fermé** (TF-0763) |
 | verdict REFUSÉ, « arbre instable » | la recette dépose légitimement chez ses bancs ce qu'elle prescrit (`.gitignore` de TF-0620, marqueur de campagne de D-34, `forge/avancement.jsonl`) — TF-0294 les voyait apparaître PENDANT la recette | 2 fichiers, puis 2 autres ; verdict rendu après ignorance bornée aux bancs | **fermé** (TF-0763) |
-| `lint` : **100** constats `ruff` (69 × E501, 12 × E741, 7 × I001, …) | non daté — **antérieur** à la campagne du 02/09 : 101 constats mesurés sur l'arbre de `623a618` | le pas est rouge, la section aussi | **ouvert** |
-| `dashboard` : les oracles de charte du socle sortent en code 1 — `check_html.py` **L17** (9 lignes de détail sans `id`, dans les tables de chapitres T6 à T8) et `render_page.py` | non daté — mesuré rouge à `77ffbac` **avant** toute correction de TF-0763. Ces oracles vivent **hors du dépôt** (`~/.claude/skills/digit-ai-page-html/`) et leur jeu de règles a bougé PENDANT la session du 02/09 : **L25** (sommaire incomplet — le manifeste d'écarts n'était dans aucun sommaire) et l'échec de `render_page` sont apparus entre deux exécutions, à empreinte de règles `c16177d42a88`, sans qu'un octet du dépôt ne change | **L25 fermé** le 02/09 (le manifeste a son ancre, son chapeau et son entrée de sommaire) ; L17 et `render_page` restent rouges | **ouvert** |
+| `lint` : **100** constats `ruff` (69 × E501, 12 × E741, 7 × I001, …) | non daté — **antérieur** à la campagne du 02/09 : 101 constats mesurés sur l'arbre de `623a618`. Cause réelle : la dépendance était déclarée `ruff>=0.5` et la version installée `0.16.1` | **115** constats sous 0.5.7, **100** sous 0.16.1, sur le MÊME arbre (17 `UP038` retirés en amont, 2 `UP031` apparus) ; **0** après solde, `ruff` épinglé `==0.16.1` | **fermé** (TF-0785, 03/09) |
+| `dashboard` : les oracles de charte du socle sortent en code 1 — `check_html.py` **L17** et `render_page.py` | non daté — mesuré rouge à `77ffbac` **avant** toute correction de TF-0763. Ces oracles vivent **hors du dépôt** (`~/.claude/skills/digit-ai-page-html/`) et leur jeu de règles a bougé PENDANT la session du 02/09 : **L25** et l'échec de `render_page` sont apparus entre deux exécutions, sans qu'un octet du dépôt ne change | **L25 fermé** le 02/09 · **L17 : 196 → 0** (les lignes de détail portent un `id` et leur bouton les vise par `aria-controls`) · **`render_page` : FAIL → PASS** (22 px d'écart entre les commandes de deux chemins de lecteur à 768 px, tolérance 2 px) | **fermé** (TF-0786, 03/09) |
 
-**Donc, au 02/09/2026 : S-01 est NON TENU**, sur `lint` et `dashboard` — 11 sections vertes sur
-13, `corpus` compris. Une dépendance d'oracle **hors dépôt** dont la version bouge sans que rien
-du dépôt ne change est elle-même une dette : elle rend le verdict non reproductible d'une heure à
-l'autre, et le pas ne peut pas la mesurer puisqu'il l'appelle sans épingler ce qu'il appelle. Le dire ici est le prix de la loi : tant que les deux dernières ne sont
-pas soldées, aucune restitution ne peut écrire « la forge attrape ce qu'elle doit ». Ce qui a
-changé le 02/09 n'est pas le verdict, c'est sa **lisibilité** — les deux causes restantes sont
-nommées, datées et hors du corpus, au lieu d'être noyées dans un « ECHEC corpus » qui accusait le
-framework d'une régression qu'il n'avait pas.
+**Donc, au 03/09/2026 : S-01 est TENU** — les treize sections sont vertes, `recette/verifier_corpus.py`
+entière rend le code 0. Les deux causes restantes du 02/09 étaient **la même** : un verdict rendu
+par un outil dont la version n'est pas épinglée mesure le poste, pas le dépôt. Ce qui a changé le
+02/09 n'était pas le verdict mais sa **lisibilité** ; ce qui change le 03/09 est le verdict, et
+la doctrine ci-dessous existe pour qu'il ne redevienne pas illisible.
+
+#### Un outil non épinglé ne rend pas un verdict (TF-0785 / TF-0786, 03/09/2026)
+
+Deux sections de la recette appelaient un outil sans épingler ce qu'elles appelaient, et les deux
+en sont mortes de la même façon — **le même dépôt rendait vert sur un poste et rouge sur l'autre,
+sans qu'un octet n'ait changé** :
+
+- **`lint`** jouait `ruff`, déclaré `ruff>=0.5`, installé en `0.16.1`. Mesure du 03/09 : **115
+  constats sous 0.5.7, 100 sous 0.16.1**. `ruff` est désormais épinglé à une **version exacte**
+  (`pyproject.toml` + `uv.lock`), la section **DIT la version qu'elle a jouée**, et une
+  déclaration qui n'épingle pas (`>=`, `~=`, une fourchette, ou l'absence de déclaration) est
+  elle-même un **ÉCHEC** de la section — pas un avertissement.
+- **`dashboard`** joue `check_html.py` et `render_page.py` depuis `~/.claude/skills/`. Leur jeu
+  de règles est passé de `4b9b6179fb57` à `c16177d42a88` (31 → 36 règles, 14 → 18 familles)
+  **pendant** la session du 02/09. La section **CONSIGNE désormais l'identité des oracles joués**
+  — l'empreinte publiée par `check_html.py --version-regles`, celle dérivée de
+  `render_page.py --familles` — et la compare à celle du run précédent
+  (`recette/.empreintes-oracles.json`, ignoré par git). Deux empreintes différentes rendent les
+  deux rapports **NON COMPARABLES**, et la recette le dit au lieu de laisser lire une régression
+  là où il n'y a qu'une montée de version.
+
+Cette identité n'est pas un contrôle et ne fait pas échouer la section : c'est une **consigne**.
+La faire échouer rendrait la recette rouge à chaque montée de version du socle — le taire ferait
+lire deux rapports incomparables comme deux mesures du même objet. La forge garde en outre ses
+propres règles **sans dépendre du skill installé** : le contrôle de pré-génération (§2 bis) juge
+désormais lui-même que toute ligne de détail porte un `id` visé par un `aria-controls`
+(`L17-detail-identifie`, `L17-detail-cible`) et que les commandes des chemins de lecteur sont
+collées au bas de leur carte (`L26bis-actions-alignees`). Bruit mesuré de ces trois règles sur
+les **33** documents HTML versionnés du dépôt : **0 accusation**.
 
 *Ce que la recette dit désormais d'elle-même* : les findings **bloquants** du banc vert sont
 listés un par un, avec leur pan, leur classe et leur message — comme les `signale` l'étaient

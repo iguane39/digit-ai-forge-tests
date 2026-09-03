@@ -58,3 +58,12 @@ fixtures/banc-*/.gitignore
 # pendant la recette, et TF-0294 refusait le verdict. Son contenu change à CHAQUE campagne (sha,
 # date, score) — versionné, il serait une instabilité permanente. Portée bornée aux bancs.
 fixtures/banc-*/forge/
+
+# TF-0786 (03/09/2026) — le journal d'empreintes des ORACLES DU SOCLE que la recette joue
+# (`check_html.py`, `render_page.py`, pris dans `~/.claude/skills/`). La recette y consigne
+# l'identité des oracles de son exécution, et la relit au run suivant pour DIRE si les deux
+# rapports sont comparables. Ce fichier décrit donc le POSTE, pas le dépôt : versionné, il
+# changerait à chaque montée de version du skill chez n'importe qui, et le contrôle de
+# stabilité d'arbre TF-0294 refuserait le verdict — exactement le remède déjà appliqué
+# au gabarit de TF-0601.
+recette/.empreintes-oracles.json
