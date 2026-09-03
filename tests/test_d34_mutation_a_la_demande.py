@@ -17,7 +17,6 @@ from pathlib import Path
 
 from forge_tests.adaptateurs import mutation
 
-
 # --- Condition 1 : a la demande ---------------------------------------------------------------
 
 def test_le_pan_mutation_ne_se_joue_pas_par_defaut(monkeypatch) -> None:

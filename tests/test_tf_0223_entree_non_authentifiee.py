@@ -1,6 +1,7 @@
 """TF-0223 (RT-7, lot COMPTA 20260814b) — le pan auditait l intérieur, jamais la PORTE D ENTRÉE.
 
-Fait mesuré en production le 14/08, sur l instance du produit `Ventilation de facture Fournisseur-A` :
+Fait mesuré en production le 14/08, sur l instance du produit `Ventilation de facture Fournisseur-A`
+:
 
     GET /  ->  303  /.auth/login/aad  ->  404 {"detail":"Not Found"}
 
@@ -194,7 +195,9 @@ def test_le_marqueur_DECLARE_pour_la_route_d_arrivee_prime_sur_le_titre() -> Non
 
     absent = _entree(chaine, corps="<h1>Service indisponible</h1>", titre="Service indisponible")
     present = _entree(
-        chaine, corps="<h1>Connexion à Ventilation Fournisseur-A</h1>", titre="Connexion à Ventilation Fournisseur-A"
+        chaine,
+        corps="<h1>Connexion à Ventilation Fournisseur-A</h1>",
+        titre="Connexion à Ventilation Fournisseur-A",
     )
 
     assert qualif.diagnostiquer_entree(absent, config) is not None

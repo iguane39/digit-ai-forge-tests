@@ -131,7 +131,7 @@ dev = [
     { name = "fastapi", specifier = ">=0.110" },
     { name = "mypy", specifier = ">=1.10" },
     { name = "pytest", specifier = ">=8.2" },
-    { name = "ruff", specifier = ">=0.5" },
+    { name = "ruff", specifier = "==0.16.1" },
 ]
 
 [[package]]

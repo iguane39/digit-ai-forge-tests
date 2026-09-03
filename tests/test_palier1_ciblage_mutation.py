@@ -3,7 +3,8 @@
 CE QUE CES TESTS PROUVENT, et ce qu ils ne prouvent pas. Ils eprouvent les fonctions PURES de
 selection et le point unique ou le palier touche l execution. Ils NE prouvent PAS la condition
 de non-perte de l etude — meme liste de survivants que la campagne pleine —, qui exige un projet
-reel dote de `coverage` : elle est declaree non jouee au rapport (`mutation.ciblage.non_perte_jouee`)
+reel dote de `coverage` : elle est declaree non jouee au rapport
+(`mutation.ciblage.non_perte_jouee`)
 plutot que supposee tenue.
 
 Chaque test porte son SENS ROUGE : ce qui casse si la regle se defait.

@@ -88,8 +88,8 @@ def test_les_familles_d_AVERTISSEMENT_ne_bloquent_pas_mais_sont_PUBLIEES(monkeyp
     # tu n existerait pas. Les deux erreurs sont refusees ici.
     assert sortie.verdict == "PASS"
     assert sortie.findings == []
-    assert any("L2 alignement entre frères empilés" in l for l in sortie.non_juge)
-    assert any("V7 rythme d'espacement" in l for l in sortie.non_juge)
+    assert any("L2 alignement entre frères empilés" in msg for msg in sortie.non_juge)
+    assert any("V7 rythme d'espacement" in msg for msg in sortie.non_juge)
 
 
 def test_la_BORNE_du_socle_est_reportee_quand_l_inventaire_est_tronque(monkeypatch) -> None:
@@ -101,21 +101,21 @@ def test_la_BORNE_du_socle_est_reportee_quand_l_inventaire_est_tronque(monkeypat
     })
     sortie = plancher.analyser(CIBLE)
     assert sortie.verdict == "FAIL"
-    assert any("TRONQUE" in l and "47" in l for l in sortie.non_juge)
+    assert any("TRONQUE" in msg and "47" in msg for msg in sortie.non_juge)
 
 
 def test_sans_socle_installe_le_pan_se_declare_NON_MESURE_jamais_vert(monkeypatch) -> None:
     monkeypatch.setattr(plancher.contraste, "_mesure_js", lambda: None)
     sortie = plancher.analyser(CIBLE)
     assert sortie.verdict == "SKIP"
-    assert any("ne recopie pas la geometrie" in l for l in sortie.non_juge)
+    assert any("ne recopie pas la geometrie" in msg for msg in sortie.non_juge)
 
 
 def test_front_non_servi_donne_un_SKIP_motive_pas_un_PASS(monkeypatch) -> None:
     _brancher(monkeypatch, {}, [])
     sortie = plancher.analyser(CIBLE)
     assert sortie.verdict == "SKIP"
-    assert any("front non servi" in l for l in sortie.non_juge)
+    assert any("front non servi" in msg for msg in sortie.non_juge)
 
 
 def test_le_POIDS_et_le_LIBELLE_viennent_du_SOCLE_jamais_d_une_copie_locale() -> None:
@@ -136,5 +136,5 @@ def test_le_POIDS_et_le_LIBELLE_viennent_du_SOCLE_jamais_d_une_copie_locale() ->
 def test_les_etats_apres_interaction_sont_DECLARES_hors_mesure() -> None:
     # La matrice d'etats du socle (TF-0493) joue les etats d'echec sur un FICHIER ; elle n'est pas
     # cablee sur une instance servie. Le pan doit le DIRE : c'est la moitie qu'il ne couvre pas.
-    assert any("etats atteints apres interaction" in l for l in plancher.NON_JUGE)
-    assert any("matrice" in l for l in plancher.NON_JUGE)
+    assert any("etats atteints apres interaction" in msg for msg in plancher.NON_JUGE)
+    assert any("matrice" in msg for msg in plancher.NON_JUGE)

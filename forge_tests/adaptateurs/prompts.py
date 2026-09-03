@@ -33,7 +33,7 @@ import json
 import re
 from pathlib import Path
 
-from forge_tests import classes, flaky
+from forge_tests import classes, exclusions, flaky
 from forge_tests.noyau import (
     Element,
     Finding,
@@ -42,7 +42,6 @@ from forge_tests.noyau import (
     evaluer_surface,
 )
 from forge_tests.risque import coter
-from forge_tests import exclusions
 
 NOM, PAN, SEUIL = "prompts-statique", "prompts", 1.0
 

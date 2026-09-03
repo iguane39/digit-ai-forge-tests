@@ -42,15 +42,21 @@ def _projet_avec_copie(base: Path, nom: str, fichiers: dict[str, str]) -> Path:
 
 def test_copie_a_jour_ne_produit_aucun_ecart(tmp_path):
     _depot(tmp_path, "digit-ai-factory", {"catalogues/catalogue.jsonl": '{"version":"1.8.0"}\n'})
-    projet = _projet_avec_copie(tmp_path, "digit-ai-factory", {"catalogues/catalogue.jsonl": '{"version":"1.8.0"}\n'})
+    projet = _projet_avec_copie(
+        tmp_path, "digit-ai-factory",
+        {"catalogues/catalogue.jsonl": '{"version":"1.8.0"}\n'})
     r = vendorisation.constats(projet, tmp_path)
     assert len(r) == 1 and r[0]["statut"] == "a_jour", r
 
 
 def test_le_fait_fondateur_deux_versions_de_retard(tmp_path):
     """Le cas exact du 24/08 : la copie porte une version antérieure, et rien ne le disait."""
-    _depot(tmp_path, "digit-ai-factory", {"catalogues/catalogue.jsonl": '{"version":"1.8.0","services":83}\n'})
-    projet = _projet_avec_copie(tmp_path, "digit-ai-factory", {"catalogues/catalogue.jsonl": '{"version":"1.6.2","services":80}\n'})
+    _depot(
+        tmp_path, "digit-ai-factory",
+        {"catalogues/catalogue.jsonl": '{"version":"1.8.0","services":83}\n'})
+    projet = _projet_avec_copie(
+        tmp_path, "digit-ai-factory",
+        {"catalogues/catalogue.jsonl": '{"version":"1.6.2","services":80}\n'})
     r = vendorisation.constats(projet, tmp_path)
     assert r[0]["statut"] == "diverge"
     assert "catalogues/catalogue.jsonl" in r[0]["divergents"]

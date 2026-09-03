@@ -18,7 +18,6 @@ le geste explicite (jamais l'exclusion), et que les divergences LÉGITIMES d'un 
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -41,7 +40,8 @@ def test_le_produit_reel_reste_dans_le_perimetre():
 
 @pytest.mark.parametrize("dossier", ["input", "output", "docs", "Old", "old", "forge", "runs"])
 def test_le_socle_couvre_tout_ce_qui_n_est_pas_le_produit(dossier):
-    """Ces sept-là étaient répartis au hasard sur dix listes ; ils viennent maintenant d'une seule."""
+    """Ces sept-là étaient répartis au hasard sur dix listes ; ils viennent maintenant d'une seule.
+    """
     assert exclusions.dossier_exclu(dossier)
 
 

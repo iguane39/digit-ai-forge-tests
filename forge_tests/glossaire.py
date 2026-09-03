@@ -126,7 +126,9 @@ def lire(chemin: Path | str) -> dict:
                 continue
             if set(cellules[0].replace(":", "").replace(" ", "")) <= {"-"}:
                 continue
-            ligne = dict(zip(COLONNES, cellules))
+            # `strict=False` ASSUMÉ : une ligne à 7 colonnes (avec `genre`) est légitime et
+            # se complète juste après — une paire stricte la rejetterait au lieu de la lire.
+            ligne = dict(zip(COLONNES, cellules, strict=False))
             if len(cellules) == len(COLONNES) + 1:
                 ligne[COLONNE_GENRE] = cellules[len(COLONNES)]
             courant["lignes"].append(ligne)
@@ -136,9 +138,9 @@ def lire(chemin: Path | str) -> dict:
     # du gabarit n'en sont pas, et les lire comme tels inventerait du vocabulaire.
     motif = None
     if illisibles:
-        detail = " · ".join("%s (%d colonnes)" % (n, v) for n, v in illisibles[:4])
-        motif = ("%d ligne(s) de tableau à largeur inattendue, DONC NON LUES : %s. "
-                 "Six colonnes attendues, sept avec `genre`" % (len(illisibles), detail))
+        detail = " · ".join(f"{n} ({v} colonnes)" for n, v in illisibles[:4])
+        motif = (f"{len(illisibles)} ligne(s) de tableau à largeur inattendue, DONC NON "
+                 f"LUES : {detail}. Six colonnes attendues, sept avec `genre`")
     return {"termes": [t for t in termes if t["categorie"]], "motif": motif}
 
 
@@ -364,8 +366,8 @@ for _loc, _g in DETERMINANTS.items():
     _collision = set(_g["m"]) & set(_g["f"])
     if _collision:                                                       # pragma: no cover
         raise AssertionError(
-            "locale %s : %s appartiennent aux DEUX genres une fois les accents retirés — "
-            "le contrôle d'accord accuserait des phrases justes" % (_loc, sorted(_collision)))
+            f"locale {_loc} : {sorted(_collision)} appartiennent aux DEUX genres une fois "
+            "les accents retirés — le contrôle d'accord accuserait des phrases justes")
 
 
 
@@ -414,7 +416,7 @@ def confronter_genre(par_locale: dict, termes: list[dict]) -> list[dict]:
             dets = "|".join(re.escape(d) for d in sorted(fautifs, key=len, reverse=True))
             # `\s+` et non `\s*` : un déterminant élidé (« un'casa ») n'est pas de la même
             # classe et se juge mal — on ne l'accuse pas.
-            motif = re.compile(r"(?<![\w'’])(%s)\s+(%s)(?![\wÀ-ÿ])" % (dets, formes),
+            motif = re.compile(rf"(?<![\w'’])({dets})\s+({formes})(?![\wÀ-ÿ])",
                                re.IGNORECASE | re.UNICODE)
             for cle, valeur in sorted((par_locale.get(loc) or {}).items()):
                 if not isinstance(valeur, str):
@@ -510,15 +512,15 @@ NON_JUGE = [
     "locale hors de cette table n est pas jugee — l allemand et l anglais n entrent pas dans une "
     "opposition binaire de determinants, et les y forcer inventerait des fautes",
     "glossaire : la coherence interne ne voit un fait que si le NOM PROPRE PRECEDE le nombre dans "
-    "la meme phrase — « a 45 minutes de Granville » n est pas rapproche de « Granville : 40 minutes ». "
-    "Elargir l ordre ferait rapprocher des sujets differents ; le manque est declare plutot que "
-    "comble au juge",
+    "la meme phrase — « a 45 minutes de Granville » n est pas rapproche de « Granville : 40 "
+    "minutes ». Elargir l ordre ferait rapprocher des sujets differents ; le manque est declare "
+    "plutot que comble au juge",
     "glossaire : seules les unites de DISTANCE et de DUREE sont confrontees. Un fait chiffre sans "
-    "unite (« 23 personnes ») n est pas juge : sans unite, deux nombres attaches au meme nom propre "
-    "peuvent parler de deux grandeurs differentes",
+    "unite (« 23 personnes ») n est pas juge : sans unite, deux nombres attaches au meme "
+    "nom propre peuvent parler de deux grandeurs differentes",
     "glossaire : un terme employe UNIQUEMENT sous une forme flechie eloignee (pluriel irregulier, "
-    "declinaison) compte ZERO emploi. Inventer une morphologie par langue serait affirmer ce que la "
-    "donnee ne porte pas ; le manque est declare plutot que comble au juge",
+    "declinaison) compte ZERO emploi. Inventer une morphologie par langue serait affirmer "
+    "ce que la donnee ne porte pas ; le manque est declare plutot que comble au juge",
     "glossaire : le controle d emploi ne se declenche que si le retenu est a ZERO **et** qu un "
     "proscrit est employe. Un retenu a zero dans une locale qui ne parle pas du concept n est pas "
     "un defaut, et un proscrit employe a cote d un retenu employe peut etre une citation",

@@ -70,7 +70,8 @@ def _fichiers(base: Path) -> dict[str, Path]:
 
 
 def _identiques(a: Path, b: Path) -> bool:
-    """Comparaison NORMALISÉE en fins de ligne : un CRLF ne fait pas diverger une copie (TF-0072)."""
+    """Comparaison NORMALISÉE en fins de ligne : un CRLF ne fait pas diverger une copie (TF-0072).
+    """
     try:
         ca, cb = a.read_bytes(), b.read_bytes()
     except OSError:
@@ -87,7 +88,8 @@ def constats(cible: Path | str, racine_forges: Path | str | None = None) -> list
     a regardé n'est pas actionnable.
     """
     cible = Path(cible)
-    racine = Path(racine_forges) if racine_forges else Path(os.environ.get("FORGE_ROOT", cible.parent))
+    defaut = os.environ.get("FORGE_ROOT", cible.parent)
+    racine = Path(racine_forges) if racine_forges else Path(defaut)
     sources = _sources_disponibles(racine)
     resultats: list[dict] = []
 
@@ -102,8 +104,9 @@ def constats(cible: Path | str, racine_forges: Path | str | None = None) -> list
                 resultats.append({
                     "copie": copie.relative_to(cible).as_posix(),
                     "statut": "non_comparable",
-                    "motif": f"aucune source « {copie.name} » sur le poste (cherchée sous {racine}) — "
-                             "non comparé, ce qui n'est pas la même chose qu'à jour",
+                    "motif": f"aucune source « {copie.name} » sur le poste (cherchée "
+                             f"sous {racine}) — non comparé, ce qui n'est pas la même "
+                             "chose qu'à jour",
                     "divergents": [], "absents": [],
                 })
                 continue
@@ -123,6 +126,7 @@ def constats(cible: Path | str, racine_forges: Path | str | None = None) -> list
                     f"{len(divergents)} fichier(s) divergent et {len(absents)} manquent sur "
                     f"{len(communs)} comparé(s) — une copie vendorisée qui a divergé sert des "
                     "valeurs périmées SANS que rien ne le dise (TF-0580)"
-                ) if (divergents or absents) else f"{len(communs)} fichier(s) comparé(s), aucun écart",
+                ) if (divergents or absents)
+                else f"{len(communs)} fichier(s) comparé(s), aucun écart",
             })
     return resultats

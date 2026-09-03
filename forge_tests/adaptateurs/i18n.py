@@ -36,12 +36,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from forge_tests import catalogue_i18n as _catalogue
+from forge_tests import classes, exclusions, seuils
 from forge_tests import glossaire as _glossaire
 from forge_tests import orphelins as _orphelins
-from forge_tests import classes, seuils
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
-from forge_tests import exclusions
 
 NOM, PAN = "i18n-build-servi", "i18n"
 SEUIL = seuils.valeur("couverture_surface_i18n")
@@ -266,7 +265,8 @@ class _Page(HTMLParser):
             self.lang = table["lang"]
         if tag != "html" and table.get("lang"):
             self._pile_lang.append(True)
-            self._marque_ouverte = self._marque_ouverte + [tag] if hasattr(self, "_marque_ouverte") else [tag]
+            ouvertes = getattr(self, "_marque_ouverte", None) or []
+            self._marque_ouverte = [*ouvertes, tag]
         if tag == "title":
             self._dans_titre = True
         if tag == "script" and (table.get("type") or "").lower() == "application/ld+json":
@@ -290,7 +290,8 @@ class _Page(HTMLParser):
             self.destinations.append(table.get("href") or "")
 
     def handle_endtag(self, tag: str) -> None:
-        if getattr(self, "_marque_ouverte", None) and self._marque_ouverte[-1] == tag and self._pile_lang:
+        ouvertes = getattr(self, "_marque_ouverte", None)
+        if ouvertes and ouvertes[-1] == tag and self._pile_lang:
             self._pile_lang.pop()
             self._marque_ouverte.pop()
         if tag == "title":
@@ -960,9 +961,10 @@ def _findings_catalogue(cible: Path) -> tuple[list[Finding], list[str]]:
                     classe=classes.I18N,
                     localisation=f"{dossier}/{ecart['locale']}.json:{ecart['cle']}",
                     message=(
-                        f"« {ecart['vu']} » : le determinant « {ecart['determinant']} » est reste au "
-                        f"genre oppose alors que le glossaire declare « {ecart['retenu']} » du genre "
-                        f"{ecart['genre']} en « {ecart['locale']} ». Une substitution de terme qui "
+                        f"« {ecart['vu']} » : le determinant « {ecart['determinant']} » est reste "
+                        f"au genre oppose alors que le glossaire declare « {ecart['retenu']} » du "
+                        f"genre {ecart['genre']} en « {ecart['locale']} ». Une substitution de "
+                        f"terme qui "
                         "change le genre laisse survivre les accords SEPARES du nom — onze sont "
                         "parties en production derriere une CI verte (TF-0660)"
                     ),
@@ -989,10 +991,11 @@ def _findings_catalogue(cible: Path) -> tuple[list[Finding], list[str]]:
                     classe=classes.I18N,
                     localisation=f"{dossier}/{ecart['locale']}.json",
                     message=(
-                        f"« {ecart['locale']} » se contredit sur « {ecart['sujet']} » en {ecart['unite']}(s) : "
-                        f"{details}. Verifier que sept langues disent la meme chose ne verifie pas qu une seule "
-                        "soit coherente avec elle-meme — un fait faux de la MEME facon partout passe toutes les "
-                        "comparaisons interlangues (TF-0663)"
+                        f"« {ecart['locale']} » se contredit sur « {ecart['sujet']} » en "
+                        f"{ecart['unite']}(s) : {details}. Verifier que sept langues disent la "
+                        f"meme chose ne verifie pas qu une seule "
+                        "soit coherente avec elle-meme — un fait faux de la MEME facon partout "
+                        "passe toutes les comparaisons interlangues (TF-0663)"
                     ),
                     risque=coter(PAN, "i18n:coherence", dossier),
                 )
@@ -1005,16 +1008,19 @@ def _findings_catalogue(cible: Path) -> tuple[list[Finding], list[str]]:
                         classe=classes.I18N,
                         localisation=f"{dossier}/{ecart['locale']}.json",
                         message=(
-                            f"« {ecart['locale']} » : le terme RETENU « {ecart['retenu']} » est employe "
-                            f"ZERO fois, quand le terme PROSCRIT « {ecart['proscrit']} » l est "
-                            f"{ecart['vus_proscrit']} fois. Le glossaire a ete corrige, les chaines n ont "
-                            "pas suivi — et un terme retenu a zero emploi n est pas une nuance a relire, "
-                            "c est un echec (TF-0656)"
+                            f"« {ecart['locale']} » : le terme RETENU « {ecart['retenu']} » est "
+                            f"employe ZERO fois, quand le terme PROSCRIT « {ecart['proscrit']} » l "
+                            f"est {ecart['vus_proscrit']} fois. Le glossaire a ete corrige, les "
+                            f"chaines n ont "
+                            "pas suivi — et un terme retenu a zero emploi n est pas une nuance a "
+                            "relire, c est un echec (TF-0656)"
                         ),
                         risque=coter(PAN, "i18n:glossaire", dossier),
                     )
                 )
-            for ecart in _glossaire.confronter(par_locale, lu_glossaire["termes"], lus_faits["faits"]):
+            confrontes = _glossaire.confronter(
+                par_locale, lu_glossaire["termes"], lus_faits["faits"])
+            for ecart in confrontes:
                 findings.append(
                     Finding(
                         id=f"i18n:nombre:{dossier}:{ecart['locale']}:{ecart['cle']}",
@@ -1158,7 +1164,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
 
     build = build_servi(cible)
     if build is None:
-        if findings_catalogue or findings_routes or any("catalogue `" in m for m in motifs_catalogue):
+        catalogue_a_parle = any("catalogue `" in m for m in motifs_catalogue)
+        if findings_catalogue or findings_routes or catalogue_a_parle:
             # Le catalogue a parle : le pan MESURE, meme sans build. Le build reste nomme comme
             # ce qui manque pour juger la parite de routes et la langue servie.
             non_juge.append(

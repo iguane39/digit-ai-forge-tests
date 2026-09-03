@@ -60,7 +60,8 @@ def test_la_forme_ancree_a_la_racine_compte_aussi(tmp_path: Path) -> None:
 
 
 def test_une_negation_est_denoncee_et_JAMAIS_retiree(tmp_path: Path) -> None:
-    """Le cas du parc : quelqu'un a écrit la négation exprès. On la dit, on ne décide pas pour lui."""
+    """Le cas du parc : quelqu'un a écrit la négation exprès. On la dit, on ne décide pas pour lui.
+    """
     avant = "*.log\n!.env.forge-tests\n"
     (tmp_path / ".gitignore").write_text(avant, encoding="utf-8")
 

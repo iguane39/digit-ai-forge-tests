@@ -27,8 +27,7 @@ import ast
 import re
 from pathlib import Path
 
-from forge_tests import classes
-from forge_tests import exclusions
+from forge_tests import classes, exclusions
 
 NON_JUGE = [
     "declencheurs : la decouverte est STATIQUE et bornee aux formes reconnues (cron d un "

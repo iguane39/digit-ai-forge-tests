@@ -507,7 +507,11 @@ def rapport(
         "boucle": boucle if boucle is not None else _boucle_non_mesuree(),
         # TF-0539 : ce que la forge a depose (ou pourquoi elle ne l'a pas fait) — le lecteur
         # du rapport apprend qu'un gabarit l'attend, sans avoir a le deviner.
-        "gabarit_env": gabarit_env if gabarit_env is not None else {"depose": False, "motif": "non mesure (audit hors flux principal)", "fichier": None},
+        "gabarit_env": gabarit_env if gabarit_env is not None else {
+            "depose": False,
+            "motif": "non mesure (audit hors flux principal)",
+            "fichier": None,
+        },
         # TF-0580 : les copies vendorisees et leur ecart a l amont — « non comparable » n est
         # JAMAIS « a jour », sinon l outil reproduit le defaut qu il detecte.
         "vendorisation": vendorisation if vendorisation is not None else [],

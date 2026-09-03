@@ -4,7 +4,8 @@ Le pan `qualif` ne savait s authentifier que d une seule façon : remplir une mi
 (`FORGE_TESTS_QUALIF_LOGIN` / `_PASSWORD`, routes `/login` | `/connexion`). Aucune forge ne
 rejoue un second facteur ni un accès conditionnel : toute instance derrière Easy Auth Entra
 (MFA, CA) lui était fermée — or c est exactement là que vivent les défauts de frontière, et le
-produit `Ventilation de facture Fournisseur-A` venait de choisir ses tests Azure par **session capturée**
+produit `Ventilation de facture Fournisseur-A` venait de choisir ses tests Azure par **session
+capturée**
 (storage state Playwright, cookie `AppServiceAuthSession`), l artefact que la forge ne savait
 pas consommer.
 

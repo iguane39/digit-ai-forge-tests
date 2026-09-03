@@ -49,10 +49,9 @@ import re
 from html.parser import HTMLParser
 from pathlib import Path
 
-from forge_tests import classes
+from forge_tests import classes, exclusions
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
-from forge_tests import exclusions
 
 NOM, PAN, SEUIL = "interface-statique", "interface", 1.0
 

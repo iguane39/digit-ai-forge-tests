@@ -49,17 +49,26 @@ _CLE = re.compile(r"FORGE_TESTS_[A-Z0-9_]+")
 #: Ce qu'une clé sert, quand son nom ne le dit pas seul. Une clé absente d'ici sort sans glose
 #: plutôt qu'avec une paraphrase de son nom : une glose creuse fatigue le lecteur et ne l'aide pas.
 GLOSES: dict[str, str] = {
-    "FORGE_TESTS_APP": "application ASGI du projet, forme `module:objet` — sans elle, le pan api ne peut rien appeler",
-    "FORGE_TESTS_BASE_URL": "URL de l'instance à interroger pour les pans qui parlent au produit lancé",
+    "FORGE_TESTS_APP": "application ASGI du projet, forme `module:objet` — sans elle, le pan "
+                       "api ne peut rien appeler",
+    "FORGE_TESTS_BASE_URL": "URL de l'instance à interroger pour les pans qui parlent au "
+                            "produit lancé",
     "FORGE_TESTS_SOURCES": "paquet Python du produit ; son parent devient la racine d'exécution",
-    "FORGE_TESTS_INCLURE": "dossiers à RÉINTÉGRER au périmètre malgré le socle d'exclusions (TF-0536) — `input` par exemple, si le projet a une vraie raison de l'auditer",
+    "FORGE_TESTS_INCLURE": "dossiers à RÉINTÉGRER au périmètre malgré le socle d'exclusions "
+                           "(TF-0536) — `input` par exemple, si le projet a une vraie raison "
+                           "de l'auditer",
     "FORGE_TESTS_MUTATION_EXCLUT": "modules hors du pan mutation",
     "FORGE_TESTS_MUTATION_PLAFOND": "plafond de mutants, pour borner la durée",
     "FORGE_TESTS_I18N_ROUTES": "routes attendues par locale (TF-0470)",
     "FORGE_TESTS_I18N_CHAINES": "lexique de chaînes littérales à surveiller (TF-0465)",
     "FORGE_TESTS_LOGIN": "identifiants de démonstration, JAMAIS un compte réel",
-    "FORGE_TESTS_GLOSSAIRE": "glossaire du projet (TF-0644) — defaut `docs/projet/GLOSSAIRE.md` ; il donne, par locale, le TERME retenu, sans quoi « 8 gites » et « 8 cottages » ne se rapprochent pas",
-    "FORGE_TESTS_FAITS": "JSON `{\"<pivot>\": <nombre>}` — la DONNEE du produit, seul point fixe hors du catalogue. Le defaut fondateur disait « 8 » dans les SEPT langues : coherentes entre elles, et toutes fausses",
+    "FORGE_TESTS_GLOSSAIRE": "glossaire du projet (TF-0644) — defaut "
+                             "`docs/projet/GLOSSAIRE.md` ; il donne, par locale, le TERME "
+                             "retenu, sans quoi « 8 gites » et « 8 cottages » ne se "
+                             "rapprochent pas",
+    "FORGE_TESTS_FAITS": "JSON `{\"<pivot>\": <nombre>}` — la DONNEE du produit, seul point "
+                         "fixe hors du catalogue. Le defaut fondateur disait « 8 » dans les "
+                         "SEPT langues : coherentes entre elles, et toutes fausses",
     "FORGE_TESTS_AVANCEMENT_S": "période d'émission de l'avancement, en secondes",
 }
 
@@ -113,7 +122,8 @@ CONFIG = ".env.forge-tests"
 
 
 def proteger(cible: Path | str) -> dict:
-    """Garantit que le `.gitignore` du projet couvre `.env.forge-tests`, ou DIT pourquoi il ne l'est pas.
+    """Garantit que le `.gitignore` du projet couvre `.env.forge-tests`, ou DIT pourquoi
+    il ne l'est pas.
 
     Quatre issues, toutes nommées — un silence ne se distinguerait pas d'un oubli :
       · `deja` — une ligne le couvre déjà, rien à faire ;
@@ -129,7 +139,8 @@ def proteger(cible: Path | str) -> dict:
         try:
             lignes = chemin.read_text(encoding="utf-8").splitlines()
         except OSError as erreur:
-            return {"etat": "impossible", "motif": f"`.gitignore` illisible : {erreur}", "ligne": None}
+            return {"etat": "impossible", "ligne": None,
+                    "motif": f"`.gitignore` illisible : {erreur}"}
 
     for numero, brute in enumerate(lignes, start=1):
         nue = brute.strip()
@@ -137,28 +148,32 @@ def proteger(cible: Path | str) -> dict:
             return {
                 "etat": "negation",
                 "motif": (
-                    f"`.gitignore:{numero}` porte `!{CONFIG}` — une NÉGATION, qui dés-ignore exprès "
-                    f"un fichier porteur d'identifiants. Elle n'est pas retirée par la forge : "
-                    f"quelqu'un l'a écrite et l'effacer serait décider à sa place. À retirer, puis "
-                    f"`git rm --cached {CONFIG}` ; si le fichier est déjà publié, seule une rotation "
-                    f"d'identifiant réduit le risque"
+                    f"`.gitignore:{numero}` porte `!{CONFIG}` — une NÉGATION, qui dés-ignore "
+                    f"exprès un fichier porteur d'identifiants. Elle n'est pas retirée par la "
+                    f"forge : quelqu'un l'a écrite et l'effacer serait décider à sa place. À "
+                    f"retirer, puis `git rm --cached {CONFIG}` ; si le fichier est déjà publié, "
+                    f"seule une rotation d'identifiant réduit le risque"
                 ),
                 "ligne": numero,
             }
         if nue == CONFIG or nue == f"/{CONFIG}":
-            return {"etat": "deja", "motif": f"`.gitignore:{numero}` couvre déjà `{CONFIG}`", "ligne": numero}
+            return {"etat": "deja", "ligne": numero,
+                    "motif": f"`.gitignore:{numero}` couvre déjà `{CONFIG}`"}
 
     entete = "" if not lignes or lignes[-1].strip() == "" else "\n"
     ajout = (
-        f"{entete}# Configuration d'audit forge-tests : porte des identifiants, jamais versionnée (TF-0620).\n"
+        f"{entete}# Configuration d'audit forge-tests : porte des identifiants, jamais "
+        "versionnée (TF-0620).\n"
         f"{CONFIG}\n"
     )
     try:
         with chemin.open("a", encoding="utf-8") as f:
             f.write(ajout)
     except OSError as erreur:
-        return {"etat": "impossible", "motif": f"écriture impossible dans `.gitignore` : {erreur}", "ligne": None}
-    return {"etat": "ajoutee", "motif": f"`{CONFIG}` ajouté au `.gitignore` du projet", "ligne": len(lignes) + 2}
+        return {"etat": "impossible", "ligne": None,
+                "motif": f"écriture impossible dans `.gitignore` : {erreur}"}
+    return {"etat": "ajoutee", "ligne": len(lignes) + 2,
+            "motif": f"`{CONFIG}` ajouté au `.gitignore` du projet"}
 
 
 def deposer(cible: Path | str, *, racine_forge: Path | str | None = None) -> dict:
@@ -171,10 +186,12 @@ def deposer(cible: Path | str, *, racine_forge: Path | str | None = None) -> dic
     """
     racine = Path(cible)
     if (racine / ".env.forge-tests").exists():
-        return {"depose": False, "motif": "le projet a déjà son `.env.forge-tests`", "fichier": None}
+        return {"depose": False, "fichier": None,
+                "motif": "le projet a déjà son `.env.forge-tests`"}
     destination = racine / FICHIER
     if destination.exists():
-        return {"depose": False, "motif": f"`{FICHIER}` déjà présent — jamais réécrit, le projet a pu l'annoter", "fichier": str(destination)}
+        return {"depose": False, "fichier": str(destination),
+                "motif": f"`{FICHIER}` déjà présent — jamais réécrit, le projet a pu l'annoter"}
     try:
         destination.write_text(rendre(cles_connues(racine_forge)), encoding="utf-8")
     except OSError as erreur:

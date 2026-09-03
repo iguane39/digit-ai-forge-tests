@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """TF-0537 — UN ARTEFACT DE SAUVEGARDE NAVIGATEUR N'EST PAS DU CODE DU PROJET (24/08/2026).
 
 LE FAIT (lot Produit-02 du 23/08). Le pan `securite` sortait FAIL sur NEUF « secrets », tous
@@ -20,7 +19,6 @@ CE QUE CE TEST VERROUILLE : les deux voies. Le nom accentue, et le marqueur pour
 trahit pas. Sans lui, le meme rapport reviendrait avec neuf constats a ecarter a la main avant
 d'apercevoir le produit — et un lecteur qui ecarte neuf lignes apprend a survoler la dixieme.
 """
-import io
 import tempfile
 from pathlib import Path
 
@@ -32,7 +30,7 @@ CLE = "AIzaSyA0000000000000000000000000000000000"
 
 def _projet(racine: Path) -> None:
     """Un projet plat : un fichier a lui, et deux artefacts venus d'un navigateur."""
-    (racine / "app.js").write_text(f"// code du projet\nconst x = 1;\n", encoding="utf-8")
+    (racine / "app.js").write_text("// code du projet\nconst x = 1;\n", encoding="utf-8")
     # (1) le nom ACCENTUE, tel que le navigateur francais l'ecrit
     (racine / "weglot.min.js.téléchargement").write_text(f"var k='{CLE}';\n", encoding="utf-8")
     # (2) un nom qui ne trahit RIEN : seul le marqueur en tete le denonce
@@ -53,11 +51,12 @@ def test_le_nom_accentue_et_le_marqueur_sortent_du_perimetre():
 
         assert "app.js" in copies, "le code du projet doit rester dans le perimetre"
         assert "weglot.min.js.téléchargement" not in copies, (
-            "TF-0537 : le motif de nom ACCENTUE ne filtre pas — c'est exactement le defaut d'origine"
+            "TF-0537 : le motif de nom ACCENTUE ne filtre pas — c'est exactement le defaut "
+            "d'origine"
         )
         assert "ressource-sauvee.js" not in copies, (
-            "TF-0537 : le marqueur « saved from url » ne filtre pas ; un artefact renomme a la main "
-            "revient donc dans le scan"
+            "TF-0537 : le marqueur « saved from url » ne filtre pas ; un artefact renomme "
+            "a la main revient donc dans le scan"
         )
         assert any("ressource-sauvee" in x for x in aspires), (
             "une exclusion se DIT au rapport : sans la liste, un lecteur ne distingue pas « aucun "
@@ -83,6 +82,7 @@ def test_un_fichier_du_projet_nest_jamais_ecarte_par_ces_motifs():
             scan = securite._sources_du_produit(racine, Path(tmp), [], [], [])
             copies = {p.name for p in scan.rglob("*") if p.is_file()}
         assert copies == {"telechargement.js", "downloads.py"}, (
-            "un fichier du projet qui PARLE de telechargement n'est pas un artefact de navigateur : "
+            "un fichier du projet qui PARLE de telechargement n'est pas un artefact de navigateur "
+            ": "
             f"copies = {sorted(copies)}"
         )
