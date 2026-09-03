@@ -107,7 +107,10 @@ def socle(*, avec_hors_produit: bool = True) -> frozenset[str]:
 
 
 def dossier_exclu(nom: str, *, avec_hors_produit: bool = True) -> bool:
-    r"""Un NOM de dossier est-il hors périmètre ? (comparaison exacte, comme les listes d'origine)"""
+    r"""Un NOM de dossier est-il hors périmètre ?
+
+    Comparaison EXACTE, comme les listes d'origine.
+    """
     if nom in _inclus_declares():
         return False
     return nom in socle(avec_hors_produit=avec_hors_produit) or nom.endswith(MOTIFS_ASPIRES)

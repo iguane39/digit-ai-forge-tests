@@ -8,7 +8,8 @@ DEUX analyseurs du même format : celui-ci en Python, et `oracles\oracle-glossai
 JavaScript chez le pilot. C'est exactement la classe de défaut qui a coûté dix listes d'exclusion
 divergentes (TF-0543).
 
-Le coût a été nommé au moment de décider ; il est ici **câblé**. `test_conformite_au_gabarit_du_pilot`
+Le coût a été nommé au moment de décider ; il est ici **câblé**.
+`test_conformite_au_gabarit_du_pilot`
 fait lire à CE parseur le gabarit de référence du pilot — le fichier même que l'autre analyseur
 juge — et vérifie qu'il y retrouve la structure attendue. Si le format dérive d'un côté, cette
 recette rougit. Quand le gabarit n'est pas atteignable depuis ce poste, le cas est DÉCLARÉ non joué
@@ -91,11 +92,13 @@ def test_conformite_au_gabarit_du_pilot():
         f"{len(lu['termes'])} terme(s) lus au lieu de 3 — le format a derive d un cote. "
         "C est precisement le risque assume en choisissant la voie (b)"
     )
-    lignes = [l for t in lu["termes"] for l in t["lignes"]]
+    lignes = [ligne for t in lu["termes"] for ligne in t["lignes"]]
     assert len(lignes) == 6, f"{len(lignes)} ligne(s) lues au lieu de 6"
     # Les champs que la confrontation emploie doivent exister, sinon elle est muette en silence.
     for terme in lu["termes"]:
-        assert terme["pivot"], f"terme « {terme['nom']} » sans pivot — la jointure avec les faits est impossible"
+        assert terme["pivot"], (
+            f"terme « {terme['nom']} » sans pivot — la jointure avec les faits est "
+            "impossible")
         for ligne in terme["lignes"]:
             assert ligne["locale"] and ligne["retenu"], f"ligne incomplete dans « {terme['nom']} »"
 
@@ -110,7 +113,8 @@ def test_lit_les_termes_et_leurs_locales(tmp_path):
     assert len(lu["termes"]) == 1
     terme = lu["termes"][0]
     assert terme["pivot"] == "gîte"
-    assert {l["locale"]: l["retenu"] for l in terme["lignes"]} == {"fr": "gîte", "en": "cottage"}
+    assert {ligne["locale"]: ligne["retenu"] for ligne in terme["lignes"]} == {
+        "fr": "gîte", "en": "cottage"}
 
 
 def test_un_fichier_qui_ne_se_declare_pas_glossaire_est_refuse_avec_son_motif(tmp_path):
@@ -185,7 +189,8 @@ def test_le_pluriel_court_est_reconnu_le_terme_au_singulier_aussi():
 
 def _terme_proscrit():
     return [{"nom": "hebergement", "categorie": "contractuel", "pivot": "gîte",
-             "lignes": [{"locale": "de", "retenu": "Ferienhaus", "proscrits": "`Gite` — mot français"}]}]
+             "lignes": [{"locale": "de", "retenu": "Ferienhaus",
+                         "proscrits": "`Gite` — mot français"}]}]
 
 
 def test_le_retenu_a_zero_emploi_pendant_que_le_proscrit_regne_est_un_ECHEC():
@@ -194,11 +199,14 @@ def test_le_retenu_a_zero_emploi_pendant_que_le_proscrit_regne_est_un_ECHEC():
     ecarts = glossaire.confronter_emploi(par_locale, _terme_proscrit())
     assert len(ecarts) == 1, f"attendu 1 ecart, obtenu {ecarts}"
     assert ecarts[0]["retenu"] == "Ferienhaus" and ecarts[0]["proscrit"] == "Gite"
-    assert ecarts[0]["vus_proscrit"] == 3, "le compte du proscrit n est pas rendu — un total anonyme ne se corrige pas"
+    assert ecarts[0]["vus_proscrit"] == 3, (
+        "le compte du proscrit n est pas rendu — un total anonyme ne se corrige pas")
 
 
 def test_le_retenu_employe_ne_declenche_rien_meme_si_le_proscrit_traine():
-    """Contre-épreuve : sans elle, une règle qui crierait dès qu'un proscrit apparaît passerait le cas rouge."""
+    """Contre-épreuve : sans elle, une règle qui crierait dès qu'un proscrit apparaît
+    passerait le cas rouge.
+    """
     par_locale = {"de": {"a": "Unser Ferienhaus in der Normandie", "b": "Das Gite ist gemütlich"}}
     assert glossaire.confronter_emploi(par_locale, _terme_proscrit()) == []
 
@@ -216,7 +224,8 @@ def test_BORNE_un_proscrit_sans_accents_graves_n_est_pas_un_terme():
     mots qui ne sont pas des termes proscrits.
     """
     termes = [{"nom": "h", "categorie": "contractuel", "pivot": "gîte",
-               "lignes": [{"locale": "de", "retenu": "Ferienhaus", "proscrits": "Gite est proscrit"}]}]
+               "lignes": [{"locale": "de", "retenu": "Ferienhaus",
+                           "proscrits": "Gite est proscrit"}]}]
     par_locale = {"de": {"a": "Unser Gite in der Normandie"}}
     assert glossaire.confronter_emploi(par_locale, termes) == []
 
@@ -283,7 +292,8 @@ def test_BORNE_un_fait_chiffre_SANS_unite_n_est_pas_juge():
 
 
 def test_BORNE_deux_unites_differentes_sur_le_meme_sujet_ne_se_contredisent_pas():
-    """45 minutes et 30 km decrivent le meme trajet sans desaccord : l'unite fait partie du sujet."""
+    """45 minutes et 30 km decrivent le meme trajet sans desaccord : l'unite fait partie du sujet.
+    """
     par_locale = {"fr": {
         "a": "Granville est a 45 minutes.",
         "b": "Granville est a 30 km.",

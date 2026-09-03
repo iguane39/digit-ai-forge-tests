@@ -47,6 +47,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+
 from forge_tests import exclusions
 
 #: Dossiers où un catalogue de chaînes vit conventionnellement. Découverts sur le disque, jamais

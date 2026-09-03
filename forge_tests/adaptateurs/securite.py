@@ -18,11 +18,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from forge_tests import classes
+from forge_tests import classes, exclusions
 from forge_tests.disposition import motif_racine_execution, racine_execution
 from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
-from forge_tests import exclusions
 
 NOM, PAN = "securite-oracles", "securite"
 
@@ -354,8 +353,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
             non_juge.append(
                 "securite : ARTEFACTS DE SAUVEGARDE NAVIGATEUR ecartes de ce scan — "
                 + ", ".join(sorted(aspires))
-                + " — reconnus a leur marqueur « saved from url » : du code de tiers reecrit par un "
-                "navigateur, que le projet ne peut ni revoquer ni corriger"
+                + " — reconnus a leur marqueur « saved from url » : du code de tiers reecrit "
+                "par un navigateur, que le projet ne peut ni revoquer ni corriger"
             )
         if vendorises:
             non_juge.append(

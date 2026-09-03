@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """R-48 — UNE SOLLICITATION HUMAINE DIT POURQUOI ELLE N'EST PAS DEDUCTIBLE (24/08/2026).
 
 LE FAIT, ET C'EST UN RETOUR HUMAIN EN SEANCE (23/08) : « demande a la Factory de retravailler les
@@ -28,9 +27,10 @@ from forge_tests import actions
 
 # Les tournures qui disent une NON-DEDUCTIBILITE, et non ce qu'il faut faire.
 RAISON = re.compile(
-    r"(arbitr|aucun agent|personne d autre|ne se deduit|ne se déduit|deux (personnes|developpeurs|développeurs) competent"
-    r"|deux (personnes|developpeurs|développeurs) compétent|acces|accès|jeton|hote|hôte|secret|identifiant"
-    r"|qui tient l environnement|intention du projet)",
+    r"(arbitr|aucun agent|personne d autre|ne se deduit|ne se déduit|deux "
+    r"(personnes|developpeurs|développeurs) competent|deux (personnes|developpeurs|développeurs) "
+    r"compétent|acces|accès|jeton|hote|hôte|secret|identifiant|qui tient l environnement|intention "
+    r"du projet)",
     re.I,
 )
 
@@ -41,7 +41,8 @@ def test_configuration_reclamee_dit_pourquoi_elle_nest_pas_deductible():
         "non-testable:api:DATABRICKS_HOST", "du pan « api »", {"requete"}, ["DATABRICKS_HOST"]
     )
     assert action["categorie"] == "manuelle_utilisateur"
-    assert action.get("non_deductible"), "R-48 : la sollicitation ne dit pas pourquoi elle est necessaire"
+    assert action.get("non_deductible"), (
+        "R-48 : la sollicitation ne dit pas pourquoi elle est necessaire")
     assert RAISON.search(action["non_deductible"]), (
         "R-48 : la justification parle de ce qu'il FAUT faire et non de ce que l'outil ne pouvait "
         f"pas decider — « {action['non_deductible'][:90]} »"
@@ -51,7 +52,9 @@ def test_configuration_reclamee_dit_pourquoi_elle_nest_pas_deductible():
 def test_pan_non_couvert_justifie_selon_son_destinataire():
     """La non-deductibilite depend du DESTINATAIRE : un acces manquant n'est pas un arbitrage."""
     dev = actions.classifier(
-        [], non_testables=[], pans_non_couverts=[{"pan": "front", "motif": "0 element", "chemin": "ecrire un test"}]
+        [], non_testables=[],
+        pans_non_couverts=[
+            {"pan": "front", "motif": "0 element", "chemin": "ecrire un test"}],
     )
     assert len(dev) == 1
     assert dev[0]["categorie"] == "manuelle_dev"

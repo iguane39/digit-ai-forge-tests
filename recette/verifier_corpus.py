@@ -1012,6 +1012,52 @@ def _resoudre_ruff() -> tuple[list[str], str] | None:
     return None
 
 
+#: La déclaration de ruff dans `pyproject.toml`, quelle que soit sa contrainte.
+_DECLARATION_RUFF = re.compile(r'"ruff(?P<contrainte>[^"]*)"')
+
+
+def epinglage_ruff(pyproject: str) -> tuple[str | None, str]:
+    """(version ÉPINGLÉE, déclaration lue) — TF-0785.
+
+    `None` en première place veut dire : la déclaration n épingle PAS. Un plancher (`>=0.5`),
+    une compatibilité (`~=0.5`) ou un nom nu laissent la version au poste, et le verdict de la
+    section `lint` avec elle.
+
+    LE FAIT PAYÉ (02/09/2026). Le même arbre rendait **115 constats sous ruff 0.5.7 et 100 sous
+    0.16.1** — 17 `UP038` disparus parce que la règle a été retirée en amont, 2 `UP031` apparus.
+    Aucun octet du dépôt n avait bougé. Un garde-fou dont la référence dérive ne mesure plus le
+    dépôt : il mesure le poste, et son « NON TENU » n apprend rien à personne.
+
+    La déclaration absente est traitée comme une non-épingle, et non comme une absence d avis :
+    ruff est dans le groupe `dev` par construction (la recette le joue), un `pyproject` qui ne
+    le nomme pas est un `pyproject` qui a perdu sa dépendance.
+    """
+    trouve = _DECLARATION_RUFF.search(pyproject)
+    if trouve is None:
+        return None, "(aucune déclaration `ruff` dans pyproject.toml)"
+    declaration = f"ruff{trouve.group('contrainte')}"
+    contrainte = trouve.group("contrainte").strip()
+    if contrainte.startswith("==") and contrainte[2:].strip():
+        return contrainte[2:].strip(), declaration
+    return None, declaration
+
+
+def _version_ruff(commande: list[str]) -> str | None:
+    """La version que la recette VIENT de jouer, lue à l outil lui-même. `None` = illisible."""
+    import subprocess
+
+    try:
+        issue = subprocess.run(
+            [*commande, "--version"], cwd=RACINE, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    sortie = (issue.stdout or "").strip()
+    trouve = re.search(r"(\d+\.\d+\.\d+\S*)", sortie)
+    return trouve.group(1) if trouve else None
+
+
 def verifier_lint() -> int:
     """Le linter du dépôt, joué PAR la recette — TF-0226.
 
@@ -1028,6 +1074,12 @@ def verifier_lint() -> int:
 
     Un ruff INTROUVABLE (ni module, ni PATH) se DIT avec son motif et reste un ÉCHEC :
     « outil absent » n est jamais « dépôt propre » — c est la loi 3, l oubli n existe pas.
+
+    TF-0785 : la section DIT la version qu elle a jouée, et REFUSE une déclaration non
+    épinglée. Un verdict rendu par un outil dont la version flotte n est pas reproductible —
+    même classe que les oracles du socle en section `dashboard` (TF-0786), et que la règle de
+    fraîcheur R-19 pour les forges. La version jouée doit AUSSI être celle qui est épinglée :
+    un `uv.lock` périmé, un venv du poste, et le dépôt se juge sur un autre outil que le sien.
     """
     import subprocess
 
@@ -1043,6 +1095,28 @@ def verifier_lint() -> int:
         print("             rejouer la recette via `uv run python recette/verifier_corpus.py`.")
         return 1
     commande, origine = resolution
+    # TF-0785 — CONSIGNÉ au rapport avant tout constat : sans la version, deux exécutions de
+    # cette section ne se comparent pas, et « 100 constats » ne dit pas de quoi il s agit.
+    jouee = _version_ruff(commande)
+    try:
+        declare = (RACINE / "pyproject.toml").read_text(encoding="utf-8")
+    except OSError as erreur:
+        declare = ""
+        print(f"  [ECHEC  ] pyproject.toml illisible ({erreur}) — l epinglage n est pas verifiable")
+    epinglee, declaration = epinglage_ruff(declare)
+    print(f"  [CONSIGNE] ruff joue : {jouee or 'version illisible'} ({origine}) "
+          f"· declare : {declaration}")
+    echecs_epinglage = 0
+    if epinglee is None:
+        echecs_epinglage += 1
+        print("  [ECHEC  ] ruff n est pas EPINGLE : la declaration laisse la version au poste.")
+        print("             Le meme arbre a rendu 115 constats sous 0.5.7 et 100 sous 0.16.1 —")
+        print("             17 UP038 retires en amont, 2 UP031 apparus, zero octet change ici.")
+        print("             Epingler `ruff==<version>` dans pyproject.toml, puis `uv lock`.")
+    elif jouee and jouee != epinglee:
+        echecs_epinglage += 1
+        print(f"  [ECHEC  ] ruff joue {jouee} alors que le depot epingle {epinglee} : le verdict")
+        print("             porterait sur un outil qui n est pas celui du depot. `uv sync`.")
     try:
         resultat = subprocess.run(
             [*commande, "check", "forge_tests", "tests", "recette",
@@ -1061,13 +1135,13 @@ def verifier_lint() -> int:
     lignes = [ligne.strip() for ligne in resultat.stdout.splitlines() if ligne.strip()]
     ok = resultat.returncode == 0
     resume = (lignes[-1] if lignes else "aucune sortie")[:80]
-    print(f"  [{'OK     ' if ok else 'ECHEC  '}] ruff ({origine}) : {resume}")
+    print(f"  [{'OK     ' if ok else 'ECHEC  '}] ruff {jouee or '?'} ({origine}) : {resume}")
     if not ok:
         for ligne in lignes[:15]:
             print(f"             {ligne}")
         if resultat.stderr.strip():
             print(f"             stderr : {resultat.stderr.strip().splitlines()[0][:80]}")
-    return 0 if ok else 1
+    return (0 if ok else 1) + echecs_epinglage
 
 
 def verifier_lecture_sql() -> int:

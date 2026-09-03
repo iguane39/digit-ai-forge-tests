@@ -1,7 +1,8 @@
 """TF-0215 (RT-1, lot COMPTA 20260814a) — le garde-fou refusait la configuration DOCUMENTÉE.
 
 Fait mesuré sur le run `20260814-tests-fournisseur-a` (FastAPI + Jinja, ledger seq 6-7) : le produit
-déclare `FORGE_TESTS_PRODUIT=Ventilation de facture Fournisseur-A` dans `<projet>/.env.forge-tests` —
+déclare `FORGE_TESTS_PRODUIT=Ventilation de facture Fournisseur-A` dans `<projet>/.env.forge-tests`
+—
 l emplacement que le README documente. Ce fichier étant lu comme « configuration du projet
 audité », la valeur entrait au corpus des valeurs interdites ; le champ `.produit` du jeu de
 données, qui reprend ce même nom, était alors refusé : `DonneeNonSynthetique`, **exit 2, quatre
@@ -210,7 +211,8 @@ def test_les_quatre_livrables_sont_produits_avec_la_configuration_documentee(
     assert sorted(chemins) == ["dashboard", "fonctionnel", "jeu", "technique"]
     assert all(chemin.exists() for chemin in chemins.values())
     assert all(
-        chemin.name.startswith("Ventilation de facture Fournisseur-A - ") for chemin in chemins.values()
+        chemin.name.startswith("Ventilation de facture Fournisseur-A - ")
+        for chemin in chemins.values()
     )
     # Et le livrable qui circule ne porte toujours pas le mot de passe du compte d audit.
     assert "Sup3rMotDePasseDAudit" not in chemins["dashboard"].read_text(encoding="utf-8")

@@ -17,7 +17,12 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.2",
-    "ruff>=0.5",
+    # TF-0785 : version EXACTE, jamais un plancher. `ruff>=0.5` a rendu 115 constats sous
+    # 0.5.7 et 100 sous 0.16.1 sur le MEME arbre — 17 UP038 disparus (regle retiree en
+    # amont), 2 UP031 apparus — donc un verdict de recette (section `lint`, TF-0226) qui
+    # changeait de couleur d un poste a l autre sans qu un octet du depot ne bouge. Un
+    # garde-fou dont la reference derive ne mesure plus le depot, il mesure le poste.
+    "ruff==0.16.1",
     "mypy>=1.10",
     # TF-0244 verifie le contrat du pan `api` contre le schema qu un VRAI FastAPI produit
     # (le 422 du cadre, les routeurs montes sous prefixe). Sans cette dependance declaree,

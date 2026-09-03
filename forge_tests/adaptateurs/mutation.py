@@ -33,7 +33,7 @@ import shutil
 import subprocess
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from forge_tests import classes, seuils
@@ -503,7 +503,9 @@ def _tests_pour(
     return carte.get(relatif, {}).get(ligne) or None
 
 
-def _carte_tests(racine: Path, python: Path, paquet: Path) -> dict[str, dict[int, list[str]]] | None:
+def _carte_tests(
+    racine: Path, python: Path, paquet: Path
+) -> dict[str, dict[int, list[str]]] | None:
     """Une passe de couverture PAR TEST sur la suite d origine. None si elle n aboutit pas.
 
     Jouee AVANT la premiere mutation, sur le code intact — la carte d un arbre en cours
@@ -1237,12 +1239,16 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # c est aussi le corpus auquel une campagne ulterieure se compare.
     note_campagne = _noter_campagne(cible, racine, {
         "sha": _sha_courant(racine),
-        "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "mutants_viables": viables,
         "tues": tues,
         "score": round(score, 4),
         "survivants": [m.id for m in survivants],
-        "paquet_source": dossier.relative_to(racine).as_posix() if dossier.is_relative_to(racine) else str(dossier),
+        "paquet_source": (
+            dossier.relative_to(racine).as_posix()
+            if dossier.is_relative_to(racine)
+            else str(dossier)
+        ),
     })
     if note_campagne:
         non_juge.append(f"mutation : {note_campagne}")

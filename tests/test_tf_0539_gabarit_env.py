@@ -11,8 +11,6 @@ en silence), et surtout que le dépôt n'écrase JAMAIS ce qui appartient au pro
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from forge_tests import gabarit_env
 
 
@@ -21,7 +19,8 @@ def test_les_cles_sont_derivees_du_code_pas_recopiees():
     cles = gabarit_env.cles_connues()
     assert len(cles) > 30, f"{len(cles)} clés dérivées — le balayage ne trouve plus le code"
     assert "FORGE_TESTS_APP" in cles
-    assert "FORGE_TESTS_INCLURE" in cles, "la clé posée par TF-0536 doit apparaître sans qu'on l'ajoute ici"
+    assert "FORGE_TESTS_INCLURE" in cles, (
+        "la clé posée par TF-0536 doit apparaître sans qu'on l'ajoute ici")
     assert cles == sorted(cles), "l'ordre doit être stable, sinon le fichier bouge à chaque dépôt"
 
 
@@ -42,7 +41,8 @@ def test_un_projet_deja_configure_n_est_pas_touche(tmp_path):
     resultat = gabarit_env.deposer(tmp_path)
     assert resultat["depose"] is False
     assert not (tmp_path / gabarit_env.FICHIER).exists()
-    assert (tmp_path / ".env.forge-tests").read_text(encoding="utf-8") == "FORGE_TESTS_APP=app:api\n"
+    ecrit = (tmp_path / ".env.forge-tests").read_text(encoding="utf-8")
+    assert ecrit == "FORGE_TESTS_APP=app:api\n"
 
 
 def test_un_gabarit_deja_depose_n_est_jamais_reecrit(tmp_path):
@@ -57,7 +57,8 @@ def test_un_gabarit_deja_depose_n_est_jamais_reecrit(tmp_path):
 def test_le_depot_se_dit_toujours(tmp_path):
     """Un dépôt silencieux ne se distingue pas d'un oubli : les trois cas portent un motif."""
     assert gabarit_env.deposer(tmp_path)["motif"]
-    assert gabarit_env.deposer(tmp_path)["motif"], "le second passage doit dire pourquoi il ne fait rien"
+    assert gabarit_env.deposer(tmp_path)["motif"], (
+        "le second passage doit dire pourquoi il ne fait rien")
 
 
 def test_une_cible_illisible_ne_fait_pas_echouer_l_audit(tmp_path):

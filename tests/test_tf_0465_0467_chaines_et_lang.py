@@ -38,7 +38,8 @@ def test_une_chaine_etrangere_non_signalee_est_un_constat(tmp_path: Path) -> Non
     corps = "<h2>Réponse courte</h2><p>" + ("English content. " * 200) + "</p>"
     constats = constats_chaines(_page(tmp_path, corps), CHAINES)
     assert ("non_traduite", "Réponse courte") in constats, (
-        f"la chaîne française passe inaperçue — c'est le défaut que la densité ne voit pas : {constats}"
+        f"la chaîne française passe inaperçue — c'est le défaut que la densité ne voit pas : "
+        f"{constats}"
     )
 
 
@@ -49,7 +50,8 @@ def test_la_frequence_n_est_pas_le_critere(tmp_path: Path) -> None:
 
 
 def test_un_fragment_marque_lang_est_conforme(tmp_path: Path) -> None:
-    """La bascule de langue en français EST la bonne convention — marquée, elle ne fait pas défaut."""
+    """La bascule de langue en français EST la bonne convention — marquée, elle ne fait pas défaut.
+    """
     corps = '<a href="/" lang="fr">Voir cette page en français</a>'
     constats = constats_chaines(_page(tmp_path, corps), CHAINES)
     assert ("signalee", "Voir cette page en français") in constats
