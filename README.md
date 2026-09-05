@@ -31,6 +31,7 @@ appelle ; ils sont désormais des sections comme les autres, et leur échec fait
 | **Impact par diff, flaky, propriétés, mutation par risque** | auditer moins mais juste : cibler par diff, isoler les flaky, proposer du property-based | `forge_tests\{impact,flaky,generateur_proprietes}.py · risque.repartir_mutants` | déclaré (experimental) |
 | **Rapport exhaustif test-par-test** | obtenir le verdict et le pourquoi de CHAQUE test, pas seulement un agrégat par pan | `forge_tests
 oyau.py (section essais) + forge_tests\junit.py` | prouvé (experimental) |
+| **Prouver la 404 personnalisée par langue (M-9)** | joindre au dossier de MEP la preuve que chaque adresse inconnue rend une 404 du même gabarit, par langue | `uv run python recette/quatre_cent_quatre.py <url-préprod> --prefixes fr,en` | prouvé (experimental) |
 
 Le catalogue consolidé des dix forges vit chez le pilot :
 [digit-ai-factory/catalogues/CATALOGUES.md](https://github.com/iguane39/digit-ai-factory/blob/main/catalogues/CATALOGUES.md).
@@ -1357,6 +1358,56 @@ journalisé). Modèle : `.env.exemple`.
 | `FORGE_TESTS_EXIGENCES` | chemin d'un `EXIGENCES.json` : les cas des cahiers y sont rattachés, **avec leur provenance** (`declare` ou `lexical`). Absent, le cahier le déclare en tête et dérive de la seule surface. Un chemin qui n'existe pas est un **refus**, pas un silence |
 | `FORGE_TESTS_PRODUIT` | nom du produit dans les noms de fichiers des livrables. À défaut : le champ `projet` du référentiel d'exigences, puis le nom du dossier audité |
 | `FORGE_TESTS_PLAYWRIGHT_TRACE` | mode `--trace` imposé à la suite e2e (`on`, `off`, `retain-on-failure`…) — à défaut, le mode déjà réglé dans le `playwright.config` du projet est respecté (rien n'est passé en ligne de commande), sinon replié sur `on`. Utile pour désactiver la trace si son écriture bloque sur un poste (TF-0132) — la couverture front devient alors non mesurable, déclarée telle |
+
+## La 404 personnalisée par langue — preuve du contrôle M-9 (TF-0803)
+
+Le patron **P-2** du pilot (`references\PATRONS-EPROUVES.md`, TF-0802) fait de la 404
+personnalisée par langue un standard d'office, et le contrôle **M-9** de `ETAPE-MEP.md` le juge au
+passage en production — **sur preuve** : « la sortie du contrôle exécutable du produit ». Tant que
+ce contrôle appartient au produit, chaque produit le réécrit, ou n'en a pas et **ne peut pas
+prouver M-9**. Le fait fondateur : un site multilingue a servi le 404 nu de son serveur de
+fichiers — page blanche, sans menu ni langue — en production **du 25/08 au 01/09/2026**, vu par
+l'exploitant et par aucun contrôle.
+
+```bash
+uv run python recette/quatre_cent_quatre.py https://preprod.exemple --prefixes fr,en,nl
+uv run python recette/quatre_cent_quatre.py https://preprod.exemple --prefixes fr,en     --langue-par-defaut fr --sitemap /sitemap.xml --sortie preuve-m9.json
+```
+
+Deux paramètres suffisent — **la liste des préfixes de langue** et **l'URL de préproduction** ;
+tout le reste est optionnel et **déclaré** (`--langue-par-defaut` pour la racine sans préfixe,
+`--marqueur-menu` pour un site sans `<nav>`, `--page-404` pour une page d'erreur à chercher au
+sitemap, `--sortie` pour la pièce jointe au dossier de MEP). L'adresse sondée est **fixe**
+(`sonde-404-forge-tests`) : une preuve de MEP se rejoue à l'identique.
+
+| Cas joué (termes de M-9) | Ce qui est mesuré | Le refus qu'il prononce |
+|---|---|---|
+| (a) adresse inconnue sous chaque préfixe | statut 404, page HTML, `<html lang>` égal au préfixe, menu **complet** face à la page de référence du préfixe | **200 → soft-404 indexable** · 404 nu sur une page · mauvaise langue · liens de menu manquants (**nommés**) |
+| (b) `noindex` + absence du sitemap | meta robots **ou** en-tête `X-Robots-Tag` ; aucune adresse sondée ni page 404 déclarée au sitemap | page d'erreur sans `noindex` · sitemap qui liste une adresse rendant 404 |
+| (c) ressource non-HTML inconnue | `.png` et `.js` inconnus rendent un **404 nu** | page HTML servie à la place d'un 404 nu |
+
+**Le piège mesuré est nommé, pas deviné.** Une réponse **pendue** (code 000) sort en échec avec
+son motif : envelopper `writeHead` sans envelopper `write()` fait partir le corps nu du serveur
+avant les en-têtes différés. Sans ce motif, un code 000 se lit comme un incident réseau et la
+cause se cherche dans l'infrastructure au lieu du code.
+
+**Codes de sortie** : `0` les cas de M-9 sont joués et tenus · `1` défaut mesuré · `2` **je ne peux
+pas mesurer** (instance injoignable, aucun préfixe fourni). **Une mesure partielle n'est jamais un
+PASS** : un seul cas `NON_MESURABLE` fait basculer le verdict global — un verdict qu'on ne peut pas
+prononcer et qu'on tait passe pour un verdict tenu.
+
+**Ce qu'elle ne mesure pas, et le dit** dans le champ `non_mesure` de sa sortie : la
+*déclaration* de l'exclusion du sitemap dans l'oracle SEO du produit (M-9 b, seconde moitié), qui
+vit dans le dépôt du produit et non dans une réponse HTTP ; et le « même gabarit » quand la page
+de référence ne porte ni `<nav>` ni marqueur déclaré — alors le cas sort `NON_MESURABLE`, jamais
+`PASS`.
+
+**Double sens prouvé** (contrat TF-0679) : `tests/test_tf_0803_404_par_langue.py` éprouve le
+jugement en fonction **pure**, puis monte **sept serveurs HTTP locaux** sur port libre — un
+conforme et six qui portent chacun un refus (200 sur adresse inconnue, 404 nu, HTML sur une image,
+`noindex` absent, 404 unique pour toutes les langues, sitemap fautif, réponse pendue). Aucun site
+réel, aucun appel sortant : `127.0.0.1` et rien d'autre. Ces tests sont joués par la section
+`unitaire` de la recette, donc **sous S-01**.
 
 ## Recette et dette
 
