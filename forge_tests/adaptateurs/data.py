@@ -88,6 +88,15 @@ NON_JUGE = [
     "data : le repli `sqlite3` relève les INSTRUCTIONS envoyées au pilote, pas les violations "
     "de contrainte ; sur un projet sans SQLAlchemy les contraintes restent donc non "
     "attribuables — tables, index et triggers, eux, sont mesurés",
+    # TF-0861 (lot L4, 07/09/2026) — COMPOSITION, pas duplication : un projet de transformation
+    # Silver/Gold (dbt, SQL Delta) porte ses tests dans l outil et non dans des migrations ; leur
+    # forme (dépendances, description, un test par modèle, tests rejoués, docs générées) est jugée
+    # par `oracle-transformer.mjs` de forge-data sur les artefacts de l outil (manifest.json,
+    # run_results.json, catalog.json). Ce pan n en relit pas la sortie : il le déclare.
+    "data : les contraintes Delta (CONSTRAINT … CHECK, NOT NULL) et les tests d un projet de "
+    "transformation (dbt, SQL Delta) ne sont pas exercés ici — leur forme est jugée par "
+    "oracle-transformer.mjs de forge-data sur manifest.json / run_results.json / catalog.json "
+    "(composition TF-0861) ; ce pan ne relit pas ces artefacts",
 ]
 
 
