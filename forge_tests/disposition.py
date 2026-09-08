@@ -114,9 +114,9 @@ def _indices(dossier: Path) -> list[str]:
 #: TF-0401 (RF-3, lot Produit-09 20260820a) — le manifeste OPPOSABLE du projet. Le pilot présente
 #: P-18 comme primant sur toute détection ; jusqu'ici AUCUN code de cette forge ne le lisait
 #: (0 occurrence, relevé du 20/08) : les racines étaient en dur (`backend`, `.`, `frontend`),
-#: et une arborescence `back/` + `front/` — celle du produit Produit-09.FR — n'était pas vue, quel que
-#: soit le manifeste livré. Un audit pouvait mesurer un dossier vide et rendre un verdict
-#: d'apparence normale.
+#: et une arborescence `back/` + `front/` — celle du produit Produit-09.FR — n'était pas vue,
+#: quel que soit le manifeste livré. Un audit pouvait mesurer un dossier vide et rendre un
+#: verdict d'apparence normale.
 #:
 #: Schéma minimal, défini ici faute d'exister ailleurs (le manifeste du conducteur porte le
 #: PROFIL, pas les racines) :

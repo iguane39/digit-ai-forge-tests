@@ -26,7 +26,9 @@ def _manifeste(racine: Path, contenu: str) -> None:
     chemin.write_text(contenu, encoding="utf-8")
 
 
-def test_le_cas_Produit-09_FR_une_arborescence_back_front_est_VUE_par_manifeste(tmp_path: Path) -> None:
+def test_le_cas_Produit_09_FR_une_arborescence_back_front_est_VUE_par_manifeste(
+    tmp_path: Path,
+) -> None:
     """Le cas fondateur : back/ + front/, fixés au dossier, invisibles à la détection."""
     (tmp_path / "back" / "tests").mkdir(parents=True)
     (tmp_path / "front").mkdir()
