@@ -16,7 +16,7 @@ ciblee rend EXACTEMENT la meme liste de survivants que la campagne pleine. Pas �
 proche », pas « le meme ordre de grandeur » — la meme liste, aux memes identifiants. Toute
 divergence est un defaut de l optimisation, jamais un arrondi acceptable.
 
-TROIS PIEGES, et chacun rendrait le verdict faux dans le sens qui rassure :
+QUATRE PIEGES, et chacun rendrait le verdict faux dans le sens qui rassure :
 
   1. LE SENS DE L ECART N EST PAS SYMETRIQUE. Un survivant que la campagne ciblee liste EN PLUS
      est une perte de temps ; un survivant qu elle PERD est un faux vert — le mutant a ete
@@ -30,11 +30,20 @@ TROIS PIEGES, et chacun rendrait le verdict faux dans le sens qui rassure :
      seulement si les variables de tirage ne bougent pas entre les deux. Elles sont donc figees
      ici, et leur valeur est publiee au rapport : une comparaison dont les deux cotes n ont pas
      joue les memes mutants ne prouve rien.
+  4. LE DRAPEAU DEMANDE LE CIBLAGE, IL NE PROUVE PAS QU IL AIT EU LIEU. Quand la carte de
+     couverture par test n aboutit pas — coverage absent du venv du projet, suite rouge, delai
+     depasse — l adaptateur repart en SUITE ENTIERE pour chaque mutant, et il le fait sans
+     bruit. Les deux passes jouent alors la MEME strategie : les listes sont identiques par
+     construction et la comparaison rendrait PASS en n ayant compare qu une campagne avec
+     elle-meme. C est le piege n° 2 sous une autre cause, et il est plus insidieux parce que les
+     campagnes, elles, ne sont pas vides. La preuve exigee est donc positive : la campagne
+     ciblee doit publier une carte obtenue ET au moins un mutant reellement cible
+     (`mutation.ciblage.carte_obtenue` et `mutants_cibles`). Sans cette preuve, SANS_OBJET.
 
     python recette/non_perte_ciblage.py <projet>
 
 Sortie : JSON {verdict: PASS|FAIL|SANS_OBJET, ...} · exit 0 = tenue · 1 = perte mesuree ·
-2 = rien a comparer (les deux campagnes n ont mute aucun mutant).
+2 = rien a comparer (aucun mutant mute des deux cotes, ou campagne « ciblee » qui n a rien cible).
 """
 
 from __future__ import annotations
@@ -86,7 +95,34 @@ def _campagne(projet: Path, ciblage: bool) -> dict:
         "score": donnees.get("score"),
         "echantillon": donnees.get("taux_echantillon"),
         "non_juge": list(sortie.non_juge or []),
+        # Piege n° 4 : l etat REEL du ciblage, tel que le pan le publie. Sans lui, la comparaison
+        # ne saurait pas distinguer une campagne ciblee d une campagne pleine deguisee.
+        "ciblage": dict(donnees.get("ciblage") or {}),
     }
+
+
+def ciblage_non_applique(ciblee: dict) -> str | None:
+    """Ce qui manque pour que la campagne ciblee ait REELLEMENT cible — None si elle a cible.
+
+    Piege n° 4. La preuve exigee est POSITIVE : le drapeau ne prouve rien, l absence de preuve
+    n est pas une preuve d absence de defaut, et c est justement le sens ou l erreur rassure.
+    """
+    etat = ciblee.get("ciblage") or {}
+    if not etat:
+        return ("le rapport de la campagne ciblee ne publie aucun etat de ciblage "
+                "(`mutation.ciblage` absent) : rien ne prouve que le ciblage ait eu lieu")
+    if not etat.get("actif"):
+        return ("le ciblage n etait pas arme du cote ciblee (`ciblage.actif` faux) : les deux "
+                "passes ont joue la campagne pleine, la comparaison porte sur elle-meme")
+    if not etat.get("carte_obtenue"):
+        return (f"{PREALABLE_ABSENT} — carte de couverture par test NON obtenue "
+                "(`ciblage.carte_obtenue` faux : coverage absent du venv du projet, suite rouge "
+                "ou delai depasse). Le rejeu est reparti en suite entiere pour chaque mutant")
+    if not etat.get("mutants_cibles"):
+        return ("carte obtenue mais AUCUN mutant reellement cible (`ciblage.mutants_cibles` a "
+                "zero) : aucune ligne mutee n est couverte par un test nomme, le rejeu est "
+                "reparti en suite entiere pour chacun")
+    return None
 
 
 def comparer(pleine: dict, ciblee: dict) -> dict:
@@ -113,10 +149,26 @@ def comparer(pleine: dict, ciblee: dict) -> dict:
     perdus = [s for s in pleine["survivants"] if s not in ciblee["survivants"]]
     ajoutes = [s for s in ciblee["survivants"] if s not in pleine["survivants"]]
     if not perdus and not ajoutes:
+        # Piege n° 4 : deux listes identiques ne valent PASS que si les deux cotes ont joue deux
+        # strategies DIFFERENTES. Le controle ne s applique qu ici, a dessein — une divergence
+        # reste un FAIL meme sans ciblage effectif, car deux passes de la meme strategie qui ne
+        # rendent pas la meme liste denoncent une instabilite, pas une absence de mesure.
+        manquant = ciblage_non_applique(ciblee)
+        if manquant:
+            return {
+                "verdict": "SANS_OBJET",
+                "motif": "les deux listes sont identiques, mais la campagne ciblee n a rien "
+                         "cible : elle a rejoue la suite entiere, comme la campagne pleine. Deux "
+                         "fois la meme strategie rendent forcement la meme liste, et rendre PASS "
+                         "ici declarerait tenue une condition jamais eprouvee",
+                "prealable_manquant": [manquant],
+            }
+        etat = ciblee["ciblage"]
         return {
             "verdict": "PASS",
             "motif": f"{len(pleine['survivants'])} survivant(s), liste identique des deux cotes "
-                     f"sur {pleine['mutants_viables']} mutant(s) viable(s)",
+                     f"sur {pleine['mutants_viables']} mutant(s) viable(s), dont "
+                     f"{etat['mutants_cibles']} rejoue(s) sur une selection ciblee",
         }
     return {
         "verdict": "FAIL",

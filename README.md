@@ -677,8 +677,9 @@ liste de survivants** — pas un score proche, la même liste aux mêmes identif
 python recette/non_perte_ciblage.py <projet>
 ```
 
-Sortie JSON, exit `0` tenue · `1` perte mesurée · `2` rien à comparer. Trois choix y sont
-portés, et chacun contre un verdict faux dans le sens qui rassure :
+Sortie JSON, exit `0` tenue · `1` perte mesurée · `2` rien à comparer — aucun mutant joué des
+deux côtés, ou campagne « ciblée » qui n'a rien ciblé. Quatre choix y sont portés, et chacun
+contre un verdict faux dans le sens qui rassure :
 
 - **le sens de l'écart n'est pas symétrique.** Un survivant que la ciblée liste EN PLUS coûte du
   temps ; un survivant qu'elle PERD est un **faux vert** — un mutant déclaré tué par une
@@ -689,7 +690,17 @@ portés, et chacun contre un verdict faux dans le sens qui rassure :
   pas la jouer ;
 - **l'échantillon est figé des deux côtés.** Le tirage des mutants est déterministe, mais
   seulement si ses variables ne bougent pas entre les deux passes : elles sont fixées par la
-  recette et publiées au rapport.
+  recette et publiées au rapport ;
+- **le drapeau demande le ciblage, il ne prouve pas qu'il ait eu lieu.** Quand la carte de
+  couverture par test n'aboutit pas — `coverage` absent du venv du projet, suite rouge, délai
+  dépassé — l'adaptateur repart en suite entière pour chaque mutant, et sans bruit : les deux
+  passes jouent alors la **même** stratégie, les listes coïncident par construction, et le
+  `PASS` ne comparerait qu'une campagne avec elle-même. C'est le piège précédent sous une autre
+  cause, et plus insidieux parce que les campagnes, elles, ne sont pas vides. La preuve exigée
+  est donc **positive** : la campagne ciblée doit publier `mutation.ciblage.carte_obtenue` vrai
+  **et** `mutants_cibles` non nul. Sans cette preuve, `SANS_OBJET` — et le rapport nomme ce qui
+  manque. Sur ce poste, `coverage` n'est pas installé dans le venv de la forge : le cas est
+  celui qu'une première campagne réelle rencontrerait, pas une hypothèse.
 
 ## Périmètre de mutation total et inventaire des modules
 

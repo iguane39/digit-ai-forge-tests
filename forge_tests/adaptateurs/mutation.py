@@ -1074,6 +1074,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
     viables_par_fichier: dict[Path, int] = {}
     survivants_par_fichier: dict[Path, list[Mutant]] = {}
     viables = 0
+    # TF-0748/TF-0749 : le nombre de mutants pour lesquels une SELECTION a reellement ete
+    # calculee. `_tests_pour` rend None des que la carte manque ou que la ligne n a aucun test
+    # nomme, et le rejeu repart alors en suite entiere — silencieusement. Sans ce compteur, une
+    # campagne « ciblee » qui n a rien cible est indiscernable d une campagne pleine, et la
+    # recette de non-perte comparerait deux fois la meme chose en croyant comparer deux
+    # strategies (voir `recette/non_perte_ciblage.py`).
+    cibles = 0
     interrompu: str | None = None
     # TF-0744 : un couple (survivant, duree) par mutant JOUE. C est la matiere de la
     # decomposition tues/survivants — sans elle, la seule valeur publiable serait une moyenne
@@ -1163,6 +1170,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
             poser(fichier, mute)
             # `mutant.ligne` est 0-based (voir `Mutant.id`), coverage numerote a partir de 1.
             selection = _tests_pour(carte_tests, mutant.fichier, mutant.ligne + 1)
+            if selection is not None:
+                cibles += 1
             # TF-0744 : le chrono entoure le REJEU seul — ni la pose du mutant ni la
             # restauration, qui appartiennent au fixe du pan et non au cout d une classe.
             depart = time.monotonic()
@@ -1315,6 +1324,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 "variable": "FORGE_TESTS_MUTATION_CIBLAGE",
                 "surcout_fixe_mesure_s": 0.386,
                 "non_perte_jouee": False,
+                # TF-0748/TF-0749 : le drapeau DEMANDE le ciblage, il ne prouve pas qu il ait
+                # eu lieu. Ces deux faits-la le prouvent, et ils sont publies parce qu un
+                # lecteur — humain ou recette — ne peut pas les deduire du reste du rapport.
+                "carte_obtenue": carte_tests is not None,
+                "mutants_cibles": cibles,
             },
         },
         modules=inventaire,
