@@ -1092,6 +1092,35 @@ La règle tient en une phrase, et le rapport la publie : **la forge démonte ce 
 | `FORGE_TESTS_INSTANCE_MONTER` — la commande qui la monte | déclarée pour le jour où la forge montera elle-même ; sans elle, la forge ne monte pas et ne démonte donc rien |
 | `FORGE_TESTS_INSTANCE_PROVENANCE` — chemin d'un document disant **de quoi** l'instance a été bâtie | issue `non_determinable`, en disant que c'est le terme **servi** qui manque : rien ne distingue alors une instance fraîche d'une instance périmée |
 
+#### Démonter ne suffit pas : il faut le vérifier (TF-0842)
+
+*Lot Produit-61, 05/09/2026. La commande de démontage déclarée était `taskkill /IM uvicorn.exe`.
+Elle ne tuait rien : un `uvicorn` lancé par `uv run` ne s'appelle pas `uvicorn.exe`, c'est un
+`python.exe` **enfant** de `uv`. Elle rendait la main sans erreur. Une instance — remontée sans
+la clé de session que l'application attend, donc rendant 500 — tenait le port après l'audit.
+Une demi-heure de diagnostic, trois relances.*
+
+**Une commande de démontage qui rend 0 sans démonter est indiscernable d'un démontage réussi.**
+Seul le port le dit :
+
+```bash
+<commande déclarée dans FORGE_TESTS_INSTANCE_DEMONTER>
+uv run python -m forge_tests.instance --verifier-demontage   # 0 libéré · 1 encore tenu · 3 non vérifiable
+```
+
+La sonde porte sur **le** port des URL que cet audit a lui-même déclarées servies
+(`FORGE_TESTS_BASE_URL`, `_QUALIF_URL`, `_API_URL`) — jamais un balayage du poste, qui
+accuserait l'instance d'un voisin. Elle dit qu'un port est **tenu**, jamais **qui** le tient : un
+socket ouvert ne nomme pas son propriétaire sans un droit et un outil que la forge n'a pas. Quand
+il l'est, la consigne nomme le remède mesuré — démonter **par le port** (`npx kill-port <port>`,
+`fuser -k <port>/tcp`, ou `netstat -ano | findstr :<port>` puis `taskkill /PID <pid> /F`).
+
+**Ce qui reste au projet, et c'est déclaré** : la forge ne vérifie pas ce que la commande de
+**montage** transmet à l'instance. Une instance remontée sans ses secrets de session démarre,
+prend le port, et rend 500 au premier appel — indiscernable d'une instance saine tant qu'on ne
+l'interroge pas. `FORGE_TESTS_INSTANCE_MONTER` doit porter l'environnement **complet** de
+l'instance ; le smoke qui suit est ce qui le prouve.
+
 Le format de provenance n'est **pas** propre à cette forge : le scellé `forge-ops/empreinte@1` produit par `ops.mjs deployer|canary` est lu tel quel (mêmes empreintes de fichiers que compare `oracle-ops.mjs --empreinte`, O-7). Un projet qui monte localement déclare la forme légère `forge-tests/instance@1` (`commit`, `construit_le`, `images[]`).
 
 La section `instance` du rapport est **toujours présente**, même sans instance déclarée — une section qui disparaîtrait serait indiscernable d'une section qui a mesuré et n'a rien trouvé. La confrontation rend les **trois issues** de l'écart servi ↔ versionné (TF-0288), généralisé de la page à l'instance entière : `concordant` · `divergent`, l'écart nommé fichier par fichier et la phrase qui compte (*ce n'est pas le code qui est en retard, c'est l'instance*) · `non_determinable`, en disant **lequel** des deux termes manque. La comparaison n'est pas symétrique, et c'est déclaré : un fichier neuf que l'empreinte ne connaît pas ne déclenche rien.

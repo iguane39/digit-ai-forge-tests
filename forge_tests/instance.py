@@ -98,6 +98,17 @@ NON_JUGE = (
     "servi (URL, champs revendiqués par les pans), pas un balayage de ports ni un inventaire "
     "de conteneurs — sonder le poste dirait ce qui tourne, jamais ce qui appartient à cet "
     "audit, et accuserait l instance d un voisin",
+    # TF-0842 : l exception, bornée, à la ligne ci-dessus — et pourquoi elle n en est pas une.
+    "instance/cycle-de-vie (TF-0842) : `verifier_demontage` sonde LE port de L URL que cet "
+    "audit a lui-même déclarée servie, jamais le poste. Il dit qu un port est TENU, pas QUI le "
+    "tient : un socket ouvert ne nomme pas son propriétaire sans un droit et un outil que la "
+    "forge n a pas. Un port repris entre-temps par un autre processus se lirait donc « encore "
+    "tenu » — le doute va vers la vérification, jamais vers le silence",
+    "instance/cycle-de-vie (TF-0842) : la forge ne vérifie pas ce que la commande de MONTAGE "
+    "transmet à l instance. Une instance remontée sans les secrets de session que "
+    "l application attend démarre, prend le port, et rend 500 au premier appel — indiscernable "
+    "d une instance saine tant qu on ne l interroge pas. C est au projet de faire porter à "
+    "FORGE_TESTS_INSTANCE_MONTER l environnement complet de son instance",
     "instance/provenance : le terme SERVI est le document de provenance DÉCLARÉ par le projet, "
     "jamais une introspection de l instance en service — interroger un conteneur supposerait un "
     "runtime, un droit et une topologie que la forge ne connaît pas, et ferait dépendre le "
@@ -156,8 +167,14 @@ def cycle_de_vie(env: dict[str, str] | None = None, monte_par_la_forge: bool = F
         consigne = "aucune URL servie déclarée — rien n est laissé debout par cet audit"
     elif c["demonter"]:
         etat = "laissee_debout"
-        consigne = ("instance NON montée par la forge, laissée en service : la démonter avec"
-                    f" `{c['demonter']}`")
+        # TF-0842 : la commande ne suffit plus à clore la consigne. Une commande de démontage
+        # qui rend 0 sans rien démonter est indiscernable d un démontage réussi — seul le port
+        # le dit, et la vérification est nommée ICI parce que c est ici qu on lit la consigne.
+        consigne = (
+            "instance NON montée par la forge, laissée en service : la démonter avec "
+            f"`{c['demonter']}`, PUIS vérifier que le port est libre — "
+            "`python -m forge_tests.instance --verifier-demontage`"
+        )
     else:
         etat = "laissee_debout_sans_commande"
         consigne = (
@@ -174,6 +191,121 @@ def cycle_de_vie(env: dict[str, str] | None = None, monte_par_la_forge: bool = F
         "demonter": c["demonter"],
         "laisse_en_service": servies,
         "pans_concernes": list(PANS_SERVIS),
+    }
+
+
+# --- Ce que le DÉMONTAGE a réellement libéré (TF-0842) -------------------------------------------
+# LE FAIT (lot Produit-61, 05/09/2026). L instance remontée pour l audit n avait pas la clé de
+# session que l application attend, et la commande de démontage déclarée — `taskkill /IM
+# uvicorn.exe` — ne tuait rien : un `uvicorn` lancé par `uv run` ne s appelle pas `uvicorn.exe`,
+# c est un `python.exe` enfant de `uv`. Résultat : une instance SANS CLÉ occupait le port après
+# l audit, le smoke M-3 rendait 500, et il a fallu une demi-heure et trois relances pour
+# comprendre que la commande de démontage avait rendu la main sans rien démonter.
+#
+# Une commande de démontage qui rend 0 sans démonter est indiscernable d un démontage réussi.
+# Seul le PORT le dit. C est la seule chose que ce module sonde, et la frontière tient :
+#
+#   - on ne BALAIE pas le poste — le `NON_JUGE` de ce module l interdit et la raison n a pas
+#     bougé : un balayage accuserait l instance d un voisin. On sonde LE port de L URL que cet
+#     audit a lui-même déclarée servie, et rien d autre ;
+#   - on ne dit pas QUI tient le port : un socket ouvert ne nomme pas son propriétaire sans un
+#     droit et un outil que la forge n a pas. On dit qu il est TENU, ce qui suffit à démentir
+#     « démonté ».
+_DELAI_SONDE_S = 1.0
+
+PORT_LIBRE = "libre"
+PORT_OCCUPE = "occupe"
+PORT_INDETERMINABLE = "indeterminable"
+
+#: Ce que la mesure du 05/09 a nommé, et qu une consigne doit porter pour être utile.
+CONSIGNE_PORT_TENU = (
+    "le port est ENCORE TENU après la commande de démontage : elle a rendu la main sans "
+    "démonter. Cas mesuré : `taskkill /IM uvicorn.exe` ne tue pas un uvicorn lancé par "
+    "`uv run` — le processus s appelle `python.exe` et il est ENFANT de `uv`. Démonter PAR LE "
+    "PORT (`npx kill-port <port>`, `fuser -k <port>/tcp`, ou l identifiant rendu par "
+    "`netstat -ano | findstr :<port>` puis `taskkill /PID <pid> /F`), puis revérifier"
+)
+
+
+def _hote_port(url: str) -> tuple[str | None, int | None]:
+    """Hôte et port d une URL servie — le port par défaut du schéma quand il est implicite."""
+    from urllib.parse import urlparse
+
+    lu = urlparse(url if "://" in url else f"http://{url}")
+    if not lu.hostname:
+        return None, None
+    port = lu.port or {"http": 80, "https": 443}.get(lu.scheme)
+    return lu.hostname, port
+
+
+def sonder_port(url: str, delai: float = _DELAI_SONDE_S) -> dict:
+    """L état du port de cette URL : `libre`, `occupe`, ou `indeterminable` AVEC son motif."""
+    import socket
+
+    hote, port = _hote_port(url)
+    if hote is None or port is None:
+        return {
+            "url": url,
+            "hote": hote,
+            "port": port,
+            "etat": PORT_INDETERMINABLE,
+            "motif": f"URL sans hôte ni port exploitable : {url!r}",
+        }
+    socle = {"url": url, "hote": hote, "port": port}
+    try:
+        with socket.create_connection((hote, port), timeout=delai):
+            return {**socle, "etat": PORT_OCCUPE, "motif": None}
+    except (TimeoutError, ConnectionRefusedError):
+        return {**socle, "etat": PORT_LIBRE, "motif": None}
+    except OSError as erreur:
+        return {
+            **socle,
+            "etat": PORT_INDETERMINABLE,
+            "motif": f"sonde impossible ({type(erreur).__name__}: {erreur})",
+        }
+
+
+def verifier_demontage(env: dict[str, str] | None = None, delai: float = _DELAI_SONDE_S) -> dict:
+    """Ce que la commande de démontage a RÉELLEMENT libéré (TF-0842).
+
+    À jouer APRÈS `FORGE_TESTS_INSTANCE_DEMONTER`. Rend un verdict fermé :
+
+      - `libere` — aucun port déclaré n est plus tenu ;
+      - `encore_tenu` — au moins un l est, avec la consigne qui nomme le remède mesuré ;
+      - `non_verifiable` — aucune URL déclarée, ou aucun port sondable, et on le DIT.
+    """
+    servies = _url_servie(env)
+    if not servies:
+        return {
+            "verdict": "non_verifiable",
+            "motif": "aucune URL servie déclarée : il n y a pas de port dont vérifier la "
+            "libération",
+            "ports": [],
+            "consigne": None,
+        }
+    ports = [sonder_port(entree["url"], delai) for entree in servies]
+    tenus = [p for p in ports if p["etat"] == PORT_OCCUPE]
+    if tenus:
+        return {
+            "verdict": "encore_tenu",
+            "motif": "port(s) encore tenu(s) après démontage : "
+            + ", ".join(f"{p['hote']}:{p['port']}" for p in tenus),
+            "ports": ports,
+            "consigne": CONSIGNE_PORT_TENU,
+        }
+    if all(p["etat"] == PORT_INDETERMINABLE for p in ports):
+        return {
+            "verdict": "non_verifiable",
+            "motif": "aucun port sondable — "
+            + " · ".join(str(p["motif"]) for p in ports if p["motif"]),
+            "ports": ports,
+            "consigne": None,
+        }
+    return {
+        "verdict": "libere",
+        "motif": "aucun port déclaré n est plus tenu",
+        "ports": ports,
+        "consigne": None,
     }
 
 
@@ -363,3 +495,33 @@ def au_rapport(
         "provenance": provenance(cible, env),
         "non_juge": list(NON_JUGE),
     }
+
+
+if __name__ == "__main__":
+    # TF-0842 — le geste qui manquait, et qui ne peut pas vivre dans l audit : la vérification
+    # se joue APRÈS la commande de démontage, donc après la fin de l audit. Même forme d appel
+    # que `python -m forge_tests.dette` : un module, une intention, aucun argument à retenir.
+    import sys
+
+    if "--verifier-demontage" not in sys.argv[1:]:
+        print(
+            "usage : python -m forge_tests.instance --verifier-demontage\n"
+            "\n"
+            "  À jouer APRÈS la commande déclarée dans FORGE_TESTS_INSTANCE_DEMONTER. Sonde le\n"
+            "  port de chaque URL que cet audit a déclarée servie (FORGE_TESTS_BASE_URL,\n"
+            "  _QUALIF_URL, _API_URL) et dit s il est encore tenu.\n"
+            "\n"
+            "  Codes : 0 libéré · 1 encore tenu · 3 non vérifiable (motif imprimé)."
+        )
+        sys.exit(0)
+
+    _verdict = verifier_demontage()
+    print(f"démontage : {_verdict['verdict']} — {_verdict['motif']}")
+    for _port in _verdict["ports"]:
+        _detail = f" ({_port['motif']})" if _port["motif"] else ""
+        print(f"  {_port['hote']}:{_port['port']} — {_port['etat']}{_detail}")
+    if _verdict["consigne"]:
+        print(f"  → {_verdict['consigne']}")
+    sys.exit(
+        {"libere": 0, "encore_tenu": 1, "non_verifiable": 3}[str(_verdict["verdict"])]
+    )

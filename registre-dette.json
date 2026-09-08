@@ -1294,6 +1294,48 @@
       "statut": "todo"
     },
     {
+      "id": "instance-001",
+      "domaine": "instance",
+      "enonce": "instance/cycle-de-vie : la forge ne MONTE pas l instance aujourd hui — le montage reste délégué au projet, qui seul sait ce que « peuplée » veut dire chez lui. Elle ne démonte donc rien : elle publie ce qu elle laisse debout et nomme la commande de démontage que le projet a déclarée. Le jour où elle montera, la règle s appliquera dans son premier sens",
+      "statut": "todo"
+    },
+    {
+      "id": "instance-002",
+      "domaine": "instance",
+      "enonce": "instance/cycle-de-vie : ce qui est publié « debout » est ce que la CONFIGURATION déclare servi (URL, champs revendiqués par les pans), pas un balayage de ports ni un inventaire de conteneurs — sonder le poste dirait ce qui tourne, jamais ce qui appartient à cet audit, et accuserait l instance d un voisin",
+      "statut": "todo"
+    },
+    {
+      "id": "instance-003",
+      "domaine": "instance",
+      "enonce": "instance/cycle-de-vie (TF-0842) : `verifier_demontage` sonde LE port de L URL que cet audit a lui-même déclarée servie, jamais le poste. Il dit qu un port est TENU, pas QUI le tient : un socket ouvert ne nomme pas son propriétaire sans un droit et un outil que la forge n a pas. Un port repris entre-temps par un autre processus se lirait donc « encore tenu » — le doute va vers la vérification, jamais vers le silence",
+      "statut": "todo"
+    },
+    {
+      "id": "instance-004",
+      "domaine": "instance",
+      "enonce": "instance/cycle-de-vie (TF-0842) : la forge ne vérifie pas ce que la commande de MONTAGE transmet à l instance. Une instance remontée sans les secrets de session que l application attend démarre, prend le port, et rend 500 au premier appel — indiscernable d une instance saine tant qu on ne l interroge pas. C est au projet de faire porter à FORGE_TESTS_INSTANCE_MONTER l environnement complet de son instance",
+      "statut": "todo"
+    },
+    {
+      "id": "instance-005",
+      "domaine": "instance",
+      "enonce": "instance/provenance : le terme SERVI est le document de provenance DÉCLARÉ par le projet, jamais une introspection de l instance en service — interroger un conteneur supposerait un runtime, un droit et une topologie que la forge ne connaît pas, et ferait dépendre le verdict de l outil d inspection au lieu du produit",
+      "statut": "todo"
+    },
+    {
+      "id": "instance-006",
+      "domaine": "instance",
+      "enonce": "instance/provenance : le terme VERSIONNÉ est le WORKING TREE de la cible, comme pour `interface/ecart-servi` (TF-0288) — un produit hors git n a donc pas de commit opposable, seulement des fichiers ; la comparaison par empreintes de fichiers reste jouable et le dit",
+      "statut": "todo"
+    },
+    {
+      "id": "instance-007",
+      "domaine": "instance",
+      "enonce": "instance/provenance : la comparaison n est pas symétrique. Un fichier PRÉSENT dans l empreinte scellée et modifié depuis est un écart ; un fichier neuf dans l arbre de travail, que l empreinte ne connaît pas, n en est PAS un — il peut n avoir jamais eu à être déployé. Seul ce que le SERVI prétend porter est confronté",
+      "statut": "todo"
+    },
+    {
       "id": "interface-statique-006",
       "domaine": "interface-statique",
       "enonce": "interface/liens : une destination EXPRIMEE (`href={chemin}`, template avec `${...}`, constante importee) n est pas resolue — elle est comptee et declaree NON JUGEE, jamais supposee bonne ni mauvaise",

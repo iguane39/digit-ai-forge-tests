@@ -147,7 +147,12 @@ def collecter() -> list[dict]:
                         valeur = _ast.literal_eval(noeud.value)
                     except (ValueError, SyntaxError):
                         continue
-                    if isinstance(valeur, list):
+                    # TF-0842 : `list` OU `tuple`. Huitieme occurrence du meme patron, et la
+                    # plus courte a corriger : `instance.NON_JUGE` est ecrit `= (…)`, ses cinq
+                    # limites declarees n entraient donc au registre d aucun domaine — de la
+                    # prose, exactement ce que le commentaire ci-dessus interdit. Le
+                    # collecteur ne doit pas dependre du choix de ponctuation d un module.
+                    if isinstance(valeur, (list, tuple)):
                         enonces.extend(str(x) for x in valeur)
             if enonces:
                 sources.append((stem.replace("_", "-"), enonces))
