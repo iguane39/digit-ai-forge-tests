@@ -663,7 +663,7 @@
     {
       "id": "qualif-navigateur-001",
       "domaine": "qualif-navigateur",
-      "enonce": "qualif : le pan LIT les ecouteurs attaches a chaque affordance, il ne CLIQUE jamais — sur une instance peuplee un clic ecrit vraiment (suppression, envoi, appel tiers facture). Un gestionnaire attache mais dont le corps ne fait rien passerait donc pour un effet",
+      "enonce": "qualif : sans FORGE_TESTS_QUALIF_EFFETS=1, le pan LIT les ecouteurs attaches a chaque affordance, il ne CLIQUE jamais — sur une instance peuplee un clic ecrit vraiment (suppression, envoi, appel tiers facture). Un gestionnaire attache mais dont le corps ne fait rien passe alors pour un effet : ces affordances sont comptees CABLEES, pas exercees, et le rapport publie leur compte separement",
       "statut": "assume",
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : le pan LIT et ne clique jamais (G-1 : cliquer écrirait chez l audité) ; marqueur/délégation = limites dites. Réévaluer si un run réel prouve que la limite coûte."
     },
@@ -997,6 +997,12 @@
       "id": "generateur-006",
       "domaine": "generateur",
       "enonce": "generateur : couvre le seul pan API ; les autres pans ne sont pas generes",
+      "statut": "retiree"
+    },
+    {
+      "id": "jeux-de-donnees-004",
+      "domaine": "jeux-de-donnees",
+      "enonce": "jeux de donnees (TF-0841) : un nom qui porte a la fois un segment authentifiant et un segment de LOCALISATION (PATH, ROUTE, URL, ENDPOINT...) sort du corpus quand sa valeur ressemble a un emplacement (« / », « http:// », « https:// ») — une adresse que le produit publie lui-meme n ouvre rien. La reconnaissance de l emplacement se fait sur la FORME de la valeur : une route ecrite sans barre oblique de tete reste classee comme un identifiant",
       "statut": "retiree"
     },
     {
@@ -1436,6 +1442,12 @@
       "id": "qualif-navigateur-009",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : un refus rendu par une page MAISON n est reconnu que si sa route est DECLAREE (FORGE_TESTS_QUALIF_REFUS) ou si un de ses segments nomme l erreur d autorisation (403, acces-refuse, forbidden…). Un produit qui refuse en servant `/oups` ou `/erreur` sans plus de precision garde ce refus COMPTE COMME PARCOURU : le non-jugement est prefere au faux refus, qui sortirait du ratio une route peut-etre cassee. Declarer la route leve la limite",
+      "statut": "todo"
+    },
+    {
+      "id": "qualif-navigateur-010",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : meme effets observes, la PERTINENCE de la destination n est pas jugee — un lien « Ma commande » qui mene a la page d aide produit bien une navigation, donc un effet. La destination CONSTATEE est publiee avec l affordance pour qu un relecteur la voie ; aucune attente ne lui est opposee, faute d attente declaree",
       "statut": "todo"
     },
     {

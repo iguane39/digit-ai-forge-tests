@@ -142,9 +142,19 @@ CHAMPS_REQUIS = (
 CHAMPS_REQUIS_INSTANCE = ("FORGE_TESTS_QUALIF_URL",)
 
 NON_JUGE = [
-    "qualif : le pan LIT les ecouteurs attaches a chaque affordance, il ne CLIQUE jamais — sur "
-    "une instance peuplee un clic ecrit vraiment (suppression, envoi, appel tiers facture). Un "
-    "gestionnaire attache mais dont le corps ne fait rien passerait donc pour un effet",
+    # TF-0876 (lot Produit-61 du 06/09) : cette limite etait DECLAREE ici, et le rapport
+    # annoncait quand meme « 68/68 exerces, qualif 100 % ». Un registre de dette ne rattrape
+    # pas un chiffre : le mot « exerce » est desormais reserve a un effet OBSERVE, et ce qui
+    # n a ete que LU se compte a part, sous son nom.
+    "qualif : sans FORGE_TESTS_QUALIF_EFFETS=1, le pan LIT les ecouteurs attaches a chaque "
+    "affordance, il ne CLIQUE jamais — sur une instance peuplee un clic ecrit vraiment "
+    "(suppression, envoi, appel tiers facture). Un gestionnaire attache mais dont le corps ne "
+    "fait rien passe alors pour un effet : ces affordances sont comptees CABLEES, pas exercees, "
+    "et le rapport publie leur compte separement",
+    "qualif : meme effets observes, la PERTINENCE de la destination n est pas jugee — un lien "
+    "« Ma commande » qui mene a la page d aide produit bien une navigation, donc un effet. La "
+    "destination CONSTATEE est publiee avec l affordance pour qu un relecteur la voie ; aucune "
+    "attente ne lui est opposee, faute d attente declaree",
     "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une "
     "route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) "
     "n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",
@@ -1026,6 +1036,20 @@ _JS_AFFORDANCES = """
 })
 """.replace("__SELECTEUR__", json.dumps(_SELECTEUR))
 
+#: TF-0876 — l état observable de la page, réduit à une empreinte comparable avant / après clic.
+#: Le DOM rendu, le titre, l URL : ce qu un utilisateur verrait changer. Une empreinte, et non le
+#: document entier, parce qu on en garde deux par affordance et qu on en compare des dizaines.
+_JS_EMPREINTE = """
+() => {
+  const dom = document.documentElement.outerHTML;
+  let empreinte = 0;
+  for (let i = 0; i < dom.length; i++) {
+    empreinte = ((empreinte << 5) - empreinte + dom.charCodeAt(i)) | 0;
+  }
+  return {dom: `${dom.length}:${empreinte}`, titre: document.title, url: location.href};
+}
+"""
+
 _JS_LIENS = (
     "() => Array.from(document.querySelectorAll('a[href]'))"
     ".map(a => a.getAttribute('href'))"
@@ -1060,6 +1084,7 @@ def _config(cible: Path) -> dict:
         except json.JSONDecodeError:
             marqueurs = {}
     plafond = (os.environ.get("FORGE_TESTS_QUALIF_PLAFOND") or "").strip()
+    effets_plafond = (os.environ.get("FORGE_TESTS_QUALIF_EFFETS_PLAFOND") or "").strip()
     return {
         "base": base.rstrip("/"),
         "amorces": [
@@ -1104,6 +1129,13 @@ def _config(cible: Path) -> dict:
             if r.strip()
         ],
         "plafond": int(plafond) if plafond.isdigit() else _PLAFOND_DEFAUT,
+        # TF-0876 : le clic est une ÉCRITURE sur une instance peuplée — il se demande. Absent,
+        # les affordances sont comptées CÂBLÉES et le rapport le dit ; présent, « exercé » veut
+        # dire ce qu il dit.
+        "effets": (os.environ.get("FORGE_TESTS_QUALIF_EFFETS") or "").strip() in ("1", "oui"),
+        "effets_plafond": int(effets_plafond)
+        if effets_plafond.isdigit()
+        else _EFFETS_PLAFOND_DEFAUT,
     }
 
 
@@ -1296,6 +1328,68 @@ def _a_un_effet(descripteur: dict, types: set[str] | None) -> str | None:
     if soumet and table.get("form"):
         return None  # rattaché à un formulaire nommé ailleurs
     return "élément interactif sans écouteur attaché, sans destination et sans soumission"
+
+
+# --- L effet OBSERVÉ (TF-0876) ------------------------------------------------------------------
+# Le fait : le pan a rendu « 68/68 exercés » et « qualif 100 % » sur une instance où « Ma
+# commande » menait à la page d aide et où « Panier » n avait aucun effet visible. Les deux
+# affordances portaient bien un écouteur — c est tout ce que le pan regardait. Le smoke M-3, joué
+# en HTTP direct, ne pouvait pas le voir non plus : il ne clique pas.
+#
+# Un élément interactif est EXERCÉ quand son effet est OBSERVÉ : une navigation, un changement du
+# DOM ou du titre, un onglet ouvert. Rien d autre ne distingue un bouton câblé d un bouton qui
+# marche.
+#
+# Pourquoi c est une porte, et pas le défaut : sur une instance PEUPLÉE — la seule que ce pan
+# accepte — un clic écrit vraiment. « Supprimer la commande 1 » supprime la commande 1. La
+# frontière d environnement est donc explicite (loi transverse n° 2) : le clic se DEMANDE, et le
+# rapport dit, à chaque fois, s il a mesuré ou seulement lu.
+
+#: Ce qu on ne clique pas : `form` n a pas de clic utile, et une soumission n est pas un clic.
+_TAGS_NON_CLIQUABLES = {"form"}
+
+#: Combien d affordances au plus sont exercées PAR PAGE. Chaque observation coûte un rechargement
+#: complet — l état d avant doit être rendu, sinon le second clic mesure les suites du premier.
+_EFFETS_PLAFOND_DEFAUT = 25
+
+#: Le temps laissé à l effet pour se produire après le clic. Une application qui rend en
+#: JavaScript ne mute pas son DOM dans le même tour de boucle que le clic.
+_ATTENTE_EFFET_MS = 400
+
+
+def _observer_effet(page, url_page: str, affordance: dict, selecteur: str) -> dict:
+    """Clique l affordance sur une page FRAÎCHE et rend ce qui a changé.
+
+    Rend `{"observe": bool | None, "effet": str}` — `None` quand rien n a pu être observé (élément
+    non visible, clic refusé) : un non-jugement, jamais une accusation.
+    """
+    if affordance["tag"] in _TAGS_NON_CLIQUABLES:
+        return {"observe": None, "effet": "non cliquable : la soumission n est pas un clic"}
+    try:
+        page.goto(url_page, wait_until="networkidle", timeout=45000)
+        cible = page.locator(selecteur).nth(affordance["rang"])
+        if not cible.is_visible():
+            return {"observe": None, "effet": "élément non visible : clic non joué"}
+        avant = page.evaluate(_JS_EMPREINTE)
+        onglets_avant = len(page.context.pages)
+        cible.click(timeout=5000)
+        page.wait_for_timeout(_ATTENTE_EFFET_MS)
+        apres = page.evaluate(_JS_EMPREINTE)
+        onglets = len(page.context.pages)
+    except Exception as erreur:  # noqa: BLE001 — un clic impossible se DECLARE, il n accuse pas
+        return {"observe": None, "effet": f"clic non joué : {type(erreur).__name__}"}
+    if apres["url"] != avant["url"]:
+        return {"observe": True, "effet": f"navigation vers {apres['url']}"}
+    if onglets > onglets_avant:
+        return {"observe": True, "effet": "ouverture d un nouvel onglet"}
+    if apres["titre"] != avant["titre"]:
+        return {"observe": True, "effet": f"titre de page devenu « {apres['titre'][:60]} »"}
+    if apres["dom"] != avant["dom"]:
+        return {"observe": True, "effet": "changement du DOM rendu"}
+    return {
+        "observe": False,
+        "effet": "clic joué, aucun effet observé : ni navigation, ni onglet, ni changement du DOM",
+    }
 
 
 # --- Parcours ---------------------------------------------------------------------------------
@@ -1522,6 +1616,7 @@ def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN00
         elif marqueur.lower() not in minuscule:
             problemes.append(f"marqueur de contenu absent : {marqueur!r}")
 
+        url_finale = _url_courante(page)
         affordances: list[dict] = []
         if statut is not None and statut < 400:
             try:
@@ -1544,6 +1639,9 @@ def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN00
                         "libelle": " ".join((descripteur["libelle"] or "").split())[:60],
                         "motif": _a_un_effet(descripteur, attaches),
                         "delegation": delegation,
+                        # TF-0876 : rempli plus bas, et seulement si le clic a été DEMANDÉ.
+                        "observe": None,
+                        "effet": "",
                     }
                 )
             if delegation:
@@ -1559,13 +1657,33 @@ def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN00
                         a_visiter.append(suivant)
             except Exception:  # noqa: BLE001
                 pass
+            # TF-0876 — l effet OBSERVÉ, quand il a été demandé. Après la collecte des liens de
+            # cette page : chaque observation recharge la page, et le relevé des liens doit se
+            # faire sur la page telle qu elle a été atteinte.
+            if config.get("effets"):
+                candidates = [a for a in affordances if a["motif"] is None][
+                    : config.get("effets_plafond", _EFFETS_PLAFOND_DEFAUT)
+                ]
+                for affordance in candidates:
+                    affordance.update(
+                        _observer_effet(page, base + route, affordance, _SELECTEUR)
+                    )
+                if len(candidates) < len([a for a in affordances if a["motif"] is None]):
+                    avertissements.append(
+                        f"qualif : {route} — plafond d observation atteint "
+                        f"({config.get('effets_plafond', _EFFETS_PLAFOND_DEFAUT)}) ; les "
+                        "affordances au-dela sont comptees "
+                        "CABLEES, pas exercees"
+                    )
         releve.append(
             {
                 "route": route,
                 "statut": statut,
                 # TF-0316 : OÙ la navigation a réellement abouti. Un refus d autorisation joué en
                 # redirection rend 200 sur la mire : sans cette URL, il se comptait pour un succès.
-                "url_finale": _url_courante(page),
+                # RELEVÉE AVANT toute observation d effet (TF-0876) : chaque clic observé recharge
+                # la page, et l URL courante ne serait plus celle où la navigation a abouti.
+                "url_finale": url_finale,
                 "problemes": problemes,
                 "affordances": affordances,
                 # Tronque : sur une instance reelle, garder 40 pages entieres en memoire pour
@@ -1774,6 +1892,11 @@ def conclure(
 
     inventaire: list[str] = []
     exerces: list[str] = []
+    # TF-0876 : les deux moitiés de ce que « exercé » recouvrait sans le dire. `observes` : le
+    # clic a été joué et un effet a suivi. `cables` : un écouteur a été LU, rien n a été joué.
+    observes: list[str] = []
+    cables: list[str] = []
+    effets_constates: list[str] = []
     findings: list[Finding] = []
     non_testables: list = []
     admises = origines_admises(config)
@@ -1897,7 +2020,34 @@ def conclure(
             inventaire.append(cle)
             role_de[cle] = role
             if affordance["motif"] is None:
+                # TF-0876 — « exercé » veut dire OBSERVÉ. Sans observation demandée, l affordance
+                # est CÂBLÉE : elle reste au ratio (la retirer ferait tomber tous les produits
+                # d un coup, sans qu aucun n ait changé), mais elle se compte à part et le
+                # rapport publie ce compte.
+                if affordance.get("observe") is False:
+                    findings.append(
+                        Finding(
+                            id=cle,
+                            classe=classes.AFFORDANCE_SANS_EFFET,
+                            localisation=f"{config['base']}{route}",
+                            message=(
+                                f"{affordance['tag']} « "
+                                f"{affordance['libelle'] or 'sans libellé'} » sur {route} — "
+                                f"{affordance['effet']}"
+                            ),
+                            risque=coter(PAN, cle, str(cible)),
+                        )
+                    )
+                    continue
                 exerces.append(cle)
+                if affordance.get("observe") is True:
+                    observes.append(cle)
+                    effets_constates.append(
+                        f"{route} — {affordance['tag']} « "
+                        f"{affordance['libelle'] or 'sans libellé'} » : {affordance['effet']}"
+                    )
+                else:
+                    cables.append(cle)
             elif affordance["delegation"]:
                 exerces.append(cle)  # non jugeable : deja NOMME en non_juge, jamais accuse
             else:
@@ -1936,6 +2086,25 @@ def conclure(
         f"qualif : {len(releve)} route(s) parcourue(s) sur {config['base']} — "
         f"{sum(len(p['affordances']) for p in releve)} affordance(s) lue(s) dans le DOM rendu"
     )
+    # TF-0876 — la phrase qui manquait au rapport du 05/09. « 68/68 exercés » se lisait « tout
+    # marche » ; il faut donc dire, à chaque run, ce qui a été JOUÉ et ce qui a seulement été LU.
+    if config.get("effets"):
+        non_juge.append(
+            f"qualif : effets OBSERVES — {len(observes)} affordance(s) cliquee(s) avec un effet "
+            f"constate, {len(cables)} comptee(s) CABLEE(s) faute d observation (element non "
+            f"visible, clic refuse, plafond de "
+            f"{config.get('effets_plafond', _EFFETS_PLAFOND_DEFAUT)} par page, ou soumission de "
+            "formulaire)"
+        )
+    else:
+        non_juge.append(
+            f"qualif : {len(cables)} affordance(s) comptee(s) CABLEE(s), pas exercee(s) — un "
+            "ecouteur a ete LU, aucun clic n a ete joue. Un gestionnaire attache dont le corps "
+            "ne fait rien est ici indiscernable d un effet. Declarer "
+            "FORGE_TESTS_QUALIF_EFFETS=1 pour que le pan CLIQUE et observe — a ne demander que "
+            "sur une instance dont on accepte qu elle soit ecrite"
+        )
+    non_juge.extend(f"qualif : effet constate — {e}" for e in effets_constates[:40])
     # TF-0316, niveau (a) — la DÉCLARATION, celle qui reste vraie quel que soit N : « 8/8, ratio
     # 1,00 » s est lu « tout est couvert » pendant cinq jours alors qu une seule identité avait
     # parcouru et que trois surfaces réservées n avaient jamais été visitées.
@@ -1978,5 +2147,11 @@ def conclure(
             # déclare, il ne se devine pas.
             "couverture_par_role": couverture,
             "elements_refuses": sorted(refuses),
+            # TF-0876 : ce que « exercé » recouvre, désormais séparé. `effets_observes` dit si le
+            # pan a CLIQUÉ ; sans lui, `affordances_cablees` est le compte de ce qui a été
+            # seulement lu — et c est ce compte qui rendait « 68/68 » trompeur.
+            "effets_observes": bool(config.get("effets")),
+            "affordances_exercees": sorted(observes),
+            "affordances_cablees": sorted(cables),
         },
     )

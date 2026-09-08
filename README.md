@@ -781,9 +781,38 @@ une **délégation d'événement** est posée sur `document` ou `body`, plus auc
 être déclaré inerte avec certitude : les éléments concernés sont alors **nommés en `non_juge`
 au lieu d'être accusés**.
 
-**Aucun clic n'est émis.** L'instance visée est peuplée : cliquer y déclencherait des écritures
-réelles — suppression, envoi de courriel, appel d'API tierce facturée. Le pan lit les écouteurs
-attachés, il ne les déclenche pas. C'est le prix de la non-destructivité, et il est déclaré.
+### Câblé n'est pas exercé (TF-0876)
+
+**Par défaut, aucun clic n'est émis.** L'instance visée est peuplée : cliquer y déclencherait des
+écritures réelles — suppression, envoi de courriel, appel d'API tierce facturée. Le pan lit les
+écouteurs attachés, il ne les déclenche pas.
+
+Ce prix était déclaré au `non_juge` depuis l'origine. *Il n'a rien rattrapé. Rapport
+`…-20260905g.json`, pan `qualif` : **68/68 exercés, 100 %**. Le lendemain, un humain ouvrait
+l'instance — « Ma commande » menait à la page d'aide, « Panier » n'avait aucun effet visible. Les
+deux portaient un écouteur, et c'est tout ce que le pan regardait. Le smoke M-3, joué en HTTP
+direct, ne pouvait pas le voir non plus : il ne clique pas.* Un registre de dette ne corrige pas
+un chiffre : c'est le mot **exercé** qui devait changer de sens.
+
+| | Ce que ça veut dire | Ce que le rapport publie |
+|---|---|---|
+| **câblé** | un écouteur, une destination ou une soumission a été **lu** dans le DOM rendu | `surface.affordances_cablees[]` — et une ligne `non_juge` qui en donne le compte |
+| **exercé** | le clic a été **joué** et un effet a **suivi** : navigation, nouvel onglet, changement du titre ou du DOM | `surface.affordances_exercees[]`, et l'effet constaté en clair |
+
+`surface.effets_observes` dit lequel des deux régimes a été appliqué. Sans clic demandé, tout ce
+qui est câblé reste **compté au ratio** — l'en sortir ferait tomber d'un coup tous les produits
+déjà mesurés, sans qu'aucun n'ait changé — mais il n'est plus appelé « exercé ».
+
+**Pour mesurer vraiment**, déclarer `FORGE_TESTS_QUALIF_EFFETS=1`. Chaque affordance est alors
+cliquée sur une page **rechargée** (sans quoi le second clic mesurerait les suites du premier),
+et ce qui ne produit rien devient un défaut nommé — `clic joué, aucun effet observé`. À ne
+demander que sur une instance dont on **accepte** qu'elle soit écrite : c'est une frontière
+d'environnement, pas une option de confort.
+
+Ce qui reste hors de portée, et c'est déclaré : la **pertinence** de la destination. « Ma
+commande » qui mène à `/aide` produit bien une navigation, donc un effet. La destination
+constatée est publiée avec l'affordance pour qu'un relecteur la voie ; aucune attente ne lui est
+opposée, faute d'attente déclarée.
 
 Sans instance servie, le pan **ne devine rien** : `SKIP` avec son motif, ses champs à fournir
 (publiés en `non_testables[]` par le mécanisme RT-6a, sans une ligne spécifique) et son
@@ -800,6 +829,8 @@ Sans instance servie, le pan **ne devine rien** : `SKIP` avec son motif, ses cha
 | `FORGE_TESTS_QUALIF_ROUTES` | routes d'amorce (virgule) — celles qu'aucun lien n'atteint |
 | `FORGE_TESTS_QUALIF_MARQUEURS` | JSON `{"/route": "marqueur métier"}` ; à défaut le titre de la page (premier `h1` non vide, sinon `title`) |
 | `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
+| `FORGE_TESTS_QUALIF_EFFETS` | `1` : le pan **clique** chaque affordance sur une page rechargée et n'appelle `exercé` que ce dont l'effet a été observé (navigation, onglet, titre, DOM). Absente : rien n'est cliqué, et ce qui est seulement câblé est publié comme tel (TF-0876). Une instance peuplée est **écrite** par ces clics |
+| `FORGE_TESTS_QUALIF_EFFETS_PLAFOND` | nombre maximal d'affordances observées par page (défaut `25`) — chaque observation recharge la page ; au-delà, le rapport le dit |
 | `FORGE_TESTS_QUALIF_REFUS` | routes (virgule) sur lesquelles le produit ATTERRIT pour dire « accès refusé » sans rendre 401/403 ni sa mire (`/erreur/403`, `/oups`). Déclarées, elles jugent ; absentes, seuls les segments nommant l'erreur d'autorisation (`403`, `acces-refuse`, `forbidden`…) sont reconnus, et un refus servi sous un nom quelconque reste **compté comme parcouru** plutôt qu'accusé à tort (TF-0325) |
 
 ## Pan `i18n` — la parité entre locales, sur le build servi
@@ -1393,6 +1424,8 @@ journalisé). Modèle : `.env.exemple`.
 | `FORGE_TESTS_QUALIF_ROUTES` | routes d'amorce du parcours (virgule) — celles qu'aucun lien n'atteint |
 | `FORGE_TESTS_QUALIF_MARQUEURS` | JSON `{"/route": "marqueur métier"}` ; à défaut le titre de la page |
 | `FORGE_TESTS_QUALIF_PLAFOND` | nombre maximal de routes visitées (défaut `40`) |
+| `FORGE_TESTS_QUALIF_EFFETS` | `1` : le pan **clique** chaque affordance sur une page rechargée et n'appelle `exercé` que ce dont l'effet a été observé (navigation, onglet, titre, DOM). Absente : rien n'est cliqué, et ce qui est seulement câblé est publié comme tel (TF-0876). Une instance peuplée est **écrite** par ces clics |
+| `FORGE_TESTS_QUALIF_EFFETS_PLAFOND` | nombre maximal d'affordances observées par page (défaut `25`) — chaque observation recharge la page ; au-delà, le rapport le dit |
 | `FORGE_TESTS_QUALIF_REFUS` | routes d'atterrissage de refus d'autorisation propres au produit (virgule) — voir « Pan `qualif` » |
 | `FORGE_TESTS_I18N_BUILD` | dossier du **build servi** lu par le pan `i18n` (l'arborescence de pages telle que le visiteur la reçoit). À défaut, le pan cherche `out/`, `dist/`, `build/`, `_site/`, `site/`, `www/`, `public/` sous la racine, puis un `index.html` à la racine elle-même. Aucun réseau, aucun navigateur |
 | `FORGE_TESTS_EXIGENCES` | chemin d'un `EXIGENCES.json` : les cas des cahiers y sont rattachés, **avec leur provenance** (`declare` ou `lexical`). Absent, le cahier le déclare en tête et dérive de la seule surface. Un chemin qui n'existe pas est un **refus**, pas un silence |
