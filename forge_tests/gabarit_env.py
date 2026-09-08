@@ -51,6 +51,10 @@ _CLE = re.compile(r"FORGE_TESTS_[A-Z0-9_]+")
 GLOSES: dict[str, str] = {
     "FORGE_TESTS_APP": "application ASGI du projet, forme `module:objet` — sans elle, le pan "
                        "api ne peut rien appeler",
+    "FORGE_TESTS_APP_GREFFE": "ou la sonde greffe l'application : `conftests` (defaut, avant "
+                              "les conftest.py) ou `session` (apres) — a passer a `session` si "
+                              "l'import precoce fige un reglage que le conftest rebranche "
+                              "(TF-0839)",
     "FORGE_TESTS_BASE_URL": "URL de l'instance à interroger pour les pans qui parlent au "
                             "produit lancé",
     "FORGE_TESTS_SOURCES": "paquet Python du produit ; son parent devient la racine d'exécution",

@@ -24,8 +24,36 @@ from pathlib import Path
 
 DESIGNATION_PAR_DEFAUT = "app.main:app"
 
+#: TF-0839 (lot Produit-61 du 05/09) — OÙ la greffe a lieu quand l application est DÉSIGNÉE.
+#:
+#: `conftests` (défaut) : avant le chargement des `conftest.py`. Seul instant utile pour une
+#: FABRIQUE — un `tests/conftest.py` qui fait `from app.main import creer_app` a déjà capturé la
+#: fabrique d origine quand la session démarre, et l enveloppe posée plus tard n est jamais
+#: appelée. C est le comportement qui rend le pan `api` mesurable sur une suite à fabrique.
+#:
+#: `session` : au démarrage de session, une fois les conftests chargés — le comportement d avant
+#: toute désignation. À demander quand l import précoce de l application CHANGE ce que la suite
+#: mesure : c est le cas dès que le module importé fige, AU MOMENT DE SON IMPORT, un réglage ou
+#: une connexion que le `conftest.py` du projet installe ensuite (moteur de base, quotas,
+#: horloge). Le pan `api` perd alors les couples des applications rendues par une fabrique ; la
+#: suite du projet, elle, redevient celle que le projet joue seul.
+GREFFE_PAR_DEFAUT = "conftests"
+GREFFES = ("conftests", "session")
+
 OBSERVE: set[tuple[str, str, int]] = set()
 _INSTRUMENTE = False
+
+
+def moment_de_greffe() -> str:
+    """Le moment demandé par `FORGE_TESTS_APP_GREFFE`, ou le défaut si la valeur est inconnue.
+
+    Une valeur non reconnue ne fait PAS échouer la suite du projet audité : la sonde n a aucun
+    canal pour prononcer un verdict, et refuser ici transformerait une faute de frappe de
+    configuration en suite rouge chez le projet. Elle retombe donc sur le défaut, qui est le
+    comportement documenté.
+    """
+    demande = (os.environ.get("FORGE_TESTS_APP_GREFFE") or "").strip().lower()
+    return demande if demande in GREFFES else GREFFE_PAR_DEFAUT
 
 
 class MiddlewareSonde:
@@ -103,8 +131,15 @@ def pytest_load_initial_conftests(early_config, parser, args) -> None:  # noqa: 
     Réservé à une désignation EXPLICITE : importer l application aussi tôt, c est le faire
     avant qu un conftest ait posé l environnement qu elle attend. Le projet qui déclare
     `FORGE_TESTS_APP` accepte ce point d entrée ; par défaut on reste au démarrage de session.
+
+    Et cet import précoce a un COÛT, mesuré (TF-0839, lot Produit-61 du 05/09) : la suite du
+    projet est rendue rouge (un cas attendait 409, le quota était resté figé à la valeur lue à
+    l import au lieu de celle que le conftest installe) et le premier audit a écrit dans la base
+    de DÉMONSTRATION, vidée, parce que le moteur avait été construit sur l environnement ambiant
+    avant que le conftest ne le rebranche. La MÊME suite passait seule. D où le point de
+    rebranchement `FORGE_TESTS_APP_GREFFE=session`, qui rend l ordre d avant.
     """
-    if (os.environ.get("FORGE_TESTS_APP") or "").strip():
+    if (os.environ.get("FORGE_TESTS_APP") or "").strip() and moment_de_greffe() == "conftests":
         _instrumenter()
 
 

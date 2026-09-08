@@ -1080,6 +1080,45 @@ démarrage de session — importer l'application plus tôt la ferait précéder 
 le projet installe lui-même. L'extraction du schéma OpenAPI suit la même désignation et
 **appelle la fabrique sans argument**.
 
+#### L'ordre d'import, et où le rebrancher (TF-0839)
+
+Cette avance a un prix, et il a été payé. *Lot Produit-61, 05/09/2026 : sous audit, la suite du
+projet rendait **1** — un cas attendait `409` et lisait un quota resté figé à `20`, la valeur du
+module au moment de son import, pas celle que le `conftest.py` installe — et le premier audit
+avait **vidé la base de démonstration** servie au même moment, parce que le moteur avait été
+construit sur l'environnement ambiant avant que le conftest ne le rebranche. Jouée seule, la même
+suite passait.* Le framework n'était pas en cause : l'**ordre d'import** l'était.
+
+L'ordre, écrit une fois pour toutes :
+
+| # | Ce qui se passe | Ce qui est déjà figé après |
+|---|---|---|
+| 1 | `pytest` charge ses greffons (`-p sonde_api`) | rien |
+| 2 | **`pytest_load_initial_conftests`** — la sonde importe le module désigné par `FORGE_TESTS_APP` | tout ce que ce module évalue **à l'import** : moteur de base, session, réglages, constantes lues dans l'environnement |
+| 3 | `conftest.py` de la racine, puis des dossiers `test*` | les rebranchements du projet — s'ils passent par une variable d'environnement lue au pas 2, ils arrivent **trop tard** |
+| 4 | `pytest_sessionstart`, puis les tests | — |
+
+Un projet est concerné dès que son module d'application **exécute** quelque chose à l'import :
+`engine = create_engine(os.environ["DATABASE_URL"])`, `QUOTA = int(os.getenv("QUOTA", 20))`,
+un client tiers construit au niveau module. Il ne l'est pas si tout cela vit dans une fabrique.
+
+**Le point de rebranchement**, et c'est une variable, pas une consigne :
+
+| `FORGE_TESTS_APP_GREFFE` | Greffe | Ce qu'on gagne, ce qu'on perd |
+|---|---|---|
+| absente ou `conftests` (**défaut**) | pas 2 — avant les conftests | la fabrique est instrumentée, donc le pan `api` mesure ; l'application précède l'environnement du projet |
+| `session` | pas 4 — après les conftests | la suite du projet redevient celle qu'il joue seul ; le relevé perd les applications rendues par une **fabrique** (une instance module, elle, reste vue) |
+
+Deux remèdes existent donc, et ils ne s'excluent pas : déclarer `FORGE_TESTS_APP_GREFFE=session`
+dans `.env.forge-tests` — l'audit dit alors ce qu'il ne mesure pas —, ou déplacer chez le projet
+ce qui est évalué à l'import vers une fabrique, ce qui rend les deux ordres équivalents. Le
+second est le seul qui rende le pan `api` pleinement mesurable ; le premier est immédiat.
+
+**Garde à part, et elle reste entière** : la base sur laquelle la suite tourne est décidée par
+l'environnement que le projet fournit. Forge Tests transmet l'environnement ambiant et
+`.env.forge-tests` au sous-processus — une variable de connexion qui y pointe une base **servie**
+la fait auditer. `.env.forge-tests` ne porte que des cibles jetables.
+
 Une suite qui finit **verte** avec un relevé **vide** produit un avertissement explicite —
 finding `sonde-muette:api` (sévérité `signale`) et entrée `non_juge` — parce qu'un « 0 %
 couvert » est alors plus probablement une sonde aveugle qu'une suite qui n'appelle rien.
@@ -1335,6 +1374,7 @@ journalisé). Modèle : `.env.exemple`.
 | Variable | Rôle |
 |---|---|
 | `FORGE_TESTS_APP` | désignation `module:attribut` de l'application ASGI auditée (défaut `app.main:app`). L'attribut peut être une **fabrique** — voir « Contrat du projet audité ». Lue par la sonde API **et** par l'extraction du schéma OpenAPI |
+| `FORGE_TESTS_APP_GREFFE` | **où** la sonde greffe l'application désignée : `conftests` (défaut, avant les `conftest.py` — seul instant utile pour une fabrique) ou `session` (après, l'ordre d'avant toute désignation). À passer à `session` quand l'import précoce fige un réglage ou une connexion que le projet rebranche dans son `conftest.py` — voir « L'ordre d'import, et où le rebrancher » (TF-0839) |
 | `FORGE_TESTS_BASE_URL` | instance **servie** à auditer (recette, préproduction). Utilisée pour le rendu des pans `accessibilite` et `visuel`, et exportée en `BASE_URL` vers la suite e2e — sans quoi celle-ci retombe sur son `localhost` et audite un serveur de développement local au lieu de la cible |
 | `FORGE_TESTS_API_URL` | API délivrant le jeton d'authentification |
 | `FORGE_TESTS_LOGIN` / `FORGE_TESTS_PASSWORD` | compte de **lecture** dédié ; sans jeton, toutes les routes protégées redirigent vers la mire et l'audit ne mesure qu'une page |
