@@ -1174,6 +1174,18 @@
       "statut": "todo"
     },
     {
+      "id": "generateur-data-002",
+      "domaine": "generateur-data",
+      "enonce": "generateur data (TF-0840) : la ligne valide est derivee des colonnes NOT NULL declarees dans le CREATE TABLE ; une valeur exigee par un declencheur, une contrainte d exclusion ou une verification multi-colonnes n est pas devinee, et le cas genere echouera a la SEMENCE — visible, jamais silencieux, puisque le rejet attendu est nomme",
+      "statut": "todo"
+    },
+    {
+      "id": "generateur-data-003",
+      "domaine": "generateur-data",
+      "enonce": "generateur data (TF-0840) : les lignes parentes ne sont semees que pour les cles etrangeres declarees en CONSTRAINT dans le corps de la table ; une cle etrangere posee par ALTER TABLE ou en REFERENCES de colonne n est pas vue, et sa ligne parente manquera",
+      "statut": "todo"
+    },
+    {
       "id": "glossaire-001",
       "domaine": "glossaire",
       "enonce": "glossaire : la JUSTESSE d un fait declare n est pas jugee. Ce module confronte une chaine a un nombre DECLARE par le produit ; si la declaration est fausse, l ecart rendu est faux dans l autre sens. C est un point fixe assume, pas une verite mesuree",
