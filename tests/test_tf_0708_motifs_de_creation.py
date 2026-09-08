@@ -137,7 +137,8 @@ def test_le_controle_sur_projet_publie_ce_qu_il_a_regarde(tmp_path: Path) -> Non
     resume = non_juge[0]
     assert "3 gabarit(s) annoncant une creation" in resume
     assert "1 en formulaire replie" in resume and "1 en panneau adressable" in resume
-    assert "1 sans aucun des deux" in resume
+    # TF-0843 : un TROISIEME motif legitime (la page dediee) a rejoint l enumeration.
+    assert "1 sans aucun des trois" in resume
     # Les deux bornes du déclencheur sont DITES avec leur mesure : un contrôle qui tait sa
     # précision demande qu'on lui fasse confiance.
     assert "7 accusations" in non_juge[1] and "220 gabarits" in non_juge[1]

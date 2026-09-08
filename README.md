@@ -1272,7 +1272,7 @@ Ce qu'il ne fait dans aucun des deux cas : se taire.
 | `FORGE_TESTS_DONNEES` | *(aucune)* | fichiers de données du produit, séparés par une virgule (globs admis). **Déclarés, jamais devinés** : un fichier oublié ne rend pas ce contrôle muet, il le rend **accusateur** |
 | `FORGE_TESTS_ORPHELINS` | absente | fait sortir les candidats en findings `signale` au lieu de `non_juge` |
 
-### Deux motifs légitimes d'écran de création (TF-0708)
+### Trois motifs légitimes d'écran de création (TF-0708, TF-0843)
 
 Une exigence d'interface imposait à **tous** les écrans le motif « formulaire replié toujours
 présent » — un `<details>` et le `data-cible` qui le vise. Le motif est bon quand le formulaire
@@ -1282,17 +1282,34 @@ pour laisser passer une refonte qui corrigeait une ergonomie réelle — *un tes
 pour livrer une amélioration vise le mauvais invariant.*
 
 Ce qui doit tenir n'est pas « ce motif-ci partout » mais « la création a une **forme
-déclarée** ». Deux formes sont légitimes, et le pan `interface` les admet toutes les deux :
+déclarée** ». Trois formes sont légitimes, et le pan `interface` les admet toutes les trois :
 
 | Motif | Marque dans le gabarit | Quand c'est le bon |
 |---|---|---|
 | **formulaire replié** | `<details>` **et** `data-cible` | création **simple** : formulaire court, sans branche, ouvert sans quitter la liste |
 | **panneau adressable** | une destination portant `?nouveau=…` (paramètre déclarable par `FORGE_TESTS_PARAM_CREATION`) | tâche **à branches exclusives** : chaque branche a son adresse, donc son état partageable et son retour arrière |
+| **page dédiée** (TF-0843) | l'affordance qui **annonce** la création est le contrôle qui **soumet** un `<form>` de la page (`<button>` ou `<input type=submit>` **dedans**) | le formulaire **est** la page : inscription, création de compte, assistant en pleine page |
 
 **Le critère de choix** — *le formulaire porte-t-il des branches exclusives ?* — n'est pas
 tranché par la forge : elle ne sait pas si deux champs s'excluent, et c'est précisément pour
-cela qu'elle admet les deux formes. Elle refuse **l'absence des deux** : un écran qui annonce
+cela qu'elle admet les trois formes. Elle refuse **l'absence des trois** : un écran qui annonce
 une création sans en porter la forme laisse l'utilisateur devant une promesse sans lieu.
+
+**Pourquoi la troisième a été ajoutée, et ce qu'elle a coûté d'être absente.** *Lot Produit-61,
+05/09/2026 : `inscription.html`, dont le formulaire EST la page, recevait « création sans
+motif » — elle ne porte ni `<details>` (rien à replier : on y est déjà) ni `?nouveau=` (rien à
+adresser : la page a sa propre URL). Et quand le projet déclarait le panneau adressable pour
+satisfaire ce contrôle, l'oracle `oracle-panneau-tache` de forge-design (PA6) le **refusait** à
+son tour, faute de déclencheur dans le document — le déclencheur, sur une page dédiée, est le
+lien qui a amené l'utilisateur ici, et il vit sur une autre page. Deux contrôles justes, et une
+action `manuelle_dev` qu'**aucune modification du gabarit** ne pouvait solder.* Un écart
+qu'aucun geste ne peut fermer n'est pas une exigence, c'est une impasse — et c'est le même
+défaut que TF-0708 avait déjà payé sous une autre forme.
+
+La distinction est mécanique : sur un écran de liste, le « Nouveau lot » est **hors** du
+formulaire — il ouvre un panneau, et l'écran doit alors porter (a) ou (b) ; sur une page dédiée,
+le « Créer mon compte » est **dans** le formulaire — il l'envoie. Une page de liste qui porte une
+barre de recherche n'est donc pas requalifiée : son affordance de création est dehors.
 Le finding est `signale`, classé `manuelle_dev` / `design` — un arbitrage de conception ne se
 dérive pas.
 

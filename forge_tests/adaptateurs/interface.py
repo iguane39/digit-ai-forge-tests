@@ -1004,6 +1004,30 @@ PARAM_CREATION_DEFAUT = "nouveau"
 MOTIF_FORMULAIRE_REPLIE = "formulaire-replie"
 MOTIF_PANNEAU_ADRESSABLE = "panneau-adressable"
 
+# --- TF-0843 : LE TROISIEME MOTIF, ou deux controles justes s excluaient l un l autre -----------
+#
+# LE FAIT (lot Produit-61, 05/09/2026). Une PAGE DEDIEE — `inscription.html`, dont le formulaire
+# EST la page — recevait « creation sans motif » ici : elle ne porte ni `<details>` + `data-cible`
+# (il n y a rien a replier, on est deja sur le formulaire) ni `?nouveau=` (il n y a rien a
+# adresser, la page a sa propre URL). Et quand le projet declarait le panneau adressable pour
+# satisfaire ce controle, l oracle de panneau adressable de forge-design (PA6) le REFUSAIT a son
+# tour, faute de declencheur dans le document — puisque le declencheur, sur une page dediee, est
+# le lien qui a amene l utilisateur ICI, et il vit sur une AUTRE page.
+#
+# Deux controles justes, et leur conjonction sans issue : l action laissee au projet ne pouvait
+# etre soldee par aucune modification du gabarit. Un ecart qu aucun geste ne peut fermer n est
+# pas une exigence, c est une impasse.
+#
+# La forme manquait a l enumeration, pas au produit. Une page dediee est la TROISIEME forme
+# legitime, et la plus ancienne des trois :
+#
+#   (c) PAGE DEDIEE — la page EST le formulaire de creation. Rien a replier, rien a adresser :
+#       l adresse, c est la page. Elle se reconnait a ce que l affordance QUI ANNONCE la creation
+#       est le bouton de SOUMISSION du formulaire, et non une affordance qui ouvrirait autre
+#       chose. Sur un ecran de liste, le « Nouveau lot » est HORS du formulaire — il ouvre un
+#       panneau ; sur une page dediee, le « Creer mon compte » est DANS le formulaire — il l envoie.
+MOTIF_PAGE_DEDIEE = "page-dediee"
+
 #: Ce qui fait d une affordance une ANNONCE de creation. Classe volontairement etroite : le
 #: controle ne se declenche que sur un ecran qui PROMET de creer quelque chose, jamais sur un
 #: gabarit quelconque.
@@ -1054,8 +1078,47 @@ def annonce_une_creation(html: str) -> bool:
     return False
 
 
+#: Les formulaires du gabarit, corps compris — pour savoir ce qui est DEDANS.
+_FORMULAIRES = re.compile(r"<form\b[^>]*>(.*?)</form>", re.IGNORECASE | re.DOTALL)
+
+#: Les controles qui SOUMETTENT un formulaire. Un `<a>` dans un formulaire n en soumet pas :
+#: le distinguer est ce qui separe une page dediee d une liste qui porte une barre de recherche.
+_BOUTONS = re.compile(r"<button\b[^>]*>(.*?)</button>", re.IGNORECASE | re.DOTALL)
+_SOUMISSIONS_INPUT = re.compile(
+    r"<input\b[^>]*type\s*=\s*[\"']?submit[\"']?[^>]*>", re.IGNORECASE
+)
+_VALEUR_INPUT = re.compile(r"value\s*=\s*[\"']([^\"']*)[\"']", re.IGNORECASE)
+
+
+def _libelle_annonce(texte: str) -> bool:
+    """Ce libelle est-il une annonce de creation, aux DEUX bornes mesurees de TF-0708 ?"""
+    mots = re.sub(r"\s+", " ", _BALISES.sub(" ", texte)).strip().split()
+    if not mots or len(mots) > _MOTS_MAXIMUM_LIBELLE:
+        return False
+    return bool(_ANNONCE_CREATION.search(" ".join(mots[:_MOTS_DE_TETE])))
+
+
+def porte_une_page_dediee(html: str) -> bool:
+    """La page EST-elle le formulaire de creation ? (TF-0843)
+
+    Le critere est mecanique et etroit : l affordance qui ANNONCE la creation doit etre le
+    controle qui SOUMET un formulaire de la page. Sur un ecran de liste, le « Nouveau lot » est
+    HORS du formulaire — il ouvre un panneau, et l ecran doit alors porter (a) ou (b). Sur une
+    page dediee, le « Creer mon compte » est DANS le formulaire — il l envoie, et il n y a ni
+    repli a poser ni adresse a inventer : la page en est une.
+    """
+    for corps in _FORMULAIRES.findall(html):
+        if any(_libelle_annonce(contenu) for contenu in _BOUTONS.findall(corps)):
+            return True
+        for balise in _SOUMISSIONS_INPUT.findall(corps):
+            valeur = _VALEUR_INPUT.search(balise)
+            if valeur and _libelle_annonce(valeur.group(1)):
+                return True
+    return False
+
+
 def motifs_de_creation(html: str, param: str | None = None) -> set[str]:
-    """Les motifs de creation que ce gabarit porte — zero, un, ou les deux. Fonction pure."""
+    """Les motifs de creation que ce gabarit porte — zero, un, deux ou trois. Fonction pure."""
     param = param or param_creation()
     presents: set[str] = set()
     # (a) Le repli : les DEUX moities. Un `<details>` sans `data-cible` est un accordeon de
@@ -1069,6 +1132,9 @@ def motifs_de_creation(html: str, param: str | None = None) -> set[str]:
     # apres un `?` ou un `&` — un mot isole ne fait pas une adresse.
     if re.search(rf"[?&]{re.escape(param)}=", html, re.IGNORECASE):
         presents.add(MOTIF_PANNEAU_ADRESSABLE)
+    # (c) La page dediee : rien a replier, rien a adresser — l adresse, c est la page (TF-0843).
+    if porte_une_page_dediee(html):
+        presents.add(MOTIF_PAGE_DEDIEE)
     return presents
 
 
@@ -1080,12 +1146,14 @@ def juger_ecran_de_creation(html: str, param: str | None = None) -> str | None:
         return None
     param = param or param_creation()
     return (
-        "ecran annoncant une creation sans AUCUN des deux motifs legitimes : ni formulaire "
-        f"replie (`<details>` + `data-cible`), ni panneau adressable (`?{param}=`). Le critere "
+        "ecran annoncant une creation sans AUCUN des trois motifs legitimes : ni formulaire "
+        f"replie (`<details>` + `data-cible`), ni panneau adressable (`?{param}=`), ni page "
+        "dediee (le bouton qui annonce la creation SOUMET un formulaire de la page). Le critere "
         "de choix est le formulaire lui-meme — sans branche exclusive, le repli garde la "
         "creation sous la main ; avec des branches exclusives, il MASQUE la contradiction au "
-        "lieu de la resoudre et l adresse est la bonne forme. La forge admet les deux et n en "
-        "impose aucune ; elle refuse leur absence (TF-0708)"
+        "lieu de la resoudre et l adresse est la bonne forme ; quand le formulaire EST la page, "
+        "il n y a ni repli a poser ni adresse a inventer. La forge admet les trois et n en "
+        "impose aucune ; elle refuse leur absence (TF-0708, TF-0843)"
     )
 
 
@@ -1094,7 +1162,7 @@ def _findings_ecrans_de_creation(cible: Path) -> tuple[list[Finding], list[str]]
     param = param_creation()
     findings: list[Finding] = []
     annoncants = 0
-    par_motif = {MOTIF_FORMULAIRE_REPLIE: 0, MOTIF_PANNEAU_ADRESSABLE: 0}
+    par_motif = {MOTIF_FORMULAIRE_REPLIE: 0, MOTIF_PANNEAU_ADRESSABLE: 0, MOTIF_PAGE_DEDIEE: 0}
     for fichier in _fichiers(cible, EXTENSIONS):
         try:
             html = fichier.read_text(encoding="utf-8", errors="replace")
@@ -1125,10 +1193,13 @@ def _findings_ecrans_de_creation(cible: Path) -> tuple[list[Finding], list[str]]
             f"{par_motif[MOTIF_FORMULAIRE_REPLIE]} en formulaire replie, "
             f"{par_motif[MOTIF_PANNEAU_ADRESSABLE]} en panneau adressable "
             f"(`?{param}=`, declarable par {VARIABLE_PARAM_CREATION}), "
-            f"{len(findings)} sans aucun des deux. LES DEUX MOTIFS SONT LEGITIMES : le repli "
-            "pour une creation simple, l adresse pour une tache a branches exclusives — "
-            "imposer le premier partout a deja fait ASSOUPLIR un test pour laisser passer une "
-            "refonte qui corrigeait une ergonomie reelle (TF-0708)",
+            f"{par_motif[MOTIF_PAGE_DEDIEE]} en page dediee, "
+            f"{len(findings)} sans aucun des trois. LES TROIS MOTIFS SONT LEGITIMES : le repli "
+            "pour une creation simple, l adresse pour une tache a branches exclusives, la page "
+            "dediee quand le formulaire EST la page — imposer le premier partout a deja fait "
+            "ASSOUPLIR un test pour laisser passer une refonte qui corrigeait une ergonomie "
+            "reelle (TF-0708), et n admettre que les deux premiers a produit une action que le "
+            "projet ne pouvait solder par AUCUNE modification du gabarit (TF-0843)",
             "interface/creation : le declencheur est le TEXTE des affordances (`<button>`, "
             "`<a>`, `<summary>`), borne aux libelles de "
             f"{_MOTS_MAXIMUM_LIBELLE} mots au plus dont l annonce est dans les "
@@ -1137,6 +1208,12 @@ def _findings_ecrans_de_creation(cible: Path) -> tuple[list[Finding], list[str]]
             "n est PAS juge ici. Les deux bornes sont MESUREES : sans elles, 7 accusations sur "
             "un corpus reel de 220 gabarits, les 7 fausses (« … in a NEW tab ») ; avec elles, "
             "zero sur le meme corpus",
+            "interface/creation (TF-0843) : la page dediee se reconnait a ce que l affordance "
+            "qui ANNONCE la creation SOUMET un formulaire de la page (`<button>` ou "
+            "`<input type=submit>` a l interieur du `<form>`). Une page dediee dont le bouton "
+            "d envoi porte un libelle neutre (« Valider », « Envoyer ») ne porte donc PAS ce "
+            "motif — le declencheur de TF-0708 ne s allume alors pas non plus, et l ecran n est "
+            "pas juge du tout : le controle reste silencieux plutot que d accuser a cote",
         ]
     else:
         non_juge = [
