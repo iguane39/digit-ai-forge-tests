@@ -1000,12 +1000,6 @@
       "statut": "retiree"
     },
     {
-      "id": "jeux-de-donnees-004",
-      "domaine": "jeux-de-donnees",
-      "enonce": "jeux de donnees (TF-0841) : un nom qui porte a la fois un segment authentifiant et un segment de LOCALISATION (PATH, ROUTE, URL, ENDPOINT...) sort du corpus quand sa valeur ressemble a un emplacement (« / », « http:// », « https:// ») — une adresse que le produit publie lui-meme n ouvre rien. La reconnaissance de l emplacement se fait sur la FORME de la valeur : une route ecrite sans barre oblique de tete reste classee comme un identifiant",
-      "statut": "retiree"
-    },
-    {
       "id": "migrations-sql-003",
       "domaine": "migrations-sql",
       "enonce": "migrations : un sens est exercé si une ligne de test RÉELLEMENT EXÉCUTÉE le nomme ; l oracle ne vérifie pas que la migration a été appliquée dans ce sens, seulement que le code qui la nomme a tourné",
@@ -1375,6 +1369,12 @@
       "id": "interface-statique-019",
       "domaine": "interface-statique",
       "enonce": "interface/ecart-servi : les deux termes delocalisent leurs cles, le servi avec les locales qu il PREFIXE et la source avec celles qu on lui donne. Les locales du servi sont donc rendues a la lecture de la source (alignement). Reste indeterminable une entree source `/xx/…` dont `xx` est une locale CONNUE que ni l arborescence source ni le build servi ne nomme : son espace de cles n est pas etablissable, le jugement y est SUSPENDU et l entree NOMMEE au motif — un deploiement correct accuse coute plus cher qu une entree non jugee",
+      "statut": "todo"
+    },
+    {
+      "id": "jeux-de-donnees-004",
+      "domaine": "jeux-de-donnees",
+      "enonce": "jeux de donnees (TF-0841) : un nom qui porte a la fois un segment authentifiant et un segment de LOCALISATION (PATH, ROUTE, URL, ENDPOINT...) sort du corpus quand sa valeur ressemble a un emplacement (« / », « http:// », « https:// ») — une adresse que le produit publie lui-meme n ouvre rien. La reconnaissance de l emplacement se fait sur la FORME de la valeur : une route ecrite sans barre oblique de tete reste classee comme un identifiant",
       "statut": "todo"
     },
     {

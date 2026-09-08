@@ -33,6 +33,11 @@ NON_JUGE = [
     "BASE_URL, QUALIF_*, ORACLES...) configurent l AUDITEUR et sont hors du corpus interdit — "
     "une valeur du jeu qui reprendrait l une d elles n est PAS signalee ; celles qui "
     "AUTHENTIFIENT (LOGIN, PASSWORD, TOKEN, SECRET, KEY, CRED...) y restent (TF-0215)",
+    "jeux de donnees (TF-0841) : un nom qui porte a la fois un segment authentifiant et un "
+    "segment de LOCALISATION (PATH, ROUTE, URL, ENDPOINT...) sort du corpus quand sa valeur "
+    "ressemble a un emplacement (« / », « http:// », « https:// ») — une adresse que le produit "
+    "publie lui-meme n ouvre rien. La reconnaissance de l emplacement se fait sur la FORME de la "
+    "valeur : une route ecrite sans barre oblique de tete reste classee comme un identifiant",
     "jeux de donnees : les valeurs sont derivees de l IDENTIFIANT de l element, pas de son "
     "type metier — un jeu couvre la FORME du cas (nominal, vide, erreur), pas la semantique "
     "d un domaine que le rapport ne connait pas",
@@ -132,8 +137,35 @@ _SEGMENTS_AUTHENTIFIANTS = frozenset(
     }
 )
 
+# TF-0841 (lot Produit-61, 05/09) — LE SEGMENT QUI LOCALISE PRIME SUR CELUI QUI AUTHENTIFIE.
+#
+# Fait mesuré : `FORGE_TESTS_LOGIN_PATH=/admin/connexion`, déclaré dans le `.env.forge-tests`
+# documenté. Le segment `LOGIN` le classait authentifiant, sa valeur entrait au corpus interdit,
+# et le jeu généré — dont une clé de cas reprenait légitimement cette route — était refusé
+# (`DonneeNonSynthetique .jeux[9].cle`). Quatre audits sans cahier ni dashboard.
+#
+# La route de la mire n est pas un identifiant : le produit la PUBLIE, tout visiteur la lit. Elle
+# NOMME ce qui est audité, exactement comme `BASE_URL` ou `QUALIF_ROUTES` que TF-0215 avait déjà
+# sortis du corpus. Un nom qui porte un segment de LOCALISATION désigne donc un emplacement, pas
+# un porteur d identité — et pour que la levée ne s étende pas à ce qu elle ne doit pas couvrir,
+# la VALEUR doit elle-même ressembler à un emplacement quand elle est connue.
+#
+# Ce que cette règle NE touche pas, et c est voulu : `FORGE_TESTS_QUALIF_STORAGE_STATE` ne porte
+# aucun segment localisant ({FORGE, TESTS, QUALIF, STORAGE, STATE}) — le chemin d une session
+# capturée reste dans le corpus, comme TF-0222 l a décidé. Une session ouvre une porte ; une
+# route de mire ouvre une page que tout le monde voit déjà.
+_SEGMENTS_LOCALISANTS = frozenset(
+    {"PATH", "PATHS", "CHEMIN", "CHEMINS", "ROUTE", "ROUTES", "URL", "URI", "ENDPOINT", "PAGE"}
+)
 
-def configure_l_auditeur(nom: str) -> bool:
+
+def _designe_un_emplacement(valeur: str) -> bool:
+    """Vrai si la valeur ressemble à une route ou une adresse, pas à un identifiant."""
+    valeur = (valeur or "").strip()
+    return valeur.startswith(("/", "http://", "https://"))
+
+
+def configure_l_auditeur(nom: str, valeur: str | None = None) -> bool:
     """Vrai si `nom` configure Forge Tests SANS porter d identifiant d accès (TF-0215).
 
     Deux sens, tous deux voulus :
@@ -143,11 +175,22 @@ def configure_l_auditeur(nom: str) -> bool:
         elles AUTHENTIFIENT un compte de test réel et restent interdites, comme avant.
     Une variable hors préfixe (celles du PRODUIT : `DATABASE_URL`, `STRIPE_SECRET`…) n est
     jamais concernée — le périmètre corrigé est celui de l auditeur, pas celui de l audité.
+
+    TF-0841 : un troisième cas, à cheval sur les deux. `FORGE_TESTS_LOGIN_PATH=/admin/connexion`
+    porte le segment authentifiant `LOGIN` et désigne pourtant une ROUTE, que le produit publie
+    lui-même. Un segment de LOCALISATION l emporte donc sur le segment authentifiant — et, quand
+    la valeur est connue, elle doit elle aussi ressembler à un emplacement : `LOGIN_PATH` valant
+    `hunter2` reste interdit, parce que c est alors un identifiant sous un nom trompeur.
     """
     nom = (nom or "").strip().upper()
     if not nom.startswith(_PREFIXE_AUDITEUR):
         return False
-    return not (set(nom.split("_")) & _SEGMENTS_AUTHENTIFIANTS)
+    segments = set(nom.split("_"))
+    if not (segments & _SEGMENTS_AUTHENTIFIANTS):
+        return True
+    return bool(segments & _SEGMENTS_LOCALISANTS) and (
+        valeur is None or _designe_un_emplacement(valeur)
+    )
 
 # Vocabulaire fermé — écrit ici, donc opposable, donc jamais issu d un produit.
 _PRENOMS = ("Alix", "Camille", "Dominique", "Élie", "Fabien", "Gaëlle", "Hakim", "Inès")
@@ -167,8 +210,9 @@ def _valeurs_de_configuration(cible: Path | None, secrets_seulement: bool = Fals
     for nom, valeur in os.environ.items():
         valeur = (valeur or "").strip()
         # TF-0215 : une variable qui configure l auditeur sans authentifier n est pas une valeur
-        # sensible du PROJET — elle ne peut pas rendre un jeu « non synthétique ».
-        if configure_l_auditeur(nom):
+        # sensible du PROJET — elle ne peut pas rendre un jeu « non synthétique ». TF-0841 : la
+        # VALEUR est passée, pour qu un nom localisant ne couvre pas un identifiant déguisé.
+        if configure_l_auditeur(nom, valeur):
             continue
         if len(valeur) >= _LONGUEUR_COMPARABLE and motif.search(nom):
             valeurs.add(valeur)
@@ -187,7 +231,7 @@ def _valeurs_de_configuration(cible: Path | None, secrets_seulement: bool = Fals
                 # TF-0215 : le cas CONSTATÉ. `<projet>/.env.forge-tests` est l emplacement
                 # DOCUMENTÉ de la configuration de l auditeur ; y lire `FORGE_TESTS_PRODUIT` puis
                 # refuser le jeu qui porte ce nom revenait à interdire la configuration publiée.
-                if configure_l_auditeur(nom):
+                if configure_l_auditeur(nom, valeur):
                     continue
                 if secrets_seulement and not _NOM_SECRET.search(nom):
                     continue

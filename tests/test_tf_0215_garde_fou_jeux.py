@@ -91,7 +91,8 @@ def test_ce_qui_NOMME_configure_l_auditeur(nom: str) -> None:
     [
         "FORGE_TESTS_PASSWORD",
         "FORGE_TESTS_LOGIN",
-        "FORGE_TESTS_LOGIN_PATH",
+        # TF-0841 : `FORGE_TESTS_LOGIN_PATH` a QUITTE cette liste — voir
+        # `tests/test_tf_0841_route_de_mire.py`, qui porte la regle nouvelle et sa borne.
         "FORGE_TESTS_QUALIF_LOGIN",
         "FORGE_TESTS_QUALIF_PASSWORD",
         "FORGE_TESTS_API_KEY",
@@ -185,7 +186,7 @@ def test_sans_l_exclusion_le_meme_jeu_serait_refuse(
 
     C est ce test qui empêche le précédent d être vert pour une raison quelconque."""
     projet = _projet(tmp_path)
-    monkeypatch.setattr(jeux, "configure_l_auditeur", lambda nom: False)
+    monkeypatch.setattr(jeux, "configure_l_auditeur", lambda nom, valeur=None: False)
     jeu = jeux.construire([], "Ventilation de facture Fournisseur-A")
 
     with pytest.raises(jeux.DonneeNonSynthetique) as refus:
