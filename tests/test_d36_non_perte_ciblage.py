@@ -71,3 +71,31 @@ def test_une_campagne_vide_face_a_une_campagne_pleine_reste_un_echec() -> None:
     verdict = recette.comparer(_campagne(["mutant:app/a.py:3:+->-"]), _campagne([], viables=0))
     assert verdict["verdict"] == "FAIL"
     assert verdict["survivants_PERDUS"] == ["mutant:app/a.py:3:+->-"]
+
+
+def test_sans_objet_nomme_le_prealable_manquant_si_le_pan_l_a_signale() -> None:
+    """TF-0749 : un SANS_OBJET qui se contente de « rien a comparer » renvoie le lecteur fouiller
+    l adaptateur pour savoir pourquoi. Quand le pan mutation a deja signale un PRÉALABLE
+    D ENVIRONNEMENT ABSENT (TF-0299 — demon de conteneurs injoignable, par exemple), ce motif se
+    reprend au premier niveau du rapport plutot que de se perdre dans le detail des deux cotes."""
+    vide = _campagne([], viables=0)
+    vide["non_juge"] = [
+        "mutation : bruit methodologique sans rapport avec la disponibilite",
+        "back : PRÉALABLE D ENVIRONNEMENT ABSENT — demon de conteneurs INJOIGNABLE.",
+    ]
+    verdict = recette.comparer(vide, vide)
+    assert verdict["verdict"] == "SANS_OBJET"
+    assert verdict["prealable_manquant"] == [
+        "back : PRÉALABLE D ENVIRONNEMENT ABSENT — demon de conteneurs INJOIGNABLE."
+    ]
+
+
+def test_sans_objet_sans_prealable_signale_le_dit_explicitement() -> None:
+    """ROUGE symetrique du test precedent : si aucun des deux cotes ne porte le marqueur
+    PRÉALABLE D ENVIRONNEMENT ABSENT (ex. suite verte mais echantillonnage retombe sur zero
+    mutant viable), le rapport ne doit ni inventer une cause ni rester muet — il le dit."""
+    vide = _campagne([], viables=0)
+    verdict = recette.comparer(vide, vide)
+    assert verdict["verdict"] == "SANS_OBJET"
+    assert len(verdict["prealable_manquant"]) == 1
+    assert "aucun PRÉALABLE D ENVIRONNEMENT ABSENT signale" in verdict["prealable_manquant"][0]

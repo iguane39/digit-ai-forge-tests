@@ -47,6 +47,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from forge_tests.adaptateurs import mutation  # noqa: E402
+from forge_tests.execution import PREALABLE_ABSENT  # noqa: E402
 
 
 def _campagne(projet: Path, ciblage: bool) -> dict:
@@ -84,17 +85,30 @@ def _campagne(projet: Path, ciblage: bool) -> dict:
         "survivants": sorted(donnees.get("survivants", [])),
         "score": donnees.get("score"),
         "echantillon": donnees.get("taux_echantillon"),
+        "non_juge": list(sortie.non_juge or []),
     }
 
 
 def comparer(pleine: dict, ciblee: dict) -> dict:
     """Le verdict de non-perte. Fonction PURE : c est elle que le banc eprouve."""
     if not pleine["mutants_viables"] and not ciblee["mutants_viables"]:
+        # TF-0749 : un SANS_OBJET qui ne dit que « rien a comparer » renvoie le lecteur fouiller
+        # l adaptateur pour savoir POURQUOI aucun mutant n a ete joue. Le motif PREALABLE_ABSENT
+        # (TF-0299) est deja porte par le pan mutation lui-meme dans son non_juge : le reprendre
+        # ici evite un second diagnostic du meme fait et rend le SANS_OBJET actionnable seul.
+        prealables = sorted({
+            m for c in (pleine, ciblee) for m in c.get("non_juge", []) if PREALABLE_ABSENT in m
+        })
         return {
             "verdict": "SANS_OBJET",
             "motif": "aucun mutant viable des deux cotes — il n y a rien a comparer. Deux "
                      "campagnes vides se ressemblent parfaitement, et rendre PASS ici serait "
                      "declarer tenue une condition jamais eprouvee",
+            "prealable_manquant": prealables or [
+                "aucun PRÉALABLE D ENVIRONNEMENT ABSENT signale — voir les non_juge complets de "
+                "campagne_pleine et campagne_ciblee pour le motif exact (echantillonnage nul, "
+                "module hors perimetre...)",
+            ],
         }
     perdus = [s for s in pleine["survivants"] if s not in ciblee["survivants"]]
     ajoutes = [s for s in ciblee["survivants"] if s not in pleine["survivants"]]
