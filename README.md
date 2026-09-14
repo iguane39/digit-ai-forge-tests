@@ -32,6 +32,7 @@ appelle ; ils sont désormais des sections comme les autres, et leur échec fait
 | **Rapport exhaustif test-par-test** | obtenir le verdict et le pourquoi de CHAQUE test, pas seulement un agrégat par pan | `forge_tests
 oyau.py (section essais) + forge_tests\junit.py` | prouvé (experimental) |
 | **Prouver la 404 personnalisée par langue (M-9)** | joindre au dossier de MEP la preuve que chaque adresse inconnue rend une 404 du même gabarit, par langue | `uv run python recette/quatre_cent_quatre.py <url-préprod> --prefixes fr,en` | prouvé (experimental) |
+| **Une suite jouée par la chaîne, ou déclarée hors portée (TF-1043)** | savoir si un fichier de suite présent au dépôt est réellement collecté par la chaîne, ou s'il s'est tu en silence | `uv run python -m forge_tests.chaine <racine>` | prouvé (experimental) |
 
 Le catalogue consolidé des dix forges vit chez le pilot :
 [digit-ai-factory/catalogues/CATALOGUES.md](https://github.com/iguane39/digit-ai-factory/blob/main/catalogues/CATALOGUES.md).
@@ -1538,6 +1539,42 @@ conforme et six qui portent chacun un refus (200 sur adresse inconnue, 404 nu, H
 `noindex` absent, 404 unique pour toutes les langues, sitemap fautif, réponse pendue). Aucun site
 réel, aucun appel sortant : `127.0.0.1` et rien d'autre. Ces tests sont joués par la section
 `unitaire` de la recette, donc **sous S-01**.
+
+## Une suite jouée par la chaîne, ou déclarée hors portée (TF-1043, 14/09/2026)
+
+Étude d'opportunité « socle de la chaîne » (20260914a, décidée le 14/09/2026, option O2).
+Mesure fondatrice (Produit-11, RT-62, 11/09/2026) : **deux tests sont restés ROUGES SIX JOURS
+DURANT UNE RÉOUVERTURE DE FAILLE P0**, sans qu'aucun contrôle du socle ne le remonte — la
+chaîne avait cessé de jouer une suite présente sur le dépôt, et une suite qui n'échoue plus
+parce qu'elle ne tourne plus se lit exactement comme une suite qui passe.
+
+Deux règles, dont une mécanisée :
+
+1. **(mécanisée)** Toute suite de tests présente dans le dépôt (sous les `testpaths` déclarés)
+   est jouée par la chaîne, ou déclarée **HORS PORTÉE** avec son motif et sa date — jamais
+   silencieusement absente du rapport d'exécution.
+2. **(écrite, non mécanisée dans ce lot)** Un correctif de sécurité qui retire une donnée
+   d'une interface publique **cite les tests qui la lisaient** — la classe
+   `correctif-de-securite-laisse-un-test-muet` proposée par le candidat trouve sa recette
+   naturelle ici, mais son mécanisme suppose de confronter un DIFF à une liste de tests
+   couvrant l'interface touchée, nature différente de la règle 1 (état du dépôt, jamais un
+   différentiel de commit) : remise au registre comme candidature distincte.
+
+```bash
+uv run python -m forge_tests.chaine <racine-du-projet-audité>
+# attendu, dépôt sain : « chaine : PASS — chaque suite présente est jouée ou déclarée hors portée »
+# attendu, suite orpheline : exit 1 + une ligne par fichier NOMMÉ, jamais un total anonyme
+```
+
+Déclarer une suite hors portée (assumé, pas oublié) : une ligne dans les dix premières du
+fichier, `# hors-chaine (id), AAAA-MM-JJ : motif` — même grammaire (identifiant, date, motif)
+que le reste du socle.
+
+Limites déclarées (`forge_tests.chaine.NON_JUGE`) : la CI HÉBERGÉE n'est pas interrogée
+directement (l'hypothèse est qu'elle invoque la même commande que la collecte locale rejouée
+ici — angle mort partagé avec TF-1017) ; un test COLLECTÉ mais marqué `pytest.mark.skip` sans
+motif daté n'est pas vu (classe voisine, pas celle mesurée par RT-62) ; sans `testpaths`
+déclaré au `pyproject.toml` audité, le périmètre supposé est `tests/`.
 
 ## Recette et dette
 

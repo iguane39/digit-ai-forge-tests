@@ -1066,6 +1066,30 @@
       "statut": "todo"
     },
     {
+      "id": "chaine-001",
+      "domaine": "chaine",
+      "enonce": "chaine : la CI HEBERGEE (GitHub Actions, Azure Pipelines) n'est pas interrogee — la collecte rejouee est celle de la commande pytest locale, sur l'hypothese qu'elle est identique a celle de l'hebergeur (angle mort partage avec TF-1017)",
+      "statut": "todo"
+    },
+    {
+      "id": "chaine-002",
+      "domaine": "chaine",
+      "enonce": "chaine : un test COLLECTE mais marque `pytest.mark.skip` sans motif date n'est pas vu ici — classe voisine, pas celle mesuree par RT-62 (le test avait disparu de la collecte)",
+      "statut": "todo"
+    },
+    {
+      "id": "chaine-003",
+      "domaine": "chaine",
+      "enonce": "chaine : la regle 2 (un correctif de securite cite les tests qu'il affecte) n'est pas mecanisee dans ce module — elle suppose un diff de commit, nature differente de l'etat du depot que ce module lit",
+      "statut": "todo"
+    },
+    {
+      "id": "chaine-004",
+      "domaine": "chaine",
+      "enonce": "chaine : sans `testpaths` declare au pyproject.toml audite, le perimetre suppose est le dossier `tests` — un projet qui range ses suites ailleurs SANS le declarer echappe au perimetre (meme angle mort que pytest lui-meme dans ce cas)",
+      "statut": "todo"
+    },
+    {
       "id": "clavier-focus-001",
       "domaine": "clavier-focus",
       "enonce": "clavier : mesure a l etat INITIAL de chaque route — un piege de focus qui n apparait qu apres ouverture d une modale ou d un menu n est pas atteint",
