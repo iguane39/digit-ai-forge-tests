@@ -337,6 +337,7 @@ _STYLE = f"""
        La classe etait posee dans le marquage et visee par AUCUNE regle : L21 le refuse, et il
        a raison — un composant annonce sans style est un composant qui n existe pas. */
     .ch-apprend {{ color:var(--muted); margin:.2em 0 1.1em; }}
+    .contenu {{ color:var(--muted); margin:.2em 0 1.1em; }}
     table {{ border-collapse:collapse; width:100%; font-size:.88rem; table-layout:fixed; }}
     th, td {{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--line);
              vertical-align:top; overflow-wrap:break-word; }}
@@ -1288,6 +1289,10 @@ def _manifeste_ecarts(ecarts: list[str]) -> str:
         '<p class="discret ch-apprend">Ce chapitre présente les limites de cette page : '
         "ce qu elle n a pas pu établir sur CE rapport, puis ce qu elle ne juge jamais, quel "
         "que soit le rapport. Une limite tue se lirait comme une absence de limite.</p>"
+        # L30 du socle (TF-0932, TF-1104) : l inventaire, distinct de la promesse ci-dessus.
+        '<p class="discret contenu">Ce chapitre contient : la liste des écarts calculés sur '
+        "CE rapport précis, puis la liste de ce que cette page ne juge JAMAIS, quel que soit "
+        "le rapport audité.</p>"
         "<h3>Sur ce rapport</h3><ul>"
         + "".join(f"<li>{_e(x)}</li>" for x in items)
         + "</ul><h3>Par construction, quel que soit le rapport</h3><ul>"
@@ -2521,8 +2526,10 @@ def construire(
             cible="echecs",
             ancre="constats-declares",
             libelle="Constats déclarés par le projet",
+            # TF-1104 (socle L3 quater, TF-0935) : 220 caracteres en un seul bloc, illisible en
+            # infobulle — coupe en deux lignes au point de phrase.
             descriptif="constats mesurés que le projet a déclarés — contestés avec "
-            "contre-preuve, ou bloqués par une configuration absente ou du code supplanté. "
+            "contre-preuve, ou bloqués par une configuration absente ou du code supplanté.\n"
             "Hors du décompte principal, jamais retirés du rapport",
             repere=f"{valeurs['declares']} sur "
             f"{valeurs['declares'] + valeurs['echecs']} constat(s) mesurés sortent du "
@@ -2791,6 +2798,30 @@ def construire(
         "actions": "suites à donner structurées (quoi, pourquoi, résultat), plan de boucle "
         "IA, puis liste filtrable par catégorie et étape",
     }
+    # L30 du socle (TF-0932, TF-1104) : `.ch-apprend` dit ce que le chapitre APPREND — la
+    # promesse ; `.contenu` dit ce qu il PORTE — l inventaire, et ce qui le distingue du
+    # chapitre voisin. Les deux textes servent des questions différentes : un lecteur pressé
+    # lit l un, un lecteur qui compare deux onglets lit l autre.
+    contenus = {
+        "synthese": "le verdict global, la table des résultats par pan avec ses pourcentages, "
+        "l'état de chaque seuil opposable (valeur mesurée contre seuil déclaré) et la "
+        "tendance par rapport au run précédent, quand elle existe",
+        "fonctionnels": "un chapitre par découpe (route, écran…) avec sa table d'éléments — "
+        "objectif, résultat, constat et risque — et le cas dépliable de chacun. Seuls les "
+        "pans FONCTIONNELS y sont rattachés",
+        "techniques": "un chapitre par découpe (table, module…) avec sa table d'éléments — "
+        "objectif, résultat, constat et risque — et le cas dépliable de chacun. Il se "
+        "distingue du chapitre Fonctionnels par la nature des pans couverts, pas par sa forme",
+        "echecs": "la table de tous les constats triée par risque décroissant, puis les "
+        "constats déclarés par le projet avec leur contre-preuve, leur signataire et leur "
+        "date",
+        "non-joues": "les éléments non testables ici, chacun avec les champs de "
+        "configuration qui manquent, puis les pans sans banc d'essai avec le geste qui les "
+        "rendrait mesurables",
+        "actions": "les suites à donner en trois catégories (automatisable, développeur, "
+        "vous), le plan de boucle pour les actions automatisables, puis la table filtrable "
+        "de toutes les actions par catégorie et étape cible",
+    }
     # TF-0235 : `data-vue` sur CHAQUE entrée de navigation — c est le marqueur que le
     # référentiel de restitution lit pour vérifier qu une page s organise en vues naviguées
     # (RL-1). Les deux barres en portent : le sommaire annoté (L6 du socle) et les onglets.
@@ -2844,6 +2875,7 @@ def construire(
         f'{"" if rang == 0 else " hidden"}>'
         + contenu[0]
         + f'<p class="discret ch-apprend">Ce panneau présente : {_e(annonces[identifiant])}.</p>'
+        + f'<p class="discret contenu">Ce chapitre contient : {_e(contenus[identifiant])}.</p>'
         + f'<p class="discret exemple-lecture">Exemple de lecture — une ligne type : '
         f"{_e(exemples[identifiant])}.</p>"
         + "\n".join(contenu[1:])
