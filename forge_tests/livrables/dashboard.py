@@ -256,6 +256,14 @@ _STYLE = f"""
       --head:"Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
       --sans:"DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
       --mono:"JetBrains Mono", ui-monospace, "Consolas", monospace;
+      /* TF-1110 (V16, TF-0910) — jetons `*-solid` du socle (charte-et-tokens.md), valeurs
+         REPRISES telles quelles, jamais redécidées. Fonds PLEINS à encre BLANCHE pour les
+         badges d'ÉTAT : les `*-fill` ci-dessus sont des fonds de CARTE, tous entre L* 93 et
+         97 — indiscernables entre eux une fois posés côte à côte sur des bulles de statut.
+         Ces quatre gardent ≥ 23 d'écart de couleur (Delta-E CIE76) deux à deux et 6,4:1 de
+         contraste avec le blanc — invariants de thème (clair/sombre) : l encre reste blanche
+         quel que soit le thème du reste de la page. */
+      --green-solid:#166534; --teal-solid:#0F5F8F; --amber-solid:#92400E; --red-solid:#B91C1C;
     }}
     :root[data-theme="sombre"] {{{_TOKENS_SOMBRES}}}
     * {{ box-sizing:border-box; }}
@@ -308,14 +316,16 @@ _STYLE = f"""
     .tuile .tuile-d {{ color:var(--muted); font-size:.75rem; }}
     .tuile .tuile-va {{ color:var(--blue); font-size:.75rem; font-weight:700; margin-top:auto; }}
     .badge {{ display:inline-block; border-radius:999px; padding:2px 11px; font-size:.8rem;
-             font-weight:700; border:1px solid var(--line); }}
-    .b-pass {{ background:var(--green-fill); border-color:var(--green-line);
-              color:var(--green-ink); }}
-    .b-fail {{ background:var(--red-fill); border-color:var(--red-line); color:var(--red-ink); }}
-    .b-part {{ background:var(--amber-fill); border-color:var(--amber-line);
-              color:var(--amber-ink); }}
-    .b-info {{ background:var(--teal-fill); border-color:var(--teal-line);
-              color:var(--teal-ink); }}
+             font-weight:700; border:1px solid transparent; }}
+    /* TF-1110 (V16) : fonds PLEINS (`*-solid`) à encre blanche — plus de pastel de carte sur
+       une bulle d état. Le picto (✓ ✕ ○ ⊘ –, `_badge_etat`) et le libellé restent le second
+       indice non colorimétrique (WCAG 1.4.1) ; ces quatre classes servent aussi des badges
+       sans picto (verdicts, seuils) que la couleur seule distinguait déjà par le TEXTE
+       (« PASS »/« FAIL »…), jamais par la seule teinte. */
+    .b-pass {{ background:var(--green-solid); color:#fff; }}
+    .b-fail {{ background:var(--red-solid); color:#fff; }}
+    .b-part {{ background:var(--amber-solid); color:#fff; }}
+    .b-info {{ background:var(--teal-solid); color:#fff; }}
     .etat-badge {{ white-space:nowrap; }}
     nav.toc {{ display:flex; flex-wrap:wrap; gap:4px 18px; margin:0 0 12px; font-size:.85rem; }}
     nav.toc a {{ color:var(--blue); text-decoration:none; }}
@@ -487,7 +497,18 @@ _STYLE = f"""
       .wrap {{ padding:22px 14px 44px; }}
       h1 {{ font-size:1.5rem; }}
       table, thead, tbody, tr, th, td {{ display:block; width:auto; }}
-      thead {{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }}
+      /* TF-1110 (V15, TF-0901) : sans `top`/`left` déclarés, un élément `position:absolute`
+         reste à sa POSITION STATIQUE (celle du flux normal) — il ne réserve plus d'espace pour
+         ses frères (qui remontent prendre sa place), mais ses propres descendants `display:block`
+         (`tr`, `th`, convertis juste au-dessus) gardent leur taille NATURELLE, non rognée par
+         `overflow:hidden` du parent (le rognage n'affecte que le rendu visuel, jamais la boîte
+         mesurée). Résultat mesuré : les `<th>` de l'en-tête, à leur taille pleine, se retrouvent
+         géométriquement à l'endroit où `<tbody>` vient de remonter — l'en-tête « mange » sa
+         propre première ligne AU REPOS, sans aucun défilement. `top`/`left` explicitement
+         négatifs sortent tout le sous-arbre (thead ET ses `th`) de l'écran, pas seulement du
+         flux : plus de coïncidence géométrique possible avec le corps du tableau. */
+      thead {{ position:absolute; top:-9999px; left:-9999px; width:1px; height:1px;
+              overflow:hidden; clip:rect(0 0 0 0); }}
       tr {{ border:1px solid var(--line); border-radius:var(--r-sm); margin:0 0 10px;
            padding:6px 8px; }}
       td {{ border:none; padding:3px 0; }}

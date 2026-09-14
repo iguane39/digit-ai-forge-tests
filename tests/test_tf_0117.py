@@ -130,6 +130,113 @@ def test_check_html_pass_sur_un_constat_qui_cite_not_null(tmp_path: Path) -> Non
     assert resultat.returncode == 0, (resultat.stdout or "") + (resultat.stderr or "")
 
 
+def test_render_page_pass_aussi_sur_le_meme_dashboard(tmp_path: Path) -> None:
+    """TF-1110 — la recette (verifier_corpus.py, section dashboard) joue check_html.py ET
+    render_page.py sur le même artefact : les deux oracles gardent leur PROPRE périmètre
+    (déclarations de la feuille vs mesure d'un rendu réel), le second ne remplace pas le
+    premier. Ce test complète `test_check_html_pass_sur_...` — le même dashboard doit passer
+    les DEUX, à 390 px où V15 (en-tête de tableau) et V7 se mesurent."""
+    page = dash.construire(RAPPORT, CONTEXTE, CHAPITRES)
+    sortie = tmp_path / "dashboard.html"
+    dash.ecrire(sortie, page, None)
+
+    oracle = (
+        Path.home() / ".claude" / "skills" / "digit-ai-page-html" / "scripts" / "render_page.py"
+    )
+    if not oracle.exists():
+        return  # DECLARE, jamais contourne — meme convention que verifier_dashboard (recette)
+
+    resultat = subprocess.run(
+        [sys.executable, str(oracle), str(sortie), "--widths", "390"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    assert resultat.returncode == 0, (resultat.stdout or "") + (resultat.stderr or "")
+
+
+def test_render_page_detecte_un_entete_de_tableau_pose_sur_sa_ligne(tmp_path: Path) -> None:
+    """Fixture ROUGE de V15 (TF-0901, TF-1110) — preuve que le SENS ROUGE de render_page est
+    réellement exercé, pas seulement son sens vert. Reproduit la classe de défaut exacte
+    mesurée sur le banc rouge (14/09/2026) : un `<thead>` visuellement masqué par
+    `position:absolute; overflow:hidden` SANS `top`/`left` déclarés reste à sa POSITION
+    STATIQUE — ses `<th>`, convertis en `display:block` pour un rendu carte mobile, gardent
+    leur taille NATURELLE (le rognage `overflow:hidden` de l'ancêtre ne réduit jamais la
+    boîte mesurée d'un descendant) et se retrouvent géométriquement là où `<tbody>` vient de
+    remonter — l'en-tête mange sa propre première ligne, AU REPOS, sans aucun défilement.
+    """
+    page = """<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digit-AI — V15 rouge — Socle — 20260914a</title>
+<style>
+  table, thead, tbody, tr, th, td { display:block; width:auto; }
+  thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+  th, td { padding:8px; border:1px solid #ccc; }
+</style></head>
+<body><main><h1>Table</h1>
+<table><thead><tr><th>Colonne</th></tr></thead>
+<tbody><tr><td>Valeur 1</td></tr><tr><td>Valeur 2</td></tr></tbody></table>
+</main></body></html>"""
+    sortie = tmp_path / "v15-rouge.html"
+    sortie.write_text(page, encoding="utf-8")
+
+    oracle = (
+        Path.home() / ".claude" / "skills" / "digit-ai-page-html" / "scripts" / "render_page.py"
+    )
+    if not oracle.exists():
+        return
+
+    resultat = subprocess.run(
+        [sys.executable, str(oracle), str(sortie), "--widths", "600"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    sortie_texte = (resultat.stdout or "") + (resultat.stderr or "")
+    assert resultat.returncode != 0, (
+        "fixture rouge caduque : render_page.py ne signale plus rien sur ce motif — "
+        + sortie_texte
+    )
+    assert "V15" in sortie_texte, sortie_texte
+
+
+def test_render_page_detecte_des_badges_d_etat_indiscernables(tmp_path: Path) -> None:
+    """Fixture ROUGE de V16 (TF-0910, TF-1110) — trois badges d'état sur des fonds `*-fill`
+    pastel (L* 93-97, tous voisins) sont indiscernables entre eux : la mesure porte sur la
+    PAIRE de fonds, jamais sur un badge seul (V2 rendait déjà PASS badge par badge)."""
+    page = """<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digit-AI — V16 rouge — Socle — 20260914a</title>
+<style>
+  .badge { display:inline-block; border-radius:999px; padding:2px 11px; }
+  .b-pass { background:#F2FCF5; }
+  .b-fail { background:#FEF2F2; }
+  .b-part { background:#FFFBEB; }
+</style></head>
+<body><main><h1>Badges</h1>
+<span class="badge b-pass">PASS</span>
+<span class="badge b-fail">FAIL</span>
+<span class="badge b-part">PARTIEL</span>
+</main></body></html>"""
+    sortie = tmp_path / "v16-rouge.html"
+    sortie.write_text(page, encoding="utf-8")
+
+    oracle = (
+        Path.home() / ".claude" / "skills" / "digit-ai-page-html" / "scripts" / "render_page.py"
+    )
+    if not oracle.exists():
+        return
+
+    resultat = subprocess.run(
+        [sys.executable, str(oracle), str(sortie), "--widths", "600"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    sortie_texte = (resultat.stdout or "") + (resultat.stderr or "")
+    assert resultat.returncode != 0, (
+        "fixture rouge caduque : render_page.py ne signale plus rien sur ce motif — "
+        + sortie_texte
+    )
+    assert "V16" in sortie_texte, sortie_texte
+
+
 def test_bouton_cas_derives_structure_le_solde_dynamique_sur_sa_propre_ligne() -> None:
     """TF-1109 — défaut antérieur à TF-1104 (`_detail_element` existe depuis 506efce, 14/08),
     non touché par ce correctif. Mesure sur le banc rouge : le suffixe dynamique
