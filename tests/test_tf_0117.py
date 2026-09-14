@@ -27,6 +27,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from forge_tests import adoption as _adoption
 from forge_tests.livrables import dashboard as dash
 
 RAPPORT = {
@@ -127,3 +128,42 @@ def test_check_html_pass_sur_un_constat_qui_cite_not_null(tmp_path: Path) -> Non
         capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     assert resultat.returncode == 0, (resultat.stdout or "") + (resultat.stderr or "")
+
+
+def test_bouton_cas_derives_structure_le_solde_dynamique_sur_sa_propre_ligne() -> None:
+    """TF-1109 — défaut antérieur à TF-1104 (`_detail_element` existe depuis 506efce, 14/08),
+    non touché par ce correctif. Mesure sur le banc rouge : le suffixe dynamique
+    (`_adoption.libelle_solde`) pousse la légende du bouton « cas dérivés » à 284 caractères
+    en un seul bloc — L3 quater du socle (TF-0935) juge illisible toute légende SANS saut de
+    ligne au-delà de 200 caractères. Fixture ROUGE : un solde NON SOLDÉ avec une adoption
+    refusée reproduit un suffixe de longueur comparable à la mesure du banc rouge.
+    """
+    detail = {
+        "cas": [
+            {"ref": "C0", "titre": "cas 0", "preconditions": "-", "jeu": "-", "etapes": [],
+             "attendu": "-", "exigences": [], "adoption": {"statut": _adoption.REFUSE}},
+            {"ref": "C1", "titre": "cas 1", "preconditions": "-", "jeu": "-", "etapes": [],
+             "attendu": "-", "exigences": []},
+            {"ref": "C2", "titre": "cas 2", "preconditions": "-", "jeu": "-", "etapes": [],
+             "attendu": "-", "exigences": []},
+        ]
+    }
+    bouton, _ = dash._detail_element(detail)
+    m = re.search(r'title="([^"]*)"', bouton, re.S)
+    assert m, "le bouton doit porter un title"
+    titre = m.group(1)
+    lignes = titre.split("\n")
+    # ROUGE implicite : le suffixe dynamique seul dépasse largement les 60 caractères — une
+    # régression qui l aurait raccourci rendrait ce test caduc plutôt que muet.
+    assert len(lignes[-1]) > 60, "fixture caduque : le solde dynamique n est plus assez long"
+    # VERT : le title est STRUCTURÉ (une ligne par objet, dans l idiome de TF-1104) — L3 quater
+    # ne juge illisible qu un title SANS saut de ligne au-delà de 200 caractères ou 2 objets
+    # séparés par « ; »/« · ». Avant le correctif (une seule ligne concaténée par « — »),
+    # cette assertion aurait échoué : la légende entière, fixe + dynamique, tenait sur une
+    # seule ligne de 284 caractères.
+    assert "\n" in titre, (
+        "title non structuré : L3 quater le jugerait illisible au-delà de 200 caractères"
+    )
+    assert lignes[0] == "cas DÉRIVÉS de la surface"
+    assert "déposés hors du projet (G-1)" in lignes[1]
+    assert "NON SOLDÉ" in lignes[2] and "refusée" in lignes[2]

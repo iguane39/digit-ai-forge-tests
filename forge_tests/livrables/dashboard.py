@@ -1762,10 +1762,16 @@ def _detail_element(detail: dict | None) -> tuple[str, str]:
     compte = _adoption.solde(etats)
     libelle = f"{n} cas dérivé{'s' if n > 1 else ''}"
     libelle += f", {compte['solde']} à adopter" if compte["solde"] else ", tous soldés"
+    # TF-1109 (socle L3 quater, TF-0935 — idiome de TF-1104) : le suffixe dynamique
+    # (libelle_solde) rend cette legende arbitrairement longue selon les donnees — mesure sur
+    # le banc rouge : 284 caracteres en un seul bloc, illisible. Partie FIXE d abord, solde
+    # DYNAMIQUE sur sa propre ligne : le `title` reste structure quelle que soit la donnee.
     bouton = (
         f'<button type="button" class="btn-detail" aria-expanded="false" '
-        f'title="cas DÉRIVÉS de la surface, déposés hors du projet (G-1) : à adopter et '
-        f'exécuter, pas des tests que l audit aurait sautés — {_e(_adoption.libelle_solde(compte))}'
+        f'title="cas DÉRIVÉS de la surface\n'
+        f'déposés hors du projet (G-1) : à adopter et exécuter, pas des tests que l audit '
+        f'aurait sautés\n'
+        f'{_e(_adoption.libelle_solde(compte))}'
         f'">{_e(libelle)} ▸</button>'
     )
     return bouton, f'<div class="cas-grille">{"".join(cartes)}</div>'
