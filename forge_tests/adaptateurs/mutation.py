@@ -428,14 +428,23 @@ def _suite_verte_ou_injouable(racine: Path, python: Path) -> bool:
 # selectionne = 0,386 s (0,361 / 0,386 / 0,414). Le critere d abandon n est pas atteint, et de
 # loin : le palier tient.
 #
-# CE QUI N EST PAS PROUVE ICI, et se declare plutot que se promet. La CONDITION DE NON-PERTE de
-# l etude — la campagne ciblee rend EXACTEMENT la meme liste de survivants que la campagne
-# pleine — exige un projet reel dote de `coverage`. Le poste sur lequel ce palier a ete ecrit n en
-# a pas (`import coverage` echoue dans le venv de la forge). Seules les fonctions PURES de
-# selection sont donc eprouvees ici, en rouge et en vert ; la chaine complete ne l est pas.
-# Le ciblage entre en consequence DERRIERE UN DRAPEAU ABSENT PAR DEFAUT — loi transverse n° 2 :
-# `FORGE_TESTS_MUTATION_CIBLAGE=1`. Il ne deviendra le defaut qu apres une campagne ou les deux
-# verdicts auront ete compares.
+# CE QUI N ETAIT PAS PROUVE A L ECRITURE, et se declarait plutot que se promettait. La CONDITION
+# DE NON-PERTE de l etude — la campagne ciblee rend EXACTEMENT la meme liste de survivants que la
+# campagne pleine — exige un projet reel dote de `coverage`. Le poste sur lequel ce palier a ete
+# ecrit n en avait pas dans le venv de la forge elle-meme (sans consequence : la mutation joue
+# TOUJOURS dans le venv DU PROJET mute, pas dans celui de la forge). Le blocage reel, mesure le
+# 08/09, etait ailleurs : la suite du seul projet reel disponible sur ce poste (le banc, dont la
+# base se monte par conteneur) ne pouvait pas demarrer, demon de conteneurs arrete.
+#
+# JOUEE LE 14/09/2026 (TF-0748/TF-0749) — la CONDITION DE NON-PERTE EST VERIFIEE une premiere
+# fois. Demon de conteneurs demarre sur ce poste, puis un seul rejeu de
+# `python recette/non_perte_ciblage.py fixtures/banc-vert` : verdict PASS, 12 mutants viables,
+# liste de survivants IDENTIQUE des deux cotes (`mutant:app/main.py:18:0->1`), et la preuve
+# POSITIVE du piege n° 4 est tenue (`ciblage.carte_obtenue` vrai, 10 mutants sur 12 REELLEMENT
+# cibles — ce n est pas une comparaison d une campagne avec elle-meme). Rien n a ete simule.
+# Le ciblage reste neanmoins DERRIERE UN DRAPEAU ABSENT PAR DEFAUT — loi transverse n° 2 :
+# `FORGE_TESTS_MUTATION_CIBLAGE=1`. Une premiere condition tenue sur un banc n est pas le
+# passage en defaut : cette bascule reste une decision humaine distincte, non prise ici.
 #
 # CE QUE LA DECISION D-34 DU 01/09 A CHANGE POUR CE PALIER, le jour meme de son ecriture. La
 # mutation est devenue une campagne A LA DEMANDE, jouee avant une mise en production et non plus

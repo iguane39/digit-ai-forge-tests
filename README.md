@@ -699,8 +699,18 @@ contre un verdict faux dans le sens qui rassure :
   cause, et plus insidieux parce que les campagnes, elles, ne sont pas vides. La preuve exigée
   est donc **positive** : la campagne ciblée doit publier `mutation.ciblage.carte_obtenue` vrai
   **et** `mutants_cibles` non nul. Sans cette preuve, `SANS_OBJET` — et le rapport nomme ce qui
-  manque. Sur ce poste, `coverage` n'est pas installé dans le venv de la forge : le cas est
-  celui qu'une première campagne réelle rencontrerait, pas une hypothèse.
+  manque.
+
+**JOUÉE le 14/09/2026 (TF-0748/TF-0749) : la condition de non-perte est VÉRIFIÉE une première
+fois.** Le blocage n'était pas `coverage` (présent dans les venvs des bancs) mais le démon de
+conteneurs arrêté sur ce poste — la suite d'un projet réel s'y monte par conteneur. Démon
+démarré, puis un seul rejeu de `python recette/non_perte_ciblage.py fixtures/banc-vert` :
+`PASS`, 12 mutants viables, liste de survivants identique des deux côtés
+(`mutant:app/main.py:18:0->1`), et la preuve positive du piège n° 4 tenue — `carte_obtenue`
+vrai, 10 mutants sur 12 réellement ciblés (pas une comparaison d'une campagne avec elle-même).
+Rien n'a été simulé. **Ce que cela ne tranche pas** : le ciblage reste éteint par défaut — une
+condition tenue une première fois sur un banc n'est pas le passage en défaut, qui reste une
+décision humaine distincte.
 
 ## Périmètre de mutation total et inventaire des modules
 
