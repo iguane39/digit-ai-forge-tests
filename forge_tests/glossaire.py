@@ -416,7 +416,18 @@ def confronter_genre(par_locale: dict, termes: list[dict]) -> list[dict]:
             dets = "|".join(re.escape(d) for d in sorted(fautifs, key=len, reverse=True))
             # `\s+` et non `\s*` : un déterminant élidé (« un'casa ») n'est pas de la même
             # classe et se juge mal — on ne l'accuse pas.
-            motif = re.compile(rf"(?<![\w'’])({dets})\s+({formes})(?![\wÀ-ÿ])",
+            #
+            # TF-1086 : la garde en une seule classe `(?<![\w'’])` traitait TOUT guillemet ou
+            # apostrophe immédiatement avant le déterminant comme une élision — y compris le
+            # guillemet simple qui OUVRE une chaîne (« 'Ningún casa rural disponible' »), qui
+            # n'élide rien du tout. Ce qui distingue une VRAIE élision (un mot COLLÉ devant
+            # l'apostrophe, « l'otro », « qu'un ») d'un guillemet de délimitation, c'est le
+            # caractère ENCORE AVANT l'apostrophe : un mot dans un cas, rien ou une espace dans
+            # l'autre. D'où les deux gardes : la première écarte un déterminant collé à un mot
+            # SANS apostrophe (cas générique) ; la seconde, de largeur fixe, n'écarte un
+            # déterminant précédé d'une apostrophe QUE si cette apostrophe est elle-même collée
+            # à un mot — jamais un guillemet en tête de chaîne ou précédé d'une espace.
+            motif = re.compile(rf"(?<!\w)(?<!\w['’])({dets})\s+({formes})(?![\wÀ-ÿ])",
                                re.IGNORECASE | re.UNICODE)
             for cle, valeur in sorted((par_locale.get(loc) or {}).items()):
                 if not isinstance(valeur, str):

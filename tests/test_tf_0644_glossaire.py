@@ -383,6 +383,26 @@ def test_BORNE_le_determinant_doit_etre_COLLE_au_nom():
     assert glossaire.confronter_genre(par_locale, _terme_genre()) == []
 
 
+def test_le_guillemet_de_debut_de_chaine_n_est_plus_pris_pour_une_elision():
+    """TF-1086, preuve de couverture P-1 du 14/09/2026. Le cas vedette du banc défauts-échappés
+    (E-07) : la chaîne commence par un guillemet simple (délimiteur JS), pas une élision. La
+    garde d'origine (`(?<![\\w'’])`) traitait ce guillemet comme si un mot y était collé et
+    manquait la faute exacte partie en production (TF-0660)."""
+    par_locale = {"es": {"a": "'Ningún casa rural disponible'."}}
+    ecarts = glossaire.confronter_genre(par_locale, _terme_genre())
+    assert len(ecarts) == 1, ecarts
+    assert ecarts[0]["determinant"].lower() == "ningún"
+    assert ecarts[0]["cle"] == "a"
+
+
+def test_l_elision_reelle_reste_ecartee():
+    """Fixture verte de TF-1086 : une VRAIE élision — un mot COLLÉ devant l'apostrophe qui
+    précède le déterminant — reste écartée. Seul le guillemet de délimitation (test précédent)
+    a cessé de l'être ; le sens qui protégeait contre une fausse accusation n'a pas régressé."""
+    par_locale = {"es": {"a": "qu'otro casa rural sea igual no importa."}}
+    assert glossaire.confronter_genre(par_locale, _terme_genre()) == []
+
+
 def test_les_deux_listes_de_determinants_ne_se_recouvrent_JAMAIS_apres_pli_des_accents():
     """Le garde qui rend l'expansion sans accents sure — il s'execute a l'import, ce cas le NOMME.
 
