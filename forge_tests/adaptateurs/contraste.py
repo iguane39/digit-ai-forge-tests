@@ -79,6 +79,20 @@ def _mesure_js() -> str | None:
             return None
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        # TF-1093 (20/09/2026) — `MEASURE_JS` est un GABARIT, pas une mesure. Il porte des
+        # jetons (`__ALIGN_TOL__`, `__L2_MIN_VIEWPORT__`…) que le socle remplacait chez lui,
+        # dans son propre `run()`. Lu ici tel quel, il LEVE dans le navigateur :
+        #   Page.evaluate: ReferenceError: __ALIGN_TOL__ is not defined
+        # — et le garde de `_parcours` transformait cette levee en « route visitee mais non
+        # mesuree », route par route : deux pans qui ne mesuraient plus rien, sans un mot de
+        # plus qu'un motif par route. Le socle PUBLIE desormais sa mesure prete (`mesure_js`),
+        # comme il publie sa table de familles. Le repli sur la constante reste, pour une copie
+        # du socle anterieure a cette porte.
+        pret = getattr(module, "mesure_js", None)
+        if callable(pret):
+            mesure = pret()
+            if isinstance(mesure, str) and mesure.strip():
+                return mesure
         mesure = getattr(module, "MEASURE_JS", None)
         return mesure if isinstance(mesure, str) and mesure.strip() else None
     except Exception:  # noqa: BLE001 — socle illisible : le pan se declare non mesure

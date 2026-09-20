@@ -1048,6 +1048,12 @@
       "statut": "retiree"
     },
     {
+      "id": "plancher-rendu-001",
+      "domaine": "plancher-rendu",
+      "enonce": "plancher : mesure a l etat INITIAL de chaque route — les etats atteints apres interaction (menu ouvert, modale, filtre, message d erreur) ne sont pas mesures ici. La matrice d etats du socle (render_page.py --matrice-etats, TF-0493) les joue sur un FICHIER, elle n est pas cablee sur une instance servie",
+      "statut": "retiree"
+    },
+    {
       "id": "securite-oracles-003",
       "domaine": "securite-oracles",
       "enonce": "securite : le perimetre scanne est le dossier applicatif ; ni l historique git, ni l infrastructure, ni la configuration de deploiement",
@@ -1451,12 +1457,6 @@
       "note": "instruite le 2026-09-02 (TF-0665) : c est le SEUL vrai reste de l item. Rendre le controle bloquant demande que la declaration porte la PORTEE du denombrable (quelles cles du catalogue parlent d hebergement), sinon un homonyme — 12 places a table — reste indiscernable d une capacite de couchage."
     },
     {
-      "id": "plancher-rendu-001",
-      "domaine": "plancher-rendu",
-      "enonce": "plancher : mesure a l etat INITIAL de chaque route — les etats atteints apres interaction (menu ouvert, modale, filtre, message d erreur) ne sont pas mesures ici. La matrice d etats du socle (render_page.py --matrice-etats, TF-0493) les joue sur un FICHIER, elle n est pas cablee sur une instance servie",
-      "statut": "todo"
-    },
-    {
       "id": "plancher-rendu-002",
       "domaine": "plancher-rendu",
       "enonce": "plancher : V5 croisements de fleches et V6 images deformees restent une inspection HUMAINE sur captures — ce pan ne produit pas d image, il lit des mesures du DOM",
@@ -1472,6 +1472,12 @@
       "id": "plancher-rendu-004",
       "domaine": "plancher-rendu",
       "enonce": "plancher : ce pan juge un PLANCHER, jamais une intention graphique. « Ce n est pas desirable » n est decidable par aucun script (doctrine du socle de marque)",
+      "statut": "todo"
+    },
+    {
+      "id": "plancher-rendu-005",
+      "domaine": "plancher-rendu",
+      "enonce": "plancher : mesure a l etat INITIAL de chaque route — les etats atteints apres interaction (menu ouvert, modale, filtre, message d erreur) ne sont pas mesures ici. La matrice d etats du socle (render_page.py --matrice-etats, TF-0493) n est pas cablee sur ce pan. Une seule porte est ouverte, et sur demande : les FILTRES CROISES (jouer_paires, TF-1093) se jouent sur l instance SERVIE quand FORGE_TESTS_PLANCHER_CROISEMENTS=1 — option absente par defaut, etat declare a chaque execution, couverture publiee en « N paires jouees sur M possibles »",
       "statut": "todo"
     },
     {
