@@ -256,6 +256,14 @@ _STYLE = f"""
       --head:"Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
       --sans:"DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
       --mono:"JetBrains Mono", ui-monospace, "Consolas", monospace;
+      /* TF-1110 (V16, TF-0910) — jetons `*-solid` du socle (charte-et-tokens.md), valeurs
+         REPRISES telles quelles, jamais redécidées. Fonds PLEINS à encre BLANCHE pour les
+         badges d'ÉTAT : les `*-fill` ci-dessus sont des fonds de CARTE, tous entre L* 93 et
+         97 — indiscernables entre eux une fois posés côte à côte sur des bulles de statut.
+         Ces quatre gardent ≥ 23 d'écart de couleur (Delta-E CIE76) deux à deux et 6,4:1 de
+         contraste avec le blanc — invariants de thème (clair/sombre) : l encre reste blanche
+         quel que soit le thème du reste de la page. */
+      --green-solid:#166534; --teal-solid:#0F5F8F; --amber-solid:#92400E; --red-solid:#B91C1C;
     }}
     :root[data-theme="sombre"] {{{_TOKENS_SOMBRES}}}
     * {{ box-sizing:border-box; }}
@@ -308,14 +316,16 @@ _STYLE = f"""
     .tuile .tuile-d {{ color:var(--muted); font-size:.75rem; }}
     .tuile .tuile-va {{ color:var(--blue); font-size:.75rem; font-weight:700; margin-top:auto; }}
     .badge {{ display:inline-block; border-radius:999px; padding:2px 11px; font-size:.8rem;
-             font-weight:700; border:1px solid var(--line); }}
-    .b-pass {{ background:var(--green-fill); border-color:var(--green-line);
-              color:var(--green-ink); }}
-    .b-fail {{ background:var(--red-fill); border-color:var(--red-line); color:var(--red-ink); }}
-    .b-part {{ background:var(--amber-fill); border-color:var(--amber-line);
-              color:var(--amber-ink); }}
-    .b-info {{ background:var(--teal-fill); border-color:var(--teal-line);
-              color:var(--teal-ink); }}
+             font-weight:700; border:1px solid transparent; }}
+    /* TF-1110 (V16) : fonds PLEINS (`*-solid`) à encre blanche — plus de pastel de carte sur
+       une bulle d état. Le picto (✓ ✕ ○ ⊘ –, `_badge_etat`) et le libellé restent le second
+       indice non colorimétrique (WCAG 1.4.1) ; ces quatre classes servent aussi des badges
+       sans picto (verdicts, seuils) que la couleur seule distinguait déjà par le TEXTE
+       (« PASS »/« FAIL »…), jamais par la seule teinte. */
+    .b-pass {{ background:var(--green-solid); color:#fff; }}
+    .b-fail {{ background:var(--red-solid); color:#fff; }}
+    .b-part {{ background:var(--amber-solid); color:#fff; }}
+    .b-info {{ background:var(--teal-solid); color:#fff; }}
     .etat-badge {{ white-space:nowrap; }}
     nav.toc {{ display:flex; flex-wrap:wrap; gap:4px 18px; margin:0 0 12px; font-size:.85rem; }}
     nav.toc a {{ color:var(--blue); text-decoration:none; }}
@@ -337,6 +347,7 @@ _STYLE = f"""
        La classe etait posee dans le marquage et visee par AUCUNE regle : L21 le refuse, et il
        a raison — un composant annonce sans style est un composant qui n existe pas. */
     .ch-apprend {{ color:var(--muted); margin:.2em 0 1.1em; }}
+    .contenu {{ color:var(--muted); margin:.2em 0 1.1em; }}
     table {{ border-collapse:collapse; width:100%; font-size:.88rem; table-layout:fixed; }}
     th, td {{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--line);
              vertical-align:top; overflow-wrap:break-word; }}
@@ -486,7 +497,18 @@ _STYLE = f"""
       .wrap {{ padding:22px 14px 44px; }}
       h1 {{ font-size:1.5rem; }}
       table, thead, tbody, tr, th, td {{ display:block; width:auto; }}
-      thead {{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }}
+      /* TF-1110 (V15, TF-0901) : sans `top`/`left` déclarés, un élément `position:absolute`
+         reste à sa POSITION STATIQUE (celle du flux normal) — il ne réserve plus d'espace pour
+         ses frères (qui remontent prendre sa place), mais ses propres descendants `display:block`
+         (`tr`, `th`, convertis juste au-dessus) gardent leur taille NATURELLE, non rognée par
+         `overflow:hidden` du parent (le rognage n'affecte que le rendu visuel, jamais la boîte
+         mesurée). Résultat mesuré : les `<th>` de l'en-tête, à leur taille pleine, se retrouvent
+         géométriquement à l'endroit où `<tbody>` vient de remonter — l'en-tête « mange » sa
+         propre première ligne AU REPOS, sans aucun défilement. `top`/`left` explicitement
+         négatifs sortent tout le sous-arbre (thead ET ses `th`) de l'écran, pas seulement du
+         flux : plus de coïncidence géométrique possible avec le corps du tableau. */
+      thead {{ position:absolute; top:-9999px; left:-9999px; width:1px; height:1px;
+              overflow:hidden; clip:rect(0 0 0 0); }}
       tr {{ border:1px solid var(--line); border-radius:var(--r-sm); margin:0 0 10px;
            padding:6px 8px; }}
       td {{ border:none; padding:3px 0; }}
@@ -1288,6 +1310,10 @@ def _manifeste_ecarts(ecarts: list[str]) -> str:
         '<p class="discret ch-apprend">Ce chapitre présente les limites de cette page : '
         "ce qu elle n a pas pu établir sur CE rapport, puis ce qu elle ne juge jamais, quel "
         "que soit le rapport. Une limite tue se lirait comme une absence de limite.</p>"
+        # L30 du socle (TF-0932, TF-1104) : l inventaire, distinct de la promesse ci-dessus.
+        '<p class="discret contenu">Ce chapitre contient : la liste des écarts calculés sur '
+        "CE rapport précis, puis la liste de ce que cette page ne juge JAMAIS, quel que soit "
+        "le rapport audité.</p>"
         "<h3>Sur ce rapport</h3><ul>"
         + "".join(f"<li>{_e(x)}</li>" for x in items)
         + "</ul><h3>Par construction, quel que soit le rapport</h3><ul>"
@@ -1757,10 +1783,16 @@ def _detail_element(detail: dict | None) -> tuple[str, str]:
     compte = _adoption.solde(etats)
     libelle = f"{n} cas dérivé{'s' if n > 1 else ''}"
     libelle += f", {compte['solde']} à adopter" if compte["solde"] else ", tous soldés"
+    # TF-1109 (socle L3 quater, TF-0935 — idiome de TF-1104) : le suffixe dynamique
+    # (libelle_solde) rend cette legende arbitrairement longue selon les donnees — mesure sur
+    # le banc rouge : 284 caracteres en un seul bloc, illisible. Partie FIXE d abord, solde
+    # DYNAMIQUE sur sa propre ligne : le `title` reste structure quelle que soit la donnee.
     bouton = (
         f'<button type="button" class="btn-detail" aria-expanded="false" '
-        f'title="cas DÉRIVÉS de la surface, déposés hors du projet (G-1) : à adopter et '
-        f'exécuter, pas des tests que l audit aurait sautés — {_e(_adoption.libelle_solde(compte))}'
+        f'title="cas DÉRIVÉS de la surface\n'
+        f'déposés hors du projet (G-1) : à adopter et exécuter, pas des tests que l audit '
+        f'aurait sautés\n'
+        f'{_e(_adoption.libelle_solde(compte))}'
         f'">{_e(libelle)} ▸</button>'
     )
     return bouton, f'<div class="cas-grille">{"".join(cartes)}</div>'
@@ -2521,8 +2553,10 @@ def construire(
             cible="echecs",
             ancre="constats-declares",
             libelle="Constats déclarés par le projet",
+            # TF-1104 (socle L3 quater, TF-0935) : 220 caracteres en un seul bloc, illisible en
+            # infobulle — coupe en deux lignes au point de phrase.
             descriptif="constats mesurés que le projet a déclarés — contestés avec "
-            "contre-preuve, ou bloqués par une configuration absente ou du code supplanté. "
+            "contre-preuve, ou bloqués par une configuration absente ou du code supplanté.\n"
             "Hors du décompte principal, jamais retirés du rapport",
             repere=f"{valeurs['declares']} sur "
             f"{valeurs['declares'] + valeurs['echecs']} constat(s) mesurés sortent du "
@@ -2791,6 +2825,30 @@ def construire(
         "actions": "suites à donner structurées (quoi, pourquoi, résultat), plan de boucle "
         "IA, puis liste filtrable par catégorie et étape",
     }
+    # L30 du socle (TF-0932, TF-1104) : `.ch-apprend` dit ce que le chapitre APPREND — la
+    # promesse ; `.contenu` dit ce qu il PORTE — l inventaire, et ce qui le distingue du
+    # chapitre voisin. Les deux textes servent des questions différentes : un lecteur pressé
+    # lit l un, un lecteur qui compare deux onglets lit l autre.
+    contenus = {
+        "synthese": "le verdict global, la table des résultats par pan avec ses pourcentages, "
+        "l'état de chaque seuil opposable (valeur mesurée contre seuil déclaré) et la "
+        "tendance par rapport au run précédent, quand elle existe",
+        "fonctionnels": "un chapitre par découpe (route, écran…) avec sa table d'éléments — "
+        "objectif, résultat, constat et risque — et le cas dépliable de chacun. Seuls les "
+        "pans FONCTIONNELS y sont rattachés",
+        "techniques": "un chapitre par découpe (table, module…) avec sa table d'éléments — "
+        "objectif, résultat, constat et risque — et le cas dépliable de chacun. Il se "
+        "distingue du chapitre Fonctionnels par la nature des pans couverts, pas par sa forme",
+        "echecs": "la table de tous les constats triée par risque décroissant, puis les "
+        "constats déclarés par le projet avec leur contre-preuve, leur signataire et leur "
+        "date",
+        "non-joues": "les éléments non testables ici, chacun avec les champs de "
+        "configuration qui manquent, puis les pans sans banc d'essai avec le geste qui les "
+        "rendrait mesurables",
+        "actions": "les suites à donner en trois catégories (automatisable, développeur, "
+        "vous), le plan de boucle pour les actions automatisables, puis la table filtrable "
+        "de toutes les actions par catégorie et étape cible",
+    }
     # TF-0235 : `data-vue` sur CHAQUE entrée de navigation — c est le marqueur que le
     # référentiel de restitution lit pour vérifier qu une page s organise en vues naviguées
     # (RL-1). Les deux barres en portent : le sommaire annoté (L6 du socle) et les onglets.
@@ -2844,6 +2902,7 @@ def construire(
         f'{"" if rang == 0 else " hidden"}>'
         + contenu[0]
         + f'<p class="discret ch-apprend">Ce panneau présente : {_e(annonces[identifiant])}.</p>'
+        + f'<p class="discret contenu">Ce chapitre contient : {_e(contenus[identifiant])}.</p>'
         + f'<p class="discret exemple-lecture">Exemple de lecture — une ligne type : '
         f"{_e(exemples[identifiant])}.</p>"
         + "\n".join(contenu[1:])

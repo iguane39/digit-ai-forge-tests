@@ -77,8 +77,10 @@ ETATS: dict[str, tuple[str, str, str, str]] = {
         "○",
         "Non exercé",
         "b-part",
-        "élément inventorié qu aucun test de la suite du projet n atteint — l audit mesure "
-        "la suite existante, il ne joue pas de cas à sa place",
+        # TF-1104 (socle L3 quater, TF-0935) : 219 caracteres en un seul bloc, illisible en
+        # infobulle — coupe en deux lignes (le composant du socle le lit et le rend en liste).
+        "élément inventorié qu aucun test de la suite du projet n atteint —\n"
+        "l audit mesure la suite existante, il ne joue pas de cas à sa place",
     ),
     "non_testable": (
         "⊘",
@@ -99,9 +101,20 @@ ENTETES: dict[str, tuple[str, str]] = {
     ),
     "état": (
         "Résultat",
-        "état mesuré de l ÉLÉMENT : ✓ Passé · ✕ KO · ○ Non exercé (aucun test de la suite ne "
-        "l atteint) · ⊘ Non testable ici (configuration absente) · – Exclu. À ne pas confondre "
-        "avec l état des CAS dépliés, qui sont des cas à adopter et exécuter (R-40)",
+        # TF-1104 (socle L3 quater, TF-0935) : cinq objets enchaînés par « · » en un seul bloc
+        # de 244 caractères sont conformes à L3 (la légende existe, elle explique) et
+        # ILLISIBLES. Contrat du composant du socle (assets/infobulle.js) : une ligne par
+        # objet, une sous-précision par ligne indentée — le `title` reste la seule source.
+        "état mesuré de l ÉLÉMENT\n"
+        "✓ Passé\n"
+        "✕ KO\n"
+        "○ Non exercé\n"
+        "  aucun test de la suite ne l atteint\n"
+        "⊘ Non testable ici\n"
+        "  configuration absente\n"
+        "– Exclu\n"
+        "À ne pas confondre avec l état des CAS dépliés, qui sont des cas à adopter et "
+        "exécuter (R-40)",
     ),
     "classe": ("Type de constat", "famille du défaut mesuré ; vide = passé, sans objet"),
     "constat mesuré": (
@@ -112,7 +125,12 @@ ENTETES: dict[str, tuple[str, str]] = {
         "Risque",
         "criticité × probabilité × coût tardif (notes 1-5, score 1-125) — calculé au rapport",
     ),
-    "sévérité": ("Sévérité", "classe déclarée par la règle : bloquant · majeur · mineur"),
+    "sévérité": (
+        "Sévérité",
+        # TF-1104 (socle L3 quater, TF-0935) : 3 objets (« bloquant · majeur · mineur ») en un
+        # bloc dépassent le plafond de 2 — une ligne par objet.
+        "classe déclarée par la règle\nbloquant\nmajeur\nmineur",
+    ),
 }
 
 # --- Catégories d actions (clé = categorie du rapport, GELÉE — actions.CATEGORIES) -------------

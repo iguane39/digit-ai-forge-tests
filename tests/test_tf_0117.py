@@ -27,6 +27,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from forge_tests import adoption as _adoption
 from forge_tests.livrables import dashboard as dash
 
 RAPPORT = {
@@ -127,3 +128,149 @@ def test_check_html_pass_sur_un_constat_qui_cite_not_null(tmp_path: Path) -> Non
         capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     assert resultat.returncode == 0, (resultat.stdout or "") + (resultat.stderr or "")
+
+
+def test_render_page_pass_aussi_sur_le_meme_dashboard(tmp_path: Path) -> None:
+    """TF-1110 — la recette (verifier_corpus.py, section dashboard) joue check_html.py ET
+    render_page.py sur le même artefact : les deux oracles gardent leur PROPRE périmètre
+    (déclarations de la feuille vs mesure d'un rendu réel), le second ne remplace pas le
+    premier. Ce test complète `test_check_html_pass_sur_...` — le même dashboard doit passer
+    les DEUX, à 390 px où V15 (en-tête de tableau) et V7 se mesurent."""
+    page = dash.construire(RAPPORT, CONTEXTE, CHAPITRES)
+    sortie = tmp_path / "dashboard.html"
+    dash.ecrire(sortie, page, None)
+
+    oracle = (
+        Path.home() / ".claude" / "skills" / "digit-ai-page-html" / "scripts" / "render_page.py"
+    )
+    if not oracle.exists():
+        return  # DECLARE, jamais contourne — meme convention que verifier_dashboard (recette)
+
+    resultat = subprocess.run(
+        [sys.executable, str(oracle), str(sortie), "--widths", "390"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    assert resultat.returncode == 0, (resultat.stdout or "") + (resultat.stderr or "")
+
+
+def test_render_page_detecte_un_entete_de_tableau_pose_sur_sa_ligne(tmp_path: Path) -> None:
+    """Fixture ROUGE de V15 (TF-0901, TF-1110) — preuve que le SENS ROUGE de render_page est
+    réellement exercé, pas seulement son sens vert. Reproduit la classe de défaut exacte
+    mesurée sur le banc rouge (14/09/2026) : un `<thead>` visuellement masqué par
+    `position:absolute; overflow:hidden` SANS `top`/`left` déclarés reste à sa POSITION
+    STATIQUE — ses `<th>`, convertis en `display:block` pour un rendu carte mobile, gardent
+    leur taille NATURELLE (le rognage `overflow:hidden` de l'ancêtre ne réduit jamais la
+    boîte mesurée d'un descendant) et se retrouvent géométriquement là où `<tbody>` vient de
+    remonter — l'en-tête mange sa propre première ligne, AU REPOS, sans aucun défilement.
+    """
+    page = """<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digit-AI — V15 rouge — Socle — 20260914a</title>
+<style>
+  table, thead, tbody, tr, th, td { display:block; width:auto; }
+  thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+  th, td { padding:8px; border:1px solid #ccc; }
+</style></head>
+<body><main><h1>Table</h1>
+<table><thead><tr><th>Colonne</th></tr></thead>
+<tbody><tr><td>Valeur 1</td></tr><tr><td>Valeur 2</td></tr></tbody></table>
+</main></body></html>"""
+    sortie = tmp_path / "v15-rouge.html"
+    sortie.write_text(page, encoding="utf-8")
+
+    oracle = (
+        Path.home() / ".claude" / "skills" / "digit-ai-page-html" / "scripts" / "render_page.py"
+    )
+    if not oracle.exists():
+        return
+
+    resultat = subprocess.run(
+        [sys.executable, str(oracle), str(sortie), "--widths", "600"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    sortie_texte = (resultat.stdout or "") + (resultat.stderr or "")
+    assert resultat.returncode != 0, (
+        "fixture rouge caduque : render_page.py ne signale plus rien sur ce motif — "
+        + sortie_texte
+    )
+    assert "V15" in sortie_texte, sortie_texte
+
+
+def test_render_page_detecte_des_badges_d_etat_indiscernables(tmp_path: Path) -> None:
+    """Fixture ROUGE de V16 (TF-0910, TF-1110) — trois badges d'état sur des fonds `*-fill`
+    pastel (L* 93-97, tous voisins) sont indiscernables entre eux : la mesure porte sur la
+    PAIRE de fonds, jamais sur un badge seul (V2 rendait déjà PASS badge par badge)."""
+    page = """<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digit-AI — V16 rouge — Socle — 20260914a</title>
+<style>
+  .badge { display:inline-block; border-radius:999px; padding:2px 11px; }
+  .b-pass { background:#F2FCF5; }
+  .b-fail { background:#FEF2F2; }
+  .b-part { background:#FFFBEB; }
+</style></head>
+<body><main><h1>Badges</h1>
+<span class="badge b-pass">PASS</span>
+<span class="badge b-fail">FAIL</span>
+<span class="badge b-part">PARTIEL</span>
+</main></body></html>"""
+    sortie = tmp_path / "v16-rouge.html"
+    sortie.write_text(page, encoding="utf-8")
+
+    oracle = (
+        Path.home() / ".claude" / "skills" / "digit-ai-page-html" / "scripts" / "render_page.py"
+    )
+    if not oracle.exists():
+        return
+
+    resultat = subprocess.run(
+        [sys.executable, str(oracle), str(sortie), "--widths", "600"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    sortie_texte = (resultat.stdout or "") + (resultat.stderr or "")
+    assert resultat.returncode != 0, (
+        "fixture rouge caduque : render_page.py ne signale plus rien sur ce motif — "
+        + sortie_texte
+    )
+    assert "V16" in sortie_texte, sortie_texte
+
+
+def test_bouton_cas_derives_structure_le_solde_dynamique_sur_sa_propre_ligne() -> None:
+    """TF-1109 — défaut antérieur à TF-1104 (`_detail_element` existe depuis 506efce, 14/08),
+    non touché par ce correctif. Mesure sur le banc rouge : le suffixe dynamique
+    (`_adoption.libelle_solde`) pousse la légende du bouton « cas dérivés » à 284 caractères
+    en un seul bloc — L3 quater du socle (TF-0935) juge illisible toute légende SANS saut de
+    ligne au-delà de 200 caractères. Fixture ROUGE : un solde NON SOLDÉ avec une adoption
+    refusée reproduit un suffixe de longueur comparable à la mesure du banc rouge.
+    """
+    detail = {
+        "cas": [
+            {"ref": "C0", "titre": "cas 0", "preconditions": "-", "jeu": "-", "etapes": [],
+             "attendu": "-", "exigences": [], "adoption": {"statut": _adoption.REFUSE}},
+            {"ref": "C1", "titre": "cas 1", "preconditions": "-", "jeu": "-", "etapes": [],
+             "attendu": "-", "exigences": []},
+            {"ref": "C2", "titre": "cas 2", "preconditions": "-", "jeu": "-", "etapes": [],
+             "attendu": "-", "exigences": []},
+        ]
+    }
+    bouton, _ = dash._detail_element(detail)
+    m = re.search(r'title="([^"]*)"', bouton, re.S)
+    assert m, "le bouton doit porter un title"
+    titre = m.group(1)
+    lignes = titre.split("\n")
+    # ROUGE implicite : le suffixe dynamique seul dépasse largement les 60 caractères — une
+    # régression qui l aurait raccourci rendrait ce test caduc plutôt que muet.
+    assert len(lignes[-1]) > 60, "fixture caduque : le solde dynamique n est plus assez long"
+    # VERT : le title est STRUCTURÉ (une ligne par objet, dans l idiome de TF-1104) — L3 quater
+    # ne juge illisible qu un title SANS saut de ligne au-delà de 200 caractères ou 2 objets
+    # séparés par « ; »/« · ». Avant le correctif (une seule ligne concaténée par « — »),
+    # cette assertion aurait échoué : la légende entière, fixe + dynamique, tenait sur une
+    # seule ligne de 284 caractères.
+    assert "\n" in titre, (
+        "title non structuré : L3 quater le jugerait illisible au-delà de 200 caractères"
+    )
+    assert lignes[0] == "cas DÉRIVÉS de la surface"
+    assert "déposés hors du projet (G-1)" in lignes[1]
+    assert "NON SOLDÉ" in lignes[2] and "refusée" in lignes[2]
