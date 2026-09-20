@@ -81,14 +81,80 @@ def test_contraste_sans_socle_est_un_skip_motive(monkeypatch) -> None:
     assert any("mesure V2 introuvable" in ligne for ligne in sortie.non_juge)
 
 
+def _socle_importe():
+    """Le module du socle, chargé comme le pan le charge — jamais une lecture de texte seule."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("_socle_pour_tf_0409", contraste._SOCLE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_contraste_charge_la_mesure_du_socle_sans_la_dupliquer() -> None:
-    """Si le socle est installé, la mesure vient de LUI — une copie divergerait en silence."""
+    """Si le socle est installé, la mesure vient de LUI — une copie divergerait en silence.
+
+    POURQUOI LE TÉMOIN A CHANGÉ (TF-1093, 20/09/2026), et pourquoi il est PLUS FORT.
+    L'intention n'a pas bougé d'un mot : la mesure jouée VIENT du socle et n'est pas dupliquée
+    dans ce dépôt. Le témoin, lui, était l'inclusion LITTÉRALE de la mesure dans le fichier du
+    socle. Depuis que le socle publie sa mesure PRÊTE (`mesure_js()`, qui substitue ses seuils
+    — `__OVERLAP_MIN_RATIO__` devient `0.1`), ce texte n'est plus une sous-chaîne du fichier :
+    première divergence mesurée à l'offset 19703. L'inclusion ne pouvait plus rien dire.
+
+    Or elle disait déjà peu : « le texte joué se retrouve dans le fichier du socle » n'interdit
+    PAS à ce dépôt d'en tenir une copie (une copie fidèle l'aurait satisfaite), et ne prouve
+    pas que le texte vient de la PORTE. Les trois témoins qui la remplacent couvrent chacun un
+    de ces angles, et ensemble ils sont strictement plus forts :
+
+      1. ORIGINE — ce que le pan charge est IDENTIQUE à ce que la porte du socle rend. Pas
+         « ressemble » : la même chaîne, à l'octet près.
+      2. NON-DUPLICATION CÔTÉ SOCLE — le CORPS de la mesure (le gabarit, jetons non
+         substitués) est bien une sous-chaîne littérale du fichier du socle. C'est
+         exactement l'ancienne assertion, portée sur l'objet dont elle est vraie.
+      3. NON-DUPLICATION CÔTÉ CONSOMMATEUR — aucun fichier de ce dépôt ne contient le corps
+         de la mesure. C'est l'angle que l'ancien témoin ne couvrait pas du tout, et c'est
+         celui que le titre du test promet.
+
+    La signature du (3) est DÉRIVÉE du socle à l'exécution : l'écrire en dur ici serait
+    précisément la duplication que le cas interdit, et le test se condamnerait lui-même.
+    """
     mesure = contraste._mesure_js()
     if mesure is None:
         return  # socle absent de ce poste : le SKIP motivé est déjà prouvé ci-dessus
     assert "v2_contrast" in mesure, "la mesure chargée n'est pas celle de render_page.py V2"
+    module = _socle_importe()
     source = contraste._SOCLE.read_text(encoding="utf-8")
-    assert mesure.strip() in source, "la mesure jouée ne vient pas du fichier du socle"
+
+    # (1) ORIGINE : la mesure jouée est CELLE que le socle publie.
+    porte = getattr(module, "mesure_js", None)
+    attendue = porte() if callable(porte) else getattr(module, "MEASURE_JS", None)
+    assert attendue is not None, "le socle ne publie aucune mesure"
+    assert mesure == attendue, (
+        "la mesure jouée n'est pas celle que le socle publie — le pan a dérivé de sa source"
+    )
+
+    # (2) NON-DUPLICATION CÔTÉ SOCLE : le corps de la mesure vit dans le fichier du socle.
+    gabarit = getattr(module, "MEASURE_JS", "")
+    assert gabarit.strip() and gabarit.strip() in source, (
+        "le corps de la mesure n'est pas dans le fichier du socle"
+    )
+
+    # (3) NON-DUPLICATION CÔTÉ CONSOMMATEUR : ce dépôt n'en tient aucune copie.
+    milieu = len(gabarit) // 2
+    signature = gabarit[milieu:milieu + 240]
+    assert len(signature) == 240, "gabarit trop court pour en tirer une signature discriminante"
+    racine = Path(__file__).resolve().parent.parent
+    copies = [
+        chemin.relative_to(racine).as_posix()
+        for chemin in sorted(racine.rglob("*"))
+        if chemin.is_file() and chemin.suffix in {".py", ".js", ".mjs", ".json", ".md"}
+        and not any(part in {".git", ".venv", "node_modules", "__pycache__",
+                             ".pytest_cache", ".ruff_cache"} for part in chemin.parts)
+        and signature in chemin.read_text(encoding="utf-8", errors="ignore")
+    ]
+    assert not copies, (
+        f"le corps de la mesure du socle est RECOPIE dans ce depot : {', '.join(copies)} — "
+        "une copie diverge en silence, c'est le defaut que ce cas interdit"
+    )
 
 
 # ── Clavier ─────────────────────────────────────────────────────────────────
