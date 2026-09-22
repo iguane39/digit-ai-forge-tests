@@ -213,7 +213,7 @@ def _texte_libre(valeur: object) -> str:
 # (`data-theme="sombre"`) et au forçage inverse de l impression (jamais de papier sombre).
 _TOKENS_SOMBRES = """
       --bg:#0B1120; --surface:#131C2E; --card:#131C2E; --ink:#E8EDF7; --muted:#9BA9C0;
-      --faint:#6B7A93; --line:#25324A; --amber-fill:#2A2113; --amber-line:#4A3A1A;
+      --faint:#6B7A93; --line:#25324A; --piste:#4B6899; --amber-fill:#2A2113; --amber-line:#4A3A1A;
       --teal-fill:#0E2A28; --teal-line:#1C4A46; --green-fill:#0F2A1B; --green-line:#1D4A2F;
       --red-fill:#2C1414; --red-line:#5A2222; --blue:#7CA6FF; --green:#4ADE80;
       --amber:#FBBF24; --red:#F87171; --teal:#5EEAD4;
@@ -222,7 +222,7 @@ _TOKENS_SOMBRES = """
 
 _TOKENS_CLAIRS = """
       --blue:#2563EB; --bg:#FAFBFF; --surface:#FFFFFF; --card:#FFFFFF;
-      --ink:#0F172A; --muted:#64748B; --faint:#94A3B8; --line:#E6EAF2;
+      --ink:#0F172A; --muted:#64748B; --faint:#94A3B8; --line:#E6EAF2; --piste:#8792A5;
       --amber:#D97706; --amber-fill:#FFFBEB; --amber-line:#FDE9C8;
       --teal:#0E9488; --teal-fill:#EFFDFB; --teal-line:#C7F0EA;
       --green:#15803D; --green-fill:#F2FCF5; --green-line:#CFEEDD;
@@ -453,10 +453,19 @@ _STYLE = f"""
       align-items:center; margin:0 0 7px; font-size:.84rem; }}
     .g-nom {{ overflow-wrap:break-word; }}
     /* La PISTE est le fond du svg (CSS), jamais un second rect : deux rects superposés dans
-       un même svg sont un chevauchement, et le contrôle de rendu du socle le refuse. */
-    .g-piste {{ display:block; width:100%; height:10px; background:var(--line);
+       un même svg sont un chevauchement, et le contrôle de rendu du socle le refuse.
+
+       TF-1272, 22/09/2026 — SA TEINTE A CHANGÉ, et deux remèdes ont été ÉCARTÉS PAR LA MESURE.
+       Le socle rendait un bloquant V9 : 89 % de la surface opaque du svg à 1,00:1, meilleur
+       contraste 1,21:1, sous le seuil WCAG 2.2 SC 1.4.11 de 3:1. Sortir la piste du svg ne
+       change rien — la capture voit les mêmes pixels, et le constat est revenu identique. La
+       retirer tout à fait est PIRE : le svg devient blanc sur blanc, mesuré à 1,00:1. Ce que
+       V9 mesure est la BOÎTE de l'actif, et dans une barre horizontale la piste en occupe
+       l'essentiel : c'est donc elle qui doit tenir le seuil. `--piste` est mesuré à 3,14:1
+       contre la carte claire et 3,18:1 contre la carte sombre. */
+    .g-piste {{ display:block; width:100%; height:10px; background:var(--piste);
       border-radius:3px; }}
-    .g-empile {{ display:block; width:100%; height:14px; background:var(--line);
+    .g-empile {{ display:block; width:100%; height:14px; background:var(--piste);
       border-radius:4px; }}
     .g-val {{ color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }}
     .g-legende {{ list-style:none; display:flex; flex-wrap:wrap; gap:6px 18px;
