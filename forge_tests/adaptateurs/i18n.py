@@ -32,8 +32,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import Any
 
 from forge_tests import catalogue_i18n as _catalogue
 from forge_tests import classes, exclusions, seuils
@@ -741,6 +743,131 @@ def constats_chaines(
     return constats
 
 
+# --- (l) DIMENSIONNEMENT SERP — TF-1318, étape B6 de la chaîne « audite les traductions » -------
+#
+# LE FAIT. Le lot `Produit-02 - RETOURS - 20260826f` nomme le « dimensionnement SERP » comme une
+# étape de la chaîne d'audit des traductions (B6) et de la chaîne de traduction (A10). Sur le
+# produit d'origine, c'est un contrôleur PROPRE AU PRODUIT qui la tenait — `check-seo`, qui « compte
+# des caractères » (lot `20260826d`) — et le produit suivant n'en aura pas. C'est pourtant une étape
+# de méthode : une traduction change la longueur d'un titre, et un titre tronqué en SERP perd ce qui
+# venait après la coupe. La taille se juge donc langue par langue, sur les pages servies.
+#
+# LA BORNE EST UNE DONNÉE EXTERNE PÉRISSABLE (loi n° 4 du pilot) : la troncature d'un moteur change
+# sans préavis, et elle se fait en PIXELS, pas en caractères. Elle ne s'invente donc pas ici : le
+# projet la DÉCLARE, sourcée et datée, dans `FORGE_TESTS_SERP_BORNES`. Rien de déclaré, rien de jugé
+# — et une borne sans source ni date est refusée, avec son motif, au lieu d'être crue.
+_BALISES_SERP = ("title", "description")
+_DATE_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _regle_serp(brute: object) -> dict[str, int] | None:
+    """Une règle `{"max": n}` / `{"min": n, "max": m}` en entiers positifs, ou None si illisible."""
+    if not isinstance(brute, dict):
+        return None
+    regle = {cle: val for cle, val in brute.items()
+             if cle in ("min", "max") and isinstance(val, int) and not isinstance(val, bool)
+             and val > 0}
+    return regle or None
+
+
+def bornes_serp() -> tuple[dict[str, Any] | None, str | None]:
+    """Les bornes SERP DÉCLARÉES par le projet, ou `(None, motif)`. Ne lève jamais.
+
+    `FORGE_TESTS_SERP_BORNES` désigne un fichier JSON :
+    `{"source": "<d'où vient la borne>", "verifie_le": "AAAA-MM-JJ",
+      "bornes": {"title": {"max": 60}, "description": {"max": 155}},
+      "par_locale": {"de": {"title": {"max": 65}}}}` — `par_locale` est facultatif.
+    Le motif distingue « rien de déclaré » de « déclaré mais pas opposable » : le premier est un
+    choix du projet, le second un défaut de sa déclaration, et les confondre les tairait tous deux.
+    """
+    chemin = (os.environ.get("FORGE_TESTS_SERP_BORNES") or "").strip()
+    if not chemin:
+        return None, None
+    fichier = Path(chemin)
+    if not fichier.is_file():
+        return None, f"bornes SERP declarees introuvables : {chemin}"
+    try:
+        brut = json.loads(fichier.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as erreur:
+        return None, f"bornes SERP illisibles ({type(erreur).__name__}) : {chemin}"
+    if not isinstance(brut, dict):
+        return None, f"bornes SERP : objet JSON attendu, {type(brut).__name__} lu"
+    source = brut.get("source")
+    date = brut.get("verifie_le")
+    if not isinstance(source, str) or not source.strip() or not isinstance(date, str) \
+            or not _DATE_ISO.match(date.strip()):
+        return None, (
+            "bornes SERP NON opposables : `source` et `verifie_le` (AAAA-MM-JJ) sont exiges. Une "
+            "borne de troncature est une donnee externe perissable — sans source ni date, elle ne "
+            "se distingue pas d une valeur inventee"
+        )
+    bornes = {b: r for b in _BALISES_SERP
+              if (r := _regle_serp((brut.get("bornes") or {}).get(b))) is not None}
+    if not bornes:
+        return None, ("bornes SERP : aucune regle lisible pour `title` ni `description` "
+                      "(entiers positifs `min`/`max`)")
+    par_locale: dict[str, dict[str, dict[str, int]]] = {}
+    for code, regles in (brut.get("par_locale") or {}).items():
+        if isinstance(regles, dict):
+            propres = {b: r for b in _BALISES_SERP if (r := _regle_serp(regles.get(b))) is not None}
+            if propres:
+                par_locale[str(code)] = propres
+    return {"source": source.strip(), "verifie_le": date.strip(), "bornes": bornes,
+            "par_locale": par_locale}, None
+
+
+def _texte_serp(page: _Page, balise: str) -> str | None:
+    """Le texte de la balise tel que le moteur le lit, espaces normalisés — ou None s'il manque.
+
+    Le `title` est le PREMIER du document : celui du `<head>`. Un `<title>` d'icône SVG, plus loin
+    dans la page, n'est pas un titre de résultat, et l'additionner fabriquerait un dépassement.
+    """
+    valeurs = page.meta.get(balise) or []
+    if not valeurs:
+        return None
+    texte = " ".join(valeurs[0].split())
+    return texte or None
+
+
+def constats_serp(
+    par_locale: dict[str, dict[str, Path]], bornes: dict[str, Any],
+) -> tuple[list[tuple[str, str, str, int, str, int, str, Path]], dict[str, Any]]:
+    """Les balises hors de leurs bornes, page par page et locale par locale — `(constats, mesure)`.
+
+    Un constat est `(locale, route, balise, longueur, sens, borne, texte, fichier)`. La longueur se
+    compte en CARACTÈRES : c'est ce qu'un projet sait déclarer et ce qu'un contrôleur de produit
+    mesure déjà ; la troncature réelle, en pixels, n'est qu'approchée — c'est dit au rapport.
+    """
+    constats: list[tuple[str, str, str, int, str, int, str, Path]] = []
+    pages = 0
+    mesurees: dict[str, int] = dict.fromkeys(_BALISES_SERP, 0)
+    absentes: dict[str, int] = dict.fromkeys(_BALISES_SERP, 0)
+    for locale in sorted(par_locale):
+        regles = {**bornes["bornes"], **bornes.get("par_locale", {}).get(locale or "defaut", {})}
+        for route, fichier in sorted(par_locale[locale].items()):
+            page = _lire(fichier)
+            pages += 1
+            for balise in _BALISES_SERP:
+                regle = regles.get(balise)
+                if not regle:
+                    continue
+                texte = _texte_serp(page, balise)
+                if texte is None:
+                    absentes[balise] += 1
+                    continue
+                mesurees[balise] += 1
+                longueur = len(texte)
+                if "max" in regle and longueur > regle["max"]:
+                    sens = "max"
+                elif "min" in regle and longueur < regle["min"]:
+                    sens = "min"
+                else:
+                    continue
+                constats.append(
+                    (locale, route, balise, longueur, sens, regle[sens], texte, fichier))
+    return constats, {"pages": pages, "mesurees": mesurees, "absentes": absentes}
+
+
 def _signes_i18n(cible: Path) -> list[str]:
     """Preuves POSITIVES qu un produit prétend être multilingue, hors build servi.
 
@@ -1162,8 +1289,18 @@ def analyser(cible: Path) -> SortieAdaptateur:
             "Rien de declare, rien de juge — le pan ne devine pas les routes d un produit"
         )
 
+    # (l) TF-1318 — les bornes SERP se LISENT d'abord : sans build, le rapport doit pouvoir dire
+    # qu'elles étaient déclarées et n'ont pas été jouées, plutôt que se taire.
+    bornes, motif_bornes = bornes_serp()
+
     build = build_servi(cible)
     if build is None:
+        if bornes is not None or motif_bornes:
+            non_juge.append(
+                "i18n : dimensionnement SERP (TF-1318) NON joue — "
+                + (motif_bornes or "bornes declarees, mais AUCUN build servi lu : les balises "
+                   "`title` et `description` se mesurent sur les pages servies")
+            )
         catalogue_a_parle = any("catalogue `" in m for m in motifs_catalogue)
         if findings_catalogue or findings_routes or catalogue_a_parle:
             # Le catalogue a parle : le pan MESURE, meme sans build. Le build reste nomme comme
@@ -1324,6 +1461,47 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     risque=coter(PAN, identifiant, str(par_locale[locale]["/"])),
                 )
             )
+
+    # (l) DIMENSIONNEMENT SERP — TF-1318. Joué sur le MÊME build, locale par locale, contre des
+    #     bornes DÉCLARÉES. Il ne touche ni à l'inventaire ni à la couverture : une route au titre
+    #     trop long est servie, elle est seulement coupée dans la page de résultats.
+    if bornes is None:
+        non_juge.append(
+            "i18n : dimensionnement SERP (TF-1318) NON juge — "
+            + (motif_bornes or "aucune borne declaree (FORGE_TESTS_SERP_BORNES : JSON {source, "
+               "verifie_le, bornes}). Une borne de troncature est une donnee externe perissable : "
+               "elle se declare, sourcee et datee, elle ne s invente pas dans un controle")
+        )
+    else:
+        hors_bornes, mesure_serp = constats_serp(par_locale, bornes)
+        for locale, route, balise, longueur, sens, borne, texte, fichier in hors_bornes:
+            findings.append(
+                Finding(
+                    id=f"i18n:serp:{locale or 'defaut'}:{route}:{balise}",
+                    classe=classes.I18N,
+                    localisation=str(fichier),
+                    message=(
+                        f"{balise} de « {_route_servie(locale, route)} » (locale "
+                        f"{locale or 'defaut'}) : {longueur} caractere(s), "
+                        + ("au-dela du maximum" if sens == "max" else "en deca du minimum")
+                        + f" declare de {borne} — « {texte[:90]}"
+                        + ("…" if len(texte) > 90 else "") + " ». "
+                        "Une traduction change la longueur du texte, et un titre tronque en SERP "
+                        f"perd ce qui venait apres la coupe (bornes : {bornes['source']}, "
+                        f"verifiees le {bornes['verifie_le']})"
+                    ),
+                    risque=coter(PAN, f"i18n:serp:{locale or 'defaut'}", str(fichier)),
+                )
+            )
+        non_juge.append(
+            f"i18n : dimensionnement SERP (TF-1318) juge contre les bornes declarees — source "
+            f"« {bornes['source']} », verifiees le {bornes['verifie_le']} ; "
+            f"{mesure_serp['pages']} page(s), {mesure_serp['mesurees']['title']} title et "
+            f"{mesure_serp['mesurees']['description']} description(s) mesure(s), "
+            f"{len(hors_bornes)} hors borne ; {sum(mesure_serp['absentes'].values())} balise(s) "
+            "absente(s), non jugee(s) ici. Le compte est en CARACTERES : la troncature d un moteur "
+            "se fait en largeur de pixels, que ce compte approche sans la mesurer"
+        )
 
     findings.sort(key=lambda finding: finding.risque or 0, reverse=True)
     total = len(par_locale) * len(attendues)

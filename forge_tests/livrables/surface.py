@@ -63,7 +63,9 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
     # d oeil, tout ce qui manque à l anglais. Ranger ses constats par écran les aurait dispersés
     # sur deux cents lignes, exactement là où ils étaient déjà invisibles.
     "locale": (
-        (re.compile(r"^i18n:(?:route|navigation|langue):(?P<v>[^:]+)"), "locale {v}"),
+        # TF-1318 : `serp` (dimensionnement des titres et descriptions) se range aussi par locale —
+        # un titre allemand trop long se lit avec le reste de ce qui cloche en allemand.
+        (re.compile(r"^i18n:(?:route|navigation|langue|serp):(?P<v>[^:]+)"), "locale {v}"),
     ),
     "fichier": (
         (re.compile(r"^migration:(?P<v>[^:]+):"), "migration {v}"),

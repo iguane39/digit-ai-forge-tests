@@ -910,6 +910,28 @@ corrigées). Joués de bout en bout par `tests/test_tf_0284_i18n.py` **et** par 
 de la recette, seule à prononcer S-01 : le pan a d'abord vécu dans des bancs séparés, donc hors
 du corpus, c'est-à-dire non mesuré par la recette du dépôt (TF-0293).
 
+### Le dimensionnement SERP, locale par locale (TF-1318)
+
+La chaîne « audite les traductions » du pilot (`references\CHAINE-TRADUCTION.md`, étape **B6**)
+demande que la taille des titres et descriptions servis soit jugée **par langue** : une traduction
+change la longueur du texte, et un titre tronqué dans la page de résultats perd ce qui venait
+après la coupe. Sur le produit d'origine, un contrôleur **propre au produit** tenait cette étape en
+comptant des caractères ; le produit suivant n'en aura pas.
+
+Le contrôle **(l)** mesure, sur chaque page du build servi et pour chaque locale, la longueur du
+premier `<title>` et de la `<meta name="description">`, contre des bornes **déclarées** :
+
+| Constat | Exemple |
+|---|---|
+| `i18n:serp:<locale>:<route>:<balise>` | `title de « /de » (locale de) : 76 caractere(s), au-dela du maximum declare de 60` |
+
+**La borne est une donnée, pas du code.** La troncature d'un moteur change sans préavis et se fait
+en largeur de pixels : elle se déclare dans `FORGE_TESTS_SERP_BORNES`, **sourcée et datée**. Rien de
+déclaré, rien de jugé, et le rapport le dit ; une borne sans `source` ni `verifie_le` est
+**refusée** avec son motif au lieu d'être crue. Le compte se fait en caractères, que le rapport
+déclare comme une approche de la largeur réelle. Recette à double sens :
+`tests/test_tf_1318_dimensionnement_serp.py`.
+
 ## Lecture du SQL — filtrer avant de découper
 
 Un `;` posé **dans un commentaire** de migration fabriquait une instruction qui n'avait jamais
@@ -1496,6 +1518,7 @@ journalisé). Modèle : `.env.exemple`.
 | `FORGE_TESTS_QUALIF_EFFETS_PLAFOND` | nombre maximal d'affordances observées par page (défaut `25`) — chaque observation recharge la page ; au-delà, le rapport le dit |
 | `FORGE_TESTS_QUALIF_REFUS` | routes d'atterrissage de refus d'autorisation propres au produit (virgule) — voir « Pan `qualif` » |
 | `FORGE_TESTS_I18N_BUILD` | dossier du **build servi** lu par le pan `i18n` (l'arborescence de pages telle que le visiteur la reçoit). À défaut, le pan cherche `out/`, `dist/`, `build/`, `_site/`, `site/`, `www/`, `public/` sous la racine, puis un `index.html` à la racine elle-même. Aucun réseau, aucun navigateur |
+| `FORGE_TESTS_SERP_BORNES` | fichier JSON des bornes du **dimensionnement SERP** (TF-1318) : `{"source": "…", "verifie_le": "AAAA-MM-JJ", "bornes": {"title": {"max": 60}, "description": {"max": 155}}, "par_locale": {"de": {"title": {"max": 65}}}}` — `min` admis, `par_locale` facultatif (clé `defaut` pour la locale sans préfixe). Absent : rien n'est jugé, et le rapport le dit. Sans `source` ni `verifie_le` : refusé, non opposable. Les valeurs de l'exemple illustrent la forme, elles ne sont pas une recommandation |
 | `FORGE_TESTS_EXIGENCES` | chemin d'un `EXIGENCES.json` : les cas des cahiers y sont rattachés, **avec leur provenance** (`declare` ou `lexical`). Absent, le cahier le déclare en tête et dérive de la seule surface. Un chemin qui n'existe pas est un **refus**, pas un silence |
 | `FORGE_TESTS_PRODUIT` | nom du produit dans les noms de fichiers des livrables. À défaut : le champ `projet` du référentiel d'exigences, puis le nom du dossier audité |
 | `FORGE_TESTS_PLAYWRIGHT_TRACE` | mode `--trace` imposé à la suite e2e (`on`, `off`, `retain-on-failure`…) — à défaut, le mode déjà réglé dans le `playwright.config` du projet est respecté (rien n'est passé en ligne de commande), sinon replié sur `on`. Utile pour désactiver la trace si son écriture bloque sur un poste (TF-0132) — la couverture front devient alors non mesurable, déclarée telle |
