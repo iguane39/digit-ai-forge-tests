@@ -57,7 +57,7 @@ DOSSIERS = ("locales", "messages", "translations", "i18n", "lang", "langs")
 #: Coupés à l'entrée : ce contrôle tourne sur TOUT audit, descendre dans les dépendances serait
 #: un coût payé partout pour rien.
 _EXCLUS = {
-    "node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build", "out", ".next",
+    "node_modules", ".git", ".venv", "venv", "__pycache__", ".next",
     ".nuxt", ".svelte-kit", "coverage", "htmlcov", ".pytest_cache", ".ruff_cache", "vendor",
     ".forge", "site-packages",
     # TF-0536/0542/0543 (lot Produit-02 20260823) : le SOCLE commun vient desormais
@@ -65,7 +65,17 @@ _EXCLUS = {
     # `input` ne figurait dans AUCUNE : sur un audit reel, 12 constats sur 15 portaient sur
     # `input\` — un site concurrent aspire et une ancienne version du site. Les entrees
     # ci-dessus restent ecrites ici : elles portent le motif de CE pan.
-    *exclusions.socle(),
+    #
+    # TF-1331 (23/09/2026) : `build`, `dist`, `out` sont RETIRES de ce socle pour CETTE
+    # recherche precisement, alors qu ils y vivent par defaut (`exclusions.OUTILLAGE`). Mesure :
+    # un catalogue `build/i18n/{fr,en}.mjs` rendait ({}, []) — invisible, ni lu ni declare non
+    # lu — parce que le socle coupait la marche AVANT meme d atteindre le dossier `i18n`. Le pan
+    # i18n reconnait deja ces trois noms comme racines de BUILD SERVI (`DOSSIERS_BUILD` dans
+    # adaptateurs/i18n.py) : un catalogue y vit legitimement, sous forme compilee. Les couper ici
+    # les rendrait invisibles ET muets — le pire des deux modes de defaillance. Un dossier hors
+    # de ces trois noms reste coupe (node_modules, .venv…) ; le bruit possible (un `locales/`
+    # vendored copie dans `dist/`) se conteste comme tout constat d audit.
+    *(exclusions.socle() - {"build", "dist", "out"}),
 }
 
 #: Un nom de fichier de locale : `fr.json`, `en-GB.json`, `pt_BR.json`.
