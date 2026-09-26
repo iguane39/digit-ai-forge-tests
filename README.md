@@ -76,7 +76,7 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 | Option | Effet |
 |---|---|
 | `--json` | rapport complet en JSON sur stdout (sinon résumé lisible) |
-| `--pans <pan> [...]` | restreint l'audit à ces pans (`front interface api data migrations batch fichiers back securite accessibilite visuel qualif prompts`) |
+| `--pans <pan> [...]` | restreint l'audit à ces pans (`front interface api data migrations batch fichiers back securite accessibilite contraste clavier visuel plancher qualif prompts i18n`) |
 | `--generer <dossier>` | dépose les cas de test générés dans ce dossier de **dépôt extérieur** — jamais dans le projet analysé. Ces cas sont **à adopter et exécuter** (R-40), pas un livrable en soi. Les messages partent sur stderr : `--generer --json` produit un stdout JSON pur |
 | `--sortie <fichier>` | persiste le rapport dans ce fichier, **à l'identique** de stdout (le dossier parent est créé au besoin) |
 | `--reprendre <rapport.json>` | relit un rapport antérieur et **ne rejoue que ce qui n'était pas vert** ; le rapport produit fusionne l'ancien et le neuf avec la provenance de chaque élément — voir « Audit de qualification avec reprise » |
