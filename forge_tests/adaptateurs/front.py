@@ -42,7 +42,8 @@ _BYTESTID = re.compile(r'getByTestId\(\s*"([^"]+)"')
 # n etait reconnu ni par `routes.jsx` ni par la convention TanStack — un produit en react-router
 # s inventoriait a zero route, et la surface front tombait a zero en cascade (accessibilite,
 # visuel).
-_ROUTE_JSX = re.compile(r'<Route\b[^>]*\bpath\s*=\s*(["\'])(.*?)\1', re.DOTALL)
+_ROUTE_OUVRANTE = re.compile(r'<Route\b')
+_PATH_ATTR = re.compile(r'\bpath\s*=\s*(["\'])(.*?)\1', re.DOTALL)
 
 NON_JUGE = [
     "front : un element manipule pendant la suite est repute exerce ; la trace dit qu il a ete "
@@ -76,6 +77,82 @@ def _routes_tanstack(racine: Path) -> list[tuple[str, Path]]:
     return routes
 
 
+def _fin_balise(texte: str, debut: int) -> tuple[int, bool] | None:
+    """Trouve la fin RÉELLE d une balise JSX ouverte en `debut` (juste après `<Route`), en
+    ignorant tout `>` situé À L INTÉRIEUR d un conteneur d expression JSX (`{…}`) — un
+    `element={<AdminLayout />}` est le cas le plus courant : sans ce comptage, le premier `>`
+    rencontré (celui du `<AdminLayout />` imbriqué) était pris pour la fin de la balise `Route`,
+    qui se lisait alors à tort comme auto-fermée (donc sans enfants à composer).
+
+    Retourne `(index juste après le '>', auto_fermee)`, ou `None` si la balise ne se termine
+    jamais (fichier tronqué/illisible : l appelant renonce proprement).
+    """
+    profondeur = 0
+    i = debut
+    while i < len(texte):
+        c = texte[i]
+        if c == "{":
+            profondeur += 1
+        elif c == "}":
+            profondeur = max(0, profondeur - 1)
+        elif c == ">" and profondeur == 0:
+            return i + 1, (i > debut and texte[i - 1] == "/")
+        i += 1
+    return None
+
+
+def _routes_depuis_jsx(texte: str, fichier: Path) -> list[tuple[str, Path]]:
+    """Routes déclarées par `<Route path="…">` (react-router), ADRESSE COMPLÈTE composée avec
+    ses ancêtres.
+
+    TF-1347 : un enfant `<Route path="keys">` sous un parent `<Route path="admin">` désigne
+    `/admin/keys`, jamais `/keys` tout seul — l ancienne lecture relevait chaque `path` isolément,
+    sans savoir qu il pouvait être imbriqué dans un autre `<Route>`. Trois faux bloquants
+    lien-casse (`/admin/keys`, `/admin/requests`) en venaient : l URL réellement visitée
+    n'appariait jamais l'un des deux fragments relevés séparément. Un chemin enfant ABSOLU
+    (commençant par `/`) ignore ses parents, comme le fait react-router lui-même.
+    """
+    routes: list[tuple[str, Path]] = []
+    pile: list[str] = [""]  # chemin COMPOSÉ de chaque <Route> actuellement ouverte ("" = racine)
+    i = 0
+    n = len(texte)
+    while i < n:
+        m_ouvre = _ROUTE_OUVRANTE.search(texte, i)
+        i_ferme = texte.find("</Route>", i)
+        if m_ouvre is None and i_ferme == -1:
+            break
+        if m_ouvre is not None and (i_ferme == -1 or m_ouvre.start() < i_ferme):
+            fin = _fin_balise(texte, m_ouvre.end())
+            if fin is None:
+                break
+            fin_idx, auto_fermee = fin
+            attrs = texte[m_ouvre.end():fin_idx - (2 if auto_fermee else 1)]
+            pm = _PATH_ATTR.search(attrs)
+            parent = pile[-1]
+            if pm is None:
+                compose = parent  # route index/layout, sans path propre : hérite du parent
+            else:
+                segment = pm.group(2).strip("/")
+                if pm.group(2).startswith("/"):
+                    compose = ("/" + segment) if segment else "/"
+                elif segment == "*" and not parent:
+                    # Catch-all RACINE (`path="*"`, convention react-router) : jamais composé en
+                    # "/*" — un enfant "*" sous un parent, lui, se compose normalement (TF-1347
+                    # ne touche pas à ce cas déjà couvert par test_correctifs_20260811.py).
+                    compose = "*"
+                else:
+                    compose = (parent.rstrip("/") + "/" + segment) if parent else "/" + segment
+                routes.append((compose, fichier))
+            if not auto_fermee:
+                pile.append(compose)
+            i = fin_idx
+        else:
+            if len(pile) > 1:
+                pile.pop()
+            i = i_ferme + len("</Route>")
+    return routes
+
+
 def _routes_react_router(racine: Path) -> list[tuple[str, Path]]:
     """Routes déclarées par `<Route path="…">` (react-router), recherchées dans tout `src/`.
 
@@ -91,8 +168,7 @@ def _routes_react_router(racine: Path) -> list[tuple[str, Path]]:
         if "routeTree.gen" in fichier.name:
             continue
         texte = fichier.read_text(encoding="utf-8", errors="replace")
-        for _guillemet, chemin in _ROUTE_JSX.findall(texte):
-            routes.append((chemin, fichier))
+        routes.extend(_routes_depuis_jsx(texte, fichier))
     return routes
 
 
