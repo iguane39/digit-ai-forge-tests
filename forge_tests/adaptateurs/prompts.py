@@ -146,6 +146,49 @@ _EPINGLE = re.compile(
     r"|20\d{2}-(?:0[1-9]|1[0-2])-(?:[0-2]\d|3[01])"
     r"|2\d(?:0[1-9]|1[0-2]))$"
 )
+
+# --- TF-1419 : les identifiants que le fournisseur publie SANS variante datée -----------------
+# `_EPINGLE` exige un suffixe daté — une règle juste pour un ALIAS (`claude-haiku-4-5` pointe
+# vers `claude-haiku-4-5-20251001`, et il existe une forme à épingler à sa place). Elle est
+# fausse pour un nom de VERSION dont le fournisseur ne publie aucune variante datée : rien à
+# épingler, et le contrôle poussait quand même vers une forme d'une génération antérieure.
+# Mesuré le 24/09/2026 sur Produit-61 (18 occurrences de `modele:claude-opus-5` contestées le
+# 05/09, contestation non remontée au registre) et confirmé inchangé le 02/10/2026 en rejouant
+# `est_epingle()` directement.
+#
+# Loi n° 4 du pilot — une donnée volatile est une donnée, pas du code : ce référentiel PÉRIME à
+# chaque nouvelle famille de modèle, il vit donc ÉDITABLE, DATÉ et SOURCÉ ici, jamais recopié en
+# dur dans la règle elle-même. `est_epingle` le lit AVANT de conclure à un alias mouvant. Un nom
+# qui pointe réellement vers une forme datée, ou qui porte un suffixe `-latest`, n'y figure PAS
+# et reste signalé : ce référentiel ne fait qu'ôter les faux positifs mesurés, il n'assouplit
+# rien d'autre.
+_IDENTIFIANTS_SANS_FORME_DATEE: tuple[dict[str, str], ...] = (
+    {
+        "nom": "claude-opus-5-5",
+        "releve_le": "2026-10-02",
+        "source": "shared/models.md (skill claude-api, Claude Code 2.1.281) : aucun identifiant "
+        "daté publié pour Opus 5.5",
+    },
+    {
+        "nom": "claude-opus-5",
+        "releve_le": "2026-10-02",
+        "source": "shared/models.md (skill claude-api, Claude Code 2.1.281) : aucun identifiant "
+        "daté publié pour Opus 5",
+    },
+    {
+        "nom": "claude-sonnet-5",
+        "releve_le": "2026-10-02",
+        "source": "shared/models.md (skill claude-api, Claude Code 2.1.281) : aucun identifiant "
+        "daté publié pour Sonnet 5",
+    },
+    {
+        "nom": "claude-fable-5-1",
+        "releve_le": "2026-10-02",
+        "source": "shared/models.md (skill claude-api, Claude Code 2.1.281) : aucun identifiant "
+        "daté publié pour Fable 5.1",
+    },
+)
+_SANS_FORME_DATEE = frozenset(entree["nom"] for entree in _IDENTIFIANTS_SANS_FORME_DATEE)
 _CHAINE = re.compile(r"[\"'`]([^\"'`\n]{3,120})[\"'`]")
 _CLE_MODELE = re.compile(
     r"(?im)^[\s\-#*>]*(?:mod[eè]les?|models?)\s*[:=]\s*[\"'`]?([^\"'`\n,}\]]+)"
@@ -269,8 +312,15 @@ def est_un_corpus(chemin: Path) -> bool:
 
 
 def est_epingle(nom: str) -> bool:
-    """Le nom désigne-t-il une version FIGÉE, ou un alias qui bouge sous nos pieds ?"""
-    return bool(_EPINGLE.search(nom.strip()))
+    """Le nom désigne-t-il une version FIGÉE, ou un alias qui bouge sous nos pieds ?
+
+    TF-1419 : un nom lu dans `_IDENTIFIANTS_SANS_FORME_DATEE` est épinglé par construction — le
+    fournisseur n'en publie aucune variante datée à exiger à sa place.
+    """
+    nom = nom.strip()
+    if nom in _SANS_FORME_DATEE:
+        return True
+    return bool(_EPINGLE.search(nom))
 
 
 def modeles_cites(texte: str) -> list[str]:
