@@ -125,10 +125,32 @@ def parcourir(
     return resultats, motifs
 
 
+def _motif_instance_injoignable(base: str, prefixe: str) -> str:
+    """TF-1210 : la forge ne monte pas l instance declaree a distance — si elle ne repond pas,
+    le motif cite la commande de demarrage declaree par le projet plutot que de laisser chaque
+    route echouer avec un « navigation impossible » generique qui ne dit ni l un ni l autre."""
+    from forge_tests.instance import CHAMP_MONTER, contrat
+
+    monter = contrat()["monter"]
+    consigne = (
+        f"demarrer l instance avec la commande declaree dans {CHAMP_MONTER} : `{monter}`"
+        if monter
+        else f"aucune commande de demarrage declaree — la fournir dans {CHAMP_MONTER}"
+    )
+    return (
+        f"{prefixe} : instance non joignable sur {base} — {consigne}, puis rejouer"
+    )
+
+
 def _parcourir_distant(
     base: str, routes: list[str], action: Action, cible: Path, prefixe: str
 ) -> tuple[dict[str, Any], list[str]]:
     """Instance servie ailleurs (recette, preproduction). GET seulement, aucune action mutante.
+
+    TF-1210 : l adresse de base est SONDEE avant le premier rendu. Sans cette garde, une
+    instance non demarree faisait echouer CHAQUE route avec le meme motif generique
+    (« navigation impossible : Error »), qui ne disait ni qu il fallait demarrer l instance ni
+    quelle commande jouer — un audit complet perdu pour un motif illisible.
 
     Le jeton est pose AVANT le premier rendu : sans lui, les routes protegees redirigent toutes
     vers la meme page et la mesure ne porte sur rien.
@@ -136,6 +158,13 @@ def _parcourir_distant(
     from playwright.sync_api import sync_playwright
 
     from forge_tests.authentification import obtenir_jeton, script_injection
+    from forge_tests.instance import PORT_LIBRE, sonder_port
+
+    # TF-1210 : seul le constat SUR (port confirme LIBRE) refuse tot. Un port INDETERMINABLE
+    # (DNS resolu, mais sonde impossible pour une autre raison) ne bloque pas — la garde ne se
+    # deduit jamais d une ignorance, meme doctrine que `precondition_absente` du pan qualif.
+    if sonder_port(base)["etat"] == PORT_LIBRE:
+        return {}, [_motif_instance_injoignable(base, prefixe)]
 
     jeton = obtenir_jeton(cible)
     resultats: dict[str, Any] = {}
