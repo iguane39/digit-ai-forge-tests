@@ -151,10 +151,16 @@ NON_JUGE = [
     "(suppression, envoi, appel tiers facture). Un gestionnaire attache mais dont le corps ne "
     "fait rien passe alors pour un effet : ces affordances sont comptees CABLEES, pas exercees, "
     "et le rapport publie leur compte separement",
-    "qualif : meme effets observes, la PERTINENCE de la destination n est pas jugee — un lien "
-    "« Ma commande » qui mene a la page d aide produit bien une navigation, donc un effet. La "
-    "destination CONSTATEE est publiee avec l affordance pour qu un relecteur la voie ; aucune "
-    "attente ne lui est opposee, faute d attente declaree",
+    "qualif : la PERTINENCE de la destination d un effet observe n est jugee QUE si une attente "
+    "est DECLAREE pour l affordance (FORGE_TESTS_QUALIF_DESTINATIONS, TF-1218) — sans elle, un "
+    "lien « Ma commande » qui mene a la page d aide produit bien une navigation, donc un effet, "
+    "et la destination CONSTATEE reste publiee avec l affordance pour qu un relecteur la voie, "
+    "sans qu aucune attente ne lui soit opposee",
+    # TF-1218 : le second scenario de l item, meme frontiere d environnement que les effets
+    # (opt-in, G-1 tenue : rien n est ecrit hors du gabarit declare par le projet lui-meme).
+    "qualif : « etat survit a une navigation » n est joue QUE si les quatre champs de "
+    "CHAMPS_ETAT sont declares (route, geste de remplissage, marqueur, route de destination) — "
+    "sans eux, aucun etat client n est verifie, et ce silence n est pas un constat",
     "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une "
     "route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) "
     "n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",
@@ -1136,7 +1142,30 @@ def _config(cible: Path) -> dict:
         "effets_plafond": int(effets_plafond)
         if effets_plafond.isdigit()
         else _EFFETS_PLAFOND_DEFAUT,
+        # TF-1218 — l'attente de DESTINATION par affordance : JSON {"sous-chaîne du libellé,
+        # en minuscules": "sous-chaîne attendue dans la destination"}. Sans déclaration, la
+        # destination réellement atteinte reste seulement CONSTATÉE (TF-0876), jamais jugée.
+        "destinations": _json_objet(os.environ.get("FORGE_TESTS_QUALIF_DESTINATIONS")),
+        # TF-1218 — le gabarit de parcours « état survit à la navigation » : quatre champs, tous
+        # requis pour que le scénario se joue (CHAMPS_ETAT) ; aucun deviné.
+        "etat_route": (os.environ.get("FORGE_TESTS_QUALIF_ETAT_ROUTE") or "").strip(),
+        "etat_remplir": (os.environ.get("FORGE_TESTS_QUALIF_ETAT_REMPLIR") or "").strip(),
+        "etat_marqueur": (os.environ.get("FORGE_TESTS_QUALIF_ETAT_MARQUEUR") or "").strip(),
+        "etat_ailleurs": (os.environ.get("FORGE_TESTS_QUALIF_ETAT_AILLEURS") or "").strip(),
     }
+
+
+def _json_objet(brut: str | None) -> dict[str, str]:
+    """Un objet JSON {chaîne: chaîne} déclaré par l'opérateur — {} si absent ou illisible, un
+    JSON mal formé n'est pas un motif pour faire tomber tout le pan."""
+    texte = (brut or "").strip()
+    if not texte:
+        return {}
+    try:
+        lu = json.loads(texte)
+    except json.JSONDecodeError:
+        return {}
+    return {str(k): str(v) for k, v in lu.items()} if isinstance(lu, dict) else {}
 
 
 def _route(url: str, base: str) -> str | None:
@@ -1390,6 +1419,127 @@ def _observer_effet(page, url_page: str, affordance: dict, selecteur: str) -> di
         "observe": False,
         "effet": "clic joué, aucun effet observé : ni navigation, ni onglet, ni changement du DOM",
     }
+
+
+# --- Pertinence de la DESTINATION d un effet observé (TF-1218) --------------------------------
+# TF-0876 avait fermé la moitié du défaut du 06/09 : « Ma commande » menait à `/aide`, et cette
+# navigation était désormais publiée comme effet CONSTATÉ — mais sa pertinence restait hors de
+# portée, faute d attente déclarée (NON_JUGE ci-dessous, toujours vrai sans déclaration). La
+# seconde moitié, ici : quand le projet DÉCLARE ce qu une affordance doit atteindre
+# (`FORGE_TESTS_QUALIF_DESTINATIONS`), une navigation qui s en écarte devient un défaut NOMMÉ.
+def pertinence_destination(libelle: str, affordance: dict, config: dict) -> str | None:
+    """Motif si la destination RÉELLEMENT atteinte par ce clic trahit l attente DÉCLARÉE pour
+    cette affordance ; None si rien n est déclaré (non jugé) ou si l attente est tenue.
+
+    L appariement se fait sur une SOUS-CHAÎNE du libellé, en minuscules — la même prudence que
+    `_est_atterrissage_de_refus` : une attente non déclarée ne juge rien, jamais une devinette.
+    """
+    if affordance.get("observe") is not True:
+        return None
+    attentes = config.get("destinations") or {}
+    cle_libelle = (libelle or "").strip().lower()
+    attendu = next((valeur for motif, valeur in attentes.items() if motif in cle_libelle), None)
+    if attendu is None:
+        return None
+    effet = str(affordance.get("effet") or "")
+    if attendu.lower() in effet.lower():
+        return None
+    return (
+        f"affordance « {libelle or 'sans libellé'} » — destination attendue (DÉCLARÉE par "
+        f"FORGE_TESTS_QUALIF_DESTINATIONS) contenant « {attendu} », destination RÉELLEMENT "
+        f"constatée sans rapport : {effet}"
+    )
+
+
+# --- État CLIENT qui survit (ou pas) à une navigation (TF-1218) --------------------------------
+# LE FAIT (retour pilot, instruction INS-0005 du 14/09/2026, journal Produit-61 séq. 88). Avant
+# le correctif du 06/09, ouvrir l aide faisait perdre le contenu du panier — aucune persistance
+# entre deux navigations — et le bouton « Ma commande » mesuré par TF-1218 menait vers une
+# destination sans rapport (second symptôme, couvert par `pertinence_destination` ci-dessus). Le
+# pan `interface` et le parcours de qualification vérifient la présence et l atteignabilité des
+# boutons, jamais que l état construit par l utilisateur SURVIT à un aller-retour.
+#
+# GABARIT DE PARCOURS, opt-in (même frontière d environnement que les effets, TF-0876) : quatre
+# champs déclarent le scénario entier ; son absence ne devine rien, le pan reste muet dessus.
+CHAMPS_ETAT = (
+    "FORGE_TESTS_QUALIF_ETAT_ROUTE",
+    "FORGE_TESTS_QUALIF_ETAT_REMPLIR",
+    "FORGE_TESTS_QUALIF_ETAT_MARQUEUR",
+    "FORGE_TESTS_QUALIF_ETAT_AILLEURS",
+)
+# Le délai laissé à l état pour se poser après le geste de remplissage (même ordre de grandeur
+# que l attente d effet, TF-0876) — une application qui écrit en JavaScript ne persiste pas dans
+# le même tour de boucle que le clic.
+_ATTENTE_ETAT_MS = 400
+
+
+def etat_declare(config: dict) -> bool:
+    """Le scénario « état survit à une navigation » est-il entièrement DÉCLARÉ ?"""
+    return bool(
+        config.get("etat_route")
+        and config.get("etat_remplir")
+        and config.get("etat_marqueur")
+        and config.get("etat_ailleurs")
+    )
+
+
+def _lire_marqueur(page, selecteur: str) -> str | None:  # noqa: ANN001
+    """Le texte du marqueur d état DÉCLARÉ, ou None si l élément n est jamais apparu."""
+    if _attendre(page, selecteur, timeout=5000) is None:
+        return None
+    try:
+        return (page.locator(selecteur).first.text_content() or "").strip()
+    except Exception:  # noqa: BLE001 — une lecture ratée se DÉCLARE, elle n accuse pas
+        return None
+
+
+def verifier_etat_survit_a_navigation(page, config: dict) -> dict | None:  # noqa: ANN001
+    """Remplit l état déclaré, navigue ailleurs, revient : le marqueur est-il intact ? TF-1218.
+
+    `None` si le scénario n est pas déclaré, ou si un geste n a pas pu être joué (élément de
+    remplissage ou marqueur jamais apparu, navigation en échec) — un non-jugement, jamais une
+    accusation : la garde est la même doctrine que `precondition_absente`. Sinon
+    `{"intact": bool, "avant": str, "apres": str | None}`.
+    """
+    if not etat_declare(config):
+        return None
+    base = config["base"]
+    route, remplir = config["etat_route"], config["etat_remplir"]
+    marqueur, ailleurs = config["etat_marqueur"], config["etat_ailleurs"]
+    try:
+        page.goto(base + route, wait_until="networkidle", timeout=45000)
+        if _attendre(page, remplir, timeout=5000) is None:
+            return None
+        page.locator(remplir).first.click(timeout=5000)
+        page.wait_for_timeout(_ATTENTE_ETAT_MS)
+        avant = _lire_marqueur(page, marqueur)
+        if avant is None:
+            return None
+        page.goto(base + ailleurs, wait_until="networkidle", timeout=45000)
+        page.goto(base + route, wait_until="networkidle", timeout=45000)
+        apres = _lire_marqueur(page, marqueur)
+    except Exception:  # noqa: BLE001 — un parcours injouable se DÉCLARE, il n accuse pas
+        return None
+    return {"intact": avant == apres, "avant": avant, "apres": apres}
+
+
+def finding_etat_perdu(etat: dict | None, config: dict) -> Finding | None:
+    """Le constat d un état qui ne survit PAS à l aller-retour déclaré, ou None."""
+    if etat is None or etat["intact"]:
+        return None
+    identifiant = f"qualif:etat-survit-navigation:{config['etat_route']}"
+    return Finding(
+        id=identifiant,
+        classe=classes.ETAT_PERDU_A_LA_NAVIGATION,
+        localisation=f"{config.get('base') or ''}{config['etat_route']}",
+        message=(
+            f"l état rempli sur {config['etat_route']} ({config['etat_remplir']}) ne survit PAS "
+            f"à une navigation vers {config['etat_ailleurs']} puis un retour — marqueur "
+            f"({config['etat_marqueur']}) avant : {etat['avant']!r}, après : {etat['apres']!r}"
+        ),
+        severite="bloquant",
+        risque=coter(PAN, identifiant, config.get("base") or ""),
+    )
 
 
 # --- Parcours ---------------------------------------------------------------------------------
@@ -1728,6 +1878,10 @@ def analyser(cible: Path) -> SortieAdaptateur:
 
     non_juge = list(NON_JUGE)
     entree: dict | None = None
+    # TF-1218 : résultat du scénario « état survit à une navigation » — None tant qu il n a pas
+    # tourné (non déclaré, ou pan tombé avant de l atteindre) ; `finding_etat_perdu` sait lire
+    # ce None sans rien accuser.
+    resultat_etat: dict | None = None
     # TF-0314 : la session est un objet dont l état se remplit par CONSTAT, et il est publié même
     # quand le parcours s effondre ensuite — une provenance non relevée se DIT, elle ne se devine
     # pas. `etat` à None veut dire « pas encore relevé », et la provenance le dira ainsi.
@@ -1779,6 +1933,17 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 avertissements.extend(_avec_role(alertes_visite, session["role"]))
                 with contextlib.suppress(Exception):
                     contexte.close()
+            # TF-1218 — une fois pour l audit entier, hors de la boucle des sessions : l état
+            # CLIENT n est pas lié à une identité, et le scénario ne se joue QUE si CHAMPS_ETAT
+            # est entièrement déclaré (etat_declare le dit, verifier_etat_survit_a_navigation ne
+            # devine rien d autre).
+            if etat_declare(config):
+                page_etat = navigateur.new_page()
+                try:
+                    resultat_etat = verifier_etat_survit_a_navigation(page_etat, config)
+                finally:
+                    with contextlib.suppress(Exception):
+                        page_etat.close()
             navigateur.close()
     except Exception as erreur:  # noqa: BLE001 — un pan qui ne peut pas voir le DECLARE
         return SortieAdaptateur(
@@ -1806,7 +1971,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
             ],
         )
     non_juge.extend(sorted(set(avertissements)))
-    return conclure(cible, config, releve, non_juge, entree, sessions)
+    return conclure(cible, config, releve, non_juge, entree, sessions, etat=resultat_etat)
 
 
 def finding_entree(entree: dict | None, config: dict, cible: Path) -> Finding | None:
@@ -1830,6 +1995,7 @@ def conclure(
     non_juge: list[str],
     entree: dict | None = None,
     sessions: list[dict] | None = None,
+    etat: dict | None = None,
 ) -> SortieAdaptateur:
     """Traduit le relevé de parcours en verdict — SEUL endroit où ce pan accuse le produit.
 
@@ -1857,6 +2023,10 @@ def conclure(
     # que la garde vient de corriger — un pan aveugle au contenu authentifié doit quand même
     # pouvoir dire « et en plus, votre porte d entrée est murée ».
     constat_entree = finding_entree(entree, config, cible)
+    # TF-1218 — même statut que le parcours d entrée : un constat INDÉPENDANT du ratio
+    # inventaire/exercé (ce n est pas une route), publié dès qu il existe, pour la même raison
+    # qu un pan aveugle au contenu authentifié doit quand même pouvoir dire ce qu il a vu ailleurs.
+    constat_etat = finding_etat_perdu(etat, config)
 
     # RT-16 : AVANT tout constat TIRÉ DU PARCOURS AUTHENTIFIÉ. Un pan qui n a pas pu établir
     # l état qu il exige ne mesure pas le produit, il mesure son propre échec — le publier comme
@@ -1918,6 +2088,11 @@ def conclure(
             exerces.append(IDENT_ENTREE)
         else:
             findings.append(constat_entree)
+
+    # TF-1218 — scénario opt-in, hors du ratio inventaire/exercé : publié dès qu un défaut est
+    # constaté, muet sinon (CHAMPS_ETAT non déclaré, ou l un des gestes n a pas pu être joué).
+    if constat_etat is not None:
+        findings.append(constat_etat)
 
     for page_vue in releve:
         route = page_vue["route"]
@@ -2046,6 +2221,22 @@ def conclure(
                         f"{route} — {affordance['tag']} « "
                         f"{affordance['libelle'] or 'sans libellé'} » : {affordance['effet']}"
                     )
+                    # TF-1218 : la destination REELLEMENT atteinte est confrontee a une attente
+                    # DECLAREE pour cette affordance — sans declaration, elle reste seulement
+                    # CONSTATEE ci-dessus (TF-0876), jamais jugee.
+                    motif_destination = pertinence_destination(
+                        affordance["libelle"], affordance, config
+                    )
+                    if motif_destination is not None:
+                        findings.append(
+                            Finding(
+                                id=f"{cle}:destination",
+                                classe=classes.DESTINATION_NON_PERTINENTE,
+                                localisation=f"{config['base']}{route}",
+                                message=motif_destination,
+                                risque=coter(PAN, cle, str(cible)),
+                            )
+                        )
                 else:
                     cables.append(cle)
             elif affordance["delegation"]:

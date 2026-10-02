@@ -43,6 +43,11 @@ AFFORDANCE_SANS_EFFET = "affordance-sans-effet"
 REFUS_AUTORISATION = "acces-refuse-a-cette-identite"
 CHAINE_AUTHENTIFICATION_EN_IMPASSE = "chaine-authentification-en-impasse"
 URL_AUTO_REFERENTE_ETRANGERE = "url-auto-referente-etrangere"
+# TF-1218 : un etat CLIENT rempli par l utilisateur qui ne survit pas a un aller-retour de
+# navigation (panier vide apres ouverture de l aide), et un effet observe (une navigation) dont
+# la destination trahit une attente DECLAREE pour l affordance qui l a produite.
+ETAT_PERDU_A_LA_NAVIGATION = "etat-perdu-a-la-navigation"
+DESTINATION_NON_PERTINENTE = "destination-non-pertinente"
 
 # --- Pans spécialisés ---------------------------------------------------------------------------
 SECURITE = "securite"
