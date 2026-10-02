@@ -48,6 +48,10 @@ URL_AUTO_REFERENTE_ETRANGERE = "url-auto-referente-etrangere"
 # la destination trahit une attente DECLAREE pour l affordance qui l a produite.
 ETAT_PERDU_A_LA_NAVIGATION = "etat-perdu-a-la-navigation"
 DESTINATION_NON_PERTINENTE = "destination-non-pertinente"
+# TF-1216 (instruction INS-0002 du 14/09/2026) : un couple identifiant / mot de passe affiche EN
+# TEXTE dans une page SERVIE hors environnement local — ni le pan `interface` (cablage, jamais le
+# texte rendu) ni forge-websec (corps de la reponse explicitement hors perimetre) ne le voyaient.
+IDENTIFIANTS_AFFICHES = "identifiants-affiches-dans-le-texte-servi"
 
 # --- Pans spécialisés ---------------------------------------------------------------------------
 SECURITE = "securite"

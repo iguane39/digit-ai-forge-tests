@@ -161,6 +161,15 @@ NON_JUGE = [
     "qualif : « etat survit a une navigation » n est joue QUE si les quatre champs de "
     "CHAMPS_ETAT sont declares (route, geste de remplissage, marqueur, route de destination) — "
     "sans eux, aucun etat client n est verifie, et ce silence n est pas un constat",
+    # TF-1216 (instruction INS-0002) : le controle ne reconnait que deux libelles immediats
+    # (identifiant/mot de passe et leurs synonymes les plus courants), suivis d une valeur dans
+    # les 80 premiers caracteres — un couple affiche sous une autre forme (image, autre langue
+    # que le francais/anglais, separateur inhabituel, valeur coupee par une balise) echappe a ce
+    # controle. Il ne juge rien sur un hote local (localhost, 127.0.0.1) : un couple de
+    # demonstration y est un outil de travail, pas une exposition.
+    "qualif : « identifiants affiches » ne lit que les 20 000 premiers caracteres de chaque "
+    "page (meme bornage que le reste du pan) et seulement les routes PARCOURUES — une page plus "
+    "longue ou non atteinte echappe a ce controle",
     "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une "
     "route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) "
     "n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",
@@ -1281,6 +1290,58 @@ def origines_admises(config: dict) -> set[str]:
     return {_origine(url) for url in candidates if url} - {"://"}
 
 
+# --- Identifiant / mot de passe affichés dans le TEXTE SERVI (TF-1216) -------------------------
+# LE FAIT (instruction INS-0002 du 14/09/2026, pilot, lecture seule sur Produit-61). Avant le
+# correctif du 06/09, la page de connexion de l administration affichait un couple identifiant /
+# mot de passe de DÉMONSTRATION dès que le drapeau de démonstration était actif — et ce drapeau
+# était actif sur le SEUL environnement servi, joignable depuis Internet. Le pan `interface` juge
+# le CÂBLAGE des éléments (présence, atteignabilité), jamais le texte rendu : il a rendu vert.
+# `digit-ai-forge-websec` (oracle-exposition, règles EX-1 à EX-11) déclare explicitement le corps
+# de la réponse hors de son périmètre — seuls les en-têtes HTTP sont jugés. Le défaut n a été vu
+# que par un humain.
+#
+# Deux libellés, immédiatement suivis d une VALEUR VISIBLE (jamais une balise : un formulaire
+# générique porte un libellé suivi de son propre `<input>` vide, jamais d une valeur en texte) —
+# et les DEUX doivent être trouvés sur la MÊME page pour que ce soit un COUPLE, pas un mot isolé
+# qui parlerait d autre chose (une page d aide qui explique « votre identifiant » sans rien
+# afficher, par exemple).
+_LIBELLES_IDENTIFIANT = ("identifiant", "login", "nom d'utilisateur", "utilisateur", "e-mail",
+                         "email", "courriel")
+_LIBELLES_MOTDEPASSE = ("mot de passe", "password", "mdp")
+# Hôtes de DÉVELOPPEMENT : un couple de démonstration y est un outil de travail, pas une
+# exposition — c est la distinction que le fait fondateur porte lui-même (« exposé à Internet »).
+_HOTES_LOCAUX = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
+
+
+def _valeurs_affichees(corps: str, libelles: tuple[str, ...]) -> list[str]:
+    """Les valeurs affichées juste après un libellé « <libellé> : » dans le texte SERVI.
+
+    Une valeur qui commence par `<` n en est pas une : c est la balise `<input>` qui suit le
+    libellé d un champ vide, la forme SAINE d un formulaire générique.
+    """
+    trouvees: list[str] = []
+    for libelle in libelles:
+        motif = re.compile(
+            rf"{re.escape(libelle)}\s*[:=]\s*([^\s<][^\n<]{{0,80}}?)(?=\s*(?:<|/|,|\n|$))",
+            re.IGNORECASE,
+        )
+        trouvees.extend(valeur.strip() for valeur in motif.findall(corps) if valeur.strip())
+    return trouvees
+
+
+def identifiants_affiches(corps: str) -> dict[str, list[str]]:
+    """Valeurs d identifiant et de mot de passe trouvées EN TEXTE dans la page rendue."""
+    return {
+        "identifiant": _valeurs_affichees(corps, _LIBELLES_IDENTIFIANT),
+        "mot_de_passe": _valeurs_affichees(corps, _LIBELLES_MOTDEPASSE),
+    }
+
+
+def environnement_local(base: str) -> bool:
+    """`base` désigne-t-elle un hôte de DÉVELOPPEMENT — jamais une exposition publique ?"""
+    return (urlparse(base).hostname or "").lower() in _HOTES_LOCAUX
+
+
 # --- Écouteurs réellement attachés, via le protocole DevTools ---------------------------------
 def _ecouteurs(page) -> tuple[list[set[str]] | None, bool, str | None]:  # noqa: ANN001
     """(types d événements par affordance, délégation détectée, motif d indisponibilité).
@@ -2187,6 +2248,33 @@ def conclure(
                     risque=coter(PAN, cle, str(cible)),
                 )
             )
+
+        # TF-1216 — un couple identifiant / mot de passe affiché EN TEXTE dans la page SERVIE,
+        # hors environnement local. Jugé une fois par route (pas par libellé) : c est le COUPLE,
+        # pas un mot isolé, qui constitue le défaut mesuré (instruction INS-0002). Publié comme
+        # finding dès qu il existe, HORS du ratio inventaire/exercé — même statut que le constat
+        # d état (TF-1218) : un couple affiché ne mesure pas la couverture de la surface, il
+        # accuse un texte précis.
+        if not environnement_local(config["base"]):
+            valeurs = identifiants_affiches(page_vue["corps"])
+            if valeurs["identifiant"] and valeurs["mot_de_passe"]:
+                cle_identifiants = _identifiant(page_vue, f"identifiants-affiches:{route}")
+                findings.append(
+                    Finding(
+                        id=cle_identifiants,
+                        classe=classes.IDENTIFIANTS_AFFICHES,
+                        localisation=f"{config['base']}{route}",
+                        message=(
+                            f"{route} — un couple identifiant / mot de passe est affiché EN "
+                            "TEXTE dans la page servie, hors environnement local : identifiant "
+                            f"« {valeurs['identifiant'][0]} », mot de passe « "
+                            f"{valeurs['mot_de_passe'][0]} » — retirer ce couple de "
+                            "démonstration avant toute exposition publique (INS-0002)"
+                        ),
+                        severite="bloquant",
+                        risque=coter(PAN, cle_identifiants, str(cible)),
+                    )
+                )
 
         for affordance in page_vue["affordances"]:
             cle = _identifiant(
