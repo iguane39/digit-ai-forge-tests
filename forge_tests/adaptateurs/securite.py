@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -76,6 +77,14 @@ NON_JUGE = [
     "prouve la detection : les accuser mesure l auditeur, pas l audite (TF-0291). Le code de la "
     "forge (`forge_tests\\`, `recette\\`) reste scanne, et tout autre projet garde ses "
     "`fixtures\\` et ses `tests\\` sous controle",
+    # TF-1229 (volet a de TF-0964) : le controle « identite-assignee » ci-dessous est STATIQUE
+    # et BORNE a un seul fournisseur et une seule forme de declaration.
+    "securite/identite-assignee : ne voit que le fournisseur de jetons `DefaultAzureCredential` "
+    "(bibliotheque `azure.identity`) et une identite assignee DECLAREE par la presence du nom "
+    "`AZURE_CLIENT_ID` dans le MEME fichier lu — un autre fournisseur (AWS STS, GCP Workload "
+    "Identity, Okta), une identite assignee declaree uniquement dans l infrastructure (Bicep, "
+    "Terraform, portail Azure, non lus ici) ou transmise par un fichier different echappe a ce "
+    "controle",
 ]
 
 # --- TF-0291, le LARSEN du pan securite -------------------------------------------------------
@@ -280,6 +289,83 @@ def _lancer(script: Path, cible: Path) -> dict | None:
         return None
 
 
+# --- TF-1229 (volet a de TF-0964) : fournisseur de jetons construit SANS l identifiant, alors --
+# qu une identite ASSIGNEE est posee par l environnement ---------------------------------------
+# Constat de production (volet b, commit 1d856701) : `DefaultAzureCredential()` construit sans
+# `client_id`/`managed_identity_client_id` resout l IDENTITE SYSTEME de l hote (ou echoue) la ou
+# l infrastructure assigne une identite PRECISE par `AZURE_CLIENT_ID` — defaut invisible jusqu a
+# l execution, et qu aucun des trois oracles externes de ce pan (sast, secrets, sca) ne voit : ce
+# n est ni une injection, ni un secret, ni une dependance vulnerable.
+#
+# CONTROLE STATIQUE, PUR PYTHON — aucun outil tiers a invoquer (la regle R3 ne s applique pas
+# ici : rien ne fait deja foi sur ce point precis), donc INDEPENDANT du registre externe
+# `FORGE_TESTS_ORACLES` : il juge meme quand `quality-oracles` n est pas installe.
+#
+# Critere, et rien d autre : le MEME fichier lu APPELLE `DefaultAzureCredential(...)` sans
+# qu aucun des deux mots-cles d identite (`client_id`, `managed_identity_client_id` — le second
+# CONTIENT le premier) n apparaisse dans ses parenthèses, ET reference `AZURE_CLIENT_ID`
+# (l environnement POSE une identite assignee). Les deux cotes sont exiges : un projet qui ne
+# construit jamais ce fournisseur, ou qui n assigne aucune identite, n a rien a se faire
+# reprocher ici — fixture double sens en `tests/test_tf_1229_identite_assignee.py`.
+_REFERENCE_IDENTITE_ASSIGNEE = re.compile(r"AZURE_CLIENT_ID")
+_CONSTRUCTION_FOURNISSEUR = re.compile(r"DefaultAzureCredential\s*\(")
+# Borne de securite sur l equilibrage de parentheses : un appel reel tient en quelques lignes,
+# et une parenthese jamais fermee ne doit pas faire parcourir un fichier entier.
+_PORTEE_APPEL_MAX = 2000
+
+
+def _appel_complet(texte: str, debut: int) -> str:
+    """Le texte de l appel repere en `debut` (la parenthese ouvrante comprise), equilibre."""
+    profondeur = 0
+    borne = min(len(texte), debut + _PORTEE_APPEL_MAX)
+    for position in range(debut, borne):
+        if texte[position] == "(":
+            profondeur += 1
+        elif texte[position] == ")":
+            profondeur -= 1
+            if profondeur == 0:
+                return texte[debut:position + 1]
+    return texte[debut:borne]
+
+
+def _findings_identite_assignee(application: Path) -> list[Finding]:
+    """Fournisseurs de jetons Azure construits sans l identifiant assigne — TF-1229."""
+    findings: list[Finding] = []
+    for chemin in sorted(application.rglob("*.py")):
+        if any(partie in _EXCLUS_DEPENDANCES for partie in chemin.parts):
+            continue
+        try:
+            texte = chemin.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if not _REFERENCE_IDENTITE_ASSIGNEE.search(texte):
+            continue  # cet environnement-ci n assigne aucune identite : rien a juger
+        relatif = chemin.relative_to(application).as_posix()
+        for appel in _CONSTRUCTION_FOURNISSEUR.finditer(texte):
+            fragment = _appel_complet(texte, appel.start())
+            if "client_id" in fragment:
+                continue
+            ligne = texte.count("\n", 0, appel.start()) + 1
+            identifiant = f"securite:identite-assignee:{relatif}:{ligne}"
+            findings.append(
+                Finding(
+                    id=identifiant,
+                    classe=classes.FOURNISSEUR_JETONS_SANS_IDENTIFIANT,
+                    localisation=f"{relatif}:{ligne}",
+                    message=(
+                        "DefaultAzureCredential() construit SANS identifiant (client_id / "
+                        "managed_identity_client_id) alors que ce fichier reference "
+                        "AZURE_CLIENT_ID : l environnement assigne une identite precise, et ce "
+                        "fournisseur de jetons ne la porte pas — il resout l identite SYSTEME "
+                        "de l hote (ou echoue) a la place de l identite assignee"
+                    ),
+                    severite="bloquant",
+                    risque=coter(PAN, identifiant, str(application)),
+                )
+            )
+    return findings
+
+
 def analyser(cible: Path) -> SortieAdaptateur:
     racine = _racine_oracles()
     # Perimetre elargi : le code applicatif ET tout ce qui l entoure — configuration, tests,
@@ -312,13 +398,23 @@ def analyser(cible: Path) -> SortieAdaptateur:
             ],
         )
 
-    findings: list[Finding] = []
+    # TF-1229 : controle INTERNE, independant des oracles externes delegues plus bas — pure
+    # Python, aucun outil tiers a invoquer. Il ne rejoint `joues`/`echec` QUE s il a reellement
+    # trouve quelque chose : un projet qui n a pas ce defaut ne doit pas faire sortir ce pan d un
+    # SKIP que les trois oracles externes auraient motive pour une autre raison (registre
+    # absent, aucun script trouve) — meme principe que la garde de precondition du pan `qualif`,
+    # qui ne se deduit jamais d une ignorance.
+    findings_identite = _findings_identite_assignee(application)
+    findings: list[Finding] = list(findings_identite)
     # TF-0216 (garde-fou de methode) : le pan DIT sur quelle racine il a lu. Une decouverte qui
     # change d un projet a l autre sans se declarer serait pire que l ancre en dur qu elle
     # remplace — ce pan est le canal de publication toujours present pour cette phrase.
     non_juge: list[str] = [*NON_JUGE, f"securite : {motif_racine_execution(cible)}"]
     echec = False
     joues: list[str] = []
+    if findings_identite:
+        joues.append("identite-assignee")
+        echec = True
 
     vendorises: list[str] = []
     aspires: list[str] = []

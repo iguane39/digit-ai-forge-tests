@@ -50,6 +50,10 @@ ACCESSIBILITE = "accessibilite"
 REGRESSION_VISUELLE = "regression-visuelle"
 MODELE_NON_EPINGLE = "modele-non-epingle"
 I18N = "i18n"
+# TF-1229 (volet a de TF-0964) : un fournisseur de jetons construit SANS l identifiant assigné,
+# alors que l'environnement lu pose une identité assignée (`AZURE_CLIENT_ID`) — vu seulement en
+# production jusqu'ici, aucun des trois oracles externes du pan `securite` ne le voit.
+FOURNISSEUR_JETONS_SANS_IDENTIFIANT = "fournisseur-jetons-sans-identifiant"
 
 # --- Revue statique de la suite de tests du projet (TF-0344 / TF-0345) --------------------------
 FAUX_VERT_ABSENCE = "faux-vert-absence-sans-presence"
