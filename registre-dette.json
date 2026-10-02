@@ -1054,6 +1054,12 @@
       "statut": "retiree"
     },
     {
+      "id": "qualif-navigateur-010",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : meme effets observes, la PERTINENCE de la destination n est pas jugee — un lien « Ma commande » qui mene a la page d aide produit bien une navigation, donc un effet. La destination CONSTATEE est publiee avec l affordance pour qu un relecteur la voie ; aucune attente ne lui est opposee, faute d attente declaree",
+      "statut": "retiree"
+    },
+    {
       "id": "securite-oracles-003",
       "domaine": "securite-oracles",
       "enonce": "securite : le perimetre scanne est le dossier applicatif ; ni l historique git, ni l infrastructure, ni la configuration de deploiement",
@@ -1517,9 +1523,21 @@
       "statut": "todo"
     },
     {
-      "id": "qualif-navigateur-010",
+      "id": "qualif-navigateur-011",
       "domaine": "qualif-navigateur",
-      "enonce": "qualif : meme effets observes, la PERTINENCE de la destination n est pas jugee — un lien « Ma commande » qui mene a la page d aide produit bien une navigation, donc un effet. La destination CONSTATEE est publiee avec l affordance pour qu un relecteur la voie ; aucune attente ne lui est opposee, faute d attente declaree",
+      "enonce": "qualif : la PERTINENCE de la destination d un effet observe n est jugee QUE si une attente est DECLAREE pour l affordance (FORGE_TESTS_QUALIF_DESTINATIONS, TF-1218) — sans elle, un lien « Ma commande » qui mene a la page d aide produit bien une navigation, donc un effet, et la destination CONSTATEE reste publiee avec l affordance pour qu un relecteur la voie, sans qu aucune attente ne lui soit opposee",
+      "statut": "todo"
+    },
+    {
+      "id": "qualif-navigateur-012",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : « etat survit a une navigation » n est joue QUE si les quatre champs de CHAMPS_ETAT sont declares (route, geste de remplissage, marqueur, route de destination) — sans eux, aucun etat client n est verifie, et ce silence n est pas un constat",
+      "statut": "todo"
+    },
+    {
+      "id": "qualif-navigateur-013",
+      "domaine": "qualif-navigateur",
+      "enonce": "qualif : « identifiants affiches » ne lit que les 20 000 premiers caracteres de chaque page (meme bornage que le reste du pan) et seulement les routes PARCOURUES — une page plus longue ou non atteinte echappe a ce controle",
       "statut": "todo"
     },
     {
@@ -1544,6 +1562,12 @@
       "id": "securite-oracles-006",
       "domaine": "securite-oracles",
       "enonce": "securite : quand le projet audite EST forge-tests (signature du depot : le paquet `forge_tests`, sa recette et son registre de dette), ses bancs d essai `fixtures\\` et ses chaines de montage de test `tests\\` ne sont PAS scannes — un banc rouge PORTE le defaut qu il existe pour faire detecter, et une chaine de montage PLANTE le secret dont elle prouve la detection : les accuser mesure l auditeur, pas l audite (TF-0291). Le code de la forge (`forge_tests\\`, `recette\\`) reste scanne, et tout autre projet garde ses `fixtures\\` et ses `tests\\` sous controle",
+      "statut": "todo"
+    },
+    {
+      "id": "securite-oracles-007",
+      "domaine": "securite-oracles",
+      "enonce": "securite/identite-assignee : ne voit que le fournisseur de jetons `DefaultAzureCredential` (bibliotheque `azure.identity`) et une identite assignee DECLAREE par la presence du nom `AZURE_CLIENT_ID` dans le MEME fichier lu — un autre fournisseur (AWS STS, GCP Workload Identity, Okta), une identite assignee declaree uniquement dans l infrastructure (Bicep, Terraform, portail Azure, non lus ici) ou transmise par un fichier different echappe a ce controle",
       "statut": "todo"
     }
   ]
