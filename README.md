@@ -1165,7 +1165,7 @@ prend le port, et rend 500 au premier appel — indiscernable d'une instance sai
 l'interroge pas. `FORGE_TESTS_INSTANCE_MONTER` doit porter l'environnement **complet** de
 l'instance ; le smoke qui suit est ce qui le prouve.
 
-Le format de provenance n'est **pas** propre à cette forge : le scellé `forge-ops/empreinte@1` produit par `ops.mjs deployer|canary` est lu tel quel (mêmes empreintes de fichiers que compare `oracle-ops.mjs --empreinte`, O-7). Un projet qui monte localement déclare la forme légère `forge-tests/instance@1` (`commit`, `construit_le`, `images[]`).
+Le format de provenance n'est **pas** propre à cette forge : le scellé `forge-ops/empreinte@1` produit par `ops.mjs deployer|canary` est lu tel quel (mêmes empreintes de fichiers que compare `oracle-ops.mjs --empreinte`, O-7). Un projet qui monte localement déclare la forme légère `forge-tests/instance@1` (`format`, `commit`, `construit_le`, `images[]`).
 
 La section `instance` du rapport est **toujours présente**, même sans instance déclarée — une section qui disparaîtrait serait indiscernable d'une section qui a mesuré et n'a rien trouvé. La confrontation rend les **trois issues** de l'écart servi ↔ versionné (TF-0288), généralisé de la page à l'instance entière : `concordant` · `divergent`, l'écart nommé fichier par fichier et la phrase qui compte (*ce n'est pas le code qui est en retard, c'est l'instance*) · `non_determinable`, en disant **lequel** des deux termes manque. La comparaison n'est pas symétrique, et c'est déclaré : un fichier neuf que l'empreinte ne connaît pas ne déclenche rien.
 
