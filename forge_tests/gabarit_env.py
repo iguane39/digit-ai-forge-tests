@@ -74,6 +74,8 @@ GLOSES: dict[str, str] = {
                          "fixe hors du catalogue. Le defaut fondateur disait « 8 » dans les "
                          "SEPT langues : coherentes entre elles, et toutes fausses",
     "FORGE_TESTS_AVANCEMENT_S": "période d'émission de l'avancement, en secondes",
+    "FORGE_TESTS_DELAI_BACKEND_S": "délai de la suite backend sous coverage, en secondes "
+                                   "(défaut 900, TF-1675)",
 }
 
 

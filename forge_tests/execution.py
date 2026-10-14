@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -94,7 +95,7 @@ def motif_indisponibilite(banc: Path | str, domaine: str, defaut: str) -> str:
 
 
 def _run(
-    commande: list[str], *, banc: Path | str, domaine: str, quoi: str, **kwargs
+    commande: list[str], *, banc: Path | str, domaine: str, quoi: str, remede: str = "", **kwargs
 ) -> subprocess.CompletedProcess | None:
     """`subprocess.run` qui DÉCLARE au lieu de mourir.
 
@@ -107,14 +108,19 @@ def _run(
     kwargs.setdefault("text", True)
     kwargs.setdefault("encoding", "utf-8")
     kwargs.setdefault("errors", "replace")
+    debut = time.monotonic()
     try:
         return subprocess.run(commande, **kwargs)  # noqa: S603 — commande construite ici
     except subprocess.TimeoutExpired:
+        # TF-1675 — la durée ATTEINTE est écrite à côté du délai, et le réglage qui le lève est
+        # nommé quand il existe (`remede`) : « 900 s dépassé » seul ne disait ni de combien la
+        # suite manquait, ni où se règle le délai.
         _declarer(
             banc,
             domaine,
-            f"{quoi} : délai de {kwargs.get('timeout')} s dépassé — pan non mesuré, "
-            "les autres pans restent mesurés",
+            f"{quoi} : délai de {kwargs.get('timeout')} s dépassé (interrompu après "
+            f"{time.monotonic() - debut:.0f} s) — pan non mesuré, les autres pans restent "
+            "mesurés" + (f" ; {remede}" if remede else ""),
         )
         return None
     except OSError as erreur:
@@ -172,6 +178,40 @@ def _coverage_present(banc: Path, python: Path) -> bool:
     return False
 
 
+#: Délai par défaut de la suite backend sous coverage, en secondes.
+DELAI_BACKEND_DEFAUT = 900
+
+
+def delai_backend() -> tuple[int, str]:
+    """(délai retenu en secondes, phrase qui dit d où il vient et comment le lever) — TF-1675.
+
+    Le délai de 900 s était fixé dans le code. Le 12/10/2026 chez Produit-80, sur un backend
+    identique, l audit 14 a mesuré api, data et migrations ; l audit 15 et sa reprise les ont
+    perdus avec deux autres pans, « délai de 900 s dépassé », la suite seule prenant 398 s sur le
+    poste. Le projet n avait aucun moyen de régler ce délai. Il le règle désormais par
+    `FORGE_TESTS_DELAI_BACKEND_S`, lu après le contrat du projet (`.env.forge-tests`). Une
+    valeur illisible n est pas devinée : le défaut s applique, et le motif le dit.
+    """
+    brut = (os.environ.get("FORGE_TESTS_DELAI_BACKEND_S") or "").strip()
+    conseil = (
+        "regler FORGE_TESTS_DELAI_BACKEND_S (secondes) dans `<projet>/.env.forge-tests` "
+        "pour lever ce delai"
+    )
+    if not brut:
+        return DELAI_BACKEND_DEFAUT, f"delai par defaut de la forge — {conseil}"
+    try:
+        valeur = int(brut)
+    except ValueError:
+        valeur = 0
+    if valeur <= 0:
+        return (
+            DELAI_BACKEND_DEFAUT,
+            f"FORGE_TESTS_DELAI_BACKEND_S={brut!r} illisible (entier positif attendu), "
+            f"defaut de {DELAI_BACKEND_DEFAUT} s retenu — {conseil}",
+        )
+    return valeur, f"delai regle par le projet (FORGE_TESTS_DELAI_BACKEND_S={valeur})"
+
+
 @lru_cache(maxsize=32)
 def mesurer(banc_str: str) -> dict | None:
     """Lance la suite UNE fois, sous coverage et sous sonde. None si la mesure est impossible.
@@ -216,6 +256,7 @@ def mesurer(banc_str: str) -> dict | None:
     # supposé. Sur un produit à racine plate, ce `cwd` en dur pointait un dossier inexistant et
     # emportait sept pans d un coup — alors que la suite y est verte.
     racine = racine_execution(banc)
+    delai, remede = delai_backend()
     with tempfile.TemporaryDirectory() as temporaire:
         releve = Path(temporaire) / "sonde.json"
         releve_data = Path(temporaire) / "sonde-data.json"
@@ -237,7 +278,7 @@ def mesurer(banc_str: str) -> dict | None:
                 "-p", "sonde_api", "-p", "sonde_data",
             ],
             banc=banc, domaine="backend", quoi="suite backend sous coverage",
-            cwd=racine, timeout=900, env=env,
+            remede=remede, cwd=racine, timeout=delai, env=env,
         )
         if lance is None:
             return None
@@ -484,6 +525,27 @@ def _mode_trace(front: Path) -> tuple[str | None, str]:
     return "on", "on"
 
 
+def _provenance_trace(banc: Path, front: Path) -> str:
+    """D OU vient le mode de trace retenu, dit au motif — TF-1673.
+
+    Le 12/10/2026, Produit-80 réglait `FORGE_TESTS_PLAYWRIGHT_TRACE=on` dans son
+    `.env.forge-tests` ; le pan front lisait la variable AVANT que ce fichier soit chargé, et
+    concluait « trace désactivée par le projet » sur une suite verte. Le motif attribuait au
+    `playwright.config` un choix qu il ne savait pas situer : il nomme désormais la source.
+    """
+    from forge_tests.authentification import ENV_PROJET, _valeurs
+
+    declare = (os.environ.get("FORGE_TESTS_PLAYWRIGHT_TRACE") or "").strip()
+    if declare:
+        if _valeurs(banc / ENV_PROJET).get("FORGE_TESTS_PLAYWRIGHT_TRACE") == declare:
+            return f"FORGE_TESTS_PLAYWRIGHT_TRACE={declare} lu dans `{ENV_PROJET}` du projet"
+        return f"FORGE_TESTS_PLAYWRIGHT_TRACE={declare} pose dans l environnement de l operateur"
+    choisi = _mode_trace_projet(front)
+    if choisi:
+        return f"son propre playwright.config choisit trace={choisi!r}"
+    return "defaut `on` de la forge"
+
+
 @lru_cache(maxsize=16)
 def front_execute(banc_str: str) -> dict | None:
     """Routes visitees et elements reellement manipules pendant la suite front.
@@ -496,6 +558,10 @@ def front_execute(banc_str: str) -> dict | None:
     import zipfile
 
     banc = Path(banc_str)
+    # TF-1673 — le contrat du projet est chargé AVANT toute lecture de réglage : le mode de
+    # trace se lisait ici alors que `.env.forge-tests` n était chargé que par `_env_front`,
+    # plus bas — un réglage du projet ignoré en silence dès que ce pan tournait le premier.
+    _contrat_projet(banc)
     # TF-0401 : la racine front suit la cascade — manifeste du projet > convention `frontend`.
     front = banc / (disposition.racines_declarees(banc)[0].get("front") or "frontend")
     if not (front / "node_modules").is_dir():
@@ -614,8 +680,8 @@ def front_execute(banc_str: str) -> dict | None:
             _declarer(
                 banc,
                 "front",
-                "trace Playwright desactivee par LE PROJET (son propre playwright.config "
-                f"choisit trace={mode_effectif!r}) — couverture front NON MESURABLE, la suite "
+                f"trace Playwright en mode {mode_effectif!r} "
+                f"({_provenance_trace(banc, front)}) — couverture front NON MESURABLE, la suite "
                 "elle meme est VERTE (code 0). Definir FORGE_TESTS_PLAYWRIGHT_TRACE=on pour "
                 "forcer la mesure si l ecriture de trace n est pas bloquee sur ce poste",
             )
