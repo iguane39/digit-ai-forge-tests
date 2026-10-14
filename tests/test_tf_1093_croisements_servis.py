@@ -282,7 +282,11 @@ def test_bout_en_bout_un_croisement_muet_est_vu_sur_une_instance_SERVIE() -> Non
     # La mesure vient de la copie DESIGNEE, la meme que `jouer_paires` — pas de la copie
     # installee : croiser avec la mesure d un autre socle ne prouverait rien de celui-ci.
     mesure = _socle_module(_chemin_socle()).mesure_js()
-    assert mesure and "__" not in mesure, "mesure du socle designe non preparee"
+    # Un jeton de gabarit a la forme `__NOM__` (cas 3 bis) ; « __ » seul accusait aussi une
+    # variable du script de mesure (`window.__tf1368cv`, socle page-html), et le cas tombait.
+    import re
+    assert mesure and not re.findall(r"__[A-Z0-9_]+__", mesure), (
+        "mesure du socle designe non preparee")
     try:
         with playwright.sync_playwright() as pw:
             navigateur = pw.chromium.launch()
