@@ -382,16 +382,6 @@ def est_ecarte(finding: dict) -> bool:
     return bool(declaration) and declaration.get("statut") == RETENUE
 
 
-def constats_inconnus(declarations: dict[str, dict], findings: list[dict]) -> list[str]:
-    """Déclarations qui ne visent aucun constat du rapport courant — jamais silencieuses."""
-    vises = {cle for f in findings for cle in cles_du_finding(f)}
-    return sorted(
-        cle
-        for cle, entree in declarations.items()
-        if not cle.startswith("(ligne ") and cle not in vises and entree.get("constat")
-    )
-
-
 # --- Application au rapport ----------------------------------------------------------------------
 def reintegrer(rapport: dict) -> dict:
     """Défait `appliquer` : les constats écartés redeviennent des constats comme les autres.
