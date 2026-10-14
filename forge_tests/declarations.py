@@ -32,6 +32,17 @@ que soit son pan) ; `classe` restreint la déclaration à une classe de finding 
 même élément en porte plusieurs. C est le PROJET qui déclare, jamais la forge, et le fichier
 est lu en LECTURE SEULE (G-1) : rien n est jamais écrit chez l audité.
 
+**Ancrage stable (TF-1672).** Un identifiant qui porte un numéro de ligne
+(`interface:…/coquille.tsx:203:a`) change dès que le code se décale : chez Produit-80, le
+constat contesté le 30/09 est revenu non déclaré sous `:205:a` après l ajout de deux entrées
+de menu. Le champ facultatif `texte` ancre la déclaration sur le MESSAGE du constat : elle vise
+alors le constat de même forme sans numéro de ligne (même pan, même fichier, même balise) et de
+même texte, où qu il soit passé, et ne vise plus l ancienne ligne si un autre constat l occupe.
+Une déclaration sans `texte`, écrite avant ce champ, garde la jointure exacte ; orpheline, elle
+est rapprochée du seul constat libre de même forme, et le rapprochement est publié au rapport
+(`declarations.rapprochees`). Plusieurs candidats : rien n est deviné, la déclaration reste
+inconnue et ses candidats sont nommés (`declarations.ambigues`).
+
 **Quatre règles, toutes vérifiées, sans lesquelles ce canal deviendrait un bouton « faire
 taire » :**
 
@@ -62,6 +73,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import re
 from pathlib import Path
 
 from forge_tests import adoption as _adoption
@@ -112,7 +124,13 @@ NON_JUGE = [
     "declarations : la peremption se juge sur la DATE DECLAREE par le projet, jamais sur une "
     "horloge externe — une date postee en avant differe le terme d autant, et cela se lit",
     "declarations : une declaration qui ne vise aucun constat du rapport courant sort en "
-    "INCONNUE, declaree telle quelle — le constat a pu disparaitre, ou l identifiant changer",
+    "INCONNUE, declaree telle quelle — le constat a pu disparaitre, ou l identifiant changer ; "
+    "seul le numero de ligne qui suit un nom de fichier est rapproche (TF-1672), tout autre "
+    "changement d identifiant reste INCONNU",
+    "declarations : une declaration SANS `texte` rapprochee par la seule forme sans numero de "
+    "ligne (fichier, balise, classe) vise le seul constat libre de cette forme ; si le constat "
+    "conteste a disparu et qu un AUTRE de meme forme est apparu, c est lui qui est ecarte — le "
+    "rapprochement est donc publie au rapport, jamais tu, et `texte` le rend exact",
 ]
 
 
@@ -145,7 +163,7 @@ def charger(cible: Path, aujourdhui: _dt.date | None = None) -> dict[str, dict]:
         if not ligne.strip():
             continue
         base = {"ligne": rang, "constat": "", "motif": "", "preuve": "", "par": "", "date": "",
-                "expire_le": "", "explication": "", "classe": ""}
+                "expire_le": "", "explication": "", "classe": "", "texte": ""}
         try:
             brut = json.loads(ligne)
         except json.JSONDecodeError:
@@ -163,7 +181,7 @@ def charger(cible: Path, aujourdhui: _dt.date | None = None) -> dict[str, dict]:
             **{
                 cle: str(brut.get(cle) or "").strip()
                 for cle in ("constat", "motif", "preuve", "par", "date", "expire_le",
-                            "explication", "classe")
+                            "explication", "classe", "texte")
             },
         }
         cle = entree["constat"] or f"(ligne {rang})"
@@ -268,18 +286,94 @@ def cles_du_finding(finding: dict) -> tuple[str, str]:
     return (f"{pan}/{identifiant}" if pan else identifiant, identifiant)
 
 
+#: Le numéro de ligne qui suit un nom de fichier dans un identifiant : `coquille.tsx:203:a`.
+_LIGNE_APRES_FICHIER = re.compile(r"(\.[A-Za-z0-9]{1,8}):\d+(?=[:#]|$)")
+
+
+def forme_stable(cle: str) -> str:
+    """La clé SANS le numéro de ligne qui suit un nom de fichier — TF-1672.
+
+    `interface/interface:src/coquille.tsx:203:a` → `interface/interface:src/coquille.tsx:*:a`.
+    Seul ce numéro-là est masqué : un rang ou un index qui ne suit pas un fichier fait partie de
+    l identité du constat, le masquer rapprocherait deux constats différents.
+    """
+    return _LIGNE_APRES_FICHIER.sub(r"\1:*", cle)
+
+
+def _texte(valeur: object) -> str:
+    return " ".join(str(valeur or "").split())
+
+
+def _convient(entree: dict, finding: dict) -> bool:
+    """La déclaration s applique-t-elle à CE constat ? Classe et `texte`, s ils sont déclarés."""
+    classe = entree.get("classe") or ""
+    if classe and classe != str(finding.get("classe") or ""):
+        return False
+    texte = _texte(entree.get("texte"))
+    return not texte or texte == _texte(finding.get("message"))
+
+
 def statut(declarations: dict[str, dict], finding: dict) -> dict:
     """Déclaration qui vise ce constat, ou `{"statut": "aucune"}`. La clé longue prime."""
     for cle in cles_du_finding(finding):
         entree = declarations.get(cle)
         if entree is None:
             continue
-        classe = entree.get("classe") or ""
-        if classe and classe != str(finding.get("classe") or ""):
+        if not _convient(entree, finding):
             continue
         return entree
     return {"statut": AUCUNE, "motif": "", "preuve": "", "par": "", "date": "",
             "motif_du_refus": ""}
+
+
+def rapprocher(
+    declarations: dict[str, dict], orphelines: list[str], libres: list[dict]
+) -> tuple[dict[str, dict], dict[str, list[str]]]:
+    """Rapproche les déclarations ORPHELINES d un constat dont seule la ligne a changé — TF-1672.
+
+    Rend `({clé déclarée: constat retenu}, {clé déclarée: candidats})`. Deux ancrages :
+
+      - **`texte`** déclaré : le constat libre de même forme stable et de même message. Un seul
+        candidat est retenu ; plusieurs (deux liens identiques dans le même fichier) restent
+        ambigus ;
+      - **sans `texte`** (déclarations antérieures à ce champ) : la forme stable seule, et
+        seulement quand elle désigne UNE déclaration orpheline et UN constat libre. Toute autre
+        configuration est ambiguë : rien n est deviné.
+    """
+    retenus: dict[str, dict] = {}
+    ambigues: dict[str, list[str]] = {}
+    pris: set[int] = set()
+
+    def _candidats(cle: str, entree: dict) -> list[dict]:
+        forme = forme_stable(cle)
+        return [
+            f for f in libres
+            if id(f) not in pris
+            and forme in {forme_stable(k) for k in cles_du_finding(f)}
+            and _convient(entree, f)
+        ]
+
+    # Les déclarations ancrées par `texte` d abord : elles sont exactes, les autres prennent ce
+    # qui reste.
+    rangees = sorted(orphelines, key=lambda c: (not declarations[c].get("texte"), c))
+    formes_sans_texte: dict[str, int] = {}
+    for cle in rangees:
+        if not declarations[cle].get("texte"):
+            formes_sans_texte[forme_stable(cle)] = formes_sans_texte.get(forme_stable(cle), 0) + 1
+    for cle in rangees:
+        if forme_stable(cle) == cle:
+            continue  # aucun numéro de ligne dans la clé : rien à rapprocher
+        entree = declarations[cle]
+        candidats = _candidats(cle, entree)
+        unique = len(candidats) == 1 and (
+            bool(entree.get("texte")) or formes_sans_texte[forme_stable(cle)] == 1
+        )
+        if unique:
+            retenus[cle] = candidats[0]
+            pris.add(id(candidats[0]))
+        elif candidats:
+            ambigues[cle] = sorted(cles_du_finding(f)[0] for f in candidats)
+    return retenus, ambigues
 
 
 def est_ecarte(finding: dict) -> bool:
@@ -356,11 +450,7 @@ def appliquer(rapport: dict, cible: Path, aujourdhui: _dt.date | None = None) ->
     declarations = charger(cible, aujourdhui)
     findings = rapport.get("findings") or []
 
-    ecartes = 0
-    for finding in findings:
-        entree = statut(declarations, finding)
-        if entree["statut"] == AUCUNE:
-            continue
+    def _poser(finding: dict, entree: dict) -> None:
         finding["declaration"] = {
             cle: entree.get(cle, "")
             for cle in ("statut", "motif", "preuve", "par", "date", "expire_le", "explication",
@@ -368,6 +458,48 @@ def appliquer(rapport: dict, cible: Path, aujourdhui: _dt.date | None = None) ->
         }
         finding["declaration"]["libelle_motif"] = MOTIFS.get(entree.get("motif", ""), {}).get(
             "libelle", entree.get("motif", "")
+        )
+
+    ecartes = 0
+    servies: set[str] = set()
+    for finding in findings:
+        entree = statut(declarations, finding)
+        if entree["statut"] == AUCUNE:
+            continue
+        _poser(finding, entree)
+        servies.add(entree.get("constat", ""))
+        ecartes += entree["statut"] == RETENUE
+
+    # TF-1672 — une déclaration qui ne vise plus aucun constat est d abord RAPPROCHÉE, si seul le
+    # numéro de ligne a changé ; le rapprochement est publié, avec la clé à recopier.
+    orphelines = [
+        cle for cle, entree in declarations.items()
+        if not cle.startswith("(ligne ") and entree.get("constat") and cle not in servies
+    ]
+    retenus, ambigues = rapprocher(
+        declarations, orphelines, [f for f in findings if "declaration" not in f]
+    )
+    rapprochees = []
+    for cle, finding in sorted(retenus.items()):
+        entree = declarations[cle]
+        _poser(finding, entree)
+        retrouve = cles_du_finding(finding)[0]
+        ancrage = "texte" if entree.get("texte") else "forme-sans-ligne"
+        finding["declaration"]["rapprochee_de"] = cle
+        finding["declaration"]["ancrage"] = ancrage
+        entree["rapprochee_vers"] = retrouve
+        rapprochees.append(
+            {
+                "declare": cle,
+                "retrouve": retrouve,
+                "ancrage": ancrage,
+                "a_faire": f"remplacer `{cle}` par `{retrouve}` dans `{FICHIER}`"
+                + (
+                    ""
+                    if entree.get("texte")
+                    else " et y ajouter `texte` (le message du constat) pour un ancrage exact"
+                ),
+            }
         )
         ecartes += entree["statut"] == RETENUE
 
@@ -388,7 +520,7 @@ def appliquer(rapport: dict, cible: Path, aujourdhui: _dt.date | None = None) ->
         statut_: sum(1 for e in declarations.values() if e.get("statut") == statut_)
         for statut_ in (RETENUE, REFUSEE, PERIMEE)
     }
-    inconnus = constats_inconnus(declarations, findings)
+    inconnus = sorted(cle for cle in orphelines if cle not in retenus)
     rapport["declarations"] = {
         "fichier": FICHIER,
         "present": source.is_file(),
@@ -397,8 +529,11 @@ def appliquer(rapport: dict, cible: Path, aujourdhui: _dt.date | None = None) ->
             **comptes,
             "constats_ecartes": ecartes,
             "inconnues": len(inconnus),
+            "rapprochees": len(rapprochees),
         },
         "inconnues": inconnus,
+        "rapprochees": rapprochees,
+        "ambigues": ambigues,
         "entrees": sorted(declarations.values(), key=lambda e: (e.get("ligne") or 0)),
         # Ce que le projet doit écrire pour se servir du canal — au rapport, pas dans une doc
         # qu il faudrait connaître d avance.
@@ -407,8 +542,9 @@ def appliquer(rapport: dict, cible: Path, aujourdhui: _dt.date | None = None) ->
             '{"constat": "<pan>/<id du finding>", "motif": "<'
             + "|".join(sorted(MOTIFS))
             + '>", "preuve": "<chemin qui existe>", "par": "<qui declare>", '
-            '"date": "AAAA-MM-JJ"}. La preuve est verifiee ; sans elle le constat reste au '
-            "decompte"
+            '"date": "AAAA-MM-JJ", "texte": "<message du constat, facultatif>"}. La preuve '
+            "est verifiee ; sans elle le constat reste au decompte. `texte` ancre la "
+            "declaration sur le message : elle suit le constat quand sa ligne change"
         ),
     }
     return rapport

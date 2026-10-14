@@ -222,8 +222,21 @@ def _resume(rap: dict) -> str:
             f"{compte.get('constats_ecartes', 0)} écarté(s) du décompte · "
             f"{compte.get('refusee', 0)} déclaration(s) REFUSÉE(S) · "
             f"{compte.get('perimee', 0)} périmée(s) · "
-            f"{compte.get('inconnues', 0)} sans constat correspondant"
+            f"{compte.get('inconnues', 0)} sans constat correspondant · "
+            f"{compte.get('rapprochees', 0)} rapprochée(s) d un constat déplacé"
         )
+        # TF-1672 — un rapprochement se DIT, avec la clé à recopier : il ne doit pas devenir
+        # la façon permanente de viser ce constat.
+        for rapprochee in declarations.get("rapprochees") or []:
+            lignes.append(
+                f"  DECLARATION RAPPROCHÉE ({rapprochee.get('ancrage')}) — "
+                f"{rapprochee.get('a_faire')}"
+            )
+        for cle, candidats in sorted((declarations.get("ambigues") or {}).items()):
+            lignes.append(
+                f"  DECLARATION AMBIGUË {cle} — {len(candidats)} constats candidats "
+                f"({', '.join(candidats)}) : préciser la clé ou ajouter `texte`"
+            )
         for entree in declarations.get("entrees") or []:
             if entree.get("statut") in ("refusee", "perimee"):
                 lignes.append(
