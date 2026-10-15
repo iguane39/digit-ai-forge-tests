@@ -121,6 +121,11 @@ ENTETES: dict[str, tuple[str, str]] = {
         "Constat mesuré — pourquoi",
         "la preuve : ce qui a été observé ; pour un KO ou un non-joué, c est le pourquoi",
     ),
+    "action": (
+        "Action — remède",
+        "le geste qui lève l écart de cet élément (L37 du socle, TF-1664) : celui de l onglet "
+        "Actions quand le constat en porte un, sinon celui que son état appelle",
+    ),
     "risque": (
         "Risque",
         "criticité × probabilité × coût tardif (notes 1-5, score 1-125) — calculé au rapport",

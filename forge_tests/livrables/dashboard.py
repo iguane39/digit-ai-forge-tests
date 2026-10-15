@@ -1972,17 +1972,52 @@ def _kpis_chapitre(chapitre: dict) -> str:
     return f'<div class="kpis-chapitre">{"".join(boutons)}</div>'
 
 
+# L37 du socle (TF-1664, bloquante depuis TF-1688) : chaque ligne en écart porte son remède.
+# Les chapitres listaient l état et le constat, et le geste vivait dans l onglet Actions, sans
+# renvoi ligne à ligne. La colonne « action » le dit désormais pour CHAQUE élément, tenu compris.
+_ACTION_PAR_ETAT = {
+    "exerce": "aucune action : élément passé, aucun constat",
+    "non_exerce": (
+        "écrire ou adopter le cas qui exerce cet élément (cahier dérivé, même référence), "
+        "puis rejouer l audit"
+    ),
+    "exclu": "aucune action : hors périmètre, le motif est au constat",
+}
+
+
+def _action_element(element: dict, actions: dict[str, dict]) -> str:
+    """Le geste qui lève l écart de cet élément : l action du rapport quand le constat en a
+    une (même texte que l onglet Actions), sinon le geste qui découle de son état."""
+    pan = str(element.get("pan") or "")
+    identifiant = str(element.get("id") or "")
+    action = actions.get(f"{pan}/{identifiant}") or actions.get(identifiant)
+    if action and action.get("attendu"):
+        return _texte_libre(action.get("attendu"))
+    etat = str(element.get("etat") or "")
+    if etat == "non_testable":
+        champs = ", ".join(element.get("champs_requis") or []) or "la configuration nommée"
+        return _e(f"fournir {champs}, puis rejouer l audit (`--reprendre`)")
+    if etat == "defaut":
+        return _e(
+            "corriger le constat dans le produit, ou le contester par une déclaration motivée "
+            "(onglet Actions), puis rejouer l audit"
+        )
+    return _e(_ACTION_PAR_ETAT.get(etat, "aucune action : état sans écart"))
+
+
 def _panneau_chapitres(
     chapitres: list[dict],
     famille: str,
     details: dict[tuple[str, str], dict] | None = None,
     declarations: dict[tuple[str, str], dict] | None = None,
+    actions: dict[str, dict] | None = None,
 ) -> str:
     """`declarations` (RT-18) : (pan, id élément) -> déclaration du projet portée par le
     finding. L état de l élément reste celui que le rapport mesure ; la déclaration s affiche
     EN REGARD du constat, elle ne le remplace pas."""
     details = details or {}
     declarations = declarations or {}
+    actions = actions or {}
     retenus = [c for c in chapitres if c["famille"] == famille]
     # Retour humain du 14/08 : l'onglet ouvre sur SA synthèse (mêmes colonnes que l'onglet
     # Synthèse, restreinte à la famille) + les commandes de repli global des chapitres.
@@ -2076,6 +2111,7 @@ def _panneau_chapitres(
                         + _badge_declaration(
                             declarations.get((str(element.get("pan") or ""), element["id"]))
                         ),
+                        _action_element(element, actions),
                         _e(element.get("risque"))
                         if element.get("risque") is not None
                         else '<span class="discret" title="pas de constat, donc pas de score '
@@ -2087,7 +2123,7 @@ def _panneau_chapitres(
                 # data-etat : la donnée que les KPIs de chapitre filtrent au clic.
                 attributs.append(f' data-etat="{_e(element["etat"])}"')
             colonnes = [
-                "élément", "objectif", "état", "classe", "constat mesuré", "risque",
+                "élément", "objectif", "état", "classe", "constat mesuré", "action", "risque",
                 "détail du cas",
             ]
             morceaux.append(
@@ -2794,6 +2830,9 @@ def construire(
         ),
     ]
 
+    actions_par_ref = {
+        str(a.get("finding_ref") or ""): a for a in (rapport.get("actions") or [])
+    }
     panneaux = [
         ("synthese", "Synthèse", synthese),
         (
@@ -2802,7 +2841,8 @@ def construire(
             [
                 "<h2>2 · Fonctionnels</h2>",
                 _panneau_chapitres(
-                    chapitres, "fonctionnel", details, declarations_par_element
+                    chapitres, "fonctionnel", details, declarations_par_element,
+                    actions_par_ref,
                 ),
             ],
         ),
@@ -2811,7 +2851,9 @@ def construire(
             "Techniques",
             [
                 "<h2>3 · Techniques</h2>",
-                _panneau_chapitres(chapitres, "technique", details, declarations_par_element),
+                _panneau_chapitres(
+                    chapitres, "technique", details, declarations_par_element, actions_par_ref
+                ),
             ],
         ),
         ("echecs", "Échecs", echecs),
