@@ -33,6 +33,8 @@ import ast
 import re
 from pathlib import Path
 
+from forge_tests import exclusions
+
 CONFORME = "conforme"
 HORS_DOMAINE = "hors_domaine"
 NON_DECLARABLE = "non_declarable"
@@ -56,6 +58,7 @@ def _fichiers(cible: Path, suffixes: tuple[str, ...]) -> list[Path]:
         f for f in sorted(cible.rglob("*"))
         if f.is_file() and f.suffix.lower() in suffixes
         and not (IGNORES & {p.name for p in f.parents})
+        and not exclusions.ignore_par_git(f, cible)  # TF-1767
     ]
 
 

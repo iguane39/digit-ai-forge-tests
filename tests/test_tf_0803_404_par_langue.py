@@ -271,9 +271,12 @@ def test_une_page_404_DECLAREE_est_cherchee_au_sitemap_par_son_chemin() -> None:
 
 def test_un_sitemap_injoignable_est_NON_MESURABLE_jamais_PASS() -> None:
     """Une absence non lue n est pas une absence prouvee : c est le meme piege que deux campagnes
-    vides qui se ressemblent — le silence ne vaut pas verdict."""
+    vides qui se ressemblent — le silence ne vaut pas verdict.
+
+    TF-1809 : un sitemap qui rend 404 est une absence LUE, donc sans objet
+    (`test_tf_1807_1809_1810_404_sans_objet.py`) ; une erreur serveur reste non mesurable."""
     verdict = recette.juger_sitemap(
-        {"url": "https://s/sitemap.xml", "code": 404, "corps": "", "entetes": {}}, [], [])
+        {"url": "https://s/sitemap.xml", "code": 503, "corps": "", "entetes": {}}, [], [])
     assert verdict["verdict"] == "NON_MESURABLE"
 
 
@@ -374,10 +377,12 @@ def test_une_instance_injoignable_rend_2_et_n_invente_aucun_verdict() -> None:
     assert rapport["cas"] == []
 
 
-def test_sans_prefixe_de_langue_il_n_y_a_rien_a_sonder() -> None:
+def test_sans_prefixe_de_langue_ni_langue_declaree_il_n_y_a_rien_a_sonder() -> None:
+    """TF-1807 : sans préfixe, la racine se sonde dans la langue que l accueil déclare. Un
+    accueil qui n en déclare aucune laisse la recette sans attendu : elle le dit."""
     rapport = recette.jouer("http://127.0.0.1:9", [], delai=1)
     assert rapport["verdict"] == "NON_MESURABLE"
-    assert "aucun prefixe" in rapport["motif"]
+    assert rapport["cas"] == []
 
 
 @pytest.mark.parametrize("serveur", ["conforme"], indirect=True)

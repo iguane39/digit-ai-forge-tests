@@ -198,6 +198,33 @@ def _sous_montage(identifiant: str, prefixes: list[str]) -> bool:
     return any(chemin == prefixe or chemin.startswith(prefixe + "/") for prefixe in prefixes)
 
 
+def _hors_inventaire(
+    releve: list[dict], operations: set[str], prefixes: list[str]
+) -> tuple[list[str], list[str]]:
+    """Couples relevés dont l opération n est pas à l inventaire, en deux familles.
+
+    - `manquees` (TF-1747) : la sonde a trouvé une route DÉCLARÉE au schéma, et l inventaire ne
+      la porte pas. C est la signature d une énumération incomplète.
+    - `sans_route` (TF-1789) : adresse sans route (repli 404), route hors schéma
+      (`include_in_schema=False`, `/openapi.json`, `/docs`), ou relevé ancien sans le détail.
+      Aucun `responses=` ne peut y déclarer un code.
+    Un chemin sous `app.mount()` reste à l exemption RT-10, il n entre dans aucune des deux.
+    """
+    manquees: set[str] = set()
+    sans_route: set[str] = set()
+    for entree in releve:
+        signature = f"{entree['methode'].upper()} {_norm(entree['gabarit'])}"
+        if f"endpoint:{signature}" in operations:
+            continue
+        if _sous_montage(f"code:{signature}=0", prefixes):
+            continue
+        if entree.get("route") and entree.get("schema"):
+            manquees.add(signature)
+        else:
+            sans_route.add(f"{signature} -> {entree['code']}")
+    return sorted(manquees), sorted(sans_route)
+
+
 def _norm(chemin: str) -> str:
     chemin = chemin.split("?")[0]
     chemin = re.sub(r"\{[^}]*\}", "{}", chemin)
@@ -508,6 +535,39 @@ def analyser(cible: Path) -> SortieAdaptateur:
 
     declares = {e.id for e in inv if e.id.startswith("code:")}
     prefixes = _montages(cible)
+    operations = {e.id for e in inv if e.id.startswith("endpoint:")}
+    manquees, sans_route = _hors_inventaire(codes_emis(cible) or [], operations, prefixes)
+    if manquees:
+        # TF-1747 — LE PLANCHER. Une route que l application a servie, qu elle déclare à son
+        # schéma, et qu aucune entrée de l inventaire ne porte, prouve que l énumération a
+        # manqué des routes. Le verdict de couverture calculé sur cet inventaire est faux sans
+        # le dire (Produit-76 : 2 routes vues sur 36). Le pan échoue au lieu de conclure.
+        message = (
+            f"énumération incomplète : {len(manquees)} route(s) servie(s) pendant la suite et "
+            "déclarée(s) au schéma, absente(s) de l inventaire du pan — la couverture calculée "
+            "ici ne mesure pas l application, elle mesure ce que l inventaire a vu. Défaut de "
+            "l outil ou de la désignation FORGE_TESTS_APP, pas du produit : "
+            + ", ".join(manquees)
+        )
+        sortie.findings.insert(
+            0,
+            Finding(
+                id="enumeration-incomplete:api",
+                classe=classes.ENUMERATION_INCOMPLETE,
+                localisation=str(_module_principal(cible)),
+                message=message,
+                severite="bloquant",
+            ),
+        )
+        sortie.non_juge.insert(0, "api : " + message)
+        sortie.verdict = "FAIL"
+    if sans_route:
+        sortie.non_juge.append(
+            f"api : {len(sans_route)} couple(s) émis par une adresse sans opération au schéma "
+            "(repli 404, interface servie, /openapi.json, route hors schéma) EXCLU(S) du contrôle "
+            "de divergence (TF-1789) — aucun `responses=` ne peut les déclarer : "
+            + ", ".join(sans_route)
+        )
     if prefixes:
         sortie.non_juge.append(
             "api : montage(s) " + ", ".join(prefixes) + " EXCLUS du controle de divergence "
@@ -519,9 +579,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
             continue
         if _sous_montage(identifiant, prefixes):
             continue
+        signature = identifiant[len("code:") :].rsplit("=", 1)[0]
+        if f"endpoint:{signature}" not in operations:
+            # TF-1789 — pas d opération au schéma, donc pas de `responses=` où déclarer ce code :
+            # le publier en divergence accusait le produit d un oubli qu il ne peut pas réparer.
+            continue
         # TF-0244 — le constat pointe le fichier qui declare la route, pas un `main.py` suppose :
         # c est la que le lecteur ira ajouter le `responses=` manquant.
-        signature = identifiant[len("code:") :].rsplit("=", 1)[0]
         methode, _, chemin = signature.partition(" ")
         ou = _localiser(methode, chemin, localisations, str(source))
         sortie.findings.append(

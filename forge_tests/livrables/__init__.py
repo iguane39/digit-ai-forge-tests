@@ -55,6 +55,30 @@ def _verifier_hors_projet(dossier: Path, cible: Path) -> None:
         )
 
 
+def copier_en_output(dashboard: Path, cible: Path) -> Path:
+    """TF-1808 — copie le dashboard DATÉ dans `<cible>/output/`, sous son nom daté.
+
+    ETAPE-MEP § 4 du pilot exige « le dashboard de tests (copie datée dans `output\\`) ». Seul
+    ce fichier entre dans le projet, et seulement sous `output/` : l audit exclut ce dossier de
+    son périmètre (`exclusions.HORS_PRODUIT`), la forge ne s y audite donc jamais elle-même.
+    Une copie de même nom et de même contenu n est pas réécrite ; un contenu différent sous le
+    même nom est refusé, jamais écrasé.
+    """
+    import shutil
+
+    dashboard, cible = Path(dashboard).resolve(), Path(cible).resolve()
+    destination = cible / "output" / dashboard.name
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        if destination.read_bytes() == dashboard.read_bytes():
+            return destination
+        raise FileExistsError(
+            f"{destination} existe avec un autre contenu : une copie datée ne s écrase pas"
+        )
+    shutil.copyfile(dashboard, destination)
+    return destination
+
+
 def nom_du_produit(cible: Path, referentiel: dict | None) -> str:
     """Nom du produit — déclaré, sinon lu au référentiel, sinon le dossier. Jamais inventé."""
     from forge_tests.authentification import charger_env

@@ -114,10 +114,15 @@ POUR_COUVRIR = (
 # `decoupe` nomme l axe de sous-chapitrage ; un axe inconnu retombe sur « element », et le
 # repli est DECLARE au cahier plutot que silencieux.
 CHAPITRES = (
+    # TF-1792 : chaque élément ne relève que d UN chapitre — la route et la porte d entrée font le
+    # parcours, tout le reste (effets, console, marqueurs) fait l écran. Avant, les deux
+    # chapitres dérivaient la même surface sous le même numéro stable.
     {"code": "F1", "famille": "fonctionnel", "titre": "Parcours bout en bout",
-     "decoupe": "parcours", "axe_cas": "etats"},
+     "decoupe": "parcours", "axe_cas": "etats",
+     "retient": r"^qualif:(?:role:[^:]+:)?(?:route|entree):"},
     {"code": "F2", "famille": "fonctionnel", "titre": "Écrans × états",
-     "decoupe": "ecran", "axe_cas": "etats"},
+     "decoupe": "ecran", "axe_cas": "etats",
+     "retient": r"^(?!qualif:(?:role:[^:]+:)?(?:route|entree):)"},
 )
 
 
@@ -176,7 +181,8 @@ NON_JUGE = [
     "qualif : le marqueur de contenu par defaut est le titre de la page (premier `h1` non vide, "
     "sinon `title`) ; il atteste qu une page a RENDU quelque chose, pas qu elle ait rendu les "
     "BONNES donnees — un marqueur metier se declare par FORGE_TESTS_QUALIF_MARQUEURS",
-    "qualif : quand une delegation d evenement est posee sur `document` ou `body`, aucun "
+    "qualif : quand une delegation d evenement est posee sur `document`, `body` ou un ancetre "
+    "des affordances (conteneur racine de React 17+, TF-1791), aucun "
     "element ne peut plus etre declare inerte avec certitude — les elements concernes sont "
     "NOMMES en non_juge au lieu d etre accuses",
     # TF-0292 : la REGLE, promue ici depuis le non_juge de SORTIE ou TF-0268 l avait laissee.
@@ -1343,6 +1349,25 @@ def environnement_local(base: str) -> bool:
 
 
 # --- Écouteurs réellement attachés, via le protocole DevTools ---------------------------------
+# TF-1791 — `getEventListeners` n existe que dans l API de console : l expression est évaluée
+# avec `includeCommandLineAPI`. Chaque ancêtre n est lu qu une fois (ensemble `vus`).
+_JS_DELEGATION_ANCETRES = """(() => {
+  const types = ['click', 'submit', 'mousedown', 'pointerdown'];
+  const ecoute = (n) => {
+    const l = getEventListeners(n) || {};
+    return types.some((t) => (l[t] || []).length > 0);
+  };
+  const vus = new Set();
+  for (const el of document.querySelectorAll(%s)) {
+    for (let n = el.parentNode; n && !vus.has(n); n = n.parentNode) {
+      vus.add(n);
+      if ((n.nodeType === 1 || n.nodeType === 9) && ecoute(n)) return true;
+    }
+  }
+  return false;
+})()"""
+
+
 def _ecouteurs(page) -> tuple[list[set[str]] | None, bool, str | None]:  # noqa: ANN001
     """(types d événements par affordance, délégation détectée, motif d indisponibilité).
 
@@ -1375,6 +1400,21 @@ def _ecouteurs(page) -> tuple[list[set[str]] | None, bool, str | None]:  # noqa:
             listes = session.send("DOMDebugger.getEventListeners", {"objectId": objet})
             types = {e.get("type", "") for e in listes.get("listeners", [])}
             delegation = delegation or bool(types & {"click", "submit", "mousedown", "pointerdown"})
+        if not delegation:
+            # TF-1791 (Produit-83 RE-3, 15/10/2026) : React 17+ ne délègue plus sur `document`
+            # mais sur le CONTENEUR passé à `createRoot` (`<div id="root">`). Lu sur `document`
+            # et `body` seulement, la délégation échappait : 64 faux « formulaire sans action ni
+            # écouteur », et un seuil qualif bloquant. On remonte donc les ANCÊTRES des
+            # affordances, où qu ils soient : un écouteur posé sur l un d eux reçoit le clic.
+            reponse = session.send(
+                "Runtime.evaluate",
+                {
+                    "expression": _JS_DELEGATION_ANCETRES % json.dumps(_SELECTEUR),
+                    "includeCommandLineAPI": True,
+                    "returnByValue": True,
+                },
+            )
+            delegation = bool((reponse.get("result") or {}).get("value"))
         session.detach()
     except Exception as erreur:  # noqa: BLE001 — le protocole se DECLARE indisponible, il ne tue rien
         return None, False, f"{type(erreur).__name__}: {erreur}"
@@ -1618,6 +1658,47 @@ _SELECTEUR_IDENTIFIANT = (
     "input[name*=user i], input[type=text]"
 )
 _SELECTEUR_SOUMISSION = "button[type=submit], input[type=submit], button"
+# TF-1768 / TF-1790 (Produit-82 RT-17, Produit-83 RE-2, 15/10/2026) : le sélecteur ci-dessus,
+# lu sur le DOCUMENT, rend le premier bouton dans l ordre du DOM. Sur deux portails, c était la
+# bascule de thème de l en-tête (`type=button`), placée avant le formulaire : aucune session
+# ouverte, 5 routes jugées refusées alors que le compte se connecte dans un navigateur. Le
+# bouton se cherche donc DEPUIS le champ mot de passe : dans son formulaire d abord, en
+# préférant `type=submit` ; sans `<form>` (SPA), dans le plus proche ancêtre qui porte un
+# bouton. Le sélecteur de document ne reste qu en dernier recours.
+_JS_SOUMISSION_DU_FORMULAIRE = """(champ) => {
+  const prefere = 'button[type=submit], input[type=submit], input[type=image]';
+  const implicite = 'button:not([type]), button[type=""]';
+  const autre = 'button:not([type=button]):not([type=reset]), [role=button]';
+  const chercher = (n) => n.querySelector(prefere) || n.querySelector(implicite)
+    || n.querySelector(autre);
+  const form = champ.form || champ.closest('form');
+  if (form) {
+    const dedans = chercher(form);
+    if (dedans) return dedans;
+    if (form.id) {
+      const associe = document.querySelector(
+        '[form="' + CSS.escape(form.id) + '"][type=submit]');
+      if (associe) return associe;
+    }
+    const bouton = form.querySelector('button');
+    if (bouton) return bouton;
+  }
+  for (let n = champ.parentElement; n; n = n.parentElement) {
+    const trouve = chercher(n) || n.querySelector('button');
+    if (trouve) return trouve;
+  }
+  return null;
+}"""
+
+
+def _bouton_de_soumission(page, mdp):  # noqa: ANN001, ANN202
+    """Le bouton qui soumet le formulaire du champ mot de passe ; à défaut, celui du document."""
+    try:
+        poignee = mdp.evaluate_handle(_JS_SOUMISSION_DU_FORMULAIRE)
+        bouton = poignee.as_element() if poignee is not None else None
+    except Exception:  # noqa: BLE001 — poignée sans évaluation (doublure, page détachée)
+        bouton = None
+    return bouton if bouton is not None else _attendre(page, _SELECTEUR_SOUMISSION)
 # Le délai laissé au bundle pour MONTER la mire avant qu on ait le droit de dire qu il n y en a
 # pas. Un pan qui n attend pas ne mesure pas l application, il mesure sa propre impatience.
 ATTENTE_MIRE_MS = 10000
@@ -1740,7 +1821,7 @@ def _connecter(page, config: dict) -> dict:  # noqa: ANN001
             continue
         identifiant.fill(config["login"])
         mdp.fill(config["mdp"])
-        bouton = _attendre(page, _SELECTEUR_SOUMISSION)
+        bouton = _bouton_de_soumission(page, mdp)
         if bouton is None:
             arrets.append(f"{route} : mire remplie, aucun bouton de soumission")
             continue
@@ -1857,7 +1938,8 @@ def _visiter(page, config: dict) -> tuple[list[dict], list[str]]:  # noqa: ANN00
                 )
             if delegation:
                 avertissements.append(
-                    f"qualif : delegation d evenement posee sur document/body de {route} — les "
+                    f"qualif : delegation d evenement posee sur document, body ou un ancetre des "
+                    f"affordances de {route} — les "
                     "affordances sans ecouteur propre y sont NON JUGEES, jamais accusees"
                 )
             # Les liens de cette page alimentent le parcours.

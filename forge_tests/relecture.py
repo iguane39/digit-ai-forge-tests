@@ -40,7 +40,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from forge_tests import classes
+from forge_tests import classes, exclusions
 from forge_tests.noyau import Finding
 from forge_tests.risque import coter
 
@@ -67,6 +67,7 @@ def _fichiers_modeles(cible: Path) -> list[Path]:
     return [
         f for f in sorted(cible.rglob("*.py"))
         if not (IGNORES & {p.name for p in f.parents})
+        and not exclusions.ignore_par_git(f, cible)  # TF-1767
     ]
 
 

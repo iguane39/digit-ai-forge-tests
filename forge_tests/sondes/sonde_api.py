@@ -41,7 +41,32 @@ GREFFE_PAR_DEFAUT = "conftests"
 GREFFES = ("conftests", "session")
 
 OBSERVE: set[tuple[str, str, int]] = set()
+#: TF-1747 — pour chaque couple relevé : une route a-t-elle été trouvée, et est-elle déclarée au
+#: schéma ? C est ce qui sépare, côté pan `api`, une énumération incomplète (route servie et
+#: déclarée, absente de l inventaire) d une adresse sans route (repli 404, TF-1789).
+DETAILS: dict[tuple[str, str, int], dict[str, bool]] = {}
 _INSTRUMENTE = False
+
+
+def gabarit_effectif(scope) -> tuple[str, bool, bool]:  # noqa: ANN001
+    """(gabarit, route trouvée, déclarée au schéma) pour la requête en cours.
+
+    TF-1747 (lot Produit-76 du 25/09) : depuis FastAPI 0.13x, `include_router()` ne recopie
+    plus les routes à plat. Il range le routeur dans un `_IncludedRouter`, et `scope["route"]`
+    porte la route ORIGINALE, celle du routeur feuille : `/workers/{worker_name}/cancel` au lieu
+    de `/api/admin/workers/{worker_name}/cancel`. Le chemin composé vit dans le contexte de
+    route effectif que FastAPI pose sous `scope["fastapi"]`. On le lit d abord ; à défaut
+    (FastAPI ancien, Starlette nu), on retombe sur `scope["route"].path`, qui y est composé.
+    """
+    route = scope.get("route")
+    contexte = (scope.get("fastapi") or {}).get("effective_route_context")
+    gabarit = getattr(contexte, "path_format", None) or getattr(contexte, "path", None)
+    porteur = contexte if gabarit else route
+    if not gabarit:
+        gabarit = getattr(route, "path", None)
+    trouvee = bool(gabarit)
+    schema = bool(trouvee and getattr(porteur, "include_in_schema", False))
+    return (gabarit or scope.get("path", "")), trouvee, schema
 
 
 def moment_de_greffe() -> str:
@@ -71,9 +96,10 @@ class MiddlewareSonde:
             if message.get("type") == "http.response.start":
                 # `scope["route"]` est posé par le routeur, qui tourne SOUS ce middleware :
                 # au moment de la réponse, le gabarit ("/api/commandes/{cid}") est disponible.
-                route = scope.get("route")
-                gabarit = getattr(route, "path", None) or scope.get("path", "")
-                OBSERVE.add((scope.get("method", ""), gabarit, int(message["status"])))
+                gabarit, trouvee, schema = gabarit_effectif(scope)
+                cle = (scope.get("method", ""), gabarit, int(message["status"]))
+                OBSERVE.add(cle)
+                DETAILS[cle] = {"route": trouvee, "schema": schema}
             await send(message)
 
         await self.app(scope, receive, send_espion)
@@ -152,7 +178,10 @@ def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ANN001, ARG001
     destination = os.environ.get("FORGE_TESTS_SONDE")
     if not destination:
         return
-    releve = [{"methode": m, "gabarit": g, "code": c} for m, g, c in sorted(OBSERVE)]
+    releve = [
+        {"methode": m, "gabarit": g, "code": c, **DETAILS.get((m, g, c), {})}
+        for m, g, c in sorted(OBSERVE)
+    ]
     Path(destination).write_text(
         json.dumps(releve, ensure_ascii=False, indent=2), encoding="utf-8"
     )

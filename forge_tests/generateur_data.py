@@ -365,7 +365,12 @@ def _violation(contrainte: str, migrations: str) -> tuple[str, tuple[str, ...]] 
     """`(instructions SQL, indices attendus dans le message)` — ou None si non dérivable."""
     if contrainte.endswith(".not_null"):
         colonne = contrainte[: -len(".not_null")]
-        table = _table_ayant_colonne(colonne, migrations)
+        # TF-1795 : la table est dans le nom quand l inventaire l a lue ; sinon, repli sur la
+        # première table qui porte la colonne (forme ancienne, sans table).
+        if "." in colonne:
+            table, colonne = colonne.split(".", 1)
+        else:
+            table = _table_ayant_colonne(colonne, migrations)
         if table is None:
             return None
         return _ligne_violante(table, migrations, {colonne: "NULL"}), (colonne, "null")

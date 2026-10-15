@@ -43,8 +43,12 @@ CE QUE LA RECETTE NE MESURE PAS, et le DIT plutot que de le supposer :
 
   - la DECLARATION de l exclusion du sitemap dans l oracle SEO du produit (M-9 b, seconde
     moitie) : elle vit dans le depot du produit, pas dans une reponse HTTP ;
-  - le « meme gabarit » quand la page de reference du prefixe ne porte ni `<nav>` ni le marqueur
-    declare par `--marqueur-menu` : sans reference, la comparaison n a pas d objet.
+  - le « meme gabarit » quand la page de reference du prefixe ne porte ni `<nav>`, ni la
+    coquille d une application monopage (TF-1810 : noeud de montage et paquet de scripts), ni le
+    marqueur declare par `--marqueur-menu` : sans reference, la comparaison n a pas d objet.
+
+Sans `--prefixes` (TF-1807), le site est sonde a la racine, dans la langue que son accueil
+declare. Un sitemap qui rend 404 sort SANS_OBJET (TF-1809) : il ne liste aucune page 404.
 
 UNE MESURE PARTIELLE N EST PAS UN PASS. Si un seul cas sort NON_MESURABLE, le verdict global est
 NON_MESURABLE (code 2) : un verdict qu on ne peut pas prononcer et qu on tait passe pour un
@@ -80,6 +84,15 @@ _NAV = re.compile(r"<nav\b[^>]*>(.*?)</nav>", re.I | re.S)
 _LANG = re.compile(r"""<html[^>]*\blang\s*=\s*["']([^"']+)["']""", re.I)
 _META_ROBOTS = re.compile(r"""<meta[^>]+name\s*=\s*["']robots["'][^>]*>""", re.I)
 _LOC = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.I)
+# TF-1810 : la coquille d une application monopage — un noeud de montage vide et le paquet de
+# scripts et de feuilles qui y rend l application, menu compris.
+_MONTAGE = re.compile(
+    r"""<div[^>]*\bid\s*=\s*["'](?:root|app|__next|__nuxt|svelte|main)["'][^>]*>\s*</div>""",
+    re.I)
+_SCRIPT_SRC = re.compile(r"""<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']""", re.I)
+_FEUILLE = re.compile(
+    r"""<link\b(?=[^>]*\brel\s*=\s*["']stylesheet["'])[^>]*\bhref\s*=\s*["']([^"']+)["']""",
+    re.I)
 
 
 # ---- Sondage : la seule partie qui parle au reseau -------------------------------------------
@@ -123,6 +136,20 @@ def liens_de_menu(html: str) -> set[str] | None:
     if not blocs:
         return None
     return {lien for bloc in blocs for lien in liens(bloc)}
+
+
+def coquille_monopage(html: str) -> set[str] | None:
+    """Les ressources qui RENDENT une application monopage, ou None si ce n en est pas une.
+
+    TF-1810 (Produit-83 RE-11, 15/10/2026) : le HTML servi d une monopage ne porte pas de
+    `<nav>` ; le menu est rendu par le script. La reference du « meme gabarit » est alors la
+    coquille : le noeud de montage et le paquet de scripts et de feuilles. Une 404 qui sert la
+    meme coquille rend la meme application, menu compris ; une 404 qui la perd, non.
+    """
+    if not _MONTAGE.search(html):
+        return None
+    ressources = set(_SCRIPT_SRC.findall(html)) | set(_FEUILLE.findall(html))
+    return ressources or None
 
 
 def langue(html: str) -> str | None:
@@ -197,9 +224,26 @@ def juger_adresse_inconnue(reponse: dict, prefixe: str, attendu_lang: str,
 
     if menu_reference is None:
         ref = (reference or {}).get("url", "la page de reference du prefixe")
+        coquille = coquille_monopage((reference or {}).get("corps", ""))
+        if coquille is not None:
+            servie = coquille_monopage(reponse["corps"]) or set()
+            perdues = sorted(coquille - servie)
+            if perdues:
+                return {**base, "verdict": "FAIL", "langue": trouvee,
+                        "ressources_manquantes": perdues,
+                        "motif": f"application monopage : la page 404 ne sert pas la coquille de "
+                                 f"{ref} ({len(perdues)} ressource(s) absente(s)) — elle ne rend "
+                                 f"pas l application, donc pas son menu"}
+            return {**base, "verdict": "PASS", "langue": trouvee,
+                    "motif": f"404 conserve, application monopage : meme coquille que {ref} "
+                             f"({len(coquille)} ressource(s)), langue du prefixe. Le menu est "
+                             f"rendu par le script ; un marqueur rendu se verifie avec "
+                             f"--marqueur-menu"}
         return {**base, "verdict": "NON_MESURABLE", "langue": trouvee,
-                "motif": f"aucun `<nav>` sur {ref} : le « meme gabarit » n a pas de reference a "
-                         f"laquelle se comparer. Declarer un marqueur avec --marqueur-menu"}
+                "motif": f"aucun `<nav>` sur {ref}, et ce n est pas la coquille d une "
+                         f"application monopage reconnue : le « meme gabarit » n a pas de "
+                         f"reference a laquelle se comparer. Option a fournir : "
+                         f"--marqueur-menu <chaine presente sur toutes les pages>"}
     menu_404 = liens_de_menu(reponse["corps"])
     manquants = sorted(menu_reference - (menu_404 or set()))
     if manquants:
@@ -249,6 +293,12 @@ def juger_sitemap(reponse: dict | None, adresses_sondees: list[str],
     base = {"cas": "sitemap", "prefixe": "", "url": (reponse or {}).get("url", "")}
     if reponse is None:
         return {**base, "verdict": "NON_MESURABLE", "motif": "aucun sitemap declare"}
+    if reponse["code"] == 404:
+        # TF-1809 (Produit-83 RE-10) : un sitemap qui rend 404 n existe pas. Il ne liste aucune
+        # adresse, donc aucune page 404 : l exigence est sans objet, pas non mesuree. Lu, ce 404
+        # est une absence PROUVEE, a la difference d un sitemap injoignable.
+        return {**base, "verdict": "SANS_OBJET", "code": 404,
+                "motif": "aucun sitemap servi (404) : il ne peut lister aucune page 404"}
     if reponse["code"] != 200:
         return {**base, "verdict": "NON_MESURABLE", "code": reponse["code"],
                 "motif": f"sitemap injoignable (code {reponse['code']}) : une absence non lue "
@@ -278,20 +328,24 @@ def synthetiser(cas: list[dict]) -> dict:
         "pass": sum(1 for c in cas if c["verdict"] == "PASS"),
         "fail": sum(1 for c in cas if c["verdict"] == "FAIL"),
         "non_mesurable": sum(1 for c in cas if c["verdict"] == "NON_MESURABLE"),
+        "sans_objet": sum(1 for c in cas if c["verdict"] == "SANS_OBJET"),
     }
     if resume["fail"]:
         return {"verdict": "FAIL", "resume": resume,
                 "motif": f"{resume['fail']} cas en defaut — le detail est dans `cas[]`, chaque "
                          f"motif nomme ce qui a ete mesure"}
-    if not cas:
+    if not resume["pass"] and not resume["non_mesurable"]:
+        # Aucun cas, ou seulement des cas sans objet : rien n a ete MESURE et tenu.
         return {"verdict": "NON_MESURABLE", "resume": resume,
-                "motif": "aucun cas joue — il n y a pas de mesure a prononcer"}
+                "motif": "aucun cas joue et tenu — il n y a pas de mesure a prononcer"}
     if resume["non_mesurable"]:
         return {"verdict": "NON_MESURABLE", "resume": resume,
                 "motif": f"{resume['non_mesurable']} cas non mesurable(s) : une mesure partielle "
                          f"n est pas un PASS, sans quoi le silence passerait pour un verdict tenu"}
+    sans_objet = (f", {resume['sans_objet']} sans objet (motif dans `cas[]`)"
+                  if resume["sans_objet"] else "")
     return {"verdict": "PASS", "resume": resume,
-            "motif": f"les {resume['pass']} cas de M-9 sont joues et tenus"}
+            "motif": f"les {resume['pass']} cas de M-9 sont joues et tenus{sans_objet}"}
 
 
 # ---- Orchestration : parametrage, sondage, jugement -------------------------------------------
@@ -311,18 +365,23 @@ def jouer(base: str, prefixes: list[str], langue_par_defaut: str | None = None,
     sondages: list[tuple[str, str]] = [(p, p) for p in nettoyes]
     if langue_par_defaut:
         sondages.append(("", langue_par_defaut.strip().lower()))
-
-    if not sondages:
-        return {"verdict": "NON_MESURABLE", "base": base, "cas": [],
-                "resume": {"pass": 0, "fail": 0, "non_mesurable": 0},
-                "motif": "aucun prefixe de langue fourni — il n y a rien a sonder"}
+    vide = {"pass": 0, "fail": 0, "non_mesurable": 0, "sans_objet": 0}
 
     accueil = sonder(base.rstrip("/") + "/", delai)
     if accueil["code"] == 0 and not accueil.get("pendue"):
-        return {"verdict": "NON_MESURABLE", "base": base, "cas": [],
-                "resume": {"pass": 0, "fail": 0, "non_mesurable": 0},
+        return {"verdict": "NON_MESURABLE", "base": base, "cas": [], "resume": vide,
                 "motif": f"instance injoignable a {base} : {accueil.get('erreur')} — rien n a pu "
                          f"etre mesure, et un refus explicite vaut mieux qu un verdict invente"}
+
+    if not sondages:
+        # TF-1807 (Produit-83 RE-8) : un site MONOLINGUE n a pas de prefixe de langue. Il se
+        # sonde a la racine, dans la langue que son accueil DECLARE (`<html lang>`), mesuree.
+        declaree = langue(accueil.get("corps", "")) if accueil["code"] == 200 else None
+        if declaree is None:
+            return {"verdict": "NON_MESURABLE", "base": base, "cas": [], "resume": vide,
+                    "motif": "aucun prefixe de langue, et l accueil ne declare aucune langue "
+                             "(`<html lang>`) : fournir --prefixes fr,en ou --langue-par-defaut"}
+        sondages.append(("", declaree.split("-")[0]))
 
     for prefixe, attendu in sondages:
         url_reference = _joindre(base, prefixe + "/") if prefixe else base.rstrip("/") + "/"
@@ -361,6 +420,8 @@ def jouer(base: str, prefixes: list[str], langue_par_defaut: str | None = None,
 
 
 CODES = {"PASS": 0, "FAIL": 1, "NON_MESURABLE": 2}
+#: TF-1809 — `SANS_OBJET` est un verdict de CAS, jamais un verdict global : il ne bloque pas un
+#: PASS et n en fait pas un a lui seul.
 
 
 def main(argv: list[str]) -> int:
@@ -368,8 +429,10 @@ def main(argv: list[str]) -> int:
         prog="quatre_cent_quatre.py",
         description="Preuve executable du controle M-9 : la 404 personnalisee par langue (P-2).")
     analyseur.add_argument("base", help="URL de preproduction (ex. https://staging.exemple)")
-    analyseur.add_argument("--prefixes", required=True,
-                           help="prefixes de langue separes par des virgules (ex. fr,en,nl)")
+    analyseur.add_argument("--prefixes", default="",
+                           help="prefixes de langue separes par des virgules (ex. fr,en,nl) ; "
+                                "absent : site monolingue sonde a la racine, dans la langue que "
+                                "son accueil declare (TF-1807)")
     analyseur.add_argument("--langue-par-defaut", default=None,
                            help="langue attendue a la racine, sans prefixe (exigence 4 de P-2)")
     analyseur.add_argument("--sitemap", default="/sitemap.xml",

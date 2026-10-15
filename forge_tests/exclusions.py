@@ -121,6 +121,87 @@ def chemin_exclu(chemin: os.PathLike[str] | str, *, avec_hors_produit: bool = Tr
     return any(dossier_exclu(p, avec_hors_produit=avec_hors_produit) for p in Path(chemin).parts)
 
 
+# --- ce que le dépôt lui-même déclare hors de lui : `.gitignore` ------------------------------
+# TF-1767 (lot Produit-82 du 15/10/2026, RT-16) : lancé sur la racine du produit, l audit a
+# inventorié et jugé `vendor-check/`, un clone du code amont ignoré par git. 493 constats sur un
+# autre code, presque tous sur ses tests et son interface ; seule la mutation savait exclure un
+# chemin. Un dossier que le dépôt ignore n est pas versionné, donc pas livré : ce n est pas du
+# produit. Il sort du périmètre PAR DÉFAUT, nommé au rapport (`perimetre_exclu_git`).
+#
+# Ce filtre ne retire QUE ce que les listes de noms ne couvrent pas déjà : un `dist/` ou un
+# `node_modules/` ignorés par git restent soumis à la politique de chaque pan (le catalogue i18n
+# lit `dist/` à dessein). Inclusion explicite : le nom du dossier dans `FORGE_TESTS_INCLURE`.
+_CACHE_GIT: dict[str, tuple[str, tuple[str, ...]]] = {}
+
+
+def _normal(chemin: os.PathLike[str] | str) -> str:
+    return os.path.normcase(os.path.abspath(os.fspath(chemin)))
+
+
+def _ignores_du_depot(racine: os.PathLike[str] | str) -> tuple[str, tuple[str, ...]]:
+    """(racine git normalisée, dossiers ignorés en chemins absolus normalisés), en cache."""
+    import subprocess
+
+    cle = _normal(racine)
+    if cle in _CACHE_GIT:
+        return _CACHE_GIT[cle]
+    resultat: tuple[str, tuple[str, ...]] = ("", ())
+    try:
+        haut = subprocess.run(
+            ["git", "-C", cle, "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        if haut.returncode == 0 and haut.stdout.strip():
+            depot = haut.stdout.strip()
+            liste = subprocess.run(
+                ["git", "-C", depot, "ls-files", "--others", "--ignored", "--exclude-standard",
+                 "--directory", "-z"],
+                capture_output=True, text=True, timeout=120, check=False,
+                encoding="utf-8", errors="replace",
+            )
+            if liste.returncode == 0:
+                noms_geres = OUTILLAGE | HORS_PRODUIT
+                inclus = _inclus_declares()
+                dossiers = []
+                for brut in liste.stdout.split("\0"):
+                    if not brut.endswith("/"):
+                        continue  # un fichier ignoré isolé ne porte pas un autre code
+                    relatif = brut.rstrip("/")
+                    nom = relatif.rsplit("/", 1)[-1]
+                    if nom in noms_geres or nom in inclus or nom.endswith(MOTIFS_ASPIRES):
+                        continue
+                    absolu = _normal(os.path.join(depot, relatif))
+                    # Seuls les dossiers SOUS la racine auditée : une racine logée elle-même dans
+                    # un dossier ignoré d un dépôt parent ne s exclut pas d elle-même.
+                    if absolu.startswith(cle + os.sep):
+                        dossiers.append(absolu)
+                resultat = (_normal(depot), tuple(sorted(dossiers)))
+    except (OSError, subprocess.SubprocessError):
+        resultat = ("", ())
+    _CACHE_GIT[cle] = resultat
+    return resultat
+
+
+def ignore_par_git(chemin: os.PathLike[str] | str, racine: os.PathLike[str] | str) -> bool:
+    """`chemin` est-il sous un dossier que le dépôt de `racine` ignore (hors noms déjà gérés) ?"""
+    _depot, dossiers = _ignores_du_depot(racine)
+    if not dossiers:
+        return False
+    cible = _normal(chemin)
+    return any(cible == d or cible.startswith(d + os.sep) for d in dossiers)
+
+
+def ignores_git(racine: os.PathLike[str] | str) -> list[str]:
+    """Les dossiers exclus par `.gitignore`, relatifs à `racine`, pour publication au rapport."""
+    _depot, dossiers = _ignores_du_depot(racine)
+    base = _normal(racine)
+    sortie = []
+    for d in dossiers:
+        if d == base or d.startswith(base + os.sep):
+            sortie.append(Path(os.path.relpath(d, base)).as_posix())
+    return sortie
+
+
 def est_page_aspiree(chemin: os.PathLike[str] | str) -> bool:
     r"""La page porte-t-elle le marqueur d'une sauvegarde navigateur ?
 

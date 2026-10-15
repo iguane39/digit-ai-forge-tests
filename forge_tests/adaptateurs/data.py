@@ -58,6 +58,67 @@ _INDEX = re.compile(rf"CREATE\s+(?:UNIQUE\s+)?INDEX\s+{_SI_EXISTE}(\w+)", re.IGN
 _TRIGGER = re.compile(rf"CREATE\s+TRIGGER\s+{_SI_EXISTE}(\w+)", re.IGNORECASE)
 
 
+_ALTER_TABLE = re.compile(rf"ALTER\s+TABLE\s+{_SI_EXISTE}(?:ONLY\s+)?(\w+)", re.IGNORECASE)
+_TABLENAME = re.compile(r"""^\s*__tablename__\s*=\s*["'](\w+)["']""", re.MULTILINE)
+_CLASSE = re.compile(r"^class\s+\w+", re.MULTILINE)
+
+
+def _cle_not_null(table: str | None, colonne: str) -> str:
+    """TF-1795 (Produit-83 RE-6, 15/10/2026) : un NOT NULL est l affaire d UNE table. Nommé par
+    sa seule colonne, `nom NOT NULL` de deux tables faisait un élément, et la violation levée
+    sur l une couvrait l autre. La table manque seulement quand le texte ne la dit pas."""
+    return f"contrainte:{table}.{colonne}.not_null" if table else f"contrainte:{colonne}.not_null"
+
+
+def _fin_de_parenthese(texte: str, ouverture: int) -> int:
+    """Indice de la parenthèse qui ferme celle ouverte en `ouverture` (ou la fin du texte)."""
+    profondeur = 0
+    for rang in range(ouverture, len(texte)):
+        if texte[rang] == "(":
+            profondeur += 1
+        elif texte[rang] == ")":
+            profondeur -= 1
+            if profondeur == 0:
+                return rang
+    return len(texte)
+
+
+def _not_null_par_table(texte: str) -> list[tuple[str | None, str]]:
+    """(table, colonne) de chaque `<colonne> <type> NOT NULL` du fragment SQL.
+
+    La table est celle du `CREATE TABLE` dont le corps contient la ligne ; hors de tout corps,
+    celle du dernier `ALTER TABLE` qui la précède ; sinon inconnue (None)."""
+    corps = []
+    for trouve in _TABLE.finditer(texte):
+        ouverture = trouve.end() - 1
+        corps.append((ouverture, _fin_de_parenthese(texte, ouverture), trouve.group(1)))
+    paires: list[tuple[str | None, str]] = []
+    for trouve in _NOT_NULL.finditer(texte):
+        position = trouve.start(1)
+        table = next((nom for debut, fin, nom in corps if debut < position < fin), None)
+        if table is None:
+            precedents = [a for a in _ALTER_TABLE.finditer(texte) if a.start() < position]
+            table = precedents[-1].group(1) if precedents else None
+        paires.append((table, trouve.group(1)))
+    return paires
+
+
+def _orm_not_null_par_table(source: str) -> list[tuple[str | None, str]]:
+    """(table, colonne) des `Column(..., nullable=False)`, table lue au `__tablename__` de la
+    classe qui les porte."""
+    debuts = [c.start() for c in _CLASSE.finditer(source)] + [len(source)]
+    paires: list[tuple[str | None, str]] = []
+    if len(debuts) == 1:
+        return [(None, c) for c in _ORM_NOT_NULL.findall(source)]
+    entete = source[: debuts[0]]
+    paires.extend((None, c) for c in _ORM_NOT_NULL.findall(entete))
+    for debut, fin in zip(debuts, debuts[1:], strict=False):
+        bloc = source[debut:fin]
+        nom = _TABLENAME.search(bloc)
+        paires.extend((nom.group(1) if nom else None, c) for c in _ORM_NOT_NULL.findall(bloc))
+    return paires
+
+
 def contraintes_declarees(texte: str) -> list[str]:
     """Noms des contraintes qu un fragment SQL CREE, dans l ordre, sans les formes idempotentes.
 
@@ -73,7 +134,7 @@ _ORM_NOT_NULL = re.compile(r"^\s*(\w+)\s*=\s*Column\([^)]*nullable=False", re.MU
 
 # PostgreSQL nomme TOUTES ses contraintes, cles etrangeres comprises.
 _PG_NOMMEE = re.compile(r'violates (?:foreign key|unique|check) constraint "(\w+)"')
-_PG_NOT_NULL = re.compile(r'null value in column "(\w+)" of relation "\w+"')
+_PG_NOT_NULL = re.compile(r'null value in column "(\w+)" of relation "(\w+)"')
 # SQLite : conserve pour les projets qui l utilisent, avec son angle mort sur les cles etrangeres.
 _NN = re.compile(r"NOT NULL constraint failed: (\w+)\.(\w+)")
 _CK = re.compile(r"CHECK constraint failed: (\w+)")
@@ -193,11 +254,12 @@ def inventaire(cible: Path) -> list[Element]:
             if cle not in vus:
                 vus.add(cle)
                 elements.append(Element(cle, PAN, f"trigger {nom}", str(fichier)))
-        for colonne in _NOT_NULL.findall(haut):
-            cle = f"contrainte:{colonne}.not_null"
+        for table, colonne in _not_null_par_table(haut):
+            cle = _cle_not_null(table, colonne)
             if cle not in vus:
                 vus.add(cle)
-                elements.append(Element(cle, PAN, f"{colonne} NOT NULL", str(fichier)))
+                libelle = f"{table}.{colonne}" if table else colonne
+                elements.append(Element(cle, PAN, f"{libelle} NOT NULL", str(fichier)))
 
     # Contraintes declarees dans l ORM : elles existent au modele meme si aucune migration ne
     # les porte. Leur absence des migrations est justement le genre de divergence a exposer.
@@ -210,12 +272,13 @@ def inventaire(cible: Path) -> list[Element]:
                 elements.append(
                     Element(cle, PAN, f"contrainte {nom} (ORM, hors migration)", str(modeles))
                 )
-        for colonne in _ORM_NOT_NULL.findall(source):
-            cle = f"contrainte:{colonne}.not_null"
+        for table, colonne in _orm_not_null_par_table(source):
+            cle = _cle_not_null(table, colonne)
             if cle not in vus:
                 vus.add(cle)
+                libelle = f"{table}.{colonne}" if table else colonne
                 elements.append(
-                    Element(cle, PAN, f"{colonne} NOT NULL (ORM)", str(modeles))
+                    Element(cle, PAN, f"{libelle} NOT NULL (ORM)", str(modeles))
                 )
     return elements
 
@@ -242,13 +305,17 @@ def exerces(cible: Path) -> set[str] | None:
         if trouve:
             couvert.add(f"contrainte:{trouve.group(1)}")
             continue
+        # TF-1795 : la violation s attribue au couple (table, colonne) que le moteur NOMME ; la
+        # forme sans table ne sert qu aux NOT NULL dont l inventaire n a pas su lire la table.
         trouve = _PG_NOT_NULL.search(message)
         if trouve:
-            couvert.add(f"contrainte:{trouve.group(1)}.not_null")
+            couvert.add(_cle_not_null(trouve.group(2), trouve.group(1)))
+            couvert.add(_cle_not_null(None, trouve.group(1)))
             continue
         trouve = _NN.search(message)
         if trouve:
-            couvert.add(f"contrainte:{trouve.group(2)}.not_null")
+            couvert.add(_cle_not_null(trouve.group(1), trouve.group(2)))
+            couvert.add(_cle_not_null(None, trouve.group(2)))
             continue
         trouve = _CK.search(message)
         if trouve:

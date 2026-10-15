@@ -677,7 +677,7 @@
     {
       "id": "qualif-navigateur-004",
       "domaine": "qualif-navigateur",
-      "enonce": "qualif : quand une delegation d evenement est posee sur `document` ou `body`, aucun element ne peut plus etre declare inerte avec certitude — les elements concernes sont NOMMES en non_juge au lieu d etre accuses",
+      "enonce": "qualif : quand une delegation d evenement est posee sur `document`, `body` ou un ancetre des affordances (conteneur racine de React 17+, TF-1791), aucun element ne peut plus etre declare inerte avec certitude — les elements concernes sont NOMMES en non_juge au lieu d etre accuses",
       "statut": "assume",
       "note": "instruite le 2026-08-14 (campagne dettes, mandat humain) : le pan LIT et ne clique jamais (G-1 : cliquer écrirait chez l audité) ; marqueur/délégation = limites dites. Réévaluer si un run réel prouve que la limite coûte."
     },

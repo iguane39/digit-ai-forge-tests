@@ -32,6 +32,7 @@ import re
 from pathlib import Path
 from urllib.parse import unquote
 
+from forge_tests import exclusions
 from forge_tests.confrontation import Terme, confronter
 
 #: Extensions où l'on cherche des appels littéraux du client.
@@ -90,6 +91,7 @@ def _fichiers(
         f for f in sorted(racine.rglob("*"))
         if f.is_file() and f.suffix.lower() in suffixes
         and not (interdits & {p.name for p in f.parents})
+        and not exclusions.ignore_par_git(f, racine)  # TF-1767
     ]
 
 

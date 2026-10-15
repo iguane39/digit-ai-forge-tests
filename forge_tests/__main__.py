@@ -80,11 +80,21 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     # publie sur origin/main. Une affordance est cablee ou elle n'existe pas (loi transverse n° 1).
     _protection = _gab.proteger(cible)
 
-    return rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins,
-                   instance=instance_au_rapport(cible),
-                   boucle=_boucle.verdict(_boucle.lire(cible)),
-                   gabarit_env={**_depot, "protection_gitignore": _protection},
-                   vendorisation=_vendor)
+    rap = rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins,
+                  instance=instance_au_rapport(cible),
+                  boucle=_boucle.verdict(_boucle.lire(cible)),
+                  gabarit_env={**_depot, "protection_gitignore": _protection},
+                  vendorisation=_vendor)
+    # TF-1767 — l exclusion par `.gitignore` est NOMINATIVE et publiée : le lecteur voit quels
+    # dossiers l audit n a pas jugés, et comment en réclamer un (`FORGE_TESTS_INCLURE`).
+    from forge_tests import exclusions as _excl
+
+    rap["perimetre_exclu_git"] = {
+        "dossiers": _excl.ignores_git(cible),
+        "motif": "dossiers ignorés par git sous la racine auditée : non versionnés, donc hors "
+                 "produit (TF-1767). Réclamer un dossier : son nom dans FORGE_TESTS_INCLURE",
+    }
+    return rap
 
 
 _DEBUT = _dt.datetime.now().astimezone()
@@ -349,7 +359,18 @@ def main(argv: list[str] | None = None) -> int:
             "provenance de chaque element"
         ),
     )
+    parser.add_argument(
+        "--copie-output",
+        action="store_true",
+        help=(
+            "avec --livrables : deposer aussi une copie du dashboard DATE dans `<cible>/output/`, "
+            "piece exigee par ETAPE-MEP § 4 du pilot (TF-1808). Seul ce fichier entre dans le "
+            "projet, et seulement sous `output/`, que l audit exclut de son perimetre"
+        ),
+    )
     args = parser.parse_args(argv)
+    if args.copie_output and args.livrables is None:
+        parser.error("--copie-output exige --livrables : la copie est celle du dashboard produit")
 
     # TF-0243 — l écart se DÉCLARE avant la mesure. Un opérateur qui a rempli le `.env` du
     # dépôt au lieu de celui du projet verrait sinon des pans « sans objet » sans jamais
@@ -506,6 +527,11 @@ def main(argv: list[str] | None = None) -> int:
             return SORTIE_ERREUR
         # Sur stderr : `--livrables --json` doit laisser un stdout JSON PUR.
         print(resume(chemins), file=sys.stderr)
+        if args.copie_output:
+            from forge_tests.livrables import copier_en_output
+
+            copie = copier_en_output(chemins["dashboard"], args.cible.resolve())
+            print(f"copie datee du dashboard (ETAPE-MEP § 4) -> {copie}", file=sys.stderr)
 
     if rap["verdict"] == "PARTIEL":
         return SORTIE_PARTIEL

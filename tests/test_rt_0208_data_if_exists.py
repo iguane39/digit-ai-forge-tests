@@ -156,7 +156,7 @@ def test_une_contrainte_reellement_nommee_reste_inventoriee(tmp_path: Path) -> N
         "table:facture",
         "contrainte:ck_facture_reference",
         "contrainte:uq_facture_reference",
-        "contrainte:reference.not_null",
+        "contrainte:facture.reference.not_null",  # TF-1795 : la table fait partie du nom
         "index:ix_facture_reference",
         "trigger:trg_facture_maj",
     } <= identifiants

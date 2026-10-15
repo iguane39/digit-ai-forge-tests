@@ -78,7 +78,11 @@ def _fichiers(cible: Path, motifs: tuple[str, ...]) -> list[Path]:
     retenus: list[Path] = []
     for motif in motifs:
         for chemin in cible.rglob(motif):
-            if chemin.is_file() and not any(p in _EXCLUS for p in chemin.parts):
+            if (
+                chemin.is_file()
+                and not any(p in _EXCLUS for p in chemin.parts)
+                and not exclusions.ignore_par_git(chemin, cible)  # TF-1767
+            ):
                 retenus.append(chemin)
     return sorted(set(retenus))
 

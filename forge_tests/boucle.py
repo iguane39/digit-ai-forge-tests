@@ -183,11 +183,33 @@ def convergence(tours: list[dict]) -> dict:
     converge pas : elle est à remonter comme telle. La masquer en clôturant serait la même
     faute que celle du 12/08, un cran plus loin.
     """
-    revelees = [int(t.get("nouvelles") or 0) for t in tours]
+    # TF-1796 (Produit-83 RE-7, 15/10/2026) : un constat contesté et retenu faux positif est une
+    # erreur de l OUTIL, pas une anomalie née d un correctif. Compté dans `nouvelles`, il faisait
+    # sortir NON CONVERGENTE une campagne qui convergeait. Il se retranche, nommé ; une
+    # contestation anonyme ne retranche rien, et elle est dite.
+    faux_par_tour: list[int] = []
+    refusees: list[str] = []
+    for tour in tours:
+        valides = 0
+        for rang, entree in enumerate(tour.get("faux_positifs_contestes") or [], 1):
+            if isinstance(entree, dict) and entree.get("finding") and entree.get("motif"):
+                valides += 1
+            else:
+                refusees.append(
+                    f"tour {tour.get('tour', '?')}, contestation {rang} : `finding` et `motif` "
+                    "exigés — une contestation anonyme ne retranche rien"
+                )
+        faux_par_tour.append(valides)
+    revelees = [
+        max(0, int(t.get("nouvelles") or 0) - faux)
+        for t, faux in zip(tours, faux_par_tour, strict=True)
+    ]
     converge = len(revelees) < 2 or revelees[-1] < revelees[-2] or revelees[-1] == 0
     return {
         "tours": len(tours),
         "revelees_par_tour": revelees,
+        "faux_positifs_par_tour": faux_par_tour,
+        "contestations_refusees": refusees,
         "nees_des_correctifs": sum(revelees[1:]),
         "converge": converge,
         "signal": (

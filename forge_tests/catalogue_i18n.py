@@ -166,7 +166,10 @@ def _dossiers_candidats(cible: Path) -> list[Path]:
 
     trouves: list[Path] = []
     for racine, dossiers, _ in os.walk(cible):
-        dossiers[:] = sorted(nom for nom in dossiers if nom not in _EXCLUS)
+        dossiers[:] = sorted(
+            nom for nom in dossiers
+            if nom not in _EXCLUS and not exclusions.ignore_par_git(Path(racine, nom), cible)
+        )
         for nom in dossiers:
             if nom.lower() in DOSSIERS:
                 trouves.append(Path(racine, nom))

@@ -28,6 +28,8 @@ MUTANT_SURVIVANT = "mutant-survivant"
 # --- Confrontation code <-> déclaration -----------------------------------------------------
 DIVERGENCE = "divergence"
 SONDE_MUETTE = "sonde-muette"
+#: TF-1747 — une route servie et déclarée au schéma manque à l inventaire : défaut de l outil.
+ENUMERATION_INCOMPLETE = "enumeration-incomplete"
 
 # --- Interface statique ----------------------------------------------------------------------
 AFFORDANCE_INERTE = "affordance-inerte"

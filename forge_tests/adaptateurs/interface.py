@@ -274,6 +274,8 @@ def _fichiers(cible: Path, extensions: tuple[str, ...]) -> list[Path]:
             continue
         if any(partie in _EXCLUS for partie in chemin.parts):
             continue
+        if exclusions.ignore_par_git(chemin, cible):  # TF-1767
+            continue
         retenus.append(chemin)
     return retenus
 

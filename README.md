@@ -81,6 +81,7 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 | `--sortie <fichier>` | persiste le rapport dans ce fichier, **à l'identique** de stdout (le dossier parent est créé au besoin) |
 | `--reprendre <rapport.json>` | relit un rapport antérieur et **ne rejoue que ce qui n'était pas vert** ; le rapport produit fusionne l'ancien et le neuf avec la provenance de chaque élément — voir « Audit de qualification avec reprise » |
 | `--livrables <dossier>` | produit les **livrables dérivés** dans ce dossier de dépôt, **hors du projet audité** : deux cahiers de tests, un jeu de données synthétique, un dashboard HTML autonome. Régénérés à chaque audit, `--reprendre` compris. Messages sur stderr — voir « Cahiers de tests dérivés et dashboard d'exécution » |
+| `--copie-output` | avec `--livrables` : dépose aussi une copie du **dashboard daté** dans `<projet>/output/`, la pièce que `ETAPE-MEP.md` § 4 du pilot exige au dossier de MEP (TF-1808). Seul ce fichier entre dans le projet, sous `output/`, que l'audit exclut ; une copie existante de contenu différent est refusée, jamais écrasée |
 | `--precedent <rapport.json>` | rapport antérieur servant de **point de comparaison** : le dashboard affiche alors la tendance de chaque compteur. Sans lui, l'onglet Synthèse le déclare |
 
 ### Codes de sortie
@@ -1105,8 +1106,13 @@ la campagne — jamais par la forge : un journal écrit par l'outil qu'il juge n
 {"tour": 3, "anomalies_entrantes": 1, "corrigees": 1, "nouvelles": 1, "restantes": 0,
  "dernier_correctif": "2026-08-17T16:00:00+02:00", "dernier_run_suite": "2026-08-17T16:20:00+02:00",
  "portes": {"suites": 0, "lint": 0, "typage": 0, "e2e": 0},
- "xfail_non_justifies": 0, "passages_verts_consecutifs": 3, "ecarts_assumes": []}
+ "xfail_non_justifies": 0, "passages_verts_consecutifs": 3, "ecarts_assumes": [],
+ "faux_positifs_contestes": [{"finding": "qualif:effet:/:0:form", "motif": "délégation sur #root"}]}
 ```
+
+`faux_positifs_contestes` (TF-1796) : les constats du tour contestés et retenus faux positifs de
+l'outil. Chacun, nommé (`finding`, `motif`), se retranche de `nouvelles` dans la convergence ; une
+entrée anonyme ne retranche rien et sort dans `convergence.contestations_refusees`.
 
 Chaque rapport d'audit porte la section **`boucle`** : elle juge la CAMPAGNE, quand `verdict`
 juge CE run. Les confondre est exactement la faute du 12/08. Journal absent → la section le
@@ -1121,6 +1127,15 @@ comme un signal à remonter — jamais utilisé pour refuser une clôture qui ti
 Ce que Forge Tests **suppose** du projet pour pouvoir le mesurer. Chaque convention ci-dessous
 est appliquée par un adaptateur ; jusqu'ici elles n'étaient découvrables qu'en lisant son code.
 Aucune n'est obligatoire : ce qui manque produit un pan **motivé**, jamais un vert.
+
+### Ce que git ignore n'est pas du produit (TF-1767)
+
+Un dossier que le dépôt ignore (`.gitignore`) sous la racine auditée n'est ni versionné ni
+livré : les pans ne l'inventorient pas. *Mesuré le 15/10/2026 chez Produit-82 : un clone amont
+`vendor-check/`, ignoré par git, avait produit 493 constats sur un autre code.* L'exclusion est
+nominative : le rapport la publie sous `perimetre_exclu_git`. Les noms déjà gérés par la
+politique de chaque pan (`node_modules`, `dist`, `build`…) n'y entrent pas. Pour réclamer un
+dossier ignoré : son nom dans `FORGE_TESTS_INCLURE`.
 
 ### Cycle de vie et provenance de l'instance servie — pans `front`, `qualif`, `accessibilite`, `visuel` (TF-0340 / TF-0341)
 

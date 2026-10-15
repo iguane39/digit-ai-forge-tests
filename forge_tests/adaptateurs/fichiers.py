@@ -86,6 +86,13 @@ def exerces(cible: Path) -> set[str] | None:
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
+    # TF-1794 : la preuve d absence se lit AVANT toute exécution. Sans module d import, il n y a
+    # rien à couvrir, et la mesure de la suite n a rien à en dire.
+    motif_sans_objet = sans_objet(cible)
+    if motif_sans_objet:
+        return evaluer_surface(
+            NOM, PAN, str(cible), [], set(), SEUIL, NON_JUGE, sans_objet=motif_sans_objet
+        )
     couvert = exerces(cible)
     if couvert is None:
         return SortieAdaptateur(

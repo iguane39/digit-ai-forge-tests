@@ -90,7 +90,7 @@ import re
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from forge_tests import classes
+from forge_tests import classes, exclusions
 from forge_tests.noyau import Finding
 from forge_tests.risque import coter
 
@@ -181,6 +181,7 @@ def _specs(cible: Path) -> list[Path]:
         if chemin.is_file()
         and chemin.name.endswith(SUFFIXES_SPEC)
         and "node_modules" not in chemin.parts
+        and not exclusions.ignore_par_git(chemin, cible)  # TF-1767
     ]
     return fichiers
 
@@ -616,6 +617,7 @@ def cle_de_relecture_separee_de_la_session(cible: Path) -> list[Finding]:
         chemin
         for chemin in sorted(cible.rglob("*"))
         if chemin.is_file() and chemin.name in _CONFIGS and "node_modules" not in chemin.parts
+        and not exclusions.ignore_par_git(chemin, cible)  # TF-1767
     ]
     textes = {
         f.relative_to(cible).as_posix(): f.read_text(encoding="utf-8", errors="replace")
@@ -689,6 +691,8 @@ def _fichiers_de_test(cible: Path) -> list[Path]:
     fichiers = list(_specs(cible))
     for chemin in sorted(cible.rglob("*.py")):
         if "node_modules" in chemin.parts or ".venv" in chemin.parts:
+            continue
+        if exclusions.ignore_par_git(chemin, cible):  # TF-1767
             continue
         nom = chemin.name
         if nom.startswith("test_") or nom.endswith("_test.py"):

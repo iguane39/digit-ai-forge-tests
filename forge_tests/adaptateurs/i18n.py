@@ -888,7 +888,10 @@ def _signes_i18n(cible: Path) -> list[str]:
     # parcourue. Ce contrôle tourne sur TOUT audit de TOUT produit — descendre dans
     # `node_modules` pour n en rien tirer serait un coût payé partout, tout le temps.
     for racine, dossiers, _ in os.walk(cible):
-        dossiers[:] = sorted(nom for nom in dossiers if nom not in _EXCLUS)
+        dossiers[:] = sorted(
+            nom for nom in dossiers
+            if nom not in _EXCLUS and not exclusions.ignore_par_git(Path(racine, nom), cible)
+        )
         for nom in dossiers:
             chemin = Path(racine, nom)
             if nom in ("locales", "messages", "translations", "i18n"):

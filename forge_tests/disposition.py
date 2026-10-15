@@ -44,6 +44,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from forge_tests import exclusions
+
 # Ce qui vit sous la racine d exécution sans être le paquet du produit. `tests` en fait partie :
 # la suite n est pas la source qu on mute, et `coverage` la reçoit déjà par ailleurs.
 # TF-0216 : la découverte pouvant désormais s exercer à la RACINE DU DÉPÔT (projet plat), les
@@ -69,6 +71,8 @@ def _candidats(racine: Path) -> list[Path]:
     retenus = []
     for entree in sorted(racine.iterdir()):
         if not entree.is_dir() or entree.name in _HORS_SOURCES or entree.name.startswith("."):
+            continue
+        if exclusions.ignore_par_git(entree, racine):  # TF-1767 : un clone ignoré, hors paquet
             continue
         if next(entree.rglob("*.py"), None) is not None:
             retenus.append(entree)

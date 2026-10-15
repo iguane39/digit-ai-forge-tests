@@ -262,6 +262,8 @@ def _fichiers(cible: Path) -> list[Path]:
     for chemin in sorted(cible.rglob("*")):
         if any(partie in _EXCLUS for partie in chemin.parts):
             continue
+        if exclusions.ignore_par_git(chemin, cible):  # TF-1767
+            continue
         if not chemin.is_file() or chemin.name in _NOMS_IGNORES:
             continue
         if chemin.suffix.lower() not in _EXTENSIONS_LUES:
@@ -558,11 +560,70 @@ def _non_testables(cible: Path) -> list[NonTestable]:
     ]
 
 
+# TF-1794 (Produit-83 RE-5, 15/10/2026) : sur un produit sans prompt ni modèle, le pan sortait
+# SKIP, « surface non énumérable », compté parmi les pans NON COUVERTS. Un inventaire vide n est
+# pas une preuve ; l absence de tout client de modèle dans les manifestes de dépendances en est
+# une. Liste déclarée, donc contestable : un client absent d ici laisse le pan en SKIP.
+_CLIENTS_DE_MODELE = (
+    "openai", "anthropic", "mistralai", "google-generativeai", "google-genai", "vertexai",
+    "langchain", "llama-index", "llama_index", "litellm", "cohere", "groq", "ollama",
+    "transformers", "@anthropic-ai/sdk", "@mistralai/", "@google/generative-ai", "@google/genai",
+    "@ai-sdk/", "@langchain/",
+)
+_MANIFESTES = ("pyproject.toml", "package.json", "Pipfile", "setup.cfg", "setup.py")
+
+
+def _manifestes(cible: Path) -> list[Path]:
+    """Manifestes de dépendances à la racine et un niveau sous elle, hors dossiers exclus."""
+    trouves: list[Path] = []
+    for dossier in [cible, *(d for d in sorted(cible.iterdir()) if d.is_dir())]:
+        if dossier != cible and (dossier.name in _EXCLUS or dossier.name.startswith(".")):
+            continue
+        if dossier != cible and exclusions.ignore_par_git(dossier, cible):
+            continue
+        for fichier in sorted(dossier.iterdir()):
+            nom = fichier.name
+            if fichier.is_file() and (
+                nom in _MANIFESTES or (nom.startswith("requirements") and nom.endswith(".txt"))
+            ):
+                trouves.append(fichier)
+    return trouves
+
+
+def sans_objet(cible: Path) -> str | None:
+    """PREUVE que le projet n appelle aucun modèle : des manifestes lus, aucun client déclaré."""
+    if not cible.is_dir():
+        return None
+    manifestes = _manifestes(cible)
+    if not manifestes:
+        return None
+    for manifeste in manifestes:
+        try:
+            texte = manifeste.read_text(encoding="utf-8", errors="replace").lower()
+        except OSError:
+            return None
+        for client in _CLIENTS_DE_MODELE:
+            if re.search(rf"(?<![\w@/]){re.escape(client)}(?!\w)", texte):
+                return None
+    lus = ", ".join(f"`{m.relative_to(cible).as_posix()}`" for m in manifestes)
+    return (
+        "aucun prompt adressable, aucun modèle nommé, et aucun client de modèle déclaré dans "
+        f"{lus} : ce projet n appelle aucun modèle"
+    )
+
+
 def analyser(cible: Path) -> SortieAdaptateur:
     non_testables = _non_testables(cible)
     elements = inventaire(cible)
     findings_modeles = _findings_modeles(cible)
     if not elements:
+        motif_sans_objet = sans_objet(cible)
+        if motif_sans_objet:
+            sortie = evaluer_surface(
+                NOM, PAN, str(cible), [], set(), SEUIL, NON_JUGE, sans_objet=motif_sans_objet
+            )
+            sortie.non_testables.extend(non_testables)
+            return sortie
         # Un modèle nommé EST un élément : un inventaire vide implique qu aucun modèle n a été
         # trouvé, donc aucun constat d épinglage à porter. Écrire ici une branche « FAIL si
         # findings » serait du code mort qui rassure.

@@ -51,7 +51,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from forge_tests import classes
+from forge_tests import classes, exclusions
 from forge_tests.noyau import Finding
 from forge_tests.risque import coter
 
@@ -104,6 +104,7 @@ def _configs(cible: Path) -> list[Path]:
         and chemin.name in CONFIGS
         and "node_modules" not in chemin.parts
         and ".venv" not in chemin.parts
+        and not exclusions.ignore_par_git(chemin, cible)  # TF-1767
     ]
 
 

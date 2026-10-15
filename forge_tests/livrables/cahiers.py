@@ -40,6 +40,7 @@ from forge_tests.livrables import anomalies as _anomalies
 from forge_tests.livrables import exigences as _exigences
 from forge_tests.livrables import jeux as _jeux
 from forge_tests.livrables import libelles as _libelles
+from forge_tests.livrables import surface as _surface
 from forge_tests.livrables.nommage import empreinte, sceller
 
 NON_JUGE = [
@@ -441,6 +442,7 @@ def cas_du_chapitre(
     rattachements: dict[str, list[dict]] = {}
     total_cas = 0
     etats_cas: list[dict] = []
+    porteurs_par_gabarit: dict[str, str] = {}
     for sous in chapitre["sous_chapitres"]:
         cle_jeu = f"JD-{chapitre['code']}-{sous['libelle']}"
         entrees = []
@@ -454,6 +456,14 @@ def cas_du_chapitre(
                 non_couverts.append({**element, "raison": raison, "exigences": liens})
                 continue
             rattachements[element["id"]] = liens
+            # TF-1792 — une adresse d instance (`/fiche/<id>`) partage les cas de son gabarit :
+            # dérivés une fois, portés par le premier élément, les suivants y renvoient.
+            if repli is False and fabrique is _cas_etats:
+                gabarit = _surface.gabarit_adresse(element["id"])
+                porteur = porteurs_par_gabarit.setdefault(gabarit, element["id"])
+                if porteur != element["id"]:
+                    entrees.append({"element": element, "cas": [], "porte_par": porteur})
+                    continue
             cas = fabrique(element, chapitre, cle_jeu)
             for rang, unite in enumerate(cas, 1):
                 # Référence STABLE : `hash()` est randomisé par processus en Python — deux
@@ -582,6 +592,12 @@ def _rendre_chapitre(chapitre: dict, referentiel: dict | None) -> list[str]:
             lignes.append("")
             if element.get("message"):
                 lignes.append(f"Constat mesuré : {element['message']}")
+                lignes.append("")
+            if entree.get("porte_par"):
+                lignes.append(
+                    f"Cas portés par `{entree['porte_par']}` : même gabarit d adresse, une autre "
+                    "donnée de l instance (TF-1792)."
+                )
                 lignes.append("")
             for unite in entree["cas"]:
                 lignes.append(f"**{unite['ref']} — {unite['titre']}**")

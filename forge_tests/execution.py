@@ -385,7 +385,10 @@ def executees(banc: Path, fichier: str) -> frozenset[int] | None:
     mesure = mesurer(str(banc))
     if mesure is None:
         return None
-    return mesure["lignes"].get(fichier)
+    # TF-1794 : la suite a tourné. Un fichier absent de sa mesure est un fichier qu elle n a
+    # jamais exécuté (ensemble vide), pas une suite rouge (None) — confondre les deux faisait
+    # dire « suite rouge ou environnement absent » sur une suite verte.
+    return mesure["lignes"].get(fichier) or frozenset()
 
 
 def violations_levees(banc: Path) -> list[str] | None:

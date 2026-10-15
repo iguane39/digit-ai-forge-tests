@@ -57,6 +57,8 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
     "table": (
         (re.compile(r"^table:(?P<v>\w+)$"), "table {v}"),
         (re.compile(r"^(?:contrainte|index|trigger):(?P<v>\w+?)_\w+$"), "table {v}"),
+        # TF-1795 : un NOT NULL porte désormais sa table, et se range sous elle.
+        (re.compile(r"^contrainte:(?P<v>\w+)\.\w+\.not_null$"), "table {v}"),
         (re.compile(r"^contrainte:(?P<v>\w+)\.not_null$"), "colonne {v}"),
     ),
     # TF-0284 : le pan i18n range par LOCALE — c est le seul axe où l on veut lire, d un coup
@@ -95,12 +97,36 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
 NON_RATTACHE = "éléments non rattachés à un {axe}"
 
 
+# TF-1792 (Produit-83 RE-4, 15/10/2026) : sur une instance peuplée, le pan qualif parcourt
+# `/fiche/11111111100011`, `/fiche/22222222200022`… Chacune devenait un sous-chapitre et
+# recevait ses 4 états : 10 728 cas pour 13 000 établissements. Une adresse d instance n est
+# pas un écran de plus, c est le même écran sur une autre donnée. Un segment est un
+# IDENTIFIANT quand il est numérique, un UUID, une empreinte hexadécimale longue, ou un jeton
+# d au moins 6 signes portant au moins 4 chiffres.
+_SEGMENT_IDENTIFIANT = re.compile(
+    r"\d+"
+    r"|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"|[0-9a-fA-F]{16,}"
+    r"|(?=(?:[^\d]*\d){4})[A-Za-z0-9_-]{6,}"
+)
+_SEGMENT_APRES_BARRE = re.compile(r"(?<=/)([^/:\s?#]+)")
+
+
+def gabarit_adresse(chemin: str) -> str:
+    """`/fiche/11111111100011` → `/fiche/{id}` ; une adresse sans identifiant est inchangée."""
+    return _SEGMENT_APRES_BARRE.sub(
+        lambda m: "{id}" if _SEGMENT_IDENTIFIANT.fullmatch(m.group(1)) else m.group(1), chemin
+    )
+
+
 def sous_chapitre(decoupe: str, identifiant: str) -> tuple[str, bool]:
     """(libellé du sous-chapitre, rattachement dérivé ?)."""
     for motif, gabarit in _REGLES.get(decoupe, ()):
         trouve = motif.match(identifiant)
         if trouve:
             valeurs = trouve.groupdict()
+            if decoupe in ("ecran", "parcours") and valeurs.get("v"):
+                valeurs["v"] = gabarit_adresse(valeurs["v"])
             return gabarit.format(**{k: v for k, v in valeurs.items() if v}), True
     return NON_RATTACHE.format(axe=decoupe), False
 
@@ -129,7 +155,9 @@ def chapitres(registre: dict) -> list[dict]:
                     # Les clés déclarées par l adaptateur sont reportées TELLES QUELLES : un pan
                     # qui a besoin d un réglage propre (les combinaisons de rendu du pan visuel)
                     # le déclare chez lui, et le cahier le lit sans le connaître d avance.
-                    **{k: v for k, v in chapitre.items() if k not in ("code", "titre")},
+                    **{
+                        k: v for k, v in chapitre.items() if k not in ("code", "titre", "retient")
+                    },
                     "code": chapitre["code"],
                     "titre": chapitre.get("titre", chapitre["code"]),
                     "famille": chapitre.get("famille", "technique"),
@@ -140,6 +168,10 @@ def chapitres(registre: dict) -> list[dict]:
             )
             if pan not in entree["pans"]:
                 entree["pans"].append(pan)
+            # TF-1792 — un pan qui déclare plusieurs chapitres y PARTAGE ses éléments par un
+            # motif `retient`, propre au pan : F2 reçoit aussi le pan front, qui garde tout.
+            if chapitre.get("retient"):
+                entree.setdefault("retient_par_pan", {})[pan] = chapitre["retient"]
     for entree in par_code.values():
         entree["pans"].sort()
         entree["axe_connu"] = entree["decoupe"] in _REGLES
@@ -271,8 +303,12 @@ def repartir(rapport: dict, registre: dict) -> list[dict]:
         groupes: dict[str, list[dict]] = {}
         rattaches = 0
         total = 0
+        retient = chapitre.get("retient_par_pan") or {}
         for pan in chapitre["pans"]:
+            motif = re.compile(retient[pan]) if pan in retient else None
             for element in elements_par_pan.get(pan, []):
+                if motif is not None and not motif.match(element["id"]):
+                    continue
                 libelle, derive = sous_chapitre(chapitre["decoupe"], element["id"])
                 groupes.setdefault(libelle, []).append({**element, "pan": pan})
                 rattaches += derive
