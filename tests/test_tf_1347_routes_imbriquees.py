@@ -1,6 +1,6 @@
 """TF-1347 — le pan `front` composait mal les routes react-router IMBRIQUÉES.
 
-Fait mesuré (retour UIA du 23/09/2026, confirmé à la lecture le 02/10/2026) : 3 findings
+Fait mesuré (retour Produit-72 du 23/09/2026, confirmé à la lecture le 02/10/2026) : 3 findings
 lien-casse bloquants sur `/admin/keys` et `/admin/requests`, vérifiés faux. Cause, dans
 `forge_tests/adaptateurs/front.py` : `_routes_react_router` relevait chaque `<Route path="…">`
 isolément — un enfant `<Route path="keys">` sous un parent `<Route path="admin">` sortait comme
@@ -25,7 +25,7 @@ def _projet_react_router(tmp_path: Path, jsx: str) -> Path:
     return projet
 
 
-# --- 1. Le cas réel du retour UIA : deux enfants sous un même parent ---------------------------
+# --- 1. Le cas réel du retour Produit-72 : deux enfants sous un même parent ---------------------------
 def test_routes_imbriquees_composees_avec_leur_parent(tmp_path: Path) -> None:
     jsx = """
     <Routes>
