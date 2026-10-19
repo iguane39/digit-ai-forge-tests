@@ -150,6 +150,7 @@ def _ignores_du_depot(racine: os.PathLike[str] | str) -> tuple[str, tuple[str, .
         haut = subprocess.run(
             ["git", "-C", cle, "rev-parse", "--show-toplevel"],
             capture_output=True, text=True, timeout=30, check=False,
+            encoding="utf-8", errors="replace",
         )
         if haut.returncode == 0 and haut.stdout.strip():
             depot = haut.stdout.strip()

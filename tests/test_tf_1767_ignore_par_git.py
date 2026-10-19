@@ -12,8 +12,10 @@ La règle corrigée : ce que le dépôt ignore sort du périmètre par défaut, 
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -68,6 +70,28 @@ def test_exclusion_publiee_au_rapport_et_reclamable_par_son_nom(
     exclusions._CACHE_GIT.clear()
     assert exclusions.ignores_git(racine) == []
     assert not exclusions.ignore_par_git(racine / "vendor-check" / "upstream", racine)
+
+
+def test_depot_sous_un_chemin_accentue_sans_mode_utf8(tmp_path: Path) -> None:
+    """TF-1864 : `git rev-parse --show-toplevel` rend de l UTF-8 ; lue avec l encodage du poste
+    (cp1252 sans mode UTF-8), la racine du dépôt perdait ses accents et plus aucun dossier
+    ignoré n était retrouvé sous une racine au chemin accentué (3 tests rouges sur un poste dont
+    le profil porte un accent, verts ailleurs). Le dépôt vit ici sous un dossier accentué, et
+    l interpréteur est lancé SANS mode UTF-8 : le défaut se rejoue sur tout poste Windows."""
+    racine = _depot(tmp_path / "Rémi-été")
+    code = (
+        "from forge_tests import exclusions; import sys;"
+        "sys.stdout.write(ascii(exclusions.ignores_git(sys.argv[1])))"
+    )
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONUTF8", "PYTHONIOENCODING")}
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    sortie = subprocess.run(
+        [sys.executable, "-X", "utf8=0", "-c", code, str(racine)],
+        capture_output=True, text=True, env=env, timeout=120, check=False,
+        encoding="ascii", errors="replace",
+    )
+    assert sortie.returncode == 0, sortie.stderr
+    assert sortie.stdout == "['vendor-check']"
 
 
 def test_dossier_versionne_ou_hors_depot_reste_juge(tmp_path: Path) -> None:
