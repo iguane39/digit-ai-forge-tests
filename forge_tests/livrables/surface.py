@@ -60,6 +60,8 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         # TF-1795 : un NOT NULL porte désormais sa table, et se range sous elle.
         (re.compile(r"^contrainte:(?P<v>\w+)\.\w+\.not_null$"), "table {v}"),
         (re.compile(r"^contrainte:(?P<v>\w+)\.not_null$"), "colonne {v}"),
+        # TF-2008 : une table Supabase (pan supabase) se range sous son nom qualifié.
+        (re.compile(r"^(?:supabase:table|rls):(?P<v>[\w$.]+)$"), "table {v}"),
     ),
     # TF-0284 : le pan i18n range par LOCALE — c est le seul axe où l on veut lire, d un coup
     # d oeil, tout ce qui manque à l anglais. Ranger ses constats par écran les aurait dispersés
@@ -84,6 +86,9 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (re.compile(r"^modele:(?P<v>\S+)$"), "modèle {v}"),
         (re.compile(r"^corpus:(?P<v>\S+)$"), "corpus {v}"),
     ),
+    # TF-1998 : le pan workers range par GENRE de gestionnaire — un cron jamais dispatché se lit
+    # à côté des autres crons, une classe Durable Object à côté des autres classes.
+    "gestionnaire": ((re.compile(r"^workers:(?P<v>[a-z-]+):"), "gestionnaire {v}"),),
     "module": (
         (re.compile(r"^mutant:(?P<v>[^:]+):"), "module {v}"),
         (re.compile(r"^seuil:mutation-module:(?P<v>\S+)$"), "module {v}"),

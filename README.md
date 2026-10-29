@@ -76,7 +76,7 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 | Option | Effet |
 |---|---|
 | `--json` | rapport complet en JSON sur stdout (sinon résumé lisible) |
-| `--pans <pan> [...]` | restreint l'audit à ces pans (`front interface api data migrations batch fichiers back securite accessibilite contraste clavier visuel plancher qualif prompts i18n`) |
+| `--pans <pan> [...]` | restreint l'audit à ces pans (`front interface api data migrations batch fichiers back securite accessibilite contraste clavier visuel plancher qualif prompts i18n workers supabase`) |
 | `--generer <dossier>` | dépose les cas de test générés dans ce dossier de **dépôt extérieur** — jamais dans le projet analysé. Ces cas sont **à adopter et exécuter** (R-40), pas un livrable en soi. Les messages partent sur stderr : `--generer --json` produit un stdout JSON pur |
 | `--sortie <fichier>` | persiste le rapport dans ce fichier, **à l'identique** de stdout (le dossier parent est créé au besoin) |
 | `--reprendre <rapport.json>` | relit un rapport antérieur et **ne rejoue que ce qui n'était pas vert** ; le rapport produit fusionne l'ancien et le neuf avec la provenance de chaque élément — voir « Audit de qualification avec reprise » |
@@ -1503,6 +1503,8 @@ de migrations tôt ne suffit pas ; c'est le volume qui SUIT qui décide.
 | `clavier` | front **servi** ; trois mesures à l'état initial de chaque route, par tabulation RÉELLE : focus **visible** (K1), absence de **piège** de focus (K2), lien d'**évitement** en première tabulation (K3) | — |
 | `plancher` | front **servi** ; débordement (V1), chevauchement (V4) et largeur de colonne (L2) mesurés sur le RENDU SERVI, via le même socle que `contraste` — la mesure tourne déjà pour `contraste`, ce pan lit ce qu'elle rendait et jetait | — |
 | `i18n` | **build servi** (dossier de pages) déclaré par `FORGE_TESTS_I18N_BUILD` ou découvert (`out/`, `dist/`, `_site/`…) ; locales = préfixes de route ISO 639-1 réellement servis — voir « Pan `i18n` » | 100 % |
+| `workers` | **statique** (TF-1998) : gestionnaires d'un Worker Cloudflare tirés de la configuration Wrangler de la racine (`wrangler.json`, `wrangler.jsonc`, `wrangler.toml`) et de son module `main` — `fetch`, `scheduled` (aussi impliqué par `triggers.crons`), `queue` (aussi par `queues.consumers`), `email`, `tail`, classes Durable Object et Workflows définis dans ce Worker. « Exercé » = **dispatché** par un test qui tourne dans le runtime Workers : suite Vitest avec `cloudflareTest()` de `@cloudflare/vitest-plugin` (ou l'ancien `@cloudflare/vitest-pool-workers`), ou fichier qui ouvre `createTestHarness`. Sans configuration Wrangler : sans objet | 100 % |
+| `supabase` | **statique** (TF-2008) : tables des schémas exposés (`[api] schemas` de `supabase/config.toml`, à défaut `public` et `graphql_public`) créées par `supabase/migrations/*.sql`. « Exercé » = **cité par un test pgTAP** de `supabase/tests/` qui adopte un rôle de l'API (`set local role authenticated`, `request.jwt.claim`, `tests.authenticate_as`). Constats `rls-absente` (table exposée sans RLS active à l'issue des migrations) et `realtime-rls-reactivee` (migration qui réactive la RLS de `realtime.messages`, refusée en 42501). Sans migration Supabase : sans objet | 100 % |
 
 La suite backend est lancée depuis `<projet>/backend` avec `coverage run --branch
 --source=app,tests` : le paquet `app` doit être importable depuis ce dossier.

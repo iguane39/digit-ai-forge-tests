@@ -99,6 +99,10 @@ JOB_SANS_DECLENCHEUR = "job-sans-declencheur"
 TRIGGER_NON_CABLE = "trigger-non-cable"
 CRON_INVALIDE = "cron-invalide"
 
+# --- Supabase : RLS des tables exposées et migration Realtime (TF-2008) --------------------------
+RLS_ABSENTE = "rls-absente"
+REALTIME_RLS_REACTIVEE = "realtime-rls-reactivee"
+
 #: Toutes les classes déclarées — le verrou de TF-0334 s en sert dans les deux sens : aucune
 #: classe du corpus hors de cet ensemble, aucun littéral de classe hors de ce module.
 CLASSES: frozenset[str] = frozenset(

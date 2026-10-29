@@ -17,7 +17,9 @@ from forge_tests.adaptateurs import (
     prompts,
     qualif,
     securite,
+    supabase,
     visuel,
+    workers,
 )
 
 REGISTRE = {
@@ -44,9 +46,16 @@ REGISTRE = {
     # contraste etait lu, le reste etait mesure puis JETE. Ce pan lit ce qui etait deja mesure.
     "plancher-rendu": plancher,
     "i18n-build-servi": i18n,
+    # TF-1998 (29/10/2026) : un Worker Cloudflare sortait de tous les pans. Inventaire STATIQUE
+    # de ses gestionnaires, exercé = dispatché par un test qui tourne dans le runtime Workers.
+    "workers-wrangler": workers,
+    # TF-2008 (29/10/2026) : `supabase/migrations/` n etait lu par aucun pan. Tables exposées,
+    # RLS active, tests pgTAP sous un rôle de l API — statique, comme `prompts` et `workers`.
+    "supabase-pgtap": supabase,
 }
 
 PANS_ATTENDUS = [
     "front", "interface", "api", "data", "migrations", "batch", "fichiers", "back", "securite",
     "accessibilite", "contraste", "clavier", "visuel", "plancher", "qualif", "prompts", "i18n",
+    "workers", "supabase",
 ]

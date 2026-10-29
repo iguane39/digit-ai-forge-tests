@@ -1659,6 +1659,60 @@
       "domaine": "securite-oracles",
       "enonce": "securite/identite-assignee : ne voit que le fournisseur de jetons `DefaultAzureCredential` (bibliotheque `azure.identity`) et une identite assignee DECLAREE par la presence du nom `AZURE_CLIENT_ID` dans le MEME fichier lu — un autre fournisseur (AWS STS, GCP Workload Identity, Okta), une identite assignee declaree uniquement dans l infrastructure (Bicep, Terraform, portail Azure, non lus ici) ou transmise par un fichier different echappe a ce controle",
       "statut": "todo"
+    },
+    {
+      "id": "supabase-pgtap-001",
+      "domaine": "supabase-pgtap",
+      "enonce": "supabase : statique — une table est tenue pour exercée quand un fichier pgTAP de `supabase/tests/` la cite après avoir adopté un rôle de l API ; le test n est ni exécuté ni prouvé vert par ce pan (`supabase test db` le juge)",
+      "statut": "todo"
+    },
+    {
+      "id": "supabase-pgtap-002",
+      "domaine": "supabase-pgtap",
+      "enonce": "supabase : les migrations se lisent par motif ; une table créée par du SQL dynamique, par `create table … as`, renommée par `alter table … rename`, ou décrite dans un schéma déclaratif `supabase/schemas/` n est pas inventoriée",
+      "statut": "todo"
+    },
+    {
+      "id": "supabase-pgtap-003",
+      "domaine": "supabase-pgtap",
+      "enonce": "supabase : les commentaires SQL sont retirés avant lecture ; une chaîne qui contient `--` est tronquée au même endroit",
+      "statut": "todo"
+    },
+    {
+      "id": "supabase-pgtap-004",
+      "domaine": "supabase-pgtap",
+      "enonce": "supabase : la RLS active ne dit rien de la JUSTESSE des politiques ; seul un test sous rôle en juge, et ce pan ne fait que constater qu il existe",
+      "statut": "todo"
+    },
+    {
+      "id": "workers-wrangler-001",
+      "domaine": "workers-wrangler",
+      "enonce": "workers : statique — un gestionnaire est tenu pour exercé quand un fichier de test qui tourne dans le runtime Workers le DISPATCHE nommément (exports.default.fetch, server.fetch, createScheduledController, createMessageBatch, runInDurableObject, introspectWorkflow…) ; le dispatch cité n est ni exécuté ni prouvé vert par ce pan",
+      "statut": "todo"
+    },
+    {
+      "id": "workers-wrangler-002",
+      "domaine": "workers-wrangler",
+      "enonce": "workers : seule la configuration Wrangler de la racine est lue ; dans un dépôt de plusieurs Workers, les autres ne sont pas inventoriés",
+      "statut": "todo"
+    },
+    {
+      "id": "workers-wrangler-003",
+      "domaine": "workers-wrangler",
+      "enonce": "workers : les gestionnaires se lisent dans le module `main` par motif de définition de méthode ; un gestionnaire défini ailleurs puis réexporté échappe à l inventaire, sauf s il est impliqué par la configuration (crons, consommateurs de file)",
+      "statut": "todo"
+    },
+    {
+      "id": "workers-wrangler-004",
+      "domaine": "workers-wrangler",
+      "enonce": "workers : les Pages Functions (dossier `functions/`) et la syntaxe Service Worker ne sont pas inventoriées",
+      "statut": "todo"
+    },
+    {
+      "id": "workers-wrangler-005",
+      "domaine": "workers-wrangler",
+      "enonce": "workers : la parité entre la date de compatibilité testée et la date servie n est pas jugée ici — gate `runtime-parity` de forge-development (TF-1998)",
+      "statut": "todo"
     }
   ]
 }

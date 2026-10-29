@@ -87,7 +87,9 @@ def test_le_verrou_ATTRAPE_la_liste_PERIMEE_du_23_09_2026() -> None:
 
     assert declares != PANS_ATTENDUS
     manquants = sorted(set(PANS_ATTENDUS) - set(declares))
-    assert manquants == ["clavier", "contraste", "i18n", "plancher"], (
+    # Fixture relue le 29/10/2026 (TF-1998, TF-2008) : `workers` et `supabase` n'existaient pas le
+    # 23/09 ; la liste périmée les manque donc aussi, en plus des quatre pans de l'époque.
+    assert manquants == ["clavier", "contraste", "i18n", "plancher", "supabase", "workers"], (
         "la liste périmée du 23/09 manquait exactement ces quatre pans — si ce n'est plus le "
         "cas, PANS_ATTENDUS a changé et cette fixture historique doit être relue, pas supprimée"
     )
@@ -190,7 +192,9 @@ def test_le_verrou_ATTRAPE_l_absence_de_contraste_clavier_plancher_du_02_10_2026
     )
     documentes = _pans_documentes_quelque_part(readme_perime)
     manquants = sorted(set(PANS_ATTENDUS) - documentes)
-    assert manquants == ["clavier", "contraste", "plancher"], (
+    # Fixture relue le 29/10/2026 (TF-1998, TF-2008) : `workers` et `supabase`, nés ce jour-là,
+    # manquent aussi au README du 24/09, en plus des trois pans que TF-1407 a documentés.
+    assert manquants == ["clavier", "contraste", "plancher", "supabase", "workers"], (
         "la fixture historique du README périmé du 24/09 ne manque plus exactement ces trois "
         "pans — si PANS_ATTENDUS a changé, relire cette fixture plutôt que la supprimer"
     )
