@@ -946,7 +946,9 @@ instruction précédée d'un commentaire de tête était rejetée en bloc.
 une chaîne ne coupe rien et ne masque rien). Les quatre lecteurs SQL du dépôt en dépendent :
 l'adaptateur `migrations` (instructions et objets annoncés), l'adaptateur `data` (inventaire des
 tables, contraintes, index, triggers — une table mise en commentaire n'entre plus à
-l'inventaire) et la sonde `verifier_schema.py` qui rejoue les migrations sur base neuve.
+l'inventaire) et la sonde `verifier_schema.py` qui rejoue les migrations sur base neuve. Depuis
+TF-2012, la fabrique de données en dépend aussi : son lecteur de schéma (`schema_sql.py`) et sa
+sonde de chargement (`sondes/charger_jeu.py`) découpent les migrations par ce même module.
 
 **Limite déclarée** : un `;` ou un `--` placé dans un littéral **dollar-quoté** (`$$…$$`, corps
 de fonction PL/pgSQL) ou dans une chaîne à échappement backslash (`E'…\'…'`) reste hors de
@@ -1627,6 +1629,93 @@ directement (l'hypothèse est qu'elle invoque la même commande que la collecte 
 ici — angle mort partagé avec TF-1017) ; un test COLLECTÉ mais marqué `pytest.mark.skip` sans
 motif daté n'est pas vu (classe voisine, pas celle mesurée par RT-62) ; sans `testpaths`
 déclaré au `pyproject.toml` audité, le périmètre supposé est `tests/`.
+
+## Fabrique de données — un jeu chargeable, jugé par un chargement réel (TF-2012, 29/10/2026)
+
+La spec du noyau déclarait cinq capacités d'adaptateur ; la quatrième, **fabrique de données**
+(« fixtures, seeding, teardown, cas limites »), n'était qu'une ligne de son tableau. Le CDC le
+constatait dès le cadrage (C4 : « Aucune fabrique de données n'existe »). Le jeu des livrables
+n'en tenait pas lieu : un JSON pour les cahiers, chargé dans aucune base. **La capacité 4 est
+désormais écrite.** `forge_tests/fabrique_donnees.py` fabrique un fichier d'INSERT depuis le
+schéma que construisent les migrations SQL du projet, puis le juge en le chargeant sur une base
+PostgreSQL éphémère.
+
+```bash
+uv run python -m forge_tests.fabrique_donnees <projet> --sortie <hors-projet>/jeu.sql
+uv run python -m forge_tests.fabrique_donnees <projet> --sortie <hors-projet>/jeu.sql \
+    --graine 42 --volume 20 --volume-table commande=200 --json
+```
+
+| Option | Effet |
+|---|---|
+| `--sortie <fichier.sql>` | obligatoire, **hors du projet** : dedans, refus G-1 en code 4 et rien n'est écrit |
+| `--graine <n>` | graine des tirages (défaut 1) : même schéma, même graine, mêmes volumes, **même octet** |
+| `--volume <n>`, `--volume-table TABLE=N` | lignes par table (défaut 10), puis par table nommée ; une table inconnue du schéma est refusée |
+| `--python <interpréteur>` | celui qui porte `testcontainers` et `psycopg` ; à défaut, le venv du projet, puis celui de la forge |
+| `--sans-chargement` | écrit le jeu sans le juger : verdict `NON_JUGE`, code 3 |
+| `--json` | rapport machine complet sur stdout ; les messages partent sur stderr |
+
+**Ce qui est lu.** Les sections `-- +migrate Up` de `<racine>/migrations/*.sql`, dans l'ordre des
+fichiers, par les fonctions de l'adaptateur `migrations` et le découpage de `forge_tests.sql`
+(`forge_tests/schema_sql.py`). Le lecteur en tire les tables, les colonnes et leurs types, les
+`NOT NULL`, les clés primaires et étrangères (de colonne, de table ou posées par `ALTER TABLE`),
+les `UNIQUE` et index uniques, les types `ENUM` et les domaines. Il traduit en valeurs les `CHECK`
+de forme reconnue : `IN`, `= ANY (ARRAY[…])`, comparaison à une borne, `BETWEEN`, longueur,
+`IS NOT NULL`, relation d'ordre entre deux colonnes, `OU` d'égalités. Un `ALTER`, un `DROP` ou un
+`RENAME` comptent comme le moteur les comptera.
+
+**Ce qui est produit.** Une instruction par ligne, rejouable par `psql -v ON_ERROR_STOP=1 -f`. Les
+tables suivent l'ordre des clés étrangères ; un cycle se rompt sur une clé nullable, et le rapport
+le dit. Les identités reçoivent des valeurs explicites (`OVERRIDING SYSTEM VALUE` quand il le
+faut) et les séquences sont recalées en fin de fichier. Le jeu porte des **cas limites** tous
+valides : bornes basses et longueurs maximales à la première ligne, `NULL` admis à la deuxième,
+bornes hautes à la troisième. Le rapport les déclare table par table.
+
+**Synthétique, et prouvé tel avant écriture.** Les valeurs viennent du vocabulaire fermé de
+`livrables/jeux.py`, et les courriels vivent sous `exemple.test`. Les seules valeurs reprises du
+projet sont celles que son schéma **impose** (`CHECK … IN`, type énuméré). Toutes passent par le
+garde-fou de `jeux.py`, réutilisé et non recopié (`jeux.verifier`). Un refus lève
+`DonneeNonSynthetique` : code 2, **rien n'est écrit**, et le message nomme la vérification qui
+imposait la valeur. C'est la décision (c) du cadrage : synthétiques uniquement.
+
+**Jugé par exécution.** Une base `postgres:16-alpine` est montée par `testcontainers` (sonde
+`forge_tests/sondes/charger_jeu.py`), les migrations Up y sont rejouées, puis le jeu. Chaque
+instruction passe sous un point de sauvegarde, si bien que chaque rejet est **nommé** par le
+moteur (contrainte, code SQLSTATE). Les lignes de chaque table sont comptées avant et après. La
+base est détruite à la sortie.
+
+| Verdict | Code | Ce qu'il affirme |
+|---|---|---|
+| `PASS` | 0 | jeu chargé, 0 rejet, toutes les lignes présentes, volume tenu |
+| `FAIL` | 1 | au moins un rejet, nommé, ou une ligne absente après chargement |
+| `REFUSE`, `ERREUR` | 2 | garde-fou synthétique (rien n'est écrit), aucun schéma lisible, migrations non rejouables sur base neuve |
+| `PARTIEL` | 3 | chargé sans rejet, mais une table n'a pas reçu son volume (unicité intenable, parent absent), motif nommé |
+| `NON_EXECUTABLE`, `NON_JUGE` | 3 | base non montée ici (démon injoignable, avec le marqueur `PRÉALABLE D ENVIRONNEMENT ABSENT` et sa preuve ; `testcontainers` absent), ou chargement non demandé : **jamais un vert** |
+| `REFUS_G1` | 4 | sortie désignée dans le projet audité |
+
+**Ce qui n'est pas jugé**, repris tel quel en `non_juge` et au registre de dette (domaines
+`fabrique-donnees` et `schema-sql`) :
+
+- **Alembic** : un schéma versionné par Alembic, ou par un ORM sans migrations SQL, n'est pas lu.
+  La fabrique le dit, compte les versions Alembic trouvées et ne fabrique rien ;
+- **moteurs autres que PostgreSQL** : SQLite, MySQL ou SQL Server reçoivent un jeu dont le
+  chargement n'est pas jugé pour leur moteur ;
+- un `CHECK` hors des formes reconnues (expression régulière, fonction) est **nommé** au
+  rapport, pas traduit : seul le chargement réel le juge ;
+- déclencheurs, règles, politiques RLS, contraintes `EXCLUDE` et lignes insérées par les
+  migrations ne sont pas modélisés : seul le chargement en juge l'effet ;
+- **teardown** : aucun script de retrait n'est produit pour une base durable. Seule la base
+  éphémère du jugement est créée puis détruite ;
+- le jeu dit la forme d'une donnée valide, pas la sémantique métier d'une colonne.
+
+Bancs à double sens sous `fixtures/fabrique-donnees/`. `vert` (clés simples, composées et
+réflexives, `ENUM`, identité, `CHECK` de bornes, de liste, de longueur et de relation) se charge
+sans un rejet. `rouge-violation` (une référence contrainte par expression régulière) doit être
+rejeté au chargement, contrainte nommée. `rouge-courriel` (un schéma qui impose une adresse sous
+un domaine non réservé) doit être refusé avant écriture. Ils sont joués par
+`tests/test_tf_2012_fabrique_donnees.py`, donc par la section `unitaire` de la recette, sous
+S-01. Les tests qui montent une base exigent Docker et l'interpréteur des bancs historiques
+(`uv sync --directory fixtures/banc-vert/backend`) ; sans eux, ils sortent en SKIP nommé.
 
 ## Recette et dette
 

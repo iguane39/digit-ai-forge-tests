@@ -1210,6 +1210,60 @@
       "statut": "todo"
     },
     {
+      "id": "fabrique-donnees-001",
+      "domaine": "fabrique-donnees",
+      "enonce": "fabrique de donnees : seul PostgreSQL juge le jeu (base ephemere postgres:16-alpine montee par testcontainers) ; un projet servi par un autre moteur (SQLite, MySQL, SQL Server) recoit un jeu dont le chargement n est pas juge pour son moteur",
+      "statut": "todo"
+    },
+    {
+      "id": "fabrique-donnees-002",
+      "domaine": "fabrique-donnees",
+      "enonce": "fabrique de donnees : seules les migrations SQL `-- +migrate Up` sont lues ; un schema versionne par Alembic, ou par un ORM sans migrations SQL, n est pas lu et aucun jeu n est produit — la fabrique le dit au lieu d inventer un schema",
+      "statut": "todo"
+    },
+    {
+      "id": "fabrique-donnees-003",
+      "domaine": "fabrique-donnees",
+      "enonce": "fabrique de donnees : une verification CHECK hors des formes reconnues (IN, = ANY, comparaison a une borne, BETWEEN, longueur, IS NOT NULL, relation d ordre entre deux colonnes, OU d egalites) n est pas traduite en valeurs : elle est NOMMEE au rapport et seul le chargement reel la juge",
+      "statut": "todo"
+    },
+    {
+      "id": "fabrique-donnees-004",
+      "domaine": "fabrique-donnees",
+      "enonce": "fabrique de donnees : un declencheur, une regle, une politique RLS ou une contrainte d exclusion (EXCLUDE) n est pas modelise ; seul le chargement reel en juge l effet",
+      "statut": "todo"
+    },
+    {
+      "id": "fabrique-donnees-005",
+      "domaine": "fabrique-donnees",
+      "enonce": "fabrique de donnees : les lignes que les migrations inserent elles-memes ne sont pas lues ; une unicite qu elles occupent deja peut faire echouer le chargement, qui le nomme",
+      "statut": "todo"
+    },
+    {
+      "id": "fabrique-donnees-006",
+      "domaine": "fabrique-donnees",
+      "enonce": "fabrique de donnees : le jeu dit la FORME d une donnee valide (type, bornes, unicite, cles), pas la semantique metier d une colonne — un `telephone` recoit un libelle",
+      "statut": "todo"
+    },
+    {
+      "id": "fabrique-donnees-007",
+      "domaine": "fabrique-donnees",
+      "enonce": "fabrique de donnees : aucun script de retrait (teardown) n est produit pour une base durable ; seule la base ephemere du jugement est creee puis detruite",
+      "statut": "todo"
+    },
+    {
+      "id": "fabrique-donnees-008",
+      "domaine": "fabrique-donnees",
+      "enonce": "fabrique de donnees : un cycle de cles etrangeres sans colonne nullable n est pas resolu (ni UPDATE differe, ni contrainte DEFERRABLE exploitee) : les lignes qu il empeche manquent au volume, et le rapport le dit",
+      "statut": "todo"
+    },
+    {
+      "id": "fabrique-donnees-009",
+      "domaine": "fabrique-donnees",
+      "enonce": "fabrique de donnees : un index unique sur EXPRESSION (`lower(email)`) est approche par les colonnes qu il cite, comparees sans casse ; un index unique PARTIEL est tenu comme total",
+      "statut": "todo"
+    },
+    {
       "id": "generateur-002",
       "domaine": "generateur",
       "enonce": "generateur : pans API et Data generes ; Front, Batch et Fichiers ne le sont pas — leurs cas exigent un scenario, pas une seule requete",
@@ -1556,6 +1610,36 @@
       "id": "revue-008",
       "domaine": "revue",
       "enonce": "revue de suite (piege 9) : les sauts construits a l EXECUTION (une variable qui porte la condition, un decorateur compose) echappent a la lecture ligne a ligne. C est la limite commune a tout ce module, et elle vaut ici comme ailleurs",
+      "statut": "todo"
+    },
+    {
+      "id": "schema-sql-001",
+      "domaine": "schema-sql",
+      "enonce": "schema sql : la lecture suit le decoupage de `forge_tests.sql` — un corps dollar-quote ($$...$$) qui contient un `;` est coupe au mauvais endroit, et un litteral dont les espaces sont multiples est normalise par le decoupage",
+      "statut": "todo"
+    },
+    {
+      "id": "schema-sql-002",
+      "domaine": "schema-sql",
+      "enonce": "schema sql : seuls CREATE / ALTER / DROP TABLE, CREATE / DROP INDEX, CREATE / ALTER / DROP TYPE ... AS ENUM et CREATE DOMAIN sont modelises ; les autres instructions (fonctions, vues, declencheurs, sequences, donnees inserees par la migration) sont COMPTEES par nature, pas lues",
+      "statut": "todo"
+    },
+    {
+      "id": "schema-sql-003",
+      "domaine": "schema-sql",
+      "enonce": "schema sql : le nom implicite d une contrainte non nommee est reconstitue a la maniere de PostgreSQL (`<table>_<colonne>_key`, `_fkey`, `_check`, `_pkey`) sans sa troncature a 63 octets ni ses suffixes de dedoublonnage — un DROP CONSTRAINT qui vise un autre nom n est pas applique, et le dit",
+      "statut": "todo"
+    },
+    {
+      "id": "schema-sql-004",
+      "domaine": "schema-sql",
+      "enonce": "schema sql : deux tables de meme nom dans deux schemas differents ne sont pas distinguees ; les colonnes heritees (INHERITS) et les partitions (PARTITION OF) ne sont pas lues",
+      "statut": "todo"
+    },
+    {
+      "id": "schema-sql-005",
+      "domaine": "schema-sql",
+      "enonce": "schema sql : une contrainte posee par ALTER DOMAIN, ou une verification de domaine ajoutee apres la creation d une colonne qui l utilise, n est pas reportee sur la colonne",
       "statut": "todo"
     },
     {
