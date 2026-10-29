@@ -512,6 +512,8 @@ Une par ligne. Chacune porte l'option recommandée et le **défaut appliqué en 
 
 **c) Régime des jeux de données ?** — Recommandé : synthétiques uniquement, ce qui rend le garde-fou G-4 automatiquement tenu et supprime toute question d'anonymisation. **Défaut appliqué** : synthétiques uniquement.
 
+> **Portée précisée le 29/10/2026 (décision humaine D-91 (a), règle R-65 du pilot).** La décision (c) vaut pour les jeux que forge-tests fabrique et pour ses fixtures, qui restent synthétiques. Elle n'interdit plus aux produits d'alimenter une base de développement ou de qualification par un extrait de leur production, anonymisé et jugé par le verbe « anonymiser » de forge-data ; une pseudonymisation par clé ou hachage n'y suffit jamais.
+
 **d) Budget de suite acceptable en intégration continue ?** — Recommandé : 15 minutes au total, conformément à S-08. **Défaut appliqué** : S-08 tel que proposé, à réviser après la première mesure réelle en phase 1.
 
 **e) La SaaS Forge construit-elle Forge Tests ?** — **CLOSE le 2026-08-02 (D-A)** : oui, en mode brownfield sur un dépôt initialisé à part. Le mode greenfield est écarté à cause du verrou V-3.

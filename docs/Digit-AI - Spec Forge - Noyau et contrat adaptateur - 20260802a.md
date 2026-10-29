@@ -233,7 +233,7 @@ Quatrième point ouvert de la section 4.6 du CDC.
 
 **Doublure ou bac à sable** : la règle par défaut est la **doublure** pour tout service tiers — payant, distant, ou à effet de bord. Le bac à sable réel n'est employé que si le contrat du service ne peut pas être doublé fidèlement, et cet emploi est journalisé. Motif : un test qui appelle un service tiers réel est un test dont le verdict dépend d'un tiers.
 
-**Aucune donnée de production non anonymisée**, en application du garde-fou G-4 et de la décision (c) — jeux synthétiques uniquement.
+**Aucune donnée de production non anonymisée**, en application du garde-fou G-4 et de la décision (c) — jeux synthétiques uniquement. Portée précisée le 29/10/2026 (D-91 (a), règle R-65 du pilot) : la décision vaut pour les jeux de la forge ; une base de qualification d'un produit peut recevoir un extrait de production anonymisé et jugé par forge-data, jamais pseudonymisé.
 
 ---
 
