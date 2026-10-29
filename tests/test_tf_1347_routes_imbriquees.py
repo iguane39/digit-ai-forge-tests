@@ -25,7 +25,7 @@ def _projet_react_router(tmp_path: Path, jsx: str) -> Path:
     return projet
 
 
-# --- 1. Le cas réel du retour Produit-72 : deux enfants sous un même parent ---------------------------
+# --- 1. Le cas réel du retour Produit-72 : deux enfants sous un même parent ---
 def test_routes_imbriquees_composees_avec_leur_parent(tmp_path: Path) -> None:
     jsx = """
     <Routes>
