@@ -1687,13 +1687,13 @@
     {
       "id": "supabase-pgtap-005",
       "domaine": "supabase-pgtap",
-      "enonce": "supabase : statique — une table est tenue pour exercée quand un fichier pgTAP de `supabase/tests/` la cite après avoir adopté un rôle de l API, quand un fichier sous un dossier `tests/` l appelle par l API (`/rest/v1/<table>` ou `from_(\"<table>\")`) ou quand le produit la déclare (`FORGE_TESTS_SUPABASE_TABLES_EXERCEES`) ; le test n est ni exécuté ni prouvé vert par ce pan (`supabase test db` le juge), et une table déclarée n est pas vérifiée",
+      "enonce": "supabase : statique — une table est tenue pour exercée quand un fichier pgTAP de `supabase/tests/` la cite après avoir adopté un rôle de l API, quand un fichier sous un dossier `tests/` l appelle par l API (`/rest/v1/<table>`, `from_(\"<table>\")` ou `.from(\"<table>\")`) ou quand le produit la déclare avec un chemin de preuve lisible (`FORGE_TESTS_SUPABASE_TABLES_EXERCEES`, `table=chemin`) ; le test n est ni exécuté ni prouvé vert par ce pan (`supabase test db` le juge), et une table déclarée n est pas vérifiée : la preuve citée doit exister, pas dire ce qu elle prétend",
       "statut": "todo"
     },
     {
       "id": "supabase-pgtap-006",
       "domaine": "supabase-pgtap",
-      "enonce": "supabase : l appel par l API se lit par motif ; un nom de table construit (concaténation, variable), un autre client que `from_` ou `/rest/v1/`, et deux tables de même nom dans deux schémas exposés (le chemin `/rest/v1/<table>` ne porte pas le schéma) ne sont pas distingués",
+      "enonce": "supabase : l appel par l API se lit par motif ; un nom de table construit (concaténation, variable), un autre client que `from_`, `.from` ou `/rest/v1/`, un `.from(\"<table>\")` cité dans une chaîne et un `.from` d un objet que la liste des faux amis ne connaît pas (`Array`, `Buffer`, `Object`, `Observable`, `Readable`, `Iterator`, tableaux typés), et deux tables de même nom dans deux schémas exposés (le chemin `/rest/v1/<table>` ne porte pas le schéma) ne sont pas distingués",
       "statut": "todo"
     },
     {

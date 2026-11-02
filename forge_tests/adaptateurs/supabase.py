@@ -24,8 +24,10 @@ Trois objets, dérivés SANS EXÉCUTION :
     `tests.authenticate_as`) et cite la table. C est là que se teste un flux d authentification
     côté base : la politique vue par l utilisateur connecté, et par l anonyme. Depuis TF-2046, une
     table est aussi exercée quand un fichier sous un dossier `tests/` l APPELLE par l API
-    (`/rest/v1/<table>` ou `from_("<table>")`, hors commentaires et docstrings), ou quand le
-    produit la déclare dans `FORGE_TESTS_SUPABASE_TABLES_EXERCEES` ;
+    (`/rest/v1/<table>`, `from_("<table>")` en Python ou `.from("<table>")` de supabase-js,
+    hors commentaires et docstrings), ou quand le produit la déclare dans
+    `FORGE_TESTS_SUPABASE_TABLES_EXERCEES` AVEC un chemin de preuve lisible, comme
+    `forge_tests.declarations` (TF-2060) : `table=chemin/du/test` ;
   - **deux constats** : `rls-absente` (table exposée dont la RLS n est pas active à l issue des
     migrations) et `realtime-rls-reactivee` (migration qui réactive la RLS de
     `realtime.messages`).
@@ -54,8 +56,8 @@ POUR_COUVRIR = (
     "écrire sous `supabase/tests/` des tests pgTAP (`supabase test db`) qui citent chaque table "
     "d un schéma exposé en jouant un rôle de l API (`set local role authenticated` et "
     "`request.jwt.claim.sub`, ou `tests.authenticate_as()`), ou un test sous un dossier `tests/` "
-    "qui appelle chaque table par l API (`/rest/v1/<table>`, `from_(\"<table>\")`), et activer la "
-    "RLS de chaque table exposée dans une migration"
+    "qui appelle chaque table par l API (`/rest/v1/<table>`, `from_(\"<table>\")`, "
+    "`.from(\"<table>\")`), et activer la RLS de chaque table exposée dans une migration"
 )
 
 # Le chapitre T2 « Données » range déjà par table : les tables Supabase s y lisent à côté des
@@ -68,12 +70,17 @@ CHAPITRES = (
 NON_JUGE = [
     "supabase : statique — une table est tenue pour exercée quand un fichier pgTAP de "
     "`supabase/tests/` la cite après avoir adopté un rôle de l API, quand un fichier sous un "
-    "dossier `tests/` l appelle par l API (`/rest/v1/<table>` ou `from_(\"<table>\")`) ou quand le "
-    "produit la déclare (`FORGE_TESTS_SUPABASE_TABLES_EXERCEES`) ; le test n est ni exécuté ni "
-    "prouvé vert par ce pan (`supabase test db` le juge), et une table déclarée n est pas vérifiée",
+    "dossier `tests/` l appelle par l API (`/rest/v1/<table>`, `from_(\"<table>\")` ou "
+    "`.from(\"<table>\")`) ou quand le produit la déclare avec un chemin de preuve lisible "
+    "(`FORGE_TESTS_SUPABASE_TABLES_EXERCEES`, `table=chemin`) ; le test n est ni exécuté ni "
+    "prouvé vert par ce pan (`supabase test db` le juge), et une table déclarée n est pas "
+    "vérifiée : la preuve citée doit exister, pas dire ce qu elle prétend",
     "supabase : l appel par l API se lit par motif ; un nom de table construit (concaténation, "
-    "variable), un autre client que `from_` ou `/rest/v1/`, et deux tables de même nom dans deux "
-    "schémas exposés (le chemin `/rest/v1/<table>` ne porte pas le schéma) ne sont pas distingués",
+    "variable), un autre client que `from_`, `.from` ou `/rest/v1/`, un `.from(\"<table>\")` cité "
+    "dans une chaîne et un `.from` d un objet que la liste des faux amis ne connaît pas "
+    "(`Array`, `Buffer`, `Object`, `Observable`, `Readable`, `Iterator`, tableaux typés), et deux "
+    "tables de même nom dans deux schémas exposés (le chemin `/rest/v1/<table>` ne porte pas le "
+    "schéma) ne sont pas distingués",
     "supabase : les migrations se lisent par motif ; une table créée par du SQL dynamique, par "
     "`create table … as`, renommée par `alter table … rename`, ou décrite dans un schéma "
     "déclaratif `supabase/schemas/` n est pas inventoriée",
@@ -102,6 +109,16 @@ _EXTENSIONS_TEST = {".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh"}
 _DOSSIERS_IGNORES = {"node_modules", "__pycache__", ".git", ".venv", "venv"}
 _REST = re.compile(r"/rest/v1/(?P<table>[A-Za-z_][\w$]*)")
 _FROM = re.compile(r"""\bfrom_\s*\(\s*(["'`])(?P<table>[A-Za-z_][\w$]*)\1""")
+# TF-2060 : le client supabase-js appelle une table par `.from("<table>")` (un seul argument, une
+# chaîne), souvent en chaîne sur plusieurs lignes ou après `?.`. Le mot `from` est aussi une
+# méthode d objets qui n ont rien d un client : `Array.from("abc")`, `Buffer.from("todos")`. Le
+# récepteur (l identifiant juste avant le point) départage ; une expression (`)`, `]`) est un
+# récepteur possible : `supabase.schema("public").from("todos")`.
+_FROM_JS = re.compile(r"""\??\.\s*from\s*\(\s*(["'`])(?P<table>[A-Za-z_][\w$]*)\1\s*\)""")
+_RECEPTEUR_JS = re.compile(r"([A-Za-z_$][\w$]*)\s*$")
+_FAUX_AMIS_FROM = re.compile(
+    r"Array|Buffer|Object|Observable|Readable|Iterator|Stream|\w+Array"
+)
 _COMMENTAIRE_DIESE = re.compile(r"(?m)(^|\s)#.*$")
 _ROLE = re.compile(
     r"\bset\s+local\s+role\s+(?:authenticated|anon)\b|request\.jwt\.claim|"
@@ -226,6 +243,21 @@ def _appels_api_texte(texte: str) -> set[str]:
     return tables | {m.group("table") for m in _FROM.finditer(texte)}
 
 
+def _appels_api_js(texte: str) -> set[str]:
+    """Tables appelées en JS/TS : `/rest/v1/<table>`, `from_("<table>")` et `.from("<table>")`.
+
+    `.from("<table>")` n est retenu que si son récepteur n est pas un faux ami connu
+    (`Array.from("abc")`, `Buffer.from("todos")`, `Uint8Array.from(…)`).
+    """
+    tables = _appels_api_texte(texte)
+    for m in _FROM_JS.finditer(texte):
+        recepteur = _RECEPTEUR_JS.search(texte[: m.start()])
+        if recepteur and _FAUX_AMIS_FROM.fullmatch(recepteur.group(1)):
+            continue
+        tables.add(m.group("table"))
+    return tables
+
+
 def _appels_api_python(source: str) -> set[str]:
     """Tables appelées par l API en Python : chaînes et appels, ni commentaires ni docstrings."""
     try:
@@ -282,27 +314,62 @@ def _tables_appelees_par_l_api(cible: Path) -> set[str]:
         elif fichier.suffix == ".sh":
             tables |= _appels_api_texte(_COMMENTAIRE_DIESE.sub(r"\1", texte))
         else:
-            tables |= _appels_api_texte(_sans_commentaires_js(texte))
+            tables |= _appels_api_js(_sans_commentaires_js(texte))
     tables.discard("rpc")  # `/rest/v1/rpc/<fonction>` appelle une fonction, pas une table
     return tables
 
 
-def _tables_declarees(cible: Path) -> set[str]:
-    """Tables que le PRODUIT déclare exercées : `schéma.table`, ou `table` seul pour `public`."""
+def _preuve_lisible(cible: Path, preuve: str) -> str | None:
+    """Motif de refus d un chemin de preuve, ou `None` s il est lisible (même règle que
+    `declarations._verifier` : la preuve doit EXISTER dans le projet ; elle n est pas jugée)."""
+    if not preuve:
+        return "aucun chemin de preuve (forme attendue : `table=chemin/du/test`)"
+    racine = cible.resolve()
+    chemin = (racine / preuve).resolve()
+    if not chemin.is_relative_to(racine):
+        return f"la preuve citée est hors du projet ({preuve})"
+    try:
+        with chemin.open("rb") as flux:
+            flux.read(1)
+    except OSError:
+        return f"la preuve citée est introuvable ou illisible ({preuve})"
+    return None
+
+
+def _declarations(cible: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """Déclarations du PRODUIT : `table=chemin` (`schéma.table=chemin` hors `public`).
+
+    Rend `(retenues {élément: preuve}, refusées {élément: motif})`. Comme `declarations.py`, une
+    déclaration sans chemin de preuve lisible est REFUSÉE : la table ne compte pas comme exercée.
+    """
     brut = os.environ.get(CHAMP_DECLARATION)
     if brut is None:
         brut = _valeurs(cible / ENV_PROJET).get(CHAMP_DECLARATION, "")
-    declarees: set[str] = set()
+    retenues: dict[str, str] = {}
+    refusees: dict[str, str] = {}
     for morceau in brut.split(","):
-        if morceau.strip():
-            schema, nom = _qualifier(morceau)
-            declarees.add(f"supabase:table:{schema}.{nom}")
-    return declarees
+        if not morceau.strip():
+            continue
+        nom, _, preuve = morceau.partition("=")
+        if not nom.strip():
+            refusees["(sans nom)"] = (
+                f"aucun nom de table devant le chemin de preuve ({morceau.strip()})"
+            )
+            continue
+        schema, table = _qualifier(nom)
+        identifiant = f"supabase:table:{schema}.{table}"
+        motif = _preuve_lisible(cible, preuve.strip())
+        if motif is None:
+            retenues[identifiant] = preuve.strip()
+        else:
+            refusees[identifiant] = motif
+    return retenues, refusees
 
 
 def exerces_par_declaration(cible: Path) -> set[str]:
-    """Tables inventoriées que le produit déclare exercées ; une table inconnue est ignorée."""
-    return _tables_declarees(cible) & {e.id for e in inventaire(cible)}
+    """Tables inventoriées que le produit déclare exercées AVEC une preuve lisible ; une table
+    inconnue des migrations est ignorée."""
+    return set(_declarations(cible)[0]) & {e.id for e in inventaire(cible)}
 
 
 def exerces(cible: Path) -> set[str]:
@@ -371,14 +438,28 @@ def analyser(cible: Path) -> SortieAdaptateur:
     if motif:
         return evaluer_surface(NOM, PAN, str(cible), [], set(), SEUIL, NON_JUGE, sans_objet=motif)
     sortie = evaluer_surface(
-        NOM, PAN, str(cible), inventaire(cible), exerces(cible), SEUIL, NON_JUGE
+        # Une COPIE : `evaluer_surface` rend la liste reçue, et les mentions ajoutées plus bas
+        # (déclarations du produit) se seraient accumulées dans `NON_JUGE` d un projet à l autre.
+        NOM, PAN, str(cible), inventaire(cible), exerces(cible), SEUIL, list(NON_JUGE)
     )
+    retenues, refusees = _declarations(cible)
     sur_declaration = sorted(exerces_par_declaration(cible))
     if sur_declaration:
         sortie.non_juge.append(
             "supabase : tables tenues pour exercées sur déclaration du produit "
-            f"({CHAMP_DECLARATION}), sans test lu par ce pan : "
-            + ", ".join(i.removeprefix("supabase:table:") for i in sur_declaration)
+            f"({CHAMP_DECLARATION}), sans test lu par ce pan, sur la seule existence de la preuve "
+            "citée : "
+            + ", ".join(
+                f"{i.removeprefix('supabase:table:')} ({retenues[i]})" for i in sur_declaration
+            )
+        )
+    if refusees:
+        sortie.non_juge.append(
+            f"supabase : déclaration du produit ({CHAMP_DECLARATION}) REFUSÉE, la table ne compte "
+            "PAS comme exercée : "
+            + " ; ".join(
+                f"{i.removeprefix('supabase:table:')} — {m}" for i, m in sorted(refusees.items())
+            )
         )
     constats = _constats(cible)
     if constats:

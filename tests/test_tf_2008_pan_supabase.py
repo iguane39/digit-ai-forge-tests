@@ -267,13 +267,18 @@ def test_rouge_appel_hors_de_tests_ne_compte_pas(tmp_path: Path) -> None:
 
 
 def test_vert_table_declaree_par_le_produit(tmp_path: Path) -> None:
-    """Le champ du produit désigne la table, nue (schéma `public`) ou qualifiée ; il le DIT."""
+    """Le champ du produit désigne la table, nue (schéma `public`) ou qualifiée, ET son chemin de
+    preuve (TF-2060, comme `declarations.py`) ; il le DIT."""
     racine = _projet(
         tmp_path,
         {
             _M1: _MIGRATION,
             _M2: _MIGRATION_JOURNAL_RLS,
-            _ENV_PROJET: f"{_DECLARATION}=todos, public.journal, prive.fantome\n",
+            "tests/banc/rls.spec.ts": "// banc joué hors de ce pan\n",
+            _ENV_PROJET: (
+                f"{_DECLARATION}=todos=tests/banc/rls.spec.ts, "
+                "public.journal=tests/banc/rls.spec.ts, prive.fantome=tests/banc/rls.spec.ts\n"
+            ),
         },
     )
     assert supabase.exerces(racine) == {
@@ -282,7 +287,11 @@ def test_vert_table_declaree_par_le_produit(tmp_path: Path) -> None:
     }
     sortie = supabase.analyser(racine)
     assert sortie.verdict == "PASS"
-    assert any("sur déclaration du produit" in n and "public.todos" in n for n in sortie.non_juge)
+    assert any(
+        "sur déclaration du produit" in n and "public.todos (tests/banc/rls.spec.ts)" in n
+        for n in sortie.non_juge
+    )
+    assert not any("REFUSÉE" in n for n in sortie.non_juge)
 
 
 def test_rouge_declaration_sans_effet_sur_une_table_inconnue(tmp_path: Path) -> None:
@@ -293,3 +302,157 @@ def test_rouge_declaration_sans_effet_sur_une_table_inconnue(tmp_path: Path) -> 
     )
     assert supabase.exerces(racine) == set()
     assert supabase.analyser(racine).verdict == "FAIL"
+
+
+# --- TF-2060 : supabase-js `.from("<table>")` et déclaration avec chemin de preuve --------------
+
+_BANC_SUPABASE_JS = """import { createClient } from "@supabase/supabase-js";
+const supabase = createClient(url, key);
+test("todos par leur proprietaire", async () => {
+  const { data } = await supabase
+    .from("todos")
+    .select("*");
+  expect(data).toEqual([]);
+});
+test("journal via un schema", async () => {
+  const r = await admin.schema("public")?.from('journal').select("*");
+  expect(r.error).toBeNull();
+});
+"""
+
+_FAUX_AMIS_JS = """test("aucun appel de table", () => {
+  const a = Array.from("todos");
+  const b = Buffer.from("journal");
+  const c = Object.from("todos");
+  const d = Uint8Array.from("journal");
+  const e = Observable.from("todos");
+  const f = Readable.from("journal");
+  const g = Array.from("todos", (x) => x);
+  const h = Array
+    .from("journal");
+  expect([a, b, c, d, e, f, g, h]).toBeDefined();
+});
+"""
+
+_BANC_FROM_EN_COMMENTAIRE_JS = """// supabase.from("todos") a écrire
+/* await supabase.from("journal").select("*") */
+test("rien", () => { expect(1).toBe(1); });
+"""
+
+
+def test_vert_supabase_js_from_appelle_la_table(tmp_path: Path) -> None:
+    """Chaîne sur plusieurs lignes, guillemets simples, `?.` et `.schema(…)` en amont."""
+    racine = _projet(
+        tmp_path,
+        {_M1: _MIGRATION, _M2: _MIGRATION_JOURNAL_RLS, "tests/e2e/rls.spec.ts": _BANC_SUPABASE_JS},
+    )
+    assert supabase.exerces(racine) == {
+        "supabase:table:public.journal",
+        "supabase:table:public.todos",
+    }
+    sortie = supabase.analyser(racine)
+    assert sortie.verdict == "PASS", [f.message for f in sortie.findings]
+
+
+def test_rouge_faux_amis_de_from_n_exercent_aucune_table(tmp_path: Path) -> None:
+    """`Array.from("todos")`, `Buffer.from("journal")` : même nom que la table, autre sens."""
+    racine = _projet(
+        tmp_path,
+        {_M1: _MIGRATION, _M2: _MIGRATION_JOURNAL_RLS, "tests/unit/outils.test.ts": _FAUX_AMIS_JS},
+    )
+    assert supabase.exerces(racine) == set()
+    assert supabase.analyser(racine).verdict == "FAIL"
+    # Remède : le même fichier avec de vrais appels du client fait passer les deux tables.
+    (racine / "tests" / "unit" / "outils.test.ts").write_text(
+        _BANC_SUPABASE_JS, encoding="utf-8"
+    )
+    assert supabase.analyser(racine).verdict == "PASS"
+
+
+def test_rouge_from_en_commentaire_ou_hors_de_tests_ne_compte_pas(tmp_path: Path) -> None:
+    racine = _projet(
+        tmp_path,
+        {
+            _M1: _MIGRATION,
+            _M2: _MIGRATION_JOURNAL_RLS,
+            "tests/e2e/notes.spec.ts": _BANC_FROM_EN_COMMENTAIRE_JS,
+            "src/data.ts": _BANC_SUPABASE_JS,
+        },
+    )
+    assert supabase.exerces(racine) == set()
+
+
+def test_rouge_from_js_dans_un_fichier_python_ou_une_chaine_non_js(tmp_path: Path) -> None:
+    """`.from("<table>")` est du JS : un `.sh` qui le cite n appelle rien."""
+    racine = _projet(
+        tmp_path,
+        {
+            _M1: _MIGRATION,
+            _M2: _MIGRATION_JOURNAL_RLS,
+            "tests/run.sh": 'echo \'x.from("todos")\'\n',
+        },
+    )
+    assert supabase.exerces(racine) == set()
+
+
+def test_rouge_declaration_sans_chemin_de_preuve_ne_compte_pas(tmp_path: Path) -> None:
+    """Forme d avant TF-2060 : une table nue. Refusée, DITE au rapport, table non exercée."""
+    racine = _projet(
+        tmp_path,
+        {_M1: _MIGRATION, _M2: _MIGRATION_JOURNAL_RLS, _ENV_PROJET: f"{_DECLARATION}=todos\n"},
+    )
+    assert supabase.exerces(racine) == set()
+    sortie = supabase.analyser(racine)
+    assert sortie.verdict == "FAIL"
+    refus = [n for n in sortie.non_juge if "REFUSÉE" in n]
+    assert len(refus) == 1 and "todos" in refus[0] and "aucun chemin de preuve" in refus[0]
+    assert "PAS comme exercée" in refus[0]
+
+
+def test_rouge_declaration_a_preuve_introuvable_ou_hors_du_projet(tmp_path: Path) -> None:
+    (tmp_path / "ailleurs.txt").write_text("hors du projet\n", encoding="utf-8")
+    racine = _projet(
+        tmp_path,
+        {
+            _M1: _MIGRATION,
+            _M2: _MIGRATION_JOURNAL_RLS,
+            _ENV_PROJET: f"{_DECLARATION}=todos=tests/absent.spec.ts, journal=../ailleurs.txt\n",
+        },
+    )
+    assert supabase.exerces(racine) == set()
+    refus = " ".join(n for n in supabase.analyser(racine).non_juge if "REFUSÉE" in n)
+    assert "introuvable ou illisible (tests/absent.spec.ts)" in refus
+    assert "hors du projet (../ailleurs.txt)" in refus
+
+
+def test_les_mentions_d_un_projet_ne_fuient_pas_vers_le_suivant(tmp_path: Path) -> None:
+    """Le non-jugé du module n est pas une pile : deux analyses de suite, chacune sa mention."""
+    avec = _projet(
+        tmp_path / "a",
+        {_M1: _MIGRATION, _M2: _MIGRATION_JOURNAL_RLS, _ENV_PROJET: f"{_DECLARATION}=todos\n"},
+    )
+    sans = _projet(tmp_path / "b", {_M1: _MIGRATION, _M2: _MIGRATION_JOURNAL_RLS})
+    avant = list(supabase.NON_JUGE)
+    assert any("REFUSÉE" in n for n in supabase.analyser(avec).non_juge)
+    assert not any("REFUSÉE" in n for n in supabase.analyser(sans).non_juge)
+    assert avant == supabase.NON_JUGE
+
+
+def test_vert_declaration_avec_preuve_lisible_et_sa_reparation(tmp_path: Path) -> None:
+    """Remède proposé par le message (`table=chemin/du/test`) : il doit PASSER."""
+    racine = _projet(
+        tmp_path,
+        {
+            _M1: _MIGRATION,
+            _M2: _MIGRATION_JOURNAL_RLS,
+            "tests/banc.spec.ts": "// preuve\n",
+            _ENV_PROJET: f"{_DECLARATION}=todos, journal=tests/banc.spec.ts\n",
+        },
+    )
+    assert supabase.exerces(racine) == {"supabase:table:public.journal"}
+    (racine / _ENV_PROJET).write_text(
+        f"{_DECLARATION}=todos=tests/banc.spec.ts, journal=tests/banc.spec.ts\n", encoding="utf-8"
+    )
+    sortie = supabase.analyser(racine)
+    assert sortie.verdict == "PASS"
+    assert not any("REFUSÉE" in n for n in sortie.non_juge)
