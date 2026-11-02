@@ -20,6 +20,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 RACINE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RACINE))
 
@@ -165,3 +167,129 @@ def test_sans_migration_supabase_le_pan_est_sans_objet(tmp_path: Path) -> None:
     sortie = supabase.analyser(racine)
     assert sortie.verdict == "NA"
     assert any("aucune migration Supabase" in n for n in sortie.non_juge)
+
+
+# --- TF-2046 : une table appelée par l API depuis un fichier de `tests/` est exercée -----------
+# Mesuré sur un banc RLS par l API (33 cas par rôle via `/rest/v1`) : 4 tables déclarées
+# « inventoriée, jamais exercée », couverture 0 %, parce que seul un fichier pgTAP comptait.
+
+_DECLARATION = "FORGE_TESTS_SUPABASE_TABLES_EXERCEES"
+_ENV_PROJET = ".env.forge-tests"
+
+_BANC_PY = '''"""Banc RLS par l API : chaque rôle appelle les tables par /rest/v1."""
+import requests
+
+BASE = "http://127.0.0.1:54321"
+
+
+def test_todos_visibles_par_leur_proprietaire(jeton):
+    r = requests.get(f"{BASE}/rest/v1/todos?select=*", headers={"Authorization": jeton})
+    assert r.status_code == 200
+
+
+def test_journal_via_le_client(client):
+    assert client.from_("journal").select("*").execute().data == []
+'''
+
+_COMMENTAIRES_PY = '''"""Notes : voir /rest/v1/todos et client.from_("journal") plus bas."""
+# GET /rest/v1/todos  -- a écrire
+# client.from_("journal").select("*")
+
+
+def test_rien_n_appelle_les_tables(client):
+    assert client is not None
+'''
+
+_BANC_TS = '''// Banc e2e : https://exemple.test/rest/v1/journal n est qu un commentaire
+/* const vieux = `${url}/rest/v1/todos`; */
+const url = "http://127.0.0.1:54321";
+test("todos", async () => {
+  const r = await fetch(`${url}/rest/v1/todos?select=*`);
+  expect(r.status).toBe(200);
+});
+'''
+
+
+@pytest.fixture(autouse=True)
+def _env_sans_declaration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Le champ du produit ne vient jamais de l environnement du poste qui joue la suite."""
+    monkeypatch.delenv(_DECLARATION, raising=False)
+
+
+def test_vert_table_appelee_par_l_api_depuis_tests(tmp_path: Path) -> None:
+    """Les deux formes de la demande : `/rest/v1/<table>` et `from_("<table>")`."""
+    racine = _projet(
+        tmp_path,
+        {_M1: _MIGRATION, _M2: _MIGRATION_JOURNAL_RLS, "tests/rls/test_banc.py": _BANC_PY},
+    )
+    assert supabase.exerces(racine) == {
+        "supabase:table:public.journal",
+        "supabase:table:public.todos",
+    }
+    sortie = supabase.analyser(racine)
+    assert sortie.verdict == "PASS", [f.message for f in sortie.findings]
+
+
+def test_rouge_table_seulement_citee_en_commentaire_n_est_pas_exercee(tmp_path: Path) -> None:
+    """Commentaire `#`, docstring, appel en toutes lettres dans un commentaire : rien ne compte."""
+    racine = _projet(
+        tmp_path,
+        {_M1: _MIGRATION, _M2: _MIGRATION_JOURNAL_RLS, "tests/test_notes.py": _COMMENTAIRES_PY},
+    )
+    assert supabase.exerces(racine) == set()
+    sortie = supabase.analyser(racine)
+    assert sortie.verdict == "FAIL"
+    assert sortie.surface is not None
+    assert sortie.surface["elements_non_exerces"] == [
+        "supabase:table:public.journal",
+        "supabase:table:public.todos",
+    ]
+    # Remède : remplacer les commentaires par de vrais appels fait passer les deux tables.
+    (racine / "tests" / "test_notes.py").write_text(_BANC_PY, encoding="utf-8")
+    assert supabase.analyser(racine).verdict == "PASS"
+
+
+def test_rouge_commentaires_typescript_et_url_dans_une_chaine(tmp_path: Path) -> None:
+    """`//` et `/* */` ne comptent pas ; le `//` d une URL dans une chaîne n ouvre rien."""
+    racine = _projet(
+        tmp_path,
+        {_M1: _MIGRATION, _M2: _MIGRATION_JOURNAL_RLS, "tests/e2e/rls.spec.ts": _BANC_TS},
+    )
+    assert supabase.exerces(racine) == {"supabase:table:public.todos"}
+
+
+def test_rouge_appel_hors_de_tests_ne_compte_pas(tmp_path: Path) -> None:
+    """Le code du produit qui appelle sa propre table n est pas un test."""
+    racine = _projet(
+        tmp_path, {_M1: _MIGRATION, _M2: _MIGRATION_JOURNAL_RLS, "src/client.py": _BANC_PY}
+    )
+    assert supabase.exerces(racine) == set()
+
+
+def test_vert_table_declaree_par_le_produit(tmp_path: Path) -> None:
+    """Le champ du produit désigne la table, nue (schéma `public`) ou qualifiée ; il le DIT."""
+    racine = _projet(
+        tmp_path,
+        {
+            _M1: _MIGRATION,
+            _M2: _MIGRATION_JOURNAL_RLS,
+            _ENV_PROJET: f"{_DECLARATION}=todos, public.journal, prive.fantome\n",
+        },
+    )
+    assert supabase.exerces(racine) == {
+        "supabase:table:public.journal",
+        "supabase:table:public.todos",
+    }
+    sortie = supabase.analyser(racine)
+    assert sortie.verdict == "PASS"
+    assert any("sur déclaration du produit" in n and "public.todos" in n for n in sortie.non_juge)
+
+
+def test_rouge_declaration_sans_effet_sur_une_table_inconnue(tmp_path: Path) -> None:
+    """Déclarer une table inexistante n en crée pas une : l inventaire vient des migrations."""
+    racine = _projet(
+        tmp_path,
+        {_M1: _MIGRATION, _M2: _MIGRATION_JOURNAL_RLS, _ENV_PROJET: f"{_DECLARATION}=autre\n"},
+    )
+    assert supabase.exerces(racine) == set()
+    assert supabase.analyser(racine).verdict == "FAIL"

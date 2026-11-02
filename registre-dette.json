@@ -1066,6 +1066,12 @@
       "statut": "retiree"
     },
     {
+      "id": "supabase-pgtap-001",
+      "domaine": "supabase-pgtap",
+      "enonce": "supabase : statique — une table est tenue pour exercée quand un fichier pgTAP de `supabase/tests/` la cite après avoir adopté un rôle de l API ; le test n est ni exécuté ni prouvé vert par ce pan (`supabase test db` le juge)",
+      "statut": "retiree"
+    },
+    {
       "id": "accessibilite-a11y-006",
       "domaine": "accessibilite-a11y",
       "enonce": "accessibilite : perimetre du seul oracle structurel. Le CONTRASTE est mesure par le pan `contraste` (render_page.py V2, luminance WCAG sur styles rendus) et la NAVIGATION CLAVIER par le pan `clavier` (focus visible, pieges de focus, lien d evitement). Restent DECOUVERTS : l ARIA avance (roles, ordre de focus coherent avec l ordre de lecture) et les etats atteints apres interaction — pour un site public francais, RGAA 4.1 est une obligation legale et ces ecarts se declarent au dossier MEP, ils ne se taisent pas. Et l audit RGAA complet reste un livrable HUMAIN : un tiers des criteres n est pas mecanisable, la machine prepare l audit, elle ne rend pas la declaration",
@@ -1661,12 +1667,6 @@
       "statut": "todo"
     },
     {
-      "id": "supabase-pgtap-001",
-      "domaine": "supabase-pgtap",
-      "enonce": "supabase : statique — une table est tenue pour exercée quand un fichier pgTAP de `supabase/tests/` la cite après avoir adopté un rôle de l API ; le test n est ni exécuté ni prouvé vert par ce pan (`supabase test db` le juge)",
-      "statut": "todo"
-    },
-    {
       "id": "supabase-pgtap-002",
       "domaine": "supabase-pgtap",
       "enonce": "supabase : les migrations se lisent par motif ; une table créée par du SQL dynamique, par `create table … as`, renommée par `alter table … rename`, ou décrite dans un schéma déclaratif `supabase/schemas/` n est pas inventoriée",
@@ -1682,6 +1682,18 @@
       "id": "supabase-pgtap-004",
       "domaine": "supabase-pgtap",
       "enonce": "supabase : la RLS active ne dit rien de la JUSTESSE des politiques ; seul un test sous rôle en juge, et ce pan ne fait que constater qu il existe",
+      "statut": "todo"
+    },
+    {
+      "id": "supabase-pgtap-005",
+      "domaine": "supabase-pgtap",
+      "enonce": "supabase : statique — une table est tenue pour exercée quand un fichier pgTAP de `supabase/tests/` la cite après avoir adopté un rôle de l API, quand un fichier sous un dossier `tests/` l appelle par l API (`/rest/v1/<table>` ou `from_(\"<table>\")`) ou quand le produit la déclare (`FORGE_TESTS_SUPABASE_TABLES_EXERCEES`) ; le test n est ni exécuté ni prouvé vert par ce pan (`supabase test db` le juge), et une table déclarée n est pas vérifiée",
+      "statut": "todo"
+    },
+    {
+      "id": "supabase-pgtap-006",
+      "domaine": "supabase-pgtap",
+      "enonce": "supabase : l appel par l API se lit par motif ; un nom de table construit (concaténation, variable), un autre client que `from_` ou `/rest/v1/`, et deux tables de même nom dans deux schémas exposés (le chemin `/rest/v1/<table>` ne porte pas le schéma) ne sont pas distingués",
       "statut": "todo"
     },
     {
