@@ -1058,6 +1058,27 @@ def _version_ruff(commande: list[str]) -> str | None:
     return trouve.group(1) if trouve else None
 
 
+#: La commande qui joue la recette sous le ruff ÉPINGLÉ : `uv` lit `uv.lock` et installe la version.
+COMMANDE_RECETTE_UV = "uv run python recette/verifier_corpus.py"
+
+
+def ecart_version_ruff(jouee: str, epinglee: str, origine: str) -> list[str]:
+    """Lignes du verdict quand le ruff joué n est pas celui que le dépôt épingle — TF-2060.
+
+    Le refus reste entier (S-01 n est pas assoupli) : un autre ruff est un autre outil. Mais la
+    cause se lit : la version vient du LANCEUR de la recette (l interpréteur ou le PATH du poste),
+    jamais du dépôt, et la commande qui la corrige est donnée. Mesuré le 02/11/2026 : ruff 0.15.21
+    sur le poste pour 0.16.1 épinglé, recette lancée hors `uv`.
+    """
+    return [
+        f"  [ECHEC  ] ruff joue {jouee} alors que le depot epingle {epinglee} : le verdict",
+        "             porterait sur un outil qui n est pas celui du depot.",
+        f"             Cette version vient du LANCEUR de la recette ({origine}), pas du depot.",
+        f"             Commande a jouer : `{COMMANDE_RECETTE_UV}` — uv installe ruff=={epinglee}",
+        "             d apres uv.lock, quelle que soit la version du poste (a defaut : `uv sync`).",
+    ]
+
+
 def verifier_lint() -> int:
     """Le linter du dépôt, joué PAR la recette — TF-0226.
 
@@ -1115,8 +1136,8 @@ def verifier_lint() -> int:
         print("             Epingler `ruff==<version>` dans pyproject.toml, puis `uv lock`.")
     elif jouee and jouee != epinglee:
         echecs_epinglage += 1
-        print(f"  [ECHEC  ] ruff joue {jouee} alors que le depot epingle {epinglee} : le verdict")
-        print("             porterait sur un outil qui n est pas celui du depot. `uv sync`.")
+        for ligne in ecart_version_ruff(jouee, epinglee, origine):
+            print(ligne)
     try:
         resultat = subprocess.run(
             [*commande, "check", "forge_tests", "tests", "recette",

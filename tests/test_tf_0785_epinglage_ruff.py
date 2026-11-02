@@ -72,3 +72,36 @@ def test_CE_depot_epingle_effectivement_son_linter() -> None:
 
     assert epinglee, f"le linter du dépôt n'est plus épinglé : {declaration}"
     assert re.fullmatch(r"\d+\.\d+\.\d+", epinglee), declaration
+
+
+# --- TF-2060 : un ruff d'une autre version dit d'où il vient et quelle commande jouer ----------
+def test_un_ruff_de_poste_reste_refuse_et_le_dit_avec_sa_commande(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CAS ROUGE — ruff 0.15.21 du poste pour 0.16.1 épinglé : le refus reste ENTIER (S-01 n'est
+    pas assoupli), mais le message nomme le lanceur et donne la commande qui corrige."""
+    monkeypatch.setattr(vc, "_version_ruff", lambda commande: "0.15.21")
+    epinglee, _ = vc.epinglage_ruff((vc.RACINE / "pyproject.toml").read_text(encoding="utf-8"))
+
+    echecs = vc.verifier_lint()
+    sortie = capsys.readouterr().out
+
+    assert echecs >= 1, "un autre ruff que l'épinglé est un ÉCHEC, jamais un avertissement"
+    assert f"ruff joue 0.15.21 alors que le depot epingle {epinglee}" in sortie
+    assert "vient du LANCEUR" in sortie
+    assert "`uv run python recette/verifier_corpus.py`" in sortie
+    assert f"ruff=={epinglee}" in sortie
+
+
+def test_le_ruff_epingle_ne_declenche_pas_le_message_du_lanceur(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CAS VERT — la version jouée est l'épinglée : aucun écart, aucun message de lanceur."""
+    epinglee, _ = vc.epinglage_ruff((vc.RACINE / "pyproject.toml").read_text(encoding="utf-8"))
+    monkeypatch.setattr(vc, "_version_ruff", lambda commande: epinglee)
+
+    vc.verifier_lint()
+    sortie = capsys.readouterr().out
+
+    assert "LANCEUR" not in sortie
+    assert "alors que le depot epingle" not in sortie
