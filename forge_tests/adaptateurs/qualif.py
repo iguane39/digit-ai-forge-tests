@@ -374,6 +374,23 @@ def _provenances(config: dict, sessions: list[dict]) -> list[str]:
     return lignes
 
 
+# TF-2098 — joindre une preproduction LOCALE a certificat TLS auto-signe. Opt-in par variable
+# DECLAREE, et BORNEE a la boucle locale : lever la verification TLS contre un hote DISTANT ferait
+# de l auditeur le complice d un homme-du-milieu. Les deux conditions sont CUMULEES.
+VARIABLE_QUALIF_TLS = "FORGE_TESTS_QUALIF_TLS_NON_VERIFIE"
+
+
+def _tls_non_verifie(config: dict) -> bool:
+    """Le certificat auto-signe d une preprod LOCALE est-il autorise pour cette base ? (TF-2098)
+
+    Deux conditions CUMULEES : la variable posee a 1 par l operateur, ET une base sur un hote de
+    boucle locale (`environnement_local`). Sans l une ou l autre, la verification TLS reste pleine.
+    """
+    if (os.environ.get(VARIABLE_QUALIF_TLS) or "").strip() != "1":
+        return False
+    return environnement_local(str(config.get("base") or ""))
+
+
 def _options_contexte(config: dict) -> tuple[dict, list[str]]:
     """Options du contexte Playwright AUTHENTIFIÉ, et ce qu il a fallu écarter en le disant.
 
@@ -403,6 +420,14 @@ def _options_contexte(config: dict) -> tuple[dict, list[str]]:
                 f"qualif : FORGE_TESTS_QUALIF_STORAGE_STATE ecarte — « {fichier.name} » {motif} ; "
                 "le parcours se poursuit SANS cette session, et la provenance publiee le dit"
             )
+    # TF-2098 : certificat auto-signe d une preprod LOCALE, sous variable bornee a la boucle locale.
+    if _tls_non_verifie(config):
+        options["ignore_https_errors"] = True
+        alertes.append(
+            f"qualif : TLS NON VERIFIE sur cette session — {VARIABLE_QUALIF_TLS}=1 et base sur un "
+            "hote de boucle locale : le certificat auto-signe d une preprod locale est accepte, et "
+            "l ecart est dit. Jamais sur un hote distant (borne de securite, TF-2098)"
+        )
     return options, alertes
 
 
@@ -1002,7 +1027,11 @@ def _relever_entree(navigateur, config: dict) -> dict:  # noqa: ANN001
     d implémentation. Rejouer cette navigation dans le contexte authentifié mesurerait ce que
     voit quelqu un qui est déjà entré — précisément la mesure qui n a rien vu.
     """
-    contexte = navigateur.new_context()
+    # TF-2098 : meme tolerance TLS que le contexte authentifie, bornee a la boucle locale — sans
+    # elle une preprod locale a certificat auto-signe est injoignable et le parcours reste anonyme.
+    contexte = navigateur.new_context(
+        **({"ignore_https_errors": True} if _tls_non_verifie(config) else {})
+    )
     vide = {"chaine": [], "corps": "", "titre": "", "erreur": None}
     try:
         page = contexte.new_page()
