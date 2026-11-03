@@ -1553,6 +1553,12 @@
       "statut": "todo"
     },
     {
+      "id": "prompts-statique-008",
+      "domaine": "prompts-statique",
+      "enonce": "prompts : l appel de fournisseur dans un test (TF-2110) est juge sur la PRESENCE d un double dans le fichier ou dans une configuration voisine (`conftest.py` du dossier ou d un parent, `vitest.setup.*`, `jest.setup.*`, `setupTests.*`), jamais sur son EFFICACITE : un double pose mais qui ne couvre pas l appel, ou un fichier d aide non nomme comme un test (`tests/helpers.py`), n est pas vu. Seuls OpenAI, Azure OpenAI et Gemini sont reconnus ; une adresse citee en assertion sans double reste un constat",
+      "statut": "todo"
+    },
+    {
       "id": "qualif-navigateur-002",
       "domaine": "qualif-navigateur",
       "enonce": "qualif : les routes sont decouvertes par exploration des liens depuis la racine ; une route atteignable seulement apres une action (formulaire poste, menu ouvert au clic) n est pas visitee — la declarer en amorce avec FORGE_TESTS_QUALIF_ROUTES",

@@ -195,6 +195,15 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "un alias change le système sous test sans qu'aucun commit ne bouge, et la régression "
         "arrive un matin sans auteur ({message})",
     ),
+    # TF-2110 — un test qui appelle le fournisseur LLM reel. Le remede est ecrit dans le code du
+    # produit (un double HTTP qui verifie l adresse appelee) : ni derivable, ni arbitrage humain.
+    "appel-fournisseur-llm-reel-dans-un-test": (
+        "manuelle_dev",
+        "development",
+        "poser un double (`monkeypatch`, `respx`, `nock`, `msw`, `vi.mock`…) sous l'appel du "
+        "fournisseur dans « {id} » : une suite qui appelle le fournisseur réel dépense des "
+        "jetons à chaque exécution et dépend du réseau et d'une clé ({message})",
+    ),
     # TF-0708 — la FORME de l ecran de creation. Ce n est pas une affordance inerte : tout est
     # cable, c est le motif qui manque. Et c est un arbitrage de conception, pas une correction
     # derivable : seul un humain sait si le formulaire porte des branches exclusives — donc

@@ -18,6 +18,10 @@ Trois objets, tous dérivés SANS EXÉCUTION et sans la moindre dépense :
     EXERCÉ. Un prompt qu'aucun cas ne cite est `non_exerce` ; un corpus DÉCLARÉ mais
     introuvable rend son prompt `non_testable`, avec ses `champs_requis`.
 
+Un quatrième constat regarde la SUITE DE TESTS du produit (TF-2110) : un fichier de test qui
+appelle le fournisseur LLM réel (OpenAI, Azure OpenAI, Gemini) sans aucun double dépense à chaque
+exécution — classe `appel-fournisseur-llm-reel-dans-un-test`, fichier et ligne.
+
 Le volet EXÉCUTÉ (rejeu N fois pour mesurer la stabilité, jugement sémantique) est **hors v0** :
 il dépense des jetons, donc il relève d'un mandat humain (règle 29 — « dépenses et gates restent
 humains »). `mesure_d_instabilite` ci-dessous en prépare la mesure et la teste sur données
@@ -91,6 +95,12 @@ NON_JUGE = [
     "prompts : le corpus est LU, jamais joue — qu un cas soit pertinent, que sa reponse "
     "attendue soit juste, et que le jeu couvre les cas limites, restent des jugements humains "
     "(l execution du corpus est deleguee a `oracle-agent-evals`, cat-agt-05)",
+    "prompts : l appel de fournisseur dans un test (TF-2110) est juge sur la PRESENCE d un double "
+    "dans le fichier ou dans une configuration voisine (`conftest.py` du dossier ou d un parent, "
+    "`vitest.setup.*`, `jest.setup.*`, `setupTests.*`), jamais sur son EFFICACITE : un double "
+    "pose mais qui ne couvre pas l appel, ou un fichier d aide non nomme comme un test "
+    "(`tests/helpers.py`), n est pas vu. Seuls OpenAI, Azure OpenAI et Gemini sont reconnus ; "
+    "une adresse citee en assertion sans double reste un constat",
 ]
 
 # Dossiers hors périmètre : dépendances et artefacts (mêmes exclusions que les pans `interface`
@@ -544,6 +554,129 @@ def _findings_modeles(cible: Path) -> list[Finding]:
     return findings
 
 
+# --- TF-2110 — un test qui appelle le fournisseur LLM RÉEL -------------------------------------
+# Un test de produit OpenAI ou Gemini qui appelle le fournisseur dépense à chaque exécution de
+# recette, sans qu aucun commit ne le dise. Produit-12 porte le bon modèle : un double HTTP par
+# `monkeypatch` qui vérifie l ADRESSE appelée sans rien dépenser. Le constat se juge par
+# fichier : un appel, aucun double dans le fichier ni dans une configuration de test voisine.
+# Formes reconnues, déclarées donc contestables : un fournisseur absent d ici n est pas vu.
+_APPEL_FOURNISSEUR = re.compile(
+    r"api\.openai\.com|\.openai\.azure\.com|generativelanguage\.googleapis\.com"
+    r"|(?<![A-Za-z0-9_])(?:Async)?(?:Azure)?OpenAI\s*\("
+    r"|(?<![A-Za-z0-9_])GoogleGenAI\s*\("
+    r"|(?<![A-Za-z0-9_])genai\.Client\s*\("
+)
+# `responses` est un mot ordinaire (`responses = []`) : seul le PAQUET compte comme double.
+_DOUBLE_DE_FOURNISSEUR = re.compile(
+    r"monkeypatch|unittest\.mock|unittest\s+import\s[^\n]*\bmock\b|\bpatch\s*\(|\bpatch\.(?:object|dict)\s*\(|\brespx\b"
+    r"|MockTransport|(?:^|\s)(?:import|from)\s+responses\b"
+    r"|\bresponses\.(?:activate|add|add_callback|start|RequestsMock)\b"
+    r"|\bvcr\b|vcrpy|pytest_recording|[Cc]assette|\bnock\b|\bmsw\b"
+    r"|\b(?:vi|jest)\.(?:do)?[Mm]ock\s*\(",
+    re.MULTILINE,
+)
+_TEST_JAVASCRIPT = re.compile(r"(?:\.test|\.spec)\.[cm]?[jt]sx?$")
+_EXTENSIONS_JAVASCRIPT = (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx")
+# Configuration de test qui s applique à tout un dossier : pytest (`conftest.py`) et les
+# amorces de jest / vitest.
+_CONFIG_DE_TEST = re.compile(
+    r"^(?:conftest\.py|(?:jest|vitest)\.(?:config|setup)\.[cm]?[jt]s|setup-?tests?\.[cm]?[jt]sx?"
+    r"|test-?setup\.[cm]?[jt]sx?|setup\.[cm]?[jt]sx?)$",
+    re.IGNORECASE,
+)
+_DEBUT_DE_COMMENTAIRE = ("#", "//", "*", "/*")
+
+
+def est_un_fichier_de_test(chemin: Path) -> bool:
+    """Nommage d un fichier de TEST : `test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`.
+
+    Un fichier sous `__tests__/` compte pour JavaScript et TypeScript. Un fichier d aide qui ne
+    porte pas ces noms (`tests/helpers.py`) n est pas un test : il est déclaré non jugé.
+    """
+    nom, extension = chemin.name, chemin.suffix.lower()
+    if extension == ".py":
+        return nom.startswith("test_") or chemin.stem.endswith("_test")
+    if extension in _EXTENSIONS_JAVASCRIPT:
+        return bool(_TEST_JAVASCRIPT.search(nom)) or "__tests__" in chemin.parts
+    return False
+
+
+def _double_dans_la_configuration(dossier: Path, memo: dict[Path, bool]) -> bool:
+    """Un fichier de configuration de test de CE dossier pose-t-il un double ?"""
+    if dossier not in memo:
+        trouve = False
+        try:
+            voisins = sorted(f for f in dossier.iterdir() if f.is_file())
+        except OSError:
+            voisins = []
+        for voisin in voisins:
+            if _CONFIG_DE_TEST.match(voisin.name) and _DOUBLE_DE_FOURNISSEUR.search(_texte(voisin)):
+                trouve = True
+                break
+        memo[dossier] = trouve
+    return memo[dossier]
+
+
+def _double_voisin(chemin: Path, cible: Path, memo: dict[Path, bool]) -> bool:
+    """Configuration de test voisine : celle du dossier du fichier ou d un dossier parent.
+
+    On ne remonte pas au-delà de la racine auditée, et on ne descend jamais dans un dossier
+    frère : le double d un autre sous-projet ne bouche pas celui-ci.
+    """
+    dossier = chemin.parent
+    while True:
+        if _double_dans_la_configuration(dossier, memo):
+            return True
+        if dossier == cible or dossier.parent == dossier:
+            return False
+        dossier = dossier.parent
+
+
+def _findings_appels_reels(cible: Path) -> list[Finding]:
+    """Fichiers de test qui appellent le fournisseur LLM réel sans aucun double (TF-2110)."""
+    findings: list[Finding] = []
+    memo: dict[Path, bool] = {}
+    for chemin in _fichiers(cible):
+        if not est_un_fichier_de_test(chemin):
+            continue
+        texte = _texte(chemin)
+        if not texte or est_un_artefact_d_auditeur(texte):
+            continue
+        appels: list[tuple[int, str]] = []
+        for numero, ligne in enumerate(texte.splitlines(), start=1):
+            if ligne.lstrip().startswith(_DEBUT_DE_COMMENTAIRE):
+                continue
+            trouve = _APPEL_FOURNISSEUR.search(ligne)
+            if trouve:
+                appels.append((numero, trouve.group(0).strip()))
+        if not appels or _DOUBLE_DE_FOURNISSEUR.search(texte):
+            continue
+        if _double_voisin(chemin, cible, memo):
+            continue
+        relatif = _relatif(chemin, cible)
+        identifiant = f"appel-fournisseur:{relatif}"
+        lignes = ", ".join(str(numero) for numero, _ in appels)
+        findings.append(
+            Finding(
+                id=identifiant,
+                classe=classes.APPEL_FOURNISSEUR_REEL_DANS_UN_TEST,
+                localisation=f"{relatif}:{appels[0][0]}",
+                message=(
+                    f"appel de fournisseur LLM RÉEL dans un test (« {appels[0][1]} », "
+                    f"ligne(s) {lignes}) : ni ce fichier ni une configuration de test voisine "
+                    "ne pose de double (`monkeypatch`, `unittest.mock`, `respx`, "
+                    "`httpx.MockTransport`, `responses`, `vcr`, `nock`, `msw`, `vi.mock`, "
+                    "`jest.mock`). Chaque exécution de la suite DÉPENSE des jetons chez le "
+                    "fournisseur sans qu'aucun commit ne le dise, et la recette dépend du "
+                    "réseau et d'une clé : poser un double HTTP qui vérifie l'adresse appelée, "
+                    "comme le fait Produit-12"
+                ),
+                risque=coter(PAN, identifiant, str(chemin)),
+            )
+        )
+    return findings
+
+
 def _non_testables(cible: Path) -> list[NonTestable]:
     """Prompts dont le corpus DÉCLARÉ est introuvable — un manque de configuration, pas un trou."""
     return [
@@ -616,8 +749,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
     non_testables = _non_testables(cible)
     elements = inventaire(cible)
     findings_modeles = _findings_modeles(cible)
+    findings_appels = _findings_appels_reels(cible)
     if not elements:
-        motif_sans_objet = sans_objet(cible)
+        # Un test qui appelle le fournisseur prouve le CONTRAIRE d « aucun modèle appelé » : un
+        # appel HTTP direct n a besoin d aucun client déclaré au manifeste (TF-2110).
+        motif_sans_objet = None if findings_appels else sans_objet(cible)
         if motif_sans_objet:
             sortie = evaluer_surface(
                 NOM, PAN, str(cible), [], set(), SEUIL, NON_JUGE, sans_objet=motif_sans_objet
@@ -625,13 +761,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
             sortie.non_testables.extend(non_testables)
             return sortie
         # Un modèle nommé EST un élément : un inventaire vide implique qu aucun modèle n a été
-        # trouvé, donc aucun constat d épinglage à porter. Écrire ici une branche « FAIL si
-        # findings » serait du code mort qui rassure.
+        # trouvé, donc aucun constat d épinglage à porter : seul le constat d appel réel dans un
+        # test (TF-2110), indépendant de l inventaire, peut faire FAIL ici.
         return SortieAdaptateur(
             NOM,
             PAN,
             str(cible),
-            "SKIP",
+            "FAIL" if findings_appels else "SKIP",
+            findings=findings_appels,
             non_juge=[
                 *NON_JUGE,
                 "prompts : aucun prompt adressable ni modèle nommé trouvé — surface non "
@@ -641,8 +778,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
         )
     sortie = evaluer_surface(NOM, PAN, str(cible), elements, exerces(cible), SEUIL, NON_JUGE)
     sortie.non_testables.extend(non_testables)
-    if findings_modeles:
-        sortie.findings = [*findings_modeles, *sortie.findings]
+    if findings_modeles or findings_appels:
+        sortie.findings = [*findings_modeles, *findings_appels, *sortie.findings]
         sortie.verdict = "FAIL"
     return sortie
 

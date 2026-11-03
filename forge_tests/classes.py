@@ -60,6 +60,9 @@ SECURITE = "securite"
 ACCESSIBILITE = "accessibilite"
 REGRESSION_VISUELLE = "regression-visuelle"
 MODELE_NON_EPINGLE = "modele-non-epingle"
+# TF-2110 : un fichier de test qui appelle le fournisseur LLM réel (adresse ou client OpenAI /
+# Gemini) sans aucun double — la suite dépense à chaque exécution.
+APPEL_FOURNISSEUR_REEL_DANS_UN_TEST = "appel-fournisseur-llm-reel-dans-un-test"
 I18N = "i18n"
 # TF-1229 (volet a de TF-0964) : un fournisseur de jetons construit SANS l identifiant assigné,
 # alors que l'environnement lu pose une identité assignée (`AZURE_CLIENT_ID`) — vu seulement en
