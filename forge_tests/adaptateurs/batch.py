@@ -153,17 +153,24 @@ def exerces(cible: Path) -> set[str] | None:
             continue
         if ligne in lignes:
             couvert.add(element.id)
-    # Un code de rejet est exercé si la ligne qui le produit a été exécutée.
+    # Un code de rejet est exercé si la ligne qui le produit a été exécutée. Le scan n a de
+    # sens que si le module classique EXISTE : sur un projet sans `batch.py` (lot absent, ou
+    # lot porté par `worker\`), lire _src() levait FileNotFoundError et faisait sortir TOUT le
+    # rapport en ERREUR — là où l absence de lot est un NA que `sans_objet()` sait déjà prouver
+    # (TF-2090). Garde présente, exerces() rend alors un ensemble VIDE, pas None : `analyser`
+    # croise cet inventaire vide avec `sans_objet` dans `evaluer_surface` et sort NA, quand un
+    # None aurait forcé un SKIP (« non mesurable ») qui n est pas le bon verdict ici.
     src = _src(cible)
-    arbre = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))
-    for noeud in ast.walk(arbre):
-        if (
-            isinstance(noeud, ast.Constant)
-            and isinstance(noeud.value, str)
-            and _CODE_REJET.match(noeud.value)
-            and noeud.lineno in lignes
-        ):
-            couvert.add(f"rejet:{noeud.value}")
+    if src.exists():
+        arbre = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))
+        for noeud in ast.walk(arbre):
+            if (
+                isinstance(noeud, ast.Constant)
+                and isinstance(noeud.value, str)
+                and _CODE_REJET.match(noeud.value)
+                and noeud.lineno in lignes
+            ):
+                couvert.add(f"rejet:{noeud.value}")
     return couvert
 
 
