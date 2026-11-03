@@ -11,6 +11,7 @@ pas devient de la dette déclarée du framework, pas une limite invisible hérit
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -366,6 +367,51 @@ def _findings_identite_assignee(application: Path) -> list[Finding]:
     return findings
 
 
+# --- TF-2096 : les regles semgrep `python.django.*` hors d un projet Django ------------------
+# `django-no-csrf-token` (et ses soeurs) se declenchent sur TOUT gabarit a champ cache, meme
+# sans Django : sur un backend FastAPI + Jinja2, chaque formulaire porte deja son jeton CSRF
+# verifie cote serveur, et la regle le prend pour une absence — un bloquant FAUX. On ne peut pas
+# filtrer par le namespace `python.django.*` : `oracle-sast` ne publie que le DERNIER segment du
+# check_id (`msg = "semgrep " + check_id.split('.').pop()`), le namespace est perdu en amont. On
+# reconnait donc la famille Django a ce segment, et on n ecarte ces constats QUE si le projet ne
+# DECLARE aucune dependance Django. Sur un vrai projet Django, ils restent signales.
+_MANIFESTES_DEPENDANCES = (
+    "pyproject.toml", "requirements.txt", "Pipfile", "setup.cfg", "setup.py",
+)
+# `django`, `Django`, `django-rest-framework`, `django>=4`… la famille au sens large. Non
+# precede d un mot (ecarte `mydjango`) ni d un point (ecarte un sous-module `paquet.django`).
+_DEPENDANCE_DJANGO = re.compile(r"(?<![\w.])django", re.IGNORECASE)
+# La famille Django d une regle semgrep, reconnue a son dernier segment (le seul publie).
+_REGLE_DJANGO = re.compile(r"\bdjango\b", re.IGNORECASE)
+
+
+def _depend_de_django(application: Path, cible: Path) -> bool:
+    """Le projet DECLARE-t-il une dependance Django ? Lu dans ses manifestes aux deux racines.
+
+    Meme idiome que le pan `prompts` (lecture du texte, pas d analyse fine du graphe de
+    dependances) et CONSERVATEUR par choix : au moindre `django` cite dans un manifeste, on
+    considere la dependance presente et on ne filtre RIEN — masquer un vrai defaut Django
+    couterait plus qu un faux positif laisse visible.
+    """
+    racines = [application] if cible == application else [application, cible]
+    vus: set[Path] = set()
+    for racine in racines:
+        candidats = [racine / nom for nom in _MANIFESTES_DEPENDANCES]
+        with contextlib.suppress(OSError):
+            candidats.extend(sorted(racine.glob("requirements*.txt")))
+        for fichier in candidats:
+            if fichier in vus or not fichier.is_file():
+                continue
+            vus.add(fichier)
+            try:
+                texte = fichier.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if _DEPENDANCE_DJANGO.search(texte):
+                return True
+    return False
+
+
 def analyser(cible: Path) -> SortieAdaptateur:
     racine = _racine_oracles()
     # Perimetre elargi : le code applicatif ET tout ce qui l entoure — configuration, tests,
@@ -404,6 +450,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # SKIP que les trois oracles externes auraient motive pour une autre raison (registre
     # absent, aucun script trouve) — meme principe que la garde de precondition du pan `qualif`,
     # qui ne se deduit jamais d une ignorance.
+    # TF-2096 : lu une fois, le projet declare-t-il Django ? Sinon, les regles `python.django.*`
+    # remontees par oracle-sast sont des faux positifs sur ce projet et sont ECARTEES plus bas.
+    django_present = _depend_de_django(application, cible)
+    ecartes_django: list[str] = []
+
     findings_identite = _findings_identite_assignee(application)
     findings: list[Finding] = list(findings_identite)
     # TF-0216 (garde-fou de methode) : le pan DIT sur quelle racine il a lu. Une decouverte qui
@@ -474,6 +525,12 @@ def analyser(cible: Path) -> SortieAdaptateur:
             for brut in rapport.get("findings", []):
                 if brut.get("sev") == "info":
                     continue
+                message = str(brut.get("msg", ""))
+                # TF-2096 : une regle Django sur un projet qui n en declare pas est un faux
+                # positif ECARTE (et declare au non_juge plus bas) ; sur un projet Django, gardee.
+                if nom == "sast" and not django_present and _REGLE_DJANGO.search(message):
+                    ecartes_django.append(message)
+                    continue
                 ou = _relocaliser(str(brut.get("where") or application), scan, application)
                 identifiant = f"securite:{nom}:{ou}"
                 findings.append(
@@ -481,11 +538,20 @@ def analyser(cible: Path) -> SortieAdaptateur:
                         id=identifiant,
                         classe=classes.SECURITE,
                         localisation=ou,
-                        message=f"[{nom}] {brut.get('msg', '')}",
+                        message=f"[{nom}] {message}",
                         severite="bloquant" if brut.get("sev") == "bloquant" else "signale",
                         risque=coter(PAN, identifiant, str(application)),
                     )
                 )
+        if ecartes_django:
+            non_juge.append(
+                f"securite/sast : {len(ecartes_django)} constat(s) de regle Django ECARTE(S) "
+                "— regles `python.django.*` (dont `django-no-csrf-token`) : le projet ne declare "
+                "aucune dependance Django (manifestes lus), et ces regles se declenchent a tort "
+                "sur des gabarits a champ cache hors Django, ou chaque formulaire porte deja son "
+                "jeton CSRF verifie cote serveur (TF-2096). Sur un projet Django, elles restent "
+                "signalees. Ecartes : " + ", ".join(sorted(set(ecartes_django))[:6])
+            )
 
     if not joues:
         return SortieAdaptateur(
