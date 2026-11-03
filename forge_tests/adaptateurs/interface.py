@@ -1100,14 +1100,49 @@ def _libelle_annonce(texte: str) -> bool:
     return bool(_ANNONCE_CREATION.search(" ".join(mots[:_MOTS_DE_TETE])))
 
 
-def porte_une_page_dediee(html: str) -> bool:
-    """La page EST-elle le formulaire de creation ? (TF-0843)
+#: Les liens du gabarit avec leur cible, pour reconnaitre un « Creer » de liste qui mene a une
+#: page dediee (TF-2097). Non-gourmand sur le corps : un appariement par lien.
+_LIENS = re.compile(
+    r"<a\b[^>]*\bhref\s*=\s*[\"']([^\"']*)[\"'][^>]*>(.*?)</a>", re.IGNORECASE | re.DOTALL
+)
 
-    Le critere est mecanique et etroit : l affordance qui ANNONCE la creation doit etre le
-    controle qui SOUMET un formulaire de la page. Sur un ecran de liste, le « Nouveau lot » est
-    HORS du formulaire — il ouvre un panneau, et l ecran doit alors porter (a) ou (b). Sur une
-    page dediee, le « Creer mon compte » est DANS le formulaire — il l envoie, et il n y a ni
-    repli a poser ni adresse a inventer : la page en est une.
+
+def _cible_de_creation(href: str) -> bool:
+    """La cible d un lien NOMME-t-elle une page dediee de creation ? (TF-2097)
+
+    Un SEGMENT DE CHEMIN qui porte le vocabulaire de creation (`/nouvelle`, `/produits/nouveau`,
+    `/create`). Le chemin est ISOLE (avant `?`/`#`) : un `?nouveau=` est le motif (b) panneau
+    adressable, jamais celui-ci. Decoupe en jetons : `/articles` (liste) ne declenche pas,
+    `/article/nouveau` oui. Meme vocabulaire que l annonce — une forme reconnue dans un libelle
+    l est aussi dans une URL.
+    """
+    chemin = re.split(r"[?#]", href, maxsplit=1)[0]
+    return any(_ANNONCE_CREATION.fullmatch(jeton) for jeton in re.split(r"[\W_]+", chemin) if jeton)
+
+
+def porte_un_lien_vers_page_dediee(html: str) -> bool:
+    """Un lien dont le TEXTE annonce une creation ET dont la CIBLE est une page dediee (TF-2097).
+
+    C est la seconde forme de la page dediee (voir `porte_une_page_dediee`) : le « Creer » d un
+    ecran de liste, un `<a href>` HORS formulaire qui MENE a la page ou la creation a lieu.
+    """
+    return any(
+        _libelle_annonce(texte) and _cible_de_creation(href)
+        for href, texte in _LIENS.findall(html)
+    )
+
+
+def porte_une_page_dediee(html: str) -> bool:
+    """La creation vit-elle sur une page DEDIEE — ici, ou au bout d un lien ? (TF-0843, TF-2097)
+
+    Deux formes de la MEME chose, et le meme controle les reconnait :
+      - la page EST le formulaire : l affordance qui ANNONCE la creation SOUMET un formulaire de
+        la page (le « Creer mon compte » DANS le `<form>`) — rien a replier ni a adresser ;
+      - un ecran de LISTE porte un lien « Creer » dont la CIBLE est une page dediee (`/…/nouvelle`),
+        que ce controle reconnait par la premiere forme quand il la visite (TF-2097). Sur une
+        liste, le « Nouveau lot » est HORS formulaire ; s il MENE a la page dediee, la forme de
+        creation est DECLAREE, une page plus loin, et l accuser ici etait une impasse de la meme
+        famille que TF-0843 — un ecart qu aucun geste sur CE gabarit ne peut fermer.
     """
     for corps in _FORMULAIRES.findall(html):
         if any(_libelle_annonce(contenu) for contenu in _BOUTONS.findall(corps)):
@@ -1116,7 +1151,7 @@ def porte_une_page_dediee(html: str) -> bool:
             valeur = _VALEUR_INPUT.search(balise)
             if valeur and _libelle_annonce(valeur.group(1)):
                 return True
-    return False
+    return porte_un_lien_vers_page_dediee(html)
 
 
 def motifs_de_creation(html: str, param: str | None = None) -> set[str]:
@@ -1134,7 +1169,8 @@ def motifs_de_creation(html: str, param: str | None = None) -> set[str]:
     # apres un `?` ou un `&` — un mot isole ne fait pas une adresse.
     if re.search(rf"[?&]{re.escape(param)}=", html, re.IGNORECASE):
         presents.add(MOTIF_PANNEAU_ADRESSABLE)
-    # (c) La page dediee : rien a replier, rien a adresser — l adresse, c est la page (TF-0843).
+    # (c) La page dediee : rien a replier, rien a adresser — l adresse, c est la page (TF-0843),
+    # etendue par TF-2097 au lien d une liste qui MENE a cette page dediee.
     if porte_une_page_dediee(html):
         presents.add(MOTIF_PAGE_DEDIEE)
     return presents
@@ -1198,10 +1234,11 @@ def _findings_ecrans_de_creation(cible: Path) -> tuple[list[Finding], list[str]]
             f"{par_motif[MOTIF_PAGE_DEDIEE]} en page dediee, "
             f"{len(findings)} sans aucun des trois. LES TROIS MOTIFS SONT LEGITIMES : le repli "
             "pour une creation simple, l adresse pour une tache a branches exclusives, la page "
-            "dediee quand le formulaire EST la page — imposer le premier partout a deja fait "
-            "ASSOUPLIR un test pour laisser passer une refonte qui corrigeait une ergonomie "
-            "reelle (TF-0708), et n admettre que les deux premiers a produit une action que le "
-            "projet ne pouvait solder par AUCUNE modification du gabarit (TF-0843)",
+            "dediee quand le formulaire EST la page (ou qu un lien de liste y mene, TF-2097) — "
+            "imposer le premier partout a deja fait ASSOUPLIR un test pour laisser passer une "
+            "refonte qui corrigeait une ergonomie reelle (TF-0708), et n admettre que les deux "
+            "premiers a produit une action que le projet ne pouvait solder par AUCUNE "
+            "modification du gabarit (TF-0843)",
             "interface/creation : le declencheur est le TEXTE des affordances (`<button>`, "
             "`<a>`, `<summary>`), borne aux libelles de "
             f"{_MOTS_MAXIMUM_LIBELLE} mots au plus dont l annonce est dans les "
