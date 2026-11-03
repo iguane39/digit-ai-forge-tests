@@ -1683,8 +1683,11 @@ def finding_etat_perdu(etat: dict | None, config: dict) -> Finding | None:
 # chargement — et chaque candidat dit désormais OÙ il s est arrêté (TF-0315 le republie).
 _SELECTEUR_MOTDEPASSE = "input[type=password]"
 _SELECTEUR_IDENTIFIANT = (
-    "input[type=email], input[name*=mail i], input[name*=login i], "
-    "input[name*=user i], input[type=text]"
+    # TF-2099 : `input[autocomplete=username i]` et `input:not([type])` reconnaissent un champ
+    # identifiant sans attribut `type` ni nom anglais (`<input name=identifiant autocomplete=
+    # username>`), que les selecteurs par nom (mail/login/user) et par `type=text` manquaient.
+    "input[type=email], input[autocomplete=username i], input[name*=mail i], "
+    "input[name*=login i], input[name*=user i], input[type=text], input:not([type])"
 )
 _SELECTEUR_SOUMISSION = "button[type=submit], input[type=submit], button"
 # TF-1768 / TF-1790 (Produit-82 RT-17, Produit-83 RE-2, 15/10/2026) : le sélecteur ci-dessus,
