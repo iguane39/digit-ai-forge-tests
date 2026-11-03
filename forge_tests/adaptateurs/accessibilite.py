@@ -442,6 +442,42 @@ def _nom_fichier(concret: str) -> str:
     return concret.strip("/").replace("/", "_").translate(_INTERDITS) or "racine"
 
 
+# TF-2100 — une capture DOM ecrite sous `<cible>/.visuel/` vit DANS l arbre du projet audite : la
+# mire y porte son jeton CSRF (champ cache) et ses metas a jeton, et le balayage de secrets du
+# PRODUIT accusait alors un fichier que la FORGE a depose. On caviarde A LA SOURCE la valeur des
+# champs caches / a jeton et des metas a jeton avant d ecrire. Un champ cache n a pas de rendu
+# visuel : le diff visuel reste intact, et il se STABILISE meme (un jeton change a chaque rendu).
+# Meme caviardage a la source que l item de forge-websec qui partage cette classe.
+_CAVIARDE = "forge-tests-caviarde"
+_INPUT_BALISE = re.compile(r"<input\b[^>]*>", re.IGNORECASE)
+_CHAMP_SENSIBLE = re.compile(
+    r"type\s*=\s*[\"']?hidden[\"']?"
+    r"|(?:name|id)\s*=\s*[\"'][^\"']*(?:csrf|xsrf|token|authenticity)[^\"']*[\"']",
+    re.IGNORECASE,
+)
+_META_SENSIBLE = re.compile(
+    r"(<meta\b[^>]*(?:csrf|xsrf|token)[^>]*\bcontent\s*=\s*)([\"'])[^\"']*\2",
+    re.IGNORECASE,
+)
+_ATTR_VALUE = re.compile(r"(\bvalue\s*=\s*)([\"'])[^\"']*\2", re.IGNORECASE)
+
+
+def _masquer(m: re.Match[str]) -> str:
+    """Remplace la valeur citee (groupe 2 = le guillemet ouvrant) par le marqueur de caviardage."""
+    guillemet = m.group(2)
+    return f"{m.group(1)}{guillemet}{_CAVIARDE}{guillemet}"
+
+
+def _caviarder(html: str) -> str:
+    """Caviarde la valeur des champs caches / a jeton et des metas a jeton d une capture DOM."""
+
+    def _input(m: re.Match[str]) -> str:
+        balise = m.group(0)
+        return _ATTR_VALUE.sub(_masquer, balise) if _CHAMP_SENSIBLE.search(balise) else balise
+
+    return _META_SENSIBLE.sub(_masquer, _INPUT_BALISE.sub(_input, html))
+
+
 def _capturer_une_route(
     page, base: str, route: str, dossier: Path, timeout: int | None = None
 ) -> tuple[Path | None, str | None]:
@@ -470,7 +506,7 @@ def _capturer_une_route(
         )
     fichier = (dossier / _nom_fichier(concret)).with_suffix(".html")
     try:
-        fichier.write_text(page.content(), encoding="utf-8")
+        fichier.write_text(_caviarder(page.content()), encoding="utf-8")
     except OSError as erreur:
         # Un pan ne fait pas tomber l audit. Avant ce garde-fou, une seule route au nom
         # impossible emportait les onze autres pans avec elle (verdict ERREUR, code 2).
