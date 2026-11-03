@@ -26,6 +26,7 @@ seraient tous en tête de fichier) et le taux retenu est DÉCLARÉ au rapport.
 from __future__ import annotations
 
 import ast
+import contextlib
 import fnmatch
 import json
 import os
@@ -321,6 +322,45 @@ def restaurer(octets: dict[Path, bytes]) -> list[Path]:
         fichier.write_bytes(contenu)
         reecrits.append(fichier)
     return reecrits
+
+
+# --- TF-2091 : verrou de la fenetre de mutation ----------------------------------------------
+# La mutation altere EN PLACE les sources du projet audite (pose d un mutant, rejeu, restauration).
+# Entre la pose et la restauration, une source porte un code FAUX : une ecriture ou un commit
+# concurrent FIGE le mutant dans le depot (G-1 rompu le temps d un mutant — observe en reel :
+# deux recettes concurrentes qui mutent le meme banc laissaient une source alteree). Le verrou DIT
+# la fenetre ouverte, pour qu un hook pre-commit de la factory refuse de commiter tant qu il existe.
+# Cote LECTURE du verrou (le hook) : hors de ce depot (pilot / forge-ops), signale en escalade.
+VERROU_MUTATION = ".forge-tests-mutation-en-cours"
+
+
+def _poser_verrou_mutation(racine: Path, fichiers: list[Path]) -> Path | None:
+    """Pose a `racine` le verrou de la fenetre de mutation, ou None s il n a pas pu l etre.
+
+    Un verrou qu on ne peut pas poser ne fait pas tomber l audit : il est declare absent (None),
+    et la fenetre reste muette plutot que bloquante. La charge NOMME les fichiers en cours de
+    mutation et PORTE l avertissement « ne pas commiter », pour un hook qui la lit.
+    """
+    chemin = racine / VERROU_MUTATION
+    try:
+        charge = {
+            "pid": os.getpid(),
+            "depuis": datetime.now(UTC).isoformat(timespec="seconds"),
+            "fichiers": sorted(f.relative_to(racine).as_posix() for f in fichiers),
+            "message": "mutation forge-tests en cours — sources alterees par un mutant, "
+            "ne pas commiter",
+        }
+        chemin.write_text(json.dumps(charge, ensure_ascii=False, indent=1), encoding="utf-8")
+    except (OSError, ValueError):
+        return None
+    return chemin
+
+
+def _retirer_verrou_mutation(verrou: Path | None) -> None:
+    """Retire le verrou de mutation, inconditionnellement (meme sur interruption)."""
+    if verrou is not None:
+        with contextlib.suppress(OSError):
+            verrou.unlink()
 
 
 def compilables(original: str, mutants: list[Mutant], nom: str) -> list[Mutant]:
@@ -1091,6 +1131,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # strategies (voir `recette/non_perte_ciblage.py`).
     cibles = 0
     interrompu: str | None = None
+    verrou: Path | None = None  # TF-2091 : pose a l entree de la fenetre de mutation, ci-dessous
     # TF-0744 : un couple (survivant, duree) par mutant JOUE. C est la matiere de la
     # decomposition tues/survivants — sans elle, la seule valeur publiable serait une moyenne
     # globale, et une moyenne globale ne decrit aucun mutant reel sous `-x`.
@@ -1156,6 +1197,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 + ". La CONDITION DE NON-PERTE de l etude du 01/09 — meme liste de survivants "
                 "que la campagne pleine — n a pas encore ete jouee sur ce projet"
             )
+        # TF-2091 — fenetre de mutation OUVERTE : a partir d ici une source porte un mutant jusqu
+        # a sa restauration. Le verrou dit la fenetre aux hooks ; il est retire dans le `finally`.
+        verrou = _poser_verrou_mutation(racine, list(octets))
         fichier_courant: Path | None = None
         joues_module = 0
         for fichier, mutant in plan:
@@ -1204,6 +1248,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     finally:
         # Restauration a l OCTET PRES, inconditionnelle : c est le garde-fou G-1 lui-meme.
         restaurer(octets)
+        _retirer_verrou_mutation(verrou)  # TF-2091 : fenetre de mutation fermee
         _purger_bytecode(racine)
         av.final()  # TF-0096 : l émission finale part même sur interruption
     if interrompu:

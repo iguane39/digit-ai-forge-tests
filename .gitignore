@@ -16,6 +16,9 @@ playwright-report/
 resultat-playwright.json
 .visuel/*.html
 .visuel/*.jsonl
+# TF-2091 : verrou transitoire de la fenetre de mutation. Pose puis retire pendant l audit ; un
+# verrou qui survit (interruption) signale une mutation inachevee, il ne se committe jamais.
+.forge-tests-mutation-en-cours
 .env
 
 # journaux du hook qualite (TF-0065) : sidecars d'oracles hors depot — les preuves
