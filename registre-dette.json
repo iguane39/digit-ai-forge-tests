@@ -1529,6 +1529,36 @@
       "note": "instruite le 2026-09-02 (TF-0665) : c est le SEUL vrai reste de l item. Rendre le controle bloquant demande que la declaration porte la PORTEE du denombrable (quelles cles du catalogue parlent d hebergement), sinon un homonyme — 12 places a table — reste indiscernable d une capacite de couchage."
     },
     {
+      "id": "parcours-personas-001",
+      "domaine": "parcours-personas",
+      "enonce": "parcours-personas : statique — un persona est tenu pour exercé quand un fichier de test de bout en bout (navigateur piloté, navigation) le CITE par son nom de fichier ou dans son texte ; ce pan ne joue aucun parcours et ne prouve pas qu un parcours cité passe",
+      "statut": "todo"
+    },
+    {
+      "id": "parcours-personas-002",
+      "domaine": "parcours-personas",
+      "enonce": "parcours-personas : le jeu de chaque parcours contre l instance servie, sous l identité du rôle, n est PAS réalisé ici — il relève du pan qualif multi-sessions (storage states par rôle) et de la suite du projet ; il reste ouvert",
+      "statut": "todo"
+    },
+    {
+      "id": "parcours-personas-003",
+      "domaine": "parcours-personas",
+      "enonce": "parcours-personas : une citation n est pas un parcours DÉDIÉ — un persona au nom courant (« admin ») cité dans un parcours écrit pour un autre est tenu pour exercé ; la lecture du fichier désigné reste humaine",
+      "statut": "todo"
+    },
+    {
+      "id": "parcours-personas-004",
+      "domaine": "parcours-personas",
+      "enonce": "parcours-personas : seuls les pilotes Playwright, Cypress, Selenium et Puppeteer sont reconnus ; un parcours écrit avec un autre outil n est pas vu",
+      "statut": "todo"
+    },
+    {
+      "id": "parcours-personas-005",
+      "domaine": "parcours-personas",
+      "enonce": "parcours-personas : les personas ne sont lus que dans EXIGENCES.json (clés `personas` et `roles`, convention de cette forge : le schéma du référentiel ne les définit pas), la matrice des droits et les comptes par rôle ; un persona seulement décrit en prose n est pas vu",
+      "statut": "todo"
+    },
+    {
       "id": "plancher-rendu-002",
       "domaine": "plancher-rendu",
       "enonce": "plancher : V5 croisements de fleches et V6 images deformees restent une inspection HUMAINE sur captures — ce pan ne produit pas d image, il lit des mesures du DOM",

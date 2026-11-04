@@ -89,6 +89,9 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
     # TF-1998 : le pan workers range par GENRE de gestionnaire — un cron jamais dispatché se lit
     # à côté des autres crons, une classe Durable Object à côté des autres classes.
     "gestionnaire": ((re.compile(r"^workers:(?P<v>[a-z-]+):"), "gestionnaire {v}"),),
+    # TF-2123 : le pan parcours-personas range par PERSONA — un rôle sans parcours se lit à côté
+    # des autres rôles du même produit.
+    "persona": ((re.compile(r"^persona:(?P<v>\S+)$"), "persona {v}"),),
     "module": (
         (re.compile(r"^mutant:(?P<v>[^:]+):"), "module {v}"),
         (re.compile(r"^seuil:mutation-module:(?P<v>\S+)$"), "module {v}"),

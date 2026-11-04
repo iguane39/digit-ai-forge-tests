@@ -13,6 +13,7 @@ from forge_tests.adaptateurs import (
     interface,
     migrations,
     mutation,
+    personas,
     plancher,
     prompts,
     qualif,
@@ -52,10 +53,14 @@ REGISTRE = {
     # TF-2008 (29/10/2026) : `supabase/migrations/` n etait lu par aucun pan. Tables exposées,
     # RLS active, tests pgTAP sous un rôle de l API — statique, comme `prompts` et `workers`.
     "supabase-pgtap": supabase,
+    # TF-2123 (04/11/2026) : aucun pan n exigeait un parcours de bout en bout PAR persona. Les
+    # personas ou rôles que le produit déclare sont lus ; un persona qu aucun parcours ne cite
+    # est un FAIL nommé. Statique : le jeu contre l instance servie n est pas simulé.
+    "parcours-personas": personas,
 }
 
 PANS_ATTENDUS = [
     "front", "interface", "api", "data", "migrations", "batch", "fichiers", "back", "securite",
     "accessibilite", "contraste", "clavier", "visuel", "plancher", "qualif", "prompts", "i18n",
-    "workers", "supabase",
+    "workers", "supabase", "parcours-personas",
 ]
