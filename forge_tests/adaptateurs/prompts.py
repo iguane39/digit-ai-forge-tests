@@ -267,7 +267,17 @@ def est_un_artefact_d_auditeur(texte: str) -> bool:
 
 # --- Parcours ---------------------------------------------------------------------------------
 def _fichiers(cible: Path) -> list[Path]:
-    """Fichiers TEXTE du projet, artefacts de construction et dépendances exclus."""
+    """Fichiers TEXTE du projet, artefacts de construction et dépendances exclus.
+
+    TF-2118 : dans un dépôt git, seules les sources SUIVIES comptent au produit. Un fichier non
+    suivi est le travail d une autre session sur le même arbre, ou un brouillon : il ne se
+    juge pas, et le pan le NOMME à part (`_non_suivis_porteurs`). Hors dépôt git, rien ne change.
+    """
+    return [c for c in _candidats(cible) if not exclusions.non_suivi_par_git(c, cible)]
+
+
+def _candidats(cible: Path) -> list[Path]:
+    """Fichiers texte du projet avant le filtre « suivi par git » (TF-2118)."""
     retenus: list[Path] = []
     for chemin in sorted(cible.rglob("*")):
         if any(partie in _EXCLUS for partie in chemin.parts):
@@ -745,15 +755,65 @@ def sans_objet(cible: Path) -> str | None:
     )
 
 
+# TF-2118 — fichiers non suivis par git que le pan a rencontrés et PORTERAIENT quelque chose.
+_MAX_NON_SUIVIS_NOMMES = 20
+
+
+def _non_suivis_porteurs(cible: Path) -> list[str]:
+    """Chemins relatifs des fichiers NON SUIVIS qui auraient été inventoriés ou jugés par ce pan :
+    prompt, corpus, nom de modèle, constante de prompt, ou appel de fournisseur dans un test.
+
+    Ils ne comptent pas au produit (`_fichiers`), mais les taire ferait disparaître ce qui a été
+    lu : ils sont nommés au rapport, à part.
+    """
+    trouves: list[str] = []
+    for chemin in _candidats(cible):
+        if not exclusions.non_suivi_par_git(chemin, cible):
+            continue
+        texte = _texte(chemin)
+        if not texte or est_un_artefact_d_auditeur(texte):
+            continue
+        if (
+            est_un_prompt(chemin)
+            or est_un_corpus(chemin)
+            or modeles_cites(texte)
+            or (chemin.suffix.lower() == ".py" and _constantes_de_prompt(chemin, texte))
+            or (est_un_fichier_de_test(chemin) and _APPEL_FOURNISSEUR.search(texte))
+        ):
+            trouves.append(_relatif(chemin, cible))
+    return trouves
+
+
+def _mention_non_suivis(non_suivis: list[str]) -> list[str]:
+    """La ligne `non_juge` qui publie les fichiers non suivis écartés ; vide s il n y en a pas."""
+    if not non_suivis:
+        return []
+    total = len(non_suivis)
+    nommes = ", ".join(non_suivis[:_MAX_NON_SUIVIS_NOMMES])
+    reste = total - _MAX_NON_SUIVIS_NOMMES
+    suite = f" et {reste} autres" if reste > 0 else ""
+    pluriel = "s" if total > 1 else ""
+    return [
+        f"prompts : {total} fichier{pluriel} non suivi{pluriel} par git rencontre{pluriel} et "
+        f"ecarte{pluriel} du produit (travail d une autre session sur le meme arbre, ou brouillon "
+        f"; ni inventorie{pluriel} ni juge{pluriel}) : {nommes}{suite} — les ajouter a l index "
+        "git pour qu ils soient juges"
+    ]
+
+
 def analyser(cible: Path) -> SortieAdaptateur:
     non_testables = _non_testables(cible)
     elements = inventaire(cible)
     findings_modeles = _findings_modeles(cible)
     findings_appels = _findings_appels_reels(cible)
+    non_suivis = _non_suivis_porteurs(cible)
+    mention = _mention_non_suivis(non_suivis)
     if not elements:
         # Un test qui appelle le fournisseur prouve le CONTRAIRE d « aucun modèle appelé » : un
-        # appel HTTP direct n a besoin d aucun client déclaré au manifeste (TF-2110).
-        motif_sans_objet = None if findings_appels else sans_objet(cible)
+        # appel HTTP direct n a besoin d aucun client déclaré au manifeste (TF-2110). Il en va de
+        # même d un fichier non suivi qui nomme un modèle (TF-2118) : il n est pas jugé, mais il
+        # interdit de PROUVER l absence de tout modèle.
+        motif_sans_objet = None if findings_appels or non_suivis else sans_objet(cible)
         if motif_sans_objet:
             sortie = evaluer_surface(
                 NOM, PAN, str(cible), [], set(), SEUIL, NON_JUGE, sans_objet=motif_sans_objet
@@ -773,10 +833,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 *NON_JUGE,
                 "prompts : aucun prompt adressable ni modèle nommé trouvé — surface non "
                 "énumérable sur ce projet",
+                *mention,
             ],
             non_testables=non_testables,
         )
     sortie = evaluer_surface(NOM, PAN, str(cible), elements, exerces(cible), SEUIL, NON_JUGE)
+    # Copie : `evaluer_surface` peut rendre la liste `NON_JUGE` du module telle quelle.
+    sortie.non_juge = [*sortie.non_juge, *mention]
     sortie.non_testables.extend(non_testables)
     if findings_modeles or findings_appels:
         sortie.findings = [*findings_modeles, *findings_appels, *sortie.findings]

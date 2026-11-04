@@ -1139,6 +1139,18 @@ nominative : le rapport la publie sous `perimetre_exclu_git`. Les noms déjà g�
 politique de chaque pan (`node_modules`, `dist`, `build`…) n'y entrent pas. Pour réclamer un
 dossier ignoré : son nom dans `FORGE_TESTS_INCLURE`.
 
+### Ce que git ne suit pas n'est pas jugé par le pan `prompts` (TF-2118)
+
+Dans un dépôt git, le pan `prompts` n'inventorie que les sources **suivies** (`git ls-files`,
+fichiers ajoutés à l'index compris). *Mesuré le 03/11/2026 chez Produit-86 : trois alias de
+modèles écrits par une autre session dans `outils/compteur-foundry/`, dossier non suivi, avaient
+produit 7 constats bloquants attribués au produit.* Les fichiers non suivis qui porteraient un
+prompt, un corpus, un nom de modèle ou un appel de fournisseur sont **nommés à part** dans le
+`non_juge` du pan (vingt noms au plus, le total toujours dit) et interdisent la preuve « ce
+projet n'appelle aucun modèle ». Hors dépôt git, ou dans un dépôt dont aucun fichier n'est encore
+suivi, le comportement est inchangé. Pour faire juger un fichier : `git add`. Les autres pans
+gardent leur propre parcours de fichiers ; l'aide `exclusions.non_suivi_par_git` est partagée.
+
 ### Cycle de vie et provenance de l'instance servie — pans `front`, `qualif`, `accessibilite`, `visuel` (TF-0340 / TF-0341)
 
 Quatre pans exigent une instance **servie**. Le montage reste délégué au projet — lui seul sait ce que « peuplée » veut dire chez lui — mais jusqu'au 18/08 le **démontage** n'était délégué à personne, et le rapport ne disait pas ce qu'il laissait debout.

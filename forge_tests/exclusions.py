@@ -203,6 +203,63 @@ def ignores_git(racine: os.PathLike[str] | str) -> list[str]:
     return sortie
 
 
+# --- ce que le dépôt ne SUIT pas : fichiers écrits par une autre session ------------------------
+# TF-2118 (lot Produit-86 du 03/11/2026, RT-9) : le pan `prompts` a inventorié trois alias de
+# modèles dans `outils/compteur-foundry/`, dossier NON suivi par git, écrit par une autre session
+# sur le même arbre : 7 constats bloquants attribués au produit, alors qu aucun fichier suivi ne
+# nomme ces modèles. Un fichier que git ne suit pas n est pas (encore) du produit.
+#
+# Ce filtre est un OUTIL, appliqué par pan : chaque pan garde son parcours et décide s il le
+# consulte. Hors dépôt git, ou dépôt sans aucun fichier suivi (rien à quoi comparer), il ne dit
+# rien — le comportement d avant reste le comportement.
+_CACHE_SUIVIS: dict[str, frozenset[str] | None] = {}
+
+
+def _suivis_du_depot(racine: os.PathLike[str] | str) -> frozenset[str] | None:
+    """Fichiers suivis (`git ls-files`) sous `racine`, en chemins absolus normalisés, en cache.
+
+    `None` : pas de dépôt git, git en échec, ou aucun fichier suivi sous la racine.
+    """
+    import subprocess
+
+    cle = _normal(racine)
+    if cle in _CACHE_SUIVIS:
+        return _CACHE_SUIVIS[cle]
+    resultat: frozenset[str] | None = None
+    try:
+        haut = subprocess.run(
+            ["git", "-C", cle, "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=30, check=False,
+            encoding="utf-8", errors="replace",
+        )
+        if haut.returncode == 0 and haut.stdout.strip():
+            liste = subprocess.run(
+                ["git", "-C", cle, "ls-files", "-z"],
+                capture_output=True, text=True, timeout=120, check=False,
+                encoding="utf-8", errors="replace",
+            )
+            if liste.returncode == 0:
+                suivis = frozenset(
+                    _normal(os.path.join(cle, brut)) for brut in liste.stdout.split("\0") if brut
+                )
+                resultat = suivis or None
+    except (OSError, subprocess.SubprocessError):
+        resultat = None
+    _CACHE_SUIVIS[cle] = resultat
+    return resultat
+
+
+def non_suivi_par_git(chemin: os.PathLike[str] | str, racine: os.PathLike[str] | str) -> bool:
+    """`chemin` est-il un FICHIER que le dépôt de `racine` ne suit pas ?
+
+    Faux hors dépôt git (ou sans fichier suivi) : aucune information, donc aucune exclusion.
+    """
+    suivis = _suivis_du_depot(racine)
+    if suivis is None:
+        return False
+    return _normal(chemin) not in suivis
+
+
 def est_page_aspiree(chemin: os.PathLike[str] | str) -> bool:
     r"""La page porte-t-elle le marqueur d'une sauvegarde navigateur ?
 

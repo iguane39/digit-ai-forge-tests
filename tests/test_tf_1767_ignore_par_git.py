@@ -43,6 +43,9 @@ def _depot(tmp_path: Path) -> Path:
     (amont / "upstream" / "prompt.md").write_text("Tu es un assistant.\n", encoding="utf-8")
     (racine / ".gitignore").write_text("vendor-check/\n", encoding="utf-8")
     subprocess.run(["git", "init", "-q", str(racine)], check=True)
+    # TF-2118 : le pan prompts ne juge que les sources SUIVIES ; sans index, `textes` serait vide
+    # et l assertion sur `vendor-check/` ne prouverait plus rien pour ce pan.
+    subprocess.run(["git", "-C", str(racine), "add", "-A"], check=True)
     exclusions._CACHE_GIT.clear()
     return racine
 
@@ -52,6 +55,7 @@ def test_dossier_ignore_par_git_sort_des_parcours_des_pans(tmp_path: Path) -> No
     html = {p.relative_to(racine).as_posix() for p in interface._fichiers(racine, (".html",))}
     assert html == {"app/page.html"}
     textes = {p.relative_to(racine).as_posix() for p in prompts._fichiers(racine)}
+    assert "app/__init__.py" in textes  # le pan a bien lu les sources suivies
     assert not [t for t in textes if t.startswith("vendor-check/")]
     suites = {p.relative_to(racine).as_posix() for p in revue._fichiers_de_test(racine)}
     assert suites == {"tests/test_app.py"}
