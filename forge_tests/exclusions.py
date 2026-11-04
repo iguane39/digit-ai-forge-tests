@@ -213,6 +213,7 @@ def ignores_git(racine: os.PathLike[str] | str) -> list[str]:
 # consulte. Hors dépôt git, ou dépôt sans aucun fichier suivi (rien à quoi comparer), il ne dit
 # rien — le comportement d avant reste le comportement.
 _CACHE_SUIVIS: dict[str, frozenset[str] | None] = {}
+_CACHE_DOSSIERS_SUIVIS: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
 
 
 def _suivis_du_depot(racine: os.PathLike[str] | str) -> frozenset[str] | None:
@@ -258,6 +259,33 @@ def non_suivi_par_git(chemin: os.PathLike[str] | str, racine: os.PathLike[str] |
     if suivis is None:
         return False
     return _normal(chemin) not in suivis
+
+
+def dossier_sans_fichier_suivi(
+    chemin: os.PathLike[str] | str, racine: os.PathLike[str] | str
+) -> bool:
+    """`chemin` est-il un DOSSIER qui ne contient aucun fichier suivi par le dépôt de `racine` ?
+
+    Pour les pans qui jugent un dossier par son nom (`locales/`, `messages/`) : `non_suivi_par_git`
+    ne parle que des fichiers, et un dossier n est jamais « suivi » au sens de `git ls-files`.
+    Faux hors dépôt git (ou sans fichier suivi), comme son pendant pour les fichiers (TF-2134).
+    """
+    suivis = _suivis_du_depot(racine)
+    if suivis is None:
+        return False
+    cle = _normal(racine)
+    en_cache = _CACHE_DOSSIERS_SUIVIS.get(cle)
+    if en_cache is None or en_cache[0] is not suivis:
+        # Tous les dossiers ancêtres d un fichier suivi, jusqu à la racine : un calcul unique, puis
+        # une recherche en O(1) par dossier rencontré (la marche i18n en interroge des milliers).
+        ancetres: set[str] = set()
+        for fichier in suivis:
+            parent = os.path.dirname(fichier)
+            while parent and parent not in ancetres and len(parent) >= len(cle):
+                ancetres.add(parent)
+                parent = os.path.dirname(parent)
+        en_cache = _CACHE_DOSSIERS_SUIVIS[cle] = (suivis, frozenset(ancetres))
+    return _normal(chemin) not in en_cache[1]
 
 
 def est_page_aspiree(chemin: os.PathLike[str] | str) -> bool:

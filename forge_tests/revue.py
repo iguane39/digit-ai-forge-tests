@@ -182,6 +182,7 @@ def _specs(cible: Path) -> list[Path]:
         and chemin.name.endswith(SUFFIXES_SPEC)
         and "node_modules" not in chemin.parts
         and not exclusions.ignore_par_git(chemin, cible)  # TF-1767
+        and not exclusions.non_suivi_par_git(chemin, cible)  # TF-2134
     ]
     return fichiers
 
@@ -618,6 +619,7 @@ def cle_de_relecture_separee_de_la_session(cible: Path) -> list[Finding]:
         for chemin in sorted(cible.rglob("*"))
         if chemin.is_file() and chemin.name in _CONFIGS and "node_modules" not in chemin.parts
         and not exclusions.ignore_par_git(chemin, cible)  # TF-1767
+        and not exclusions.non_suivi_par_git(chemin, cible)  # TF-2134
     ]
     textes = {
         f.relative_to(cible).as_posix(): f.read_text(encoding="utf-8", errors="replace")
@@ -693,6 +695,8 @@ def _fichiers_de_test(cible: Path) -> list[Path]:
         if "node_modules" in chemin.parts or ".venv" in chemin.parts:
             continue
         if exclusions.ignore_par_git(chemin, cible):  # TF-1767
+            continue
+        if exclusions.non_suivi_par_git(chemin, cible):  # TF-2134
             continue
         nom = chemin.name
         if nom.startswith("test_") or nom.endswith("_test.py"):

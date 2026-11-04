@@ -276,6 +276,8 @@ def _fichiers(cible: Path, extensions: tuple[str, ...]) -> list[Path]:
             continue
         if exclusions.ignore_par_git(chemin, cible):  # TF-1767
             continue
+        if exclusions.non_suivi_par_git(chemin, cible):  # TF-2134 : écrit hors de git
+            continue
         retenus.append(chemin)
     return retenus
 

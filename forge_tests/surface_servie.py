@@ -79,11 +79,16 @@ _HORS_BUILD = re.compile(r"^(?:https?:|data:|mailto:|tel:|blob:|javascript:|#|//
 
 
 def _fichiers(
-    racine: Path, suffixes: tuple[str, ...], *, exclus: set[str] | None = None
+    racine: Path, suffixes: tuple[str, ...], *, exclus: set[str] | None = None,
+    suivis_seulement: bool = True,
 ) -> list[Path]:
     """Fichiers d'un arbre, hors dossiers exclus. `exclus` par défaut = les seuls dossiers
     d'atelier : c'est l'appelant qui sait s'il lit des SOURCES (et doit écarter les builds) ou
-    un BUILD (et ne doit surtout pas s'écarter lui-même)."""
+    un BUILD (et ne doit surtout pas s'écarter lui-même).
+
+    TF-2134 : dans un dépôt git, une SOURCE non suivie est le travail d'une autre session, pas du
+    produit. Un BUILD, lui, n'est presque jamais suivi et le lire est son objet : l'appelant qui
+    lit un build passe `suivis_seulement=False`."""
     if not racine.is_dir():
         return []
     interdits = IGNORES if exclus is None else exclus
@@ -92,6 +97,7 @@ def _fichiers(
         if f.is_file() and f.suffix.lower() in suffixes
         and not (interdits & {p.name for p in f.parents})
         and not exclusions.ignore_par_git(f, racine)  # TF-1767
+        and not (suivis_seulement and exclusions.non_suivi_par_git(f, racine))  # TF-2134
     ]
 
 
@@ -203,7 +209,7 @@ def ressources_referencees(build: Path) -> Terme:
     """Ce que les artefacts SERVIS référencent : `url()` des CSS, `src`/`href` des HTML."""
     lus: list[str] = []
     refs: set[str] = set()
-    for f in _fichiers(build, (".css", ".html")):
+    for f in _fichiers(build, (".css", ".html"), suivis_seulement=False):  # un build se lit
         texte = f.read_text(encoding="utf-8", errors="replace")
         brutes = (_URL_CSS.findall(texte) if f.suffix.lower() == ".css"
                   else _RESSOURCE_HTML.findall(texte))

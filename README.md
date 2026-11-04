@@ -1164,6 +1164,18 @@ projet n'appelle aucun modèle ». Hors dépôt git, ou dans un dépôt dont auc
 suivi, le comportement est inchangé. Pour faire juger un fichier : `git add`. Les autres pans
 gardent leur propre parcours de fichiers ; l'aide `exclusions.non_suivi_par_git` est partagée.
 
+### Ce que git ne suit pas n'est jugé par aucun pan de lecture de sources (TF-2134)
+
+La règle de TF-2118 s'étend aux autres pans qui parcourent les fichiers du produit :
+`interface`, `migrations`, `declencheurs`, `domaine`, `revue`, `couverture`, `relecture`,
+`surface_servie` et `i18n` (signes et catalogue de chaînes). Dans un dépôt git, ils ne lisent que
+les sources **suivies** (`exclusions.non_suivi_par_git`) ; un dossier de traductions sans aucun
+fichier suivi n'est pas un signe d'i18n (`exclusions.dossier_sans_fichier_suivi`). Deux lectures
+restent hors du filtre, parce que leur objet n'est presque jamais suivi : le **build servi**
+(`surface_servie.ressources_referencees`) et un catalogue compilé sous `build`, `dist` ou `out`.
+Hors dépôt git, ou dans un dépôt sans fichier suivi, le comportement est inchangé. Contrairement
+au pan `prompts`, ces pans ne nomment pas encore les fichiers écartés dans leur `non_juge`.
+
 ### Cycle de vie et provenance de l'instance servie — pans `front`, `qualif`, `accessibilite`, `visuel` (TF-0340 / TF-0341)
 
 Quatre pans exigent une instance **servie**. Le montage reste délégué au projet — lui seul sait ce que « peuplée » veut dire chez lui — mais jusqu'au 18/08 le **démontage** n'était délégué à personne, et le rapport ne disait pas ce qu'il laissait debout.

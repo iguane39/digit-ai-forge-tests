@@ -132,6 +132,8 @@ def catalogues(cible: Path) -> tuple[dict[str, dict[str, dict[str, str]]], list[
         for fichier in sorted(dossier.iterdir()):
             if not fichier.is_file():
                 continue
+            if _non_suivi_hors_build(fichier, cible):  # TF-2134
+                continue
             trouve = _NOM_LOCALE.match(fichier.name)
             if trouve:
                 try:
@@ -160,6 +162,21 @@ def catalogues(cible: Path) -> tuple[dict[str, dict[str, dict[str, str]]], list[
     return lus, non_lus
 
 
+#: Les trois noms de BUILD que ce contrôle lit à dessein (TF-1331, voir `_EXCLUS`). Un build n est
+#: presque jamais suivi par git : le filtre « suivi » ne s y applique pas (TF-2134).
+_BUILDS = frozenset({"build", "dist", "out"})
+
+
+def _non_suivi_hors_build(fichier: Path, cible: Path) -> bool:
+    """Fichier d une SOURCE que git ne suit pas (travail d une autre session) — jamais un build."""
+    return not _sous_build(fichier, cible) and exclusions.non_suivi_par_git(fichier, cible)
+
+
+def _sous_build(chemin: Path, cible: Path) -> bool:
+    """Le chemin est-il (dans) un dossier de build conventionnel de la cible ?"""
+    return bool(_BUILDS & set(chemin.relative_to(cible).parts))
+
+
 def _dossiers_candidats(cible: Path) -> list[Path]:
     """Découverte sur le DISQUE : tout dossier au nom conventionnel, dépendances coupées."""
     import os
@@ -169,6 +186,10 @@ def _dossiers_candidats(cible: Path) -> list[Path]:
         dossiers[:] = sorted(
             nom for nom in dossiers
             if nom not in _EXCLUS and not exclusions.ignore_par_git(Path(racine, nom), cible)
+            and (
+                _sous_build(Path(racine, nom), cible)
+                or not exclusions.dossier_sans_fichier_suivi(Path(racine, nom), cible)
+            )
         )
         for nom in dossiers:
             if nom.lower() in DOSSIERS:

@@ -6,7 +6,7 @@ import configparser
 import re
 from pathlib import Path
 
-from forge_tests import classes
+from forge_tests import classes, exclusions
 from forge_tests.disposition import racine_execution
 from forge_tests.execution import (
     instructions_sql,
@@ -61,7 +61,10 @@ def _fichiers(cible: Path) -> list[Path]:
     violation de contraintes qui existaient bel et bien. Un faux négatif de l auditeur, pas un
     trou de l audité.
     """
-    return sorted((racine_execution(cible) / "migrations").glob("*.sql"))
+    return sorted(
+        p for p in (racine_execution(cible) / "migrations").glob("*.sql")
+        if not exclusions.non_suivi_par_git(p, cible)  # TF-2134 : écrit hors de git, pas du produit
+    )
 
 
 def _script_location(cible: Path) -> Path | None:
@@ -115,7 +118,10 @@ def _versions_alembic(cible: Path) -> list[Path]:
     )
     for dossier in candidats:
         if dossier.is_dir():
-            return sorted(p for p in dossier.glob("*.py") if p.name != "__init__.py")
+            return sorted(
+                p for p in dossier.glob("*.py")
+                if p.name != "__init__.py" and not exclusions.non_suivi_par_git(p, cible)  # TF-2134
+            )
     return []
 
 

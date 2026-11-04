@@ -82,6 +82,7 @@ def _fichiers(cible: Path, motifs: tuple[str, ...]) -> list[Path]:
                 chemin.is_file()
                 and not any(p in _EXCLUS for p in chemin.parts)
                 and not exclusions.ignore_par_git(chemin, cible)  # TF-1767
+                and not exclusions.non_suivi_par_git(chemin, cible)  # TF-2134
             ):
                 retenus.append(chemin)
     return sorted(set(retenus))

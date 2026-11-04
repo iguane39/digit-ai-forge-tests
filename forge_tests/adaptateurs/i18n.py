@@ -877,7 +877,7 @@ def _signes_i18n(cible: Path) -> list[str]:
     signes: list[str] = []
     for nom in ("package.json", "next.config.js", "next.config.mjs", "next.config.ts"):
         fichier = cible / nom
-        if not fichier.is_file():
+        if not fichier.is_file() or exclusions.non_suivi_par_git(fichier, cible):  # TF-2134
             continue
         texte = fichier.read_text(encoding="utf-8", errors="replace")
         for marqueur in ("next-intl", "react-i18next", "i18next", "vue-i18n", "\"i18n\"", "i18n:"):
@@ -888,9 +888,12 @@ def _signes_i18n(cible: Path) -> list[str]:
     # parcourue. Ce contrôle tourne sur TOUT audit de TOUT produit — descendre dans
     # `node_modules` pour n en rien tirer serait un coût payé partout, tout le temps.
     for racine, dossiers, _ in os.walk(cible):
+        # TF-2134 : un dossier sans aucun fichier suivi est le travail d une autre session, il
+        # ne dit rien du produit ; il se coupe comme une dépendance.
         dossiers[:] = sorted(
             nom for nom in dossiers
             if nom not in _EXCLUS and not exclusions.ignore_par_git(Path(racine, nom), cible)
+            and not exclusions.dossier_sans_fichier_suivi(Path(racine, nom), cible)
         )
         for nom in dossiers:
             chemin = Path(racine, nom)
