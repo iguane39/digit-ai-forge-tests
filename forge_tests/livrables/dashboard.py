@@ -210,7 +210,7 @@ def _texte_libre(valeur: object) -> str:
 
 
 # Tokens SOMBRES, une seule définition — servie deux fois : au choix explicite du lecteur
-# (`data-theme="sombre"`) et au forçage inverse de l impression (jamais de papier sombre).
+# (`data-theme="dark"`) et au forçage inverse de l impression (jamais de papier sombre).
 _TOKENS_SOMBRES = """
       --bg:#0B1120; --surface:#131C2E; --card:#131C2E; --ink:#E8EDF7; --muted:#9BA9C0;
       --faint:#6B7A93; --line:#25324A; --piste:#4B6899; --amber-fill:#2A2113; --amber-line:#4A3A1A;
@@ -218,6 +218,14 @@ _TOKENS_SOMBRES = """
       --red-fill:#2C1414; --red-line:#5A2222; --blue:#7CA6FF; --green:#4ADE80;
       --amber:#FBBF24; --red:#F87171; --teal:#5EEAD4;
       --amber-ink:#FBBF24; --teal-ink:#5EEAD4; --green-ink:#4ADE80; --red-ink:#F87171;
+      /* Invariants de thème (TF-1110), re-déclarés À L IDENTIQUE : la parité clair/sombre
+         (oracle-tokens T4, oracle-bascule B-T4) exige que le sombre nomme chaque jeton, même
+         quand sa valeur ne change pas. L encre reste claire sur ces fonds pleins. */
+      --green-solid:#166534; --teal-solid:#0F5F8F; --amber-solid:#92400E; --red-solid:#B91C1C;
+      --on-solid:#F8FAFF;
+      /* Encre posée sur `--blue`, qui CHANGE de thème : claire sur le bleu foncé, sombre sur
+         le bleu clair (2,3:1 mesuré avec l encre claire, oracle-tokens T5). */
+      --on-blue:#0B1120;
 """
 
 _TOKENS_CLAIRS = """
@@ -228,6 +236,7 @@ _TOKENS_CLAIRS = """
       --green:#15803D; --green-fill:#F2FCF5; --green-line:#CFEEDD;
       --red:#B91C1C; --red-fill:#FEF2F2; --red-line:#FBD5D5;
       --amber-ink:#92400E; --teal-ink:#115E59; --green-ink:#14532D; --red-ink:#991B1B;
+      --on-blue:#F8FAFF;
 """
 
 # Favicon-lettre en `data:` URI — coupée en deux constantes, non par coquetterie : la ligne
@@ -264,8 +273,12 @@ _STYLE = f"""
          contraste avec le blanc — invariants de thème (clair/sombre) : l encre reste blanche
          quel que soit le thème du reste de la page. */
       --green-solid:#166534; --teal-solid:#0F5F8F; --amber-solid:#92400E; --red-solid:#B91C1C;
+      /* TF-2101 : l encre des fonds pleins est un JETON (T1), teinté vers la marque (S4), et
+         reste claire dans les deux thèmes comme les `*-solid` qu elle porte. Le focus est
+         PRESCRIT (T8) : un anneau et son décalage, consommés par toutes les règles :focus. */
+      --on-solid:#F8FAFF; --focus-anneau:var(--blue); --focus-decalage:2px;
     }}
-    :root[data-theme="sombre"] {{{_TOKENS_SOMBRES}}}
+    :root[data-theme="dark"] {{{_TOKENS_SOMBRES}}}
     * {{ box-sizing:border-box; }}
     /* L23 (TF-0733) — LA GARDE DE L ATTRIBUT `hidden`, et elle n est pas cosmetique. Ce
        tableau de bord masque par PROPRIETE : `p.hidden` pour les panneaux d onglet,
@@ -293,19 +306,20 @@ _STYLE = f"""
     .eyebrow {{ color:var(--muted); font-size:.85rem; letter-spacing:.04em;
                text-transform:uppercase; margin:0 0 .3em; }}
     .card {{ background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
-            padding:18px 22px; margin:16px 0; }}
+            padding:20px 24px; margin:16px 0; }}
     .grille {{ display:flex; flex-wrap:wrap; gap:12px; margin:16px 0; align-items:stretch; }}
     .tuile {{ flex:1 1 170px; background:var(--surface); border:1px solid var(--line);
-             border-radius:var(--r); padding:14px 16px; text-align:left; }}
+             border-radius:var(--r); padding:16px 16px; text-align:left; }}
     /* H3 (standard listes) : un KPI qui compte des éléments AFFICHÉS est un bouton — il mène
        à sa liste, éventuellement filtrée. Un KPI d éléments hors page reste un div et DIT où
        ils vivent. Jamais d affordance morte. */
     button.tuile {{ font:inherit; color:inherit; cursor:pointer; display:flex;
-                    flex-direction:column; gap:2px; }}
+                    flex-direction:column; gap:4px; }}
     button.tuile:hover {{ border-color:var(--blue); }}
     button.tuile:focus-visible, .theme-toggle:focus-visible, a:focus-visible,
     summary:focus-visible, .outillage button:focus-visible, .lien-chapitre:focus-visible,
-    .outillage input:focus-visible {{ outline:3px solid var(--blue); outline-offset:2px; }}
+    .outillage input:focus-visible {{ outline:3px solid var(--focus-anneau);
+      outline-offset:var(--focus-decalage); }}
     .tuile .chiffre {{ font-family:var(--head); font-size:1.9rem; font-weight:900;
                       display:block; line-height:1.1; }}
     .tuile .quoi {{ color:var(--ink); font-size:.85rem; font-weight:700; }}
@@ -315,32 +329,32 @@ _STYLE = f"""
     .tuile .delta.pire {{ color:var(--red-ink); }}
     .tuile .tuile-d {{ color:var(--muted); font-size:.75rem; }}
     .tuile .tuile-va {{ color:var(--blue); font-size:.75rem; font-weight:700; margin-top:auto; }}
-    .badge {{ display:inline-block; border-radius:999px; padding:2px 11px; font-size:.8rem;
+    .badge {{ display:inline-block; border-radius:999px; padding:4px 12px; font-size:.8rem;
              font-weight:700; border:1px solid transparent; }}
     /* TF-1110 (V16) : fonds PLEINS (`*-solid`) à encre blanche — plus de pastel de carte sur
        une bulle d état. Le picto (✓ ✕ ○ ⊘ –, `_badge_etat`) et le libellé restent le second
        indice non colorimétrique (WCAG 1.4.1) ; ces quatre classes servent aussi des badges
        sans picto (verdicts, seuils) que la couleur seule distinguait déjà par le TEXTE
        (« PASS »/« FAIL »…), jamais par la seule teinte. */
-    .b-pass {{ background:var(--green-solid); color:#fff; }}
-    .b-fail {{ background:var(--red-solid); color:#fff; }}
-    .b-part {{ background:var(--amber-solid); color:#fff; }}
-    .b-info {{ background:var(--teal-solid); color:#fff; }}
+    .b-pass {{ background:var(--green-solid); color:var(--on-solid); }}
+    .b-fail {{ background:var(--red-solid); color:var(--on-solid); }}
+    .b-part {{ background:var(--amber-solid); color:var(--on-solid); }}
+    .b-info {{ background:var(--teal-solid); color:var(--on-solid); }}
     .etat-badge {{ white-space:nowrap; }}
-    nav.toc {{ display:flex; flex-wrap:wrap; gap:4px 18px; margin:0 0 12px; font-size:.85rem; }}
+    nav.toc {{ display:flex; flex-wrap:wrap; gap:4px 20px; margin:0 0 12px; font-size:.85rem; }}
     nav.toc a {{ color:var(--blue); text-decoration:none; }}
     nav.toc a:hover {{ text-decoration:underline; }}
     nav.toc .toc-d {{ color:var(--muted); }}
-    nav.onglets {{ display:flex; flex-wrap:wrap; gap:6px; margin:0 0 20px;
+    nav.onglets {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 20px;
                   border-bottom:1px solid var(--line); }}
     nav.onglets button {{ font-family:var(--sans); font-size:.95rem; font-weight:600;
       background:transparent; color:var(--muted); border:1px solid transparent;
-      border-bottom:none; border-radius:var(--r-sm) var(--r-sm) 0 0; padding:9px 15px;
+      border-bottom:none; border-radius:var(--r-sm) var(--r-sm) 0 0; padding:8px 16px;
       cursor:pointer; }}
     nav.onglets button[aria-selected="true"] {{ background:var(--surface); color:var(--ink);
       border-color:var(--line); }}
     .theme-toggle {{ font:inherit; font-size:.85rem; border:1px solid var(--line);
-      background:var(--surface); color:var(--ink); border-radius:999px; padding:4px 14px;
+      background:var(--surface); color:var(--ink); border-radius:999px; padding:4px 16px;
       cursor:pointer; }}
     .zone-tableau {{ overflow-x:auto; }}
     /* Le chapeau d ouverture d un panneau (L7 : un chapitre dit ce qu on va y apprendre).
@@ -349,7 +363,7 @@ _STYLE = f"""
     .ch-apprend {{ color:var(--muted); margin:.2em 0 1.1em; }}
     .contenu {{ color:var(--muted); margin:.2em 0 1.1em; }}
     table {{ border-collapse:collapse; width:100%; font-size:.88rem; table-layout:fixed; }}
-    th, td {{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--line);
+    th, td {{ text-align:left; padding:8px 12px; border-bottom:1px solid var(--line);
              vertical-align:top; overflow-wrap:break-word; }}
     /* L19 (socle, 23/08) : `anywhere` casse un mot AU MILIEU D UNE LIGNE (« Utilisabl/e »).
        Il est necessaire sur un identifiant technique et ravageur sur de la prose. Il vit donc
@@ -363,19 +377,19 @@ _STYLE = f"""
     th[data-tri]:hover {{ color:var(--ink); }}
     th .tri-marque {{ font-size:.9em; }}
     .grise {{ opacity:.72; border-style:dashed; }}
-    .filtres {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px; }}
+    .filtres {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }}
     .filtres button {{ font-family:var(--sans); font-size:.85rem; border:1px solid var(--line);
-      background:var(--surface); color:var(--ink); border-radius:999px; padding:5px 13px;
+      background:var(--surface); color:var(--ink); border-radius:999px; padding:4px 12px;
       cursor:pointer; }}
-    .filtres button[aria-pressed="true"] {{ background:var(--blue); color:#fff;
+    .filtres button[aria-pressed="true"] {{ background:var(--blue); color:var(--on-blue);
       border-color:var(--blue); }}
     /* H1/H2 (standard listes) : recherche + réinitialisation + compteur par tableau outillé. */
     .outillage {{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 8px; }}
     .outillage input[type="search"] {{ flex:1 1 240px; font:inherit; font-size:.88rem;
       color:var(--ink); background:var(--surface); border:1px solid var(--line);
-      border-radius:var(--r-sm); padding:6px 10px; }}
+      border-radius:var(--r-sm); padding:8px 12px; }}
     .outillage .outil-reinit {{ font:inherit; font-size:.85rem; border:1px solid var(--line);
-      background:var(--surface); color:var(--ink); border-radius:var(--r-sm); padding:6px 12px;
+      background:var(--surface); color:var(--ink); border-radius:var(--r-sm); padding:8px 12px;
       cursor:pointer; }}
     .outillage .outil-compte {{ color:var(--muted); font-size:.82rem; }}
     /* Compte PAR TABLE (G5) : la barre du chapitre agrège toutes ses sous-listes — ce compte-ci
@@ -386,46 +400,48 @@ _STYLE = f"""
     .lib {{ font-weight:600; }}
     /* TF-0175 — détail de cas en LIGNE PLEINE LARGEUR (retour n°6) : cartes côte à côte. */
     .btn-detail {{ font:inherit; font-size:.8rem; color:var(--blue); background:var(--surface);
-      border:1px solid var(--line); border-radius:var(--r-sm); padding:3px 10px;
+      border:1px solid var(--line); border-radius:var(--r-sm); padding:4px 12px;
       cursor:pointer; white-space:nowrap; }}
-    .btn-detail[aria-expanded="true"] {{ background:var(--blue); color:#fff;
+    .btn-detail[aria-expanded="true"] {{ background:var(--blue); color:var(--on-blue);
       border-color:var(--blue); }}
-    .btn-detail:focus-visible {{ outline:3px solid var(--blue); outline-offset:2px; }}
+    .btn-detail:focus-visible {{ outline:3px solid var(--focus-anneau);
+      outline-offset:var(--focus-decalage); }}
     tr[data-detail] > td {{ background:var(--bg); border-bottom:2px solid var(--line);
-      padding:14px 16px; }}
+      padding:16px 16px; }}
     .cas-grille {{ display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr));
       gap:12px; }}
     .cas-carte {{ background:var(--surface); border:1px solid var(--line);
-      border-radius:var(--r-sm); padding:12px 14px; font-size:.86rem; }}
+      border-radius:var(--r-sm); padding:12px 16px; font-size:.86rem; }}
     .cas-carte p {{ margin:0 0 .5em; }}
     .cas-carte ol {{ margin:.2em 0 .6em; padding-left:1.4em; }}
     .cas-ref {{ color:var(--muted); }}
     /* RT-12 — constat de la route porteuse, rendu sous le constat propre de l'élément. */
     .porteur {{ color:var(--muted); font-size:.92em; }}
-    .outil-chapitre {{ margin:6px 0 10px; }}
+    .outil-chapitre {{ margin:8px 0 12px; }}
     /* Chapitres REPLIABLES (retour humain du 14/08) : chevron qui tourne, repli au choix
        du lecteur — ouverts par défaut, le papier déplie tout. */
     details.pli > summary {{ cursor:pointer; list-style:none; }}
     details.pli > summary::-webkit-details-marker {{ display:none; }}
-    details.pli > summary h3 {{ display:flex; align-items:center; gap:10px; margin:0; }}
+    details.pli > summary h3 {{ display:flex; align-items:center; gap:12px; margin:0; }}
     details.pli > summary .chevron {{ color:var(--blue); font-size:.85em;
       transition:transform .15s ease; transform:rotate(-90deg); }}
     details.pli[open] > summary .chevron {{ transform:none; }}
     details.pli > summary:hover h3 {{ color:var(--blue); }}
-    .pli-commandes {{ margin:10px 0 0; }}
+    .pli-commandes {{ margin:12px 0 0; }}
     /* KPIs d'état par chapitre (retour humain du 14/08) : compteurs cliquables qui filtrent
        les tables du chapitre. Habillés sur les mêmes pastilles que les badges d'état. */
-    .kpis-chapitre {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 10px; }}
+    .kpis-chapitre {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 12px; }}
     .kpi-etat {{ font:inherit; font-size:.84rem; font-weight:700; border-radius:999px;
-      border:1px solid var(--line); padding:4px 13px; cursor:pointer; }}
+      border:1px solid var(--line); padding:4px 12px; cursor:pointer; }}
     .kpi-etat[aria-pressed="true"] {{ outline:2px solid var(--blue); outline-offset:1px; }}
-    .kpi-etat:focus-visible {{ outline:3px solid var(--blue); outline-offset:2px; }}
+    .kpi-etat:focus-visible {{ outline:3px solid var(--focus-anneau);
+      outline-offset:var(--focus-decalage); }}
     /* Colonne « objectif du test » : lisible mais discrète — la donnée d'abord. */
     .objectif {{ font-size:.84rem; color:var(--muted); }}
     /* Actions structurées Quoi / Pourquoi / Vous obtiendrez (retour humain du 14/08). */
-    .actions-vous > li {{ margin:0 0 14px; }}
+    .actions-vous > li {{ margin:0 0 16px; }}
     .actions-vous .a-quoi, .actions-vous .a-pourquoi, .actions-vous .a-obtenu {{
-      display:block; margin:2px 0; }}
+      display:block; margin:4px 0; }}
     .actions-vous .a-pourquoi, .actions-vous .a-obtenu {{ color:var(--muted);
       font-size:.92em; }}
     .discret {{ color:var(--muted); font-size:.86rem; }}
@@ -433,8 +449,8 @@ _STYLE = f"""
        Composants du référentiel, habillés sur les tokens DÉJÀ posés : pas une couleur de plus,
        pas une police de plus. Le verdict conclut, le KPI porte sa lecture, la figure pose sa
        question, le chemin nomme son lecteur, le manifeste déclare ce que la page ne fait pas. */
-    .verdict {{ background:var(--surface); border:1px solid var(--line);
-      border-left:4px solid var(--blue); border-radius:var(--r); padding:14px 18px;
+    .verdict {{ background:var(--surface); border:1px solid var(--blue);
+      border-radius:var(--r); padding:16px 20px;
       margin:0 0 16px; }}
     .verdict p {{ margin:0 0 .45em; }}
     .verdict p:last-child {{ margin:0; }}
@@ -443,14 +459,14 @@ _STYLE = f"""
        n est jamais annoncé seul, ni à l œil ni au lecteur d écran. */
     .tuile .k-repere {{ display:block; font-size:.78rem; color:var(--ink);
       background:var(--bg); border:1px solid var(--line); border-radius:var(--r-sm);
-      padding:6px 8px; margin:6px 0 0; }}
+      padding:8px 8px; margin:8px 0 0; }}
     figure.graphe {{ background:var(--surface); border:1px solid var(--line);
-      border-radius:var(--r); padding:14px 18px; margin:16px 0; }}
+      border-radius:var(--r); padding:16px 20px; margin:16px 0; }}
     figure.graphe figcaption {{ font-family:var(--head); font-weight:700; font-size:1rem;
       margin:0 0 4px; }}
     figure.graphe .g-sous {{ color:var(--muted); font-size:.84rem; margin:0 0 12px; }}
-    .g-ligne {{ display:grid; grid-template-columns:minmax(110px, 30%) 1fr auto; gap:10px;
-      align-items:center; margin:0 0 7px; font-size:.84rem; }}
+    .g-ligne {{ display:grid; grid-template-columns:minmax(110px, 30%) 1fr auto; gap:12px;
+      align-items:center; margin:0 0 8px; font-size:.84rem; }}
     .g-nom {{ overflow-wrap:break-word; }}
     /* La PISTE est le fond du svg (CSS), jamais un second rect : deux rects superposés dans
        un même svg sont un chevauchement, et le contrôle de rendu du socle le refuse.
@@ -468,18 +484,18 @@ _STYLE = f"""
     .g-empile {{ display:block; width:100%; height:14px; background:var(--piste);
       border-radius:4px; }}
     .g-val {{ color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }}
-    .g-legende {{ list-style:none; display:flex; flex-wrap:wrap; gap:6px 18px;
+    .g-legende {{ list-style:none; display:flex; flex-wrap:wrap; gap:8px 20px;
       margin:12px 0 0; padding:0; font-size:.82rem; }}
     .g-puce {{ display:inline-block; width:10px; height:10px; border-radius:3px;
-      margin-right:6px; vertical-align:baseline; }}
+      margin-right:8px; vertical-align:baseline; }}
     .chemins {{ list-style:none; display:grid;
       grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:12px;
       margin:12px 0 0; padding:0; }}
     .chemin {{ background:var(--surface); border:1px solid var(--line);
-      border-left:3px solid var(--blue); border-radius:var(--r-sm); padding:12px 14px;
+      border-radius:var(--r-sm); padding:12px 16px;
       font-size:.88rem; display:flex; flex-direction:column; }}
-    .chemin b {{ display:block; font-family:var(--head); margin:0 0 3px; }}
-    .chemin .c-question {{ display:block; color:var(--muted); margin:0 0 7px; }}
+    .chemin b {{ display:block; font-family:var(--head); margin:0 0 4px; }}
+    .chemin .c-question {{ display:block; color:var(--muted); margin:0 0 8px; }}
     /* Les BOUTONS de deux cartes voisines s alignent : la grille étire les cartes à la même
        hauteur, `margin-top:auto` colle le bloc d actions au bas de chacune, et deux textes
        d introduction de longueurs différentes cessent de décaler les commandes l une par
@@ -492,10 +508,10 @@ _STYLE = f"""
     footer.ecarts h2 {{ font-size:1.05rem; margin:0 0 .4em; }}
     footer.ecarts h3 {{ font-size:.92rem; margin:1em 0 .3em; }}
     footer.ecarts ul {{ margin:0; padding-left:1.2em; }}
-    footer.ecarts li {{ margin:0 0 6px; color:var(--muted); }}
+    footer.ecarts li {{ margin:0 0 8px; color:var(--muted); }}
     .lien-chapitre {{ font:inherit; color:var(--blue); background:none; border:none;
       cursor:pointer; text-align:left; padding:0; text-decoration:underline; }}
-    footer.doc {{ margin-top:44px; padding-top:14px; border-top:1px solid var(--line);
+    footer.doc {{ margin-top:44px; padding-top:16px; border-top:1px solid var(--line);
                  color:var(--muted); font-size:.85rem; }}
     /* Sur mobile, un tableau à sept colonnes ne « défile » pas : il sort de l écran et le
        lecteur ne sait pas qu il manque quelque chose. Les lignes se replient donc en blocs,
@@ -503,7 +519,7 @@ _STYLE = f"""
        c est la seule mise en page qui tienne la promesse « aucune absence silencieuse »
        jusque dans le rendu. Mesuré : sans cela, V1 sort douze débordements à 390 px. */
     @media (max-width:640px) {{
-      .wrap {{ padding:22px 14px 44px; }}
+      .wrap {{ padding:24px 16px 44px; }}
       h1 {{ font-size:1.5rem; }}
       table, thead, tbody, tr, th, td {{ display:block; width:auto; }}
       /* TF-1110 (V15, TF-0901) : sans `top`/`left` déclarés, un élément `position:absolute`
@@ -518,18 +534,23 @@ _STYLE = f"""
          flux : plus de coïncidence géométrique possible avec le corps du tableau. */
       thead {{ position:absolute; top:-9999px; left:-9999px; width:1px; height:1px;
               overflow:hidden; clip:rect(0 0 0 0); }}
-      tr {{ border:1px solid var(--line); border-radius:var(--r-sm); margin:0 0 10px;
-           padding:6px 8px; }}
-      td {{ border:none; padding:3px 0; }}
+      tr {{ border:1px solid var(--line); border-radius:var(--r-sm); margin:0 0 12px;
+           padding:8px 8px; }}
+      td {{ border:none; padding:4px 0; }}
       td::before {{ content:attr(data-label) " · "; color:var(--muted); font-size:.76rem;
                    text-transform:uppercase; letter-spacing:.03em; }}
       td:empty {{ display:none; }}
     }}
+    /* TF-2101 (R10, WCAG 2.2 SC 2.3.3) : le seul mouvement de la page est le chevron qui
+       tourne ; un lecteur qui demande moins de mouvement ne le voit pas tourner. */
+    @media (prefers-reduced-motion: reduce) {{
+      *, *::before, *::after {{ transition:none !important; animation:none !important; }}
+    }}
     @page {{ size:A4 landscape; margin:14mm; }}
     @media print {{
       /* Le papier est TOUJOURS clair, même si le lecteur avait choisi le sombre à l écran. */
-      :root, :root[data-theme="sombre"] {{{_TOKENS_CLAIRS}}}
-      body {{ background:#FFFFFF; }}
+      :root, :root[data-theme="dark"] {{{_TOKENS_CLAIRS}}}
+      body {{ background:var(--surface); }}
       .wrap {{ max-width:none; padding:0; }}
       nav.onglets, .filtres, .theme-toggle, .outillage, .tuile-va,
       .kpis-chapitre {{ display:none; }}
@@ -613,20 +634,21 @@ _SCRIPT = """
   var bascule = document.getElementById('bascule-theme');
   var racine = document.documentElement;
   function poserTheme(theme) {
-    if (theme === 'sombre') { racine.setAttribute('data-theme', 'sombre'); }
+    if (theme === 'dark') { racine.setAttribute('data-theme', 'dark'); }
     else { racine.removeAttribute('data-theme'); }
     try { localStorage.setItem('digitai-theme-dashboard', theme); } catch (e) {}
     if (bascule) {
-      bascule.textContent = theme === 'sombre' ? 'Thème clair' : 'Thème sombre';
-      bascule.setAttribute('aria-pressed', theme === 'sombre' ? 'true' : 'false');
+      bascule.textContent = theme === 'dark' ? 'Thème clair' : 'Thème sombre';
+      bascule.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
     }
   }
   var memorise = null;
   try { memorise = localStorage.getItem('digitai-theme-dashboard'); } catch (e) {}
-  poserTheme(memorise === 'sombre' ? 'sombre' : 'clair');
+  // « sombre » est l ancienne valeur persistée (avant TF-2101) : elle est encore lue.
+  poserTheme(memorise === 'dark' || memorise === 'sombre' ? 'dark' : 'clair');
   if (bascule) {
     bascule.addEventListener('click', function () {
-      poserTheme(racine.getAttribute('data-theme') === 'sombre' ? 'clair' : 'sombre');
+      poserTheme(racine.getAttribute('data-theme') === 'dark' ? 'clair' : 'dark');
     });
   }
 
@@ -1879,14 +1901,14 @@ def _badge_declaration(declaration: dict | None) -> str:
         return (
             '<p><span class="badge b-info" title="le projet a DÉCLARÉ ce constat et la preuve '
             'citée existe : il reste mesuré et affiché, hors du décompte principal">'
-            f"⚖ Déclaré par le projet — {libelle}</span> "
+            f"Déclaré par le projet — {libelle}</span> "
             f'contre-preuve <code>{_e(declaration.get("preuve"))}</code>'
             f"{signature}{explication}</p>"
         )
     if statut == _declarations.PERIMEE:
         return (
             '<p><span class="badge b-part" title="déclaration expirée : le constat revient au '
-            'décompte principal tant qu elle n est pas renouvelée">⏳ Déclaration périmée</span> '
+            'décompte principal tant qu elle n est pas renouvelée">Déclaration périmée</span> '
             f'<span class="discret">{_e(declaration.get("motif_du_refus"))}</span>{signature}</p>'
         )
     return (
@@ -2181,12 +2203,12 @@ def _section_declarations(rapport: dict, valeurs: dict[str, int]) -> str:
         badge = {
             _declarations.RETENUE: (
                 "b-info",
-                "⚖ Retenue",
+                "Retenue",
                 "la preuve citée existe : le constat sort du décompte principal",
             ),
             _declarations.PERIMEE: (
                 "b-part",
-                "⏳ Périmée",
+                "Périmée",
                 "le terme est passé : le constat est revenu au décompte principal",
             ),
         }.get(
@@ -3042,7 +3064,7 @@ _REGLES_PREGENERATION: tuple[tuple[str, str], ...] = (
     ),
     (
         "R-30-clair-par-defaut",
-        r'data-theme="sombre"',
+        r'data-theme="dark"',
     ),
     (
         "G1-bascule-cablee",

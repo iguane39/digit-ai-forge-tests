@@ -1706,7 +1706,9 @@ def verifier_dashboard(rouge: dict) -> int:
         cas.append(("themes TF-0153 : clair par defaut STRICT (pas d auto-sombre OS)",
                     "prefers-color-scheme: dark" not in page))
         cas.append(("themes TF-0153 : palette sombre portee, au choix du lecteur",
-                    ':root[data-theme="sombre"]' in page))
+                    # TF-2101 : l attribut est « dark » (R-30, oracle-bascule B-T4) ; le contrôle
+                    # reste le même, sur la même palette, avec la valeur que l oracle lit.
+                    ':root[data-theme="dark"]' in page))
         cas.append(("themes TF-0153 : bascule presente et persistee",
                     "bascule-theme" in page and "localStorage" in page))
         cas.append(("les six onglets sont presents",

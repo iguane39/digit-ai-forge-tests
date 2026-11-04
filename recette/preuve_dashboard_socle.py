@@ -11,6 +11,10 @@ verdict, KPI complets, figures à question, chemins de lecteur, manifeste d éca
 dit « la page est-elle bien construite ? » ; celui-là dit « sert-elle son lecteur ? ». Les deux
 sont dus, donc les deux sont prouvés au même endroit.
 
+TF-2101 (03/11/2026) — la CRITIQUE D IMPLÉMENTATION de forge-design est jugée aussi : la page passe
+`run-oracles-design.mjs` (slop, tokens, mouvement, bascule sombre, caractères de contrôle, goût,
+saisie, déclencheurs). Avant la correction du gabarit, quatre de ces oracles la refusaient.
+
 Usage : uv run python recette/preuve_dashboard_socle.py   (exit 0 = preuve tenue)
 """
 
@@ -51,6 +55,15 @@ def _oracle_restitution() -> Path | None:
     racine = os.environ.get("FORGE_ROOT")
     base = Path(racine) if racine else Path(__file__).resolve().parent.parent.parent
     chemin = base / "digit-ai-forge-design" / "oracles" / "oracle-restitution.mjs"
+    return chemin if chemin.exists() else None
+
+
+def _orchestrateur_design() -> Path | None:
+    """`run-oracles-design.mjs` de forge-design, résolu comme `_oracle_restitution` : absent du
+    poste, la preuve se dégrade en SKIP motivé, elle ne ment pas."""
+    racine = os.environ.get("FORGE_ROOT")
+    base = Path(racine) if racine else Path(__file__).resolve().parent.parent.parent
+    chemin = base / "digit-ai-forge-design" / "oracles" / "run-oracles-design.mjs"
     return chemin if chemin.exists() else None
 
 
@@ -187,6 +200,25 @@ def main() -> int:
         )
         verdicts.append(("oracle-restitution", resultat.returncode))
         print(f"[{'PASS' if resultat.returncode == 0 else 'FAIL'}] oracle-restitution")
+        if resultat.returncode != 0:
+            print(((resultat.stdout or "") + (resultat.stderr or ""))[-1400:])
+
+    # TF-2101 — la critique d implémentation de forge-design : exit 0 = PASS, 1 = au moins un
+    # oracle en échec, 2 = indéterminé (un oracle non exécutable est un ÉCHEC ici, jamais un vert).
+    orchestrateur = _orchestrateur_design()
+    if orchestrateur is None:
+        print("[SKIP] run-oracles-design — forge-design absente du poste (preuve partielle)")
+    elif node is None:
+        print("[SKIP] run-oracles-design — node absent du poste (preuve partielle)")
+    else:
+        resultat = subprocess.run(
+            [node, str(orchestrateur), str(sortie), "--json-only"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        verdicts.append(("run-oracles-design", resultat.returncode))
+        print(f"[{'PASS' if resultat.returncode == 0 else 'FAIL'}] run-oracles-design")
         if resultat.returncode != 0:
             print(((resultat.stdout or "") + (resultat.stderr or ""))[-1400:])
 
