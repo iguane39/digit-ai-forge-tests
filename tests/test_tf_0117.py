@@ -162,6 +162,10 @@ def test_render_page_detecte_un_entete_de_tableau_pose_sur_sa_ligne(tmp_path: Pa
     leur taille NATURELLE (le rognage `overflow:hidden` de l'ancêtre ne réduit jamais la
     boîte mesurée d'un descendant) et se retrouvent géométriquement là où `<tbody>` vient de
     remonter — l'en-tête mange sa propre première ligne, AU REPOS, sans aucun défilement.
+
+    TF-2170 (05/11/2026) : un `<thead>` ROGNÉ par `overflow:hidden; clip` ne se voit pas à
+    l'écran, et V15 ne le compte plus. La fixture garde donc la sortie du flux sans son
+    rognage : les `<th>` restent visibles, posés sur la première ligne, le défaut réel.
     """
     page = """<!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8">
@@ -169,7 +173,7 @@ def test_render_page_detecte_un_entete_de_tableau_pose_sur_sa_ligne(tmp_path: Pa
 <title>Digit-AI — V15 rouge — Socle — 20260914a</title>
 <style>
   table, thead, tbody, tr, th, td { display:block; width:auto; }
-  thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+  thead { position:absolute; white-space:nowrap; }
   th, td { padding:8px; border:1px solid #ccc; }
 </style></head>
 <body><main><h1>Table</h1>
