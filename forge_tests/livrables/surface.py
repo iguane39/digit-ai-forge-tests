@@ -91,7 +91,8 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
     "gestionnaire": ((re.compile(r"^workers:(?P<v>[a-z-]+):"), "gestionnaire {v}"),),
     # TF-2123 : le pan parcours-personas range par PERSONA — un rôle sans parcours se lit à côté
     # des autres rôles du même produit.
-    "persona": ((re.compile(r"^persona:(?P<v>\S+)$"), "persona {v}"),),
+    # TF-2123 (suite) : le jeu du parcours (`joue:<persona>`) se range sous le même persona.
+    "persona": ((re.compile(r"^(?:persona|joue):(?P<v>\S+)$"), "persona {v}"),),
     "module": (
         (re.compile(r"^mutant:(?P<v>[^:]+):"), "module {v}"),
         (re.compile(r"^seuil:mutation-module:(?P<v>\S+)$"), "module {v}"),

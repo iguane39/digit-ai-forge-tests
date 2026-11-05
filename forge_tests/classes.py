@@ -97,6 +97,13 @@ RESSOURCE_REFERENCEE_ABSENTE = "ressource-referencee-absente"
 # --- Matrice des droits et recette multi-profils (TF-0343 / TF-0342) ----------------------------
 MATRICE_DES_DROITS = "matrice-des-droits"
 
+# --- Jeu du parcours d'un persona sous l'identité de son rôle (TF-2123) --------------------------
+# Une route que le parcours du persona navigue est refusée à son rôle, renvoie vers la mire de
+# connexion, ou répond en erreur sur l'instance servie. Distincte de `acces-refuse-a-cette-identite`
+# (qualif, qui parcourt TOUTE l'application sous chaque rôle) : ici la route fait partie du parcours
+# que le produit a écrit pour ce persona.
+PARCOURS_PERSONA_REFUSE = "parcours-persona-refuse-sous-son-identite"
+
 # --- Déclencheurs de batch -----------------------------------------------------------------------
 JOB_SANS_DECLENCHEUR = "job-sans-declencheur"
 TRIGGER_NON_CABLE = "trigger-non-cable"

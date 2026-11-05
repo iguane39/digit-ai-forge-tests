@@ -17,12 +17,18 @@ Ce pan lit deux choses, SANS EXÉCUTION et sans réseau :
     de fichier ou dans son texte. Un persona qu aucun parcours ne cite est `non exercé` : un
     FAIL nommé, avec le persona.
 
-CE QUE CE PAN NE FAIT PAS, et il le dit à chaque rapport (`non_juge`) : il ne JOUE aucun
-parcours. Jouer un parcours par persona contre l instance servie exige une identité par rôle, une
-instance peuplée et un navigateur : c est le volet `qualif` multi-sessions (TF-0316) et la suite
-du projet, pas une lecture de sources. Un persona « exercé » ici signifie « un parcours de bout en
-bout le cite », pas « ce parcours passe ». Le reste de TF-2123 (le jeu contre l instance servie)
-reste ouvert et n est pas simulé.
+CE QUE LE VOLET STATIQUE NE FAISAIT PAS, et que le jeu fait désormais (TF-2123, suite) : un
+persona « exercé » par citation signifiait « un parcours le cite », pas « ce parcours passe ». Quand
+une instance servie est déclarée (`FORGE_TESTS_QUALIF_URL`, à défaut `FORGE_TESTS_BASE_URL`) et que
+le rôle du persona a un compte (`FORGE_TESTS_QUALIF_STORAGE_STATES`, `role=chemin`), le pan JOUE les
+routes que son parcours navigue, sous les cookies et le jeton de ce compte, en GET seulement. Un
+élément `joue:<persona>` s ajoute à l inventaire ; il est exercé quand chaque route répond sans
+refus, sans erreur et sans renvoi vers la mire. Sans instance, sans compte pour un rôle, ou instance
+injoignable, le persona n est PAS joué, et le rapport le dit : ni succès ni échec du produit.
+
+Ce que le jeu ne fait toujours pas, et il le dit à chaque rapport : il ne clique pas, ne remplit
+aucun formulaire et n exécute aucun JavaScript. C est un parcours HTTP des routes navigées ; le pan
+qualif multi-sessions (TF-0316) parcourt l application rendue.
 """
 
 from __future__ import annotations
@@ -31,9 +37,12 @@ import json
 import os
 import re
 import unicodedata
+import urllib.error
+import urllib.request
 from pathlib import Path
+from urllib.parse import urljoin, urlsplit
 
-from forge_tests import droits, exclusions
+from forge_tests import classes, droits, exclusions
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "parcours-personas", "parcours-personas", 1.0
@@ -43,7 +52,9 @@ POUR_COUVRIR = (
     "écrire, pour chaque persona ou rôle déclaré (clés `personas` ou `roles` d EXIGENCES.json, "
     "`profils` de forge/matrice-droits.json, comptes de FORGE_TESTS_QUALIF_STORAGE_STATES), au "
     "moins un test de bout en bout qui pilote un navigateur, navigue, et nomme ce persona dans son "
-    "nom de fichier ou son texte ; puis le jouer contre l instance servie sous l identité du rôle"
+    "nom de fichier ou son texte ; fournir l instance servie (FORGE_TESTS_QUALIF_URL ou "
+    "FORGE_TESTS_BASE_URL) et un compte par rôle (FORGE_TESTS_QUALIF_STORAGE_STATES) pour que le "
+    "pan JOUE ce parcours sous l identité du rôle"
 )
 
 # Chapitre de cahier que ce pan alimente, DÉRIVÉ du registre par le cahier et le dashboard.
@@ -53,12 +64,16 @@ CHAPITRES = (
 )
 
 NON_JUGE = [
-    "parcours-personas : statique — un persona est tenu pour exercé quand un fichier de test de "
-    "bout en bout (navigateur piloté, navigation) le CITE par son nom de fichier ou dans son "
-    "texte ; ce pan ne joue aucun parcours et ne prouve pas qu un parcours cité passe",
-    "parcours-personas : le jeu de chaque parcours contre l instance servie, sous l identité du "
-    "rôle, n est PAS réalisé ici — il relève du pan qualif multi-sessions (storage states par "
-    "rôle) et de la suite du projet ; il reste ouvert",
+    "parcours-personas : statique — un persona est tenu pour exercé (`persona:<clé>`) quand un "
+    "fichier de test de bout en bout (navigateur piloté, navigation) le CITE par son nom de "
+    "fichier ou dans son texte ; la citation seule ne prouve pas qu un parcours cité passe, le "
+    "jeu contre l instance est un élément à part (`joue:<clé>`), présent quand il a lieu",
+    "parcours-personas : quand le jeu a lieu (instance et compte par rôle fournis), il rejoue en "
+    "GET les routes que le parcours NAVIGUE (littéraux de `goto`, `visit`…), sous les cookies et "
+    "le jeton du storage state du rôle ; il ne joue ni clic ni formulaire ni JavaScript. Une "
+    "application à page unique qui répond 200 sur son enveloppe et renvoie vers la mire côté "
+    "client n est pas vue ici : c est le pan qualif multi-sessions qui parcourt l application "
+    "rendue",
     "parcours-personas : une citation n est pas un parcours DÉDIÉ — un persona au nom courant "
     "(« admin ») cité dans un parcours écrit pour un autre est tenu pour exercé ; la lecture "
     "du fichier désigné reste humaine",
@@ -78,6 +93,7 @@ _EXIGENCES = ("EXIGENCES.json", "forge/EXIGENCES.json", "forge/etapes/conception
 _VARIABLE_EXIGENCES = "FORGE_TESTS_EXIGENCES"
 _ENV_COMPTES = "FORGE_TESTS_QUALIF_STORAGE_STATES"
 _ENV_INSTANCE = "FORGE_TESTS_BASE_URL"
+_ENV_INSTANCE_QUALIF = "FORGE_TESTS_QUALIF_URL"
 _PLAFOND_OCTETS = 512 * 1024
 
 # --- Parcours de bout en bout -------------------------------------------------------------------
@@ -139,9 +155,7 @@ def _chemin_exigences(cible: Path) -> Path | None:
 def _comptes_par_role(cible: Path) -> list[str]:
     """Rôles des comptes de test : `role=chemin`, séparés par des virgules (environnement, puis
     `.env.forge-tests` du projet). Lus sans rien écrire dans l environnement du processus."""
-    from forge_tests.authentification import ENV_PROJET, _valeurs
-
-    brut = os.environ.get(_ENV_COMPTES) or _valeurs(Path(cible) / ENV_PROJET).get(_ENV_COMPTES, "")
+    brut = _valeur_declaree(cible, _ENV_COMPTES)
     roles = []
     for paire in brut.split(","):
         role, separateur, _chemin = paire.partition("=")
@@ -209,8 +223,9 @@ def _est_un_parcours_e2e(relatif: str, texte: str) -> bool:
     return nom_de_test and pilote and bool(_NAVIGATION.search(texte))
 
 
-def _parcours(cible: Path) -> list[tuple[str, str]]:
-    """(chemin relatif, texte normalisé nom+contenu) de chaque parcours de bout en bout."""
+def _parcours_bruts(cible: Path) -> list[tuple[str, str]]:
+    """(chemin relatif, texte BRUT) de chaque parcours de bout en bout — la casse des routes que le
+    jeu rejoue doit survivre, la normalisation du repérage la détruit."""
     trouves: list[tuple[str, str]] = []
     for racine, dossiers, fichiers in os.walk(cible):
         # Élagage : on ne descend ni dans les dépendances ni dans ce que git ignore.
@@ -231,8 +246,16 @@ def _parcours(cible: Path) -> list[tuple[str, str]]:
                 continue
             relatif = chemin.relative_to(cible).as_posix()
             if _est_un_parcours_e2e(relatif, texte):
-                trouves.append((relatif, _sans_accent(f"{relatif}\n{texte}").lower()))
+                trouves.append((relatif, texte))
     return trouves
+
+
+def _parcours(cible: Path) -> list[tuple[str, str]]:
+    """(chemin relatif, texte normalisé nom+contenu) de chaque parcours de bout en bout."""
+    return [
+        (relatif, _sans_accent(f"{relatif}\n{texte}").lower())
+        for relatif, texte in _parcours_bruts(cible)
+    ]
 
 
 def parcours_par_persona(cible: Path, personas: dict[str, dict]) -> dict[str, list[str]]:
@@ -245,6 +268,271 @@ def parcours_par_persona(cible: Path, personas: dict[str, dict]) -> dict[str, li
             relatif for relatif, texte in parcours if any(m.search(texte) for m in motifs)
         ]
     return resultat
+
+
+# --- Le jeu des parcours contre l instance servie (TF-2123, suite) ------------------------------
+#: Nombre maximal de routes jouées par persona. Au-delà, le rapport le dit : un parcours qui navigue
+#: plus de routes que cela est une exploration, pas un parcours, et le jeu s'arrête à la borne.
+PLAFOND_ROUTES = 12
+_DELAI_REQUETE_S = 15
+_SAUTS_MAX = 5
+# Une adresse dont le NOM porte une action. Un GET n'est sûr que par convention : jouer `/logout`
+# fermerait la session du compte d'audit, `/supprimer` ou `/reset` modifierait l'instance. Ces
+# routes ne sont pas jouées, et le rapport les nomme.
+_ROUTE_A_EFFET = re.compile(
+    r"(?:^|[/_-])(?:logout|log-out|signout|sign-out|deconnexion|deconnecter|se-deconnecter"
+    r"|delete|supprimer|suppression|remove|reset|destroy|purge)(?:$|[/_.-])",
+    re.IGNORECASE,
+)
+_GOTO_LITTERAL = re.compile(
+    r"""(?:\.goto|\bcy\.visit|\bdriver\.get|\.navigate)\s*\(\s*(?P<q>['"`])(?P<route>[^'"`]*)(?P=q)"""
+)
+# Premier segment d une adresse qui est la mire de connexion : y atterrir, c est ne pas avoir de
+# session acceptée. Un jeu dont la route demandée EST la mire n y voit pas un échec.
+_MIRES = {
+    "login", "connexion", "signin", "sign-in", "auth", "authentification", "se-connecter",
+    "log-in", "identification",
+}
+
+
+def routes_du_parcours(brut: str) -> list[str]:
+    """Les routes que ce parcours NAVIGUE, dans l ordre, sans doublon — littéraux seulement.
+
+    Une adresse construite (`${id}`, concaténation), une adresse absolue vers un autre hôte ou une
+    chaîne vide ne sont pas des routes que le jeu peut rejouer sans deviner : elles sont écartées,
+    et un parcours qui n en garde aucune joue la racine (le rapport le dit).
+    """
+    routes: list[str] = []
+    for trouve in _GOTO_LITTERAL.finditer(brut):
+        route = trouve.group("route").strip()
+        if not route.startswith("/") or "${" in route or route.startswith("//"):
+            continue
+        route = route.split("#")[0]
+        chemin = route.split("?")[0] or "/"
+        if chemin not in routes:
+            routes.append(chemin)
+    return routes
+
+
+def _valeur_declaree(cible: Path, cle: str) -> str:
+    """Une clé de configuration, SANS rien écrire dans l environnement du processus.
+
+    Dans l ordre : l environnement de l opérateur, `.env.forge-tests`, puis le fichier d audit
+    versionné du produit."""
+    from forge_tests.authentification import ENV_AUDIT, ENV_PROJET, _valeurs
+
+    brut = os.environ.get(cle)
+    if brut and brut.strip():
+        return brut.strip()
+    for fichier in (ENV_PROJET, ENV_AUDIT):
+        valeur = _valeurs(Path(cible) / fichier).get(cle, "").strip()
+        if valeur:
+            return valeur
+    return ""
+
+
+def instance_declaree(cible: Path) -> str:
+    """L instance servie que le jeu joint : `FORGE_TESTS_QUALIF_URL`, à défaut `..._BASE_URL`
+    (même ordre que le pan qualif, qui parcourt l instance peuplée)."""
+    for cle in (_ENV_INSTANCE_QUALIF, _ENV_INSTANCE):
+        valeur = _valeur_declaree(cible, cle)
+        if valeur:
+            return valeur if valeur.startswith(("http://", "https://")) else f"https://{valeur}"
+    return ""
+
+
+def identites(cible: Path) -> dict[str, str]:
+    """{étiquette de rôle: chemin du storage state} — `role=chemin`, séparés par des virgules."""
+    brut = _valeur_declaree(cible, _ENV_COMPTES)
+    trouvees: dict[str, str] = {}
+    for paire in brut.split(","):
+        role, separateur, chemin = paire.partition("=")
+        if separateur and role.strip() and chemin.strip():
+            trouvees.setdefault(role.strip(), chemin.strip())
+    return trouvees
+
+
+def _identite_du_persona(
+    cle: str, entree: dict, trouvees: dict[str, str]
+) -> tuple[str, str] | None:
+    """(étiquette, chemin) du compte de ce persona : l étiquette du rôle, normalisée comme la
+    clé du persona, égale à sa clé ou à l un de ses alias."""
+    voulues = {cle, *entree.get("alias", ())}
+    for role, chemin in trouvees.items():
+        if _cle(role) in voulues:
+            return role, chemin
+    return None
+
+
+def _lire_etat(cible: Path, chemin: str) -> tuple[dict | None, str | None]:
+    fichier = Path(chemin)
+    if not fichier.is_absolute():
+        fichier = Path(cible) / fichier
+    try:
+        donnees = json.loads(fichier.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as erreur:
+        return None, f"« {fichier.name} » illisible ({type(erreur).__name__})"
+    if not isinstance(donnees, dict):
+        return None, f"« {fichier.name} » n est pas un storage state (objet JSON attendu)"
+    return donnees, None
+
+
+def _cookie_vaut_pour(cookie: dict, hote: str, chemin: str, https: bool) -> bool:
+    domaine = str(cookie.get("domain") or "")
+    if not domaine and cookie.get("url"):
+        domaine = urlsplit(str(cookie["url"])).hostname or ""
+    domaine = domaine.lstrip(".").lower()
+    if not domaine or not (hote == domaine or hote.endswith("." + domaine)):
+        return False
+    portee = str(cookie.get("path") or "/")
+    if not chemin.startswith(portee):
+        return False
+    boucle_locale = hote in ("localhost", "127.0.0.1", "::1")
+    return not (cookie.get("secure") and not https and not boucle_locale)
+
+
+def _en_tetes(etat: dict, base: str, chemin: str) -> dict[str, str]:
+    """Les en-têtes d identité d un storage state pour cette requête : les cookies dont le domaine
+    et le chemin portent, et le jeton du stockage local de la même origine en `Authorization`."""
+    from forge_tests.authentification import CLE_STOCKAGE
+
+    morceaux = urlsplit(base)
+    hote = (morceaux.hostname or "").lower()
+    https = morceaux.scheme == "https"
+    cookies = [
+        f"{c['name']}={c['value']}"
+        for c in etat.get("cookies") or []
+        if isinstance(c, dict) and "name" in c and "value" in c
+        and _cookie_vaut_pour(c, hote, chemin, https)
+    ]
+    en_tetes: dict[str, str] = {}
+    if cookies:
+        en_tetes["Cookie"] = "; ".join(cookies)
+    origine = f"{morceaux.scheme}://{morceaux.netloc}".lower()
+    for entree in etat.get("origins") or []:
+        if not isinstance(entree, dict):
+            continue
+        if str(entree.get("origin", "")).lower().rstrip("/") != origine:
+            continue
+        for element in entree.get("localStorage") or []:
+            if isinstance(element, dict) and element.get("name") == CLE_STOCKAGE:
+                en_tetes["Authorization"] = f"Bearer {element.get('value', '')}"
+    return en_tetes
+
+
+class _SansRedirection(urllib.request.HTTPRedirectHandler):
+    """Les redirections sont suivies À LA MAIN : chaque saut est lu, et le dernier dit où la route
+    a atterri (la mire de connexion, ou un autre hôte)."""
+
+    def redirect_request(self, *_args, **_kwargs):  # noqa: ANN002, ANN003, ANN201
+        return None
+
+
+def _est_la_mire(chemin: str) -> bool:
+    premier = chemin.strip("/").split("/")[0].lower()
+    return premier in _MIRES
+
+
+def _jouer_route(base: str, route: str, etat: dict) -> tuple[str, str]:
+    """(issue, détail) d un GET de `route` sous l identité de `etat`.
+
+    Issues : `ok` · `refuse` (401, 403) · `mire` (renvoyée vers la mire, ou hors de l instance) ·
+    `erreur` (404, 5xx, autre code) · `injoignable`. GET seulement.
+    """
+    ouvreur = urllib.request.build_opener(_SansRedirection)
+    courant = base.rstrip("/") + route
+    for _saut in range(_SAUTS_MAX + 1):
+        morceaux = urlsplit(courant)
+        origine_base = urlsplit(base)
+        if morceaux.netloc.lower() != origine_base.netloc.lower():
+            return "mire", f"renvoyée hors de l instance ({morceaux.netloc})"
+        requete = urllib.request.Request(  # noqa: S310 — l URL est celle que l opérateur déclare
+            courant, headers=_en_tetes(etat, base, morceaux.path or "/"), method="GET"
+        )
+        try:
+            with ouvreur.open(requete, timeout=_DELAI_REQUETE_S) as reponse:  # noqa: S310
+                code, lieu = reponse.status, ""
+        except urllib.error.HTTPError as erreur:
+            code, lieu = erreur.code, erreur.headers.get("Location", "")
+        except (urllib.error.URLError, OSError, ValueError) as erreur:
+            cause = getattr(erreur, "reason", erreur)
+            return "injoignable", f"{type(cause).__name__}"
+        if 300 <= code < 400 and lieu:
+            courant = urljoin(courant, lieu)
+            continue
+        if code in (401, 403):
+            return "refuse", f"{code}"
+        if 200 <= code < 300:
+            arrivee = urlsplit(courant).path or "/"
+            if _est_la_mire(arrivee) and not _est_la_mire(route):
+                return "mire", f"renvoyée vers la mire {arrivee}"
+            return "ok", f"{code}"
+        return "erreur", f"{code}"
+    return "erreur", f"plus de {_SAUTS_MAX} redirections"
+
+
+def jouer(cible: Path, personas_: dict[str, dict]) -> dict:
+    """Joue, pour chaque persona qu un parcours cite ET dont le rôle a un compte, les routes de
+    ce parcours contre l instance déclarée. Aucun effet de bord sur l instance : GET seulement.
+
+    Rend `{"instance", "joues", "sans_identite", "illisibles", "injoignables", "sans_parcours"}`.
+    `joues[cle]` porte le rôle, le fichier du compte (son NOM, jamais son contenu), les routes
+    avec leur issue, `ok` et la liste des parcours dont elles viennent.
+    """
+    base = instance_declaree(cible)
+    jeu: dict = {"instance": base, "joues": {}, "sans_identite": [], "illisibles": {},
+                 "injoignables": [], "sans_parcours": [], "ecartees": {}, "sans_route_jouable": []}
+    if not base:
+        return jeu
+    comptes = identites(cible)
+    bruts = dict(_parcours_bruts(cible))
+    cites = parcours_par_persona(cible, personas_)
+    for cle, entree in sorted(personas_.items()):
+        fichiers = cites.get(cle) or []
+        if not fichiers:
+            jeu["sans_parcours"].append(cle)
+            continue
+        compte = _identite_du_persona(cle, entree, comptes)
+        if compte is None:
+            jeu["sans_identite"].append(cle)
+            continue
+        role, chemin = compte
+        etat, motif = _lire_etat(cible, chemin)
+        if etat is None:
+            jeu["illisibles"][cle] = motif
+            continue
+        routes: list[str] = []
+        for relatif in fichiers:
+            for route in routes_du_parcours(bruts.get(relatif, "")):
+                if route not in routes:
+                    routes.append(route)
+        a_effet = [r for r in routes if _ROUTE_A_EFFET.search(_sans_accent(r))]
+        if a_effet:
+            jeu["ecartees"][cle] = a_effet
+            routes = [r for r in routes if r not in a_effet]
+            if not routes:
+                jeu["sans_route_jouable"].append(cle)
+                continue
+        sans_route = not routes
+        total = len(routes)
+        routes = (routes or ["/"])[:PLAFOND_ROUTES]
+        issues = []
+        for route in routes:
+            issue, detail = _jouer_route(base, route, etat)
+            issues.append({"route": route, "issue": issue, "detail": detail})
+        if all(i["issue"] == "injoignable" for i in issues):
+            jeu["injoignables"].append(cle)
+            continue
+        jeu["joues"][cle] = {
+            "role": role,
+            "compte": Path(chemin).name,
+            "routes": issues,
+            "ok": all(i["issue"] == "ok" for i in issues),
+            "parcours": fichiers,
+            "routes_navigees": total,
+            "racine_par_defaut": sans_route,
+        }
+    return jeu
 
 
 # --- Contrat d adaptateur -----------------------------------------------------------------------
@@ -276,26 +564,135 @@ def exerces(cible: Path) -> set[str]:
     return {f"persona:{cle}" for cle, parcours in cites.items() if parcours}
 
 
-def _mention_instance(cible: Path) -> str:
-    from forge_tests.authentification import ENV_PROJET, _valeurs
+def _elements_du_jeu(cible: Path, jeu: dict, personas_: dict[str, dict]) -> list[Element]:
+    """Un élément `joue:<persona>` par persona dont le parcours a pu être joué sous son identité.
 
-    declaree = os.environ.get(_ENV_INSTANCE) or _valeurs(Path(cible) / ENV_PROJET).get(
-        _ENV_INSTANCE, ""
-    )
-    if declaree.strip():
-        return (
-            "parcours-personas : une instance servie est déclarée (FORGE_TESTS_BASE_URL) mais ce "
-            "pan n y joue AUCUN parcours — le jeu par persona contre cette instance reste ouvert"
+    Un persona sans compte, au compte illisible ou dont l instance est injoignable n a PAS
+    d élément : il n a pas été joué, et le dire (non_juge) est plus honnête que l accuser d un
+    échec du produit ou le compter pour un succès.
+    """
+    elements = []
+    for cle, joue in sorted(jeu["joues"].items()):
+        libelle = personas_[cle]["libelle"]
+        elements.append(
+            Element(
+                f"joue:{cle}",
+                PAN,
+                f"parcours de « {libelle} » joué contre l instance sous l identité du rôle "
+                f"« {joue['role']} »",
+                str(Path(cible) / joue["parcours"][0]),
+            )
         )
-    return (
-        "parcours-personas : aucune instance servie déclarée (FORGE_TESTS_BASE_URL) — le jeu des "
-        "parcours par persona contre une instance est impossible tant qu elle n est pas fournie"
+    return elements
+
+
+_PHRASES_ISSUE = {
+    "refuse": lambda d: f"refusée à ce rôle (HTTP {d})",
+    "mire": lambda d: d,
+    "erreur": lambda d: f"en erreur (HTTP {d})" if d.isdigit() else d,
+    "injoignable": lambda d: f"injoignable ({d})",
+}
+
+
+def _message_du_jeu(libelle: str, joue: dict, instance: str) -> str:
+    """La phrase d un constat de jeu : le persona, le rôle, les routes en défaut et pourquoi."""
+    fautives = [r for r in joue["routes"] if r["issue"] != "ok"]
+    montrees = "; ".join(
+        f"{r['route']} : {_PHRASES_ISSUE[r['issue']](r['detail'])}" for r in fautives[:5]
     )
+    reste = f"; … et {len(fautives) - 5} autre(s)" if len(fautives) > 5 else ""
+    return (
+        f"persona « {libelle} » : parcours joué sous l identité du rôle « {joue['role']} » "
+        f"contre {instance} — {len(fautives)} route(s) sur {len(joue['routes'])} en défaut : "
+        f"{montrees}{reste}"
+    )
+
+
+def _jeu_non_realise() -> str:
+    return (
+        "parcours-personas : le jeu de chaque parcours contre l instance servie, sous l identité "
+        "du rôle, n est PAS réalisé ici — il exige l instance servie (FORGE_TESTS_QUALIF_URL ou "
+        f"FORGE_TESTS_BASE_URL) et un compte par rôle ({_ENV_COMPTES}, `role=chemin`)"
+    )
+
+
+def _mentions_du_jeu(jeu: dict, personas_: dict[str, dict]) -> list[str]:
+    """Ce que le jeu a fait, et surtout ce qu il n a pas fait : une ligne par réserve."""
+    nom = {cle: entree["libelle"] for cle, entree in personas_.items()}
+    base = jeu["instance"]
+    if not base:
+        return [
+            "parcours-personas : aucune instance servie déclarée (FORGE_TESTS_QUALIF_URL ou "
+            "FORGE_TESTS_BASE_URL) — le jeu des parcours par persona contre une instance est "
+            "impossible tant qu elle n est pas fournie",
+            _jeu_non_realise(),
+        ]
+    lignes: list[str] = []
+    joues = jeu["joues"]
+    if joues:
+        detail = " · ".join(
+            f"{cle} sous « {j['role']} » : "
+            + ", ".join(f"{r['route']} {r['detail']}" for r in j["routes"])
+            for cle, j in sorted(joues.items())
+        )
+        lignes.append(
+            f"parcours-personas : JEU RÉEL — {len(joues)} parcours joué(s) contre {base} sous "
+            f"l identité du rôle de chaque persona, en GET seulement (l instance n est jamais "
+            f"modifiée) : {detail}"
+        )
+    else:
+        lignes.append(
+            "parcours-personas : une instance servie est déclarée (FORGE_TESTS_QUALIF_URL ou "
+            "FORGE_TESTS_BASE_URL) mais ce pan n y joue AUCUN parcours — aucun persona cité par "
+            f"un parcours n a pu être joué sous son identité ({_ENV_COMPTES}, `role=chemin`)"
+        )
+    if jeu["sans_identite"]:
+        lignes.append(
+            f"parcours-personas : {len(jeu['sans_identite'])} persona(s) cité(s) par un parcours "
+            f"mais SANS identité — non joué(s) : "
+            + ", ".join(nom[c] for c in jeu["sans_identite"])
+            + f" ; fournir un compte par rôle dans {_ENV_COMPTES} (`role=chemin`, un storage state "
+            "par rôle). Ce n est pas un échec du produit"
+        )
+    for cle, motif in sorted(jeu["illisibles"].items()):
+        lignes.append(
+            f"parcours-personas : le compte du persona « {nom[cle]} » est {motif} — non joué ; "
+            "ce n est ni un succès ni un échec du produit"
+        )
+    if jeu["injoignables"]:
+        lignes.append(
+            f"parcours-personas : instance {base} INJOIGNABLE pour "
+            + ", ".join(nom[c] for c in jeu["injoignables"])
+            + " — non joué(s) ; ce n est ni un succès ni un échec du produit. Démarrer l instance "
+            "(commande de démarrage déclarée par le projet) puis `--reprendre` le rapport"
+        )
+    for cle, ecartees in sorted(jeu["ecartees"].items()):
+        lignes.append(
+            f"parcours-personas : {len(ecartees)} route(s) du parcours de « {nom[cle]} » NON "
+            f"JOUÉE(S) ({', '.join(ecartees[:5])}) : leur nom porte une action (fermer la session, "
+            "supprimer, réinitialiser), et un GET sur une telle adresse peut modifier l instance "
+            "ou fermer la session du compte d audit"
+            + (" ; plus aucune route à jouer, le persona n est pas joué"
+               if cle in jeu["sans_route_jouable"] else "")
+        )
+    for cle, joue in sorted(joues.items()):
+        if joue["racine_par_defaut"]:
+            lignes.append(
+                f"parcours-personas : le parcours de « {nom[cle]} » ne navigue aucune route "
+                "littérale : le jeu a joué la racine (`/`) sous son identité, et rien d autre"
+            )
+        if joue["routes_navigees"] > PLAFOND_ROUTES:
+            lignes.append(
+                f"parcours-personas : le parcours de « {nom[cle]} » navigue "
+                f"{joue['routes_navigees']} routes ; le jeu en rejoue {PLAFOND_ROUTES} (plafond), "
+                "les suivantes ne sont pas jouées"
+            )
+    return lignes
 
 
 def analyser(cible: Path) -> SortieAdaptateur:
-    personas, notes = declares(cible)
-    if not personas:
+    personas_, notes = declares(cible)
+    if not personas_:
         if notes:
             return SortieAdaptateur(
                 NOM, PAN, str(cible), "SKIP",
@@ -309,8 +706,21 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 f"{_ENV_COMPTES} : ce projet ne déclare pas de persona à parcourir"
             ),
         )
+    # Le jeu contre l instance servie (TF-2123, suite) : il ajoute un élément `joue:<persona>` par
+    # parcours effectivement joué, exercé quand chacune de ses routes a répondu sous l identité.
+    jeu = jouer(cible, personas_)
+    exerce = exerces(cible) | {f"joue:{cle}" for cle, j in jeu["joues"].items() if j["ok"]}
     sortie = evaluer_surface(
-        NOM, PAN, str(cible), inventaire(cible), exerces(cible), SEUIL, NON_JUGE
+        NOM, PAN, str(cible),
+        [*inventaire(cible), *_elements_du_jeu(cible, jeu, personas_)],
+        exerce, SEUIL, NON_JUGE,
     )
-    sortie.non_juge = [*sortie.non_juge, *notes, _mention_instance(cible)]
+    for constat in sortie.findings:
+        if constat.id.startswith("joue:"):
+            cle = constat.id[len("joue:"):]
+            constat.classe = classes.PARCOURS_PERSONA_REFUSE
+            constat.message = _message_du_jeu(
+                personas_[cle]["libelle"], jeu["joues"][cle], jeu["instance"]
+            )
+    sortie.non_juge = [*sortie.non_juge, *notes, *_mentions_du_jeu(jeu, personas_)]
     return sortie
