@@ -38,8 +38,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from forge_tests import classes, seuils
-from forge_tests.disposition import motif_indetermine, paquet_sources, racine_execution
-from forge_tests.execution import PREALABLE_ABSENT, motif_indisponibilite, resume_fichiers
+from forge_tests.disposition import (
+    est_module_plat,
+    modules_plats,
+    motif_indetermine,
+    paquet_sources,
+    racine_execution,
+    racine_plate,
+)
+from forge_tests.execution import (
+    PREALABLE_ABSENT,
+    motif_indisponibilite,
+    python_designe,
+    resume_fichiers,
+)
 from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -49,9 +61,10 @@ DOSSIER_SOURCE = Path("backend/app")  # conservé pour mémoire : la racine est 
 SUITE = "tests"
 
 POUR_COUVRIR = (
-    "fournir un environnement Python du projet (`backend/.venv` ou `.venv`) avec sa suite "
-    "verte, et un paquet de sources sous `backend/` — la mutation altère la source puis "
-    "rejoue la suite, elle ne peut rien mesurer sans l'une ni l'autre"
+    "fournir un environnement Python du projet (`backend/.venv` ou `.venv`, ou l'interpréteur "
+    "désigné par `--python`) avec sa suite verte, et un paquet de sources sous `backend/` — ou "
+    "des modules `.py` à la racine avec un `tests/` voisin (outil autonome, TF-2173) — la mutation "
+    "altère la source puis rejoue la suite, elle ne peut rien mesurer sans l'une ni l'autre"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
@@ -156,8 +169,17 @@ def decouvrir(racine: Path, dossier: Path) -> tuple[list[Path], list[dict]]:
     motifs = _exclusions_declarees()
     retenus: list[Path] = []
     exclus: list[dict] = []
-    for source in sorted(dossier.rglob("*.py")):
+    # TF-2173 — racine PLATE (`dossier` est la racine d'exécution elle-même) : seuls les modules
+    # posés à la racine sont des sources. Un `rglob` y lirait `forge/`, `scripts/`, `docs/` ; la
+    # suite, l'amorçage et l'installation de la racine sont écartés et NOMMÉS, jamais tus.
+    plat = dossier == racine
+    for source in sorted(dossier.glob("*.py") if plat else dossier.rglob("*.py")):
         relatif = source.relative_to(racine).as_posix()
+        if plat and not est_module_plat(source.name):
+            exclus.append(
+                {"module": relatif, "motif": "test ou amorçage de la racine, hors sources"}
+            )
+            continue
         if any(partie in _DOSSIERS_EXCLUS for partie in source.relative_to(dossier).parts[:-1]):
             exclus.append({"module": relatif, "motif": "dossier hors sources du projet"})
             continue
@@ -1002,9 +1024,17 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # pire que le SKIP d avant. Un correctif qui aggrave le cas qu il vise n en est pas un.
     racine = racine_execution(cible)
     dossier = paquet_sources(cible)
-    python = racine / ".venv" / "Scripts" / "python.exe"
-    if not python.exists():
-        python = racine / ".venv" / "bin" / "python"
+    # TF-2173 — un outil à modules plats n'a pas de paquet `app` ni `src` : la racine est la source.
+    plate = racine_plate(cible) if dossier is None else None
+    if plate is not None:
+        dossier = plate
+    # TF-2173 — l'interpréteur DÉSIGNÉ (`--python`) prime sur le `.venv` de la racine ; désigné et
+    # introuvable, il n'est pas remplacé en silence (`motif_python` est publié au SKIP).
+    python, motif_python = python_designe(cible)
+    if python is None:
+        python = racine / ".venv" / "Scripts" / "python.exe"
+        if not python.exists():
+            python = racine / ".venv" / "bin" / "python"
     # TF-0402 (RF-4, lot Produit-09) — « écosystème non couvert » et « configuration manquante » ne
     # sont pas le même verdict, et les confondre coûte double : une configuration réclamée pour
     # un pan structurellement inatteignable use la crédibilité des actions (TF-0381), et un
@@ -1039,6 +1069,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
     par_module = _entier_env("FORGE_TESTS_MUTANTS_PAR_MODULE", _MUTANTS_PAR_MODULE_DEFAUT)
     plafond = _entier_env("FORGE_TESTS_MUTATION_PLAFOND", _PLAFOND_DEFAUT)
     non_juge = list(NON_JUGE)
+    if plate is not None:
+        non_juge.append(
+            "mutation : RACINE PLATE (TF-2173) — outil sans paquet `app` ni `src` : "
+            f"{len(modules_plats(plate))} module(s) posé(s) à la racine sont la source "
+            f"({', '.join(m.name for m in modules_plats(plate)[:8])}"
+            f"{' …' if len(modules_plats(plate)) > 8 else ''}), la suite est celle de `tests/`"
+        )
     if exclus:
         non_juge.append(
             "mutation : "
@@ -1080,8 +1117,10 @@ def analyser(cible: Path) -> SortieAdaptateur:
             findings=_findings_modules(dossier, inventaire),
             non_juge=[
                 *non_juge,
-                f"mutation : aucun environnement Python du projet ({racine / '.venv'}) — "
-                f"{len(retenus)} module(s) inventorié(s), aucun muté",
+                motif_python
+                or f"mutation : aucun environnement Python du projet ({racine / '.venv'}) ; "
+                "pour un outil sans `.venv`, désigner l'interpréteur par `--python`",
+                f"mutation : {len(retenus)} module(s) inventorié(s), aucun muté",
             ],
             modules=inventaire,
         )

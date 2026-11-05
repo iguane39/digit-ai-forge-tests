@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -378,9 +379,33 @@ def main(argv: list[str] | None = None) -> int:
             "projet, et seulement sous `output/`, que l audit exclut de son perimetre"
         ),
     )
+    parser.add_argument(
+        "--python",
+        type=Path,
+        default=None,
+        metavar="INTERPRETEUR",
+        help=(
+            "interpreteur Python qui lance la suite du projet (couverture, mutation) quand il n a "
+            "pas de `.venv` : un outil autonome rangé hors de backend/ (TF-2173). Equivaut a "
+            "FORGE_TESTS_PYTHON, et prime sur la valeur de .env.forge-tests ou de "
+            "forge/etapes/tests/audit.env. Un chemin qui n existe pas est refuse, jamais remplace"
+        ),
+    )
     args = parser.parse_args(argv)
     if args.copie_output and args.livrables is None:
         parser.error("--copie-output exige --livrables : la copie est celle du dashboard produit")
+    if args.python is not None:
+        # TF-2173 — résolu ICI et posé dans l environnement : `charger_env` ne surcharge jamais
+        # une variable déjà posée, donc `--python` prime sur les deux fichiers du projet. Un nom nu
+        # (`python`) est cherché dans le PATH ; un chemin se lit depuis le dossier de l opérateur.
+        import shutil
+
+        brut = str(args.python)
+        trouve = shutil.which(brut) if len(args.python.parts) == 1 else None
+        interpreteur = Path(trouve) if trouve else args.python.resolve()
+        if not interpreteur.is_file():
+            parser.error(f"--python {brut} : {interpreteur} n existe pas")
+        os.environ["FORGE_TESTS_PYTHON"] = str(interpreteur)
 
     # TF-0243 — l écart se DÉCLARE avant la mesure. Un opérateur qui a rempli le `.env` du
     # dépôt au lieu de celui du projet verrait sinon des pans « sans objet » sans jamais

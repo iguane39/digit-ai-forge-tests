@@ -24,10 +24,12 @@ from pathlib import Path
 
 from forge_tests import disposition
 from forge_tests.disposition import (
+    OMISSIONS_RACINE_PLATE,
     motif_indetermine,
     motif_racine_execution,
     nom_paquet_sources,
     racine_execution,
+    racine_plate,
 )
 
 SONDES = Path(__file__).resolve().parent / "sondes"
@@ -148,7 +150,42 @@ def _venvs_essayes(banc: Path) -> list[Path]:
     return [racine / ".venv" for racine in racines]
 
 
+#: TF-2173 — l'interpréteur que le produit ou l'opérateur DÉSIGNE (`--python`, ou cette clé dans
+#: `.env.forge-tests` / `forge/etapes/tests/audit.env`). Un outil autonome n'a souvent aucun
+#: `.venv` : sans désignation, l'audit ne pouvait pas lancer sa suite (Produit-86, RP-13).
+ENV_PYTHON = "FORGE_TESTS_PYTHON"
+
+
+def python_designe(banc: Path) -> tuple[Path | None, str | None]:
+    """(interpréteur désigné, motif quand la désignation est inutilisable) — TF-2173.
+
+    Rien désigné : (None, None), la découverte des `.venv` s'applique. Désigné et trouvé :
+    (chemin, None). Désigné et introuvable : (None, motif) — la désignation n'est JAMAIS remplacée
+    en silence par un autre interpréteur, ce serait mesurer le produit avec un environnement que
+    personne n'a choisi. Un nom nu (`python`) est cherché dans le PATH ; un chemin relatif se lit
+    depuis la racine auditée.
+    """
+    brut = (os.environ.get(ENV_PYTHON) or "").strip()
+    if not brut:
+        return None, None
+    chemin = Path(brut)
+    if not chemin.is_absolute():
+        trouve = shutil.which(brut) if len(chemin.parts) == 1 else None
+        chemin = Path(trouve) if trouve else Path(banc) / chemin
+    if chemin.is_file():
+        return chemin, None
+    return None, (
+        f"{ENV_PYTHON}={brut!r} ne désigne aucun fichier ({chemin}) — l'interpréteur désigné "
+        "n'est pas remplacé par un autre : corriger `--python` ou cette clé"
+    )
+
+
 def _python(banc: Path) -> Path | None:
+    designe, motif = python_designe(banc)
+    if designe is not None:
+        return designe
+    if motif:
+        return None
     for venv in _venvs_essayes(banc):
         for candidat in (venv / "Scripts" / "python.exe", venv / "bin" / "python"):
             if candidat.exists():
@@ -233,12 +270,17 @@ def mesurer(banc_str: str) -> dict | None:
     _declarer(banc, "racine-execution", motif_racine_execution(banc))
     python = _python(banc)
     if python is None:
+        _designe, motif_designation = python_designe(banc)
         essayes = ", ".join(str(v) for v in _venvs_essayes(banc))
         _declarer(
             banc,
             "backend",
-            f"aucun environnement Python dans le projet analysé — cherché sous {essayes} ; "
-            f"{motif_racine_execution(banc)}",
+            motif_designation
+            or (
+                f"aucun environnement Python dans le projet analysé — cherché sous {essayes} ; "
+                f"{motif_racine_execution(banc)} ; pour un outil sans `.venv`, désigner "
+                f"l'interpréteur par `--python` ou {ENV_PYTHON}"
+            ),
         )
         return None
     if not _coverage_present(banc, python):
@@ -247,11 +289,18 @@ def mesurer(banc_str: str) -> dict | None:
     # paquet s appelle autrement rend une couverture vide, et l absence de mesure passait alors
     # pour une suite qui n exerce rien. Voir `forge_tests.disposition`.
     paquet = nom_paquet_sources(banc)
-    if paquet is None:
+    # TF-2173 — un outil à modules plats n'a pas de paquet : la source mesurée est la racine
+    # d'exécution elle-même, sans l'environnement ni les artefacts (`OMISSIONS_RACINE_PLATE`).
+    plate = racine_plate(banc) if paquet is None else None
+    if paquet is None and plate is None:
         _declarer(
             banc, "backend", f"sources du projet non localisables — {motif_indetermine(banc)}"
         )
         return None
+    if plate is not None:
+        sources_coverage = ["--source=.", "--omit=" + ",".join(OMISSIONS_RACINE_PLATE)]
+    else:
+        sources_coverage = [f"--source={paquet},tests"]
     # TF-0216 : la suite se lance depuis la racine DÉCOUVERTE, pas depuis `<cible>/backend`
     # supposé. Sur un produit à racine plate, ce `cwd` en dur pointait un dossier inexistant et
     # emportait sept pans d un coup — alors que la suite y est verte.
@@ -272,7 +321,7 @@ def mesurer(banc_str: str) -> dict | None:
         }
         lance = _run(
             [
-                str(python), "-m", "coverage", "run", "--branch", f"--source={paquet},tests",
+                str(python), "-m", "coverage", "run", "--branch", *sources_coverage,
                 "-m", "pytest", "-q", "--no-header",
                 "-p", "no:cacheprovider", "-p", "no:warnings",
                 "-p", "sonde_api", "-p", "sonde_data",

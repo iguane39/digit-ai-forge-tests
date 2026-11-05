@@ -73,6 +73,8 @@ GLOSES: dict[str, str] = {
     "FORGE_TESTS_FAITS": "JSON `{\"<pivot>\": <nombre>}` — la DONNEE du produit, seul point "
                          "fixe hors du catalogue. Le defaut fondateur disait « 8 » dans les "
                          "SEPT langues : coherentes entre elles, et toutes fausses",
+    "FORGE_TESTS_PYTHON": "interpréteur qui lance la suite du projet quand il n'a pas de `.venv` "
+                          "(outil autonome, TF-2173) ; l'option `--python` le pose",
     "FORGE_TESTS_AVANCEMENT_S": "période d'émission de l'avancement, en secondes",
     "FORGE_TESTS_DELAI_BACKEND_S": "délai de la suite backend sous coverage, en secondes "
                                    "(défaut 900, TF-1675)",
@@ -103,6 +105,9 @@ def rendre(cles: list[str]) -> str:
         "# Configuration d'audit forge-tests — GABARIT DÉPOSÉ PAR LA FORGE (TF-0539).",
         "#",
         "# Renommer ce fichier en `.env.forge-tests` et renseigner ce qui s'applique à ce projet.",
+        "# Ce qui ne porte aucun secret (application désignée, mutation demandée, instance,",
+        "# interpréteur) se range plutôt dans `forge/etapes/tests/audit.env` : versionné avec le",
+        "# produit et lu d'office, il évite de refaire le réglage à chaque session (TF-2161).",
         "# Une clé laissée vide est une clé non fournie : le pan concerné le DIT dans le rapport,",
         "# il ne devine pas et ne se tait pas.",
         "#",

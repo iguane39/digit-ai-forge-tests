@@ -277,6 +277,75 @@ def paquet_sources(cible: Path) -> Path | None:
     return candidats[0] if len(candidats) == 1 else None
 
 
+#: TF-2173 (Produit-86, RP-13, 03/11/2026) — fichiers `.py` posés directement sous une racine plate
+#: qui ne sont PAS des modules du produit : la suite, l'amorçage de la suite et l'installation.
+#: Les muter mesurerait la suite d'un tiers ou des mutants équivalents par construction.
+_AMORCAGE_PLAT = {"conftest.py", "setup.py", "__init__.py"}
+
+
+def est_module_plat(nom: str) -> bool:
+    """Ce fichier `.py` de la racine est-il un module du produit (ni test, ni amorçage) ?"""
+    bas = nom.lower()
+    if not bas.endswith(".py") or bas in _AMORCAGE_PLAT:
+        return False
+    return not (bas.startswith("test_") or bas.endswith("_test.py"))
+
+
+def modules_plats(racine: Path) -> list[Path]:
+    """Les modules du produit posés directement sous `racine`, triés (TF-2173)."""
+    if not racine.is_dir():
+        return []
+    return sorted(p for p in racine.glob("*.py") if p.is_file() and est_module_plat(p.name))
+
+
+def _a_des_tests_voisins(racine: Path) -> bool:
+    """Une suite vit-elle à côté des modules : un `tests/` ou `test/` portant du Python, ou un
+    `test_*.py` à la racine ?"""
+    for nom in ("tests", "test"):
+        dossier = racine / nom
+        if dossier.is_dir() and next(dossier.rglob("*.py"), None) is not None:
+            return True
+    return any(
+        p.is_file() and not est_module_plat(p.name) and p.name.lower() not in _AMORCAGE_PLAT
+        for p in racine.glob("*.py")
+    )
+
+
+def racine_plate(cible: Path) -> Path | None:
+    """La racine d'exécution elle-même, quand le projet est un OUTIL À MODULES PLATS (TF-2173).
+
+    Fait remonté (Produit-86, RP-13, 03/11/2026) : `outils/compteur-foundry`, un outil Python
+    autonome rangé hors de `backend/`, des modules `.py` et un `tests/` côte à côte, sans paquet
+    `app` ni `src`. `paquet_sources` rendait None, le pan back sortait en SKIP « sources non
+    localisables » malgré 11 tests verts, et le verdict restait PARTIEL.
+
+    Une racine est plate quand, CUMULATIVEMENT : aucune déclaration explicite ne désigne les
+    sources (`FORGE_TESTS_SOURCES` prime toujours), aucun paquet ne se découvre (ni `app`, ni
+    `src`, ni dossier unique portant des modules), la racine porte au moins un module du produit
+    et une suite voisine. Plusieurs sous-dossiers de Python restent AMBIGUS : ils ne sont pas
+    départagés ici, la déclaration l'est.
+
+    `paquet_sources` ne change pas : les pans qui parcourent récursivement « le paquet » (api,
+    batch, data, fichiers) liraient `.venv/` et les artefacts du dépôt s'ils recevaient la racine
+    entière. Seuls la couverture d'exécution et le pan back (mutation) consomment cette fonction.
+    """
+    if _declaration() or paquet_sources(cible) is not None:
+        return None
+    racine = racine_execution(cible)
+    if not racine.is_dir() or _candidats(racine):
+        return None
+    if not modules_plats(racine) or not _a_des_tests_voisins(racine):
+        return None
+    return racine
+
+
+#: Dossiers que la couverture d'une racine plate écarte : l'environnement, les dépendances, les
+#: artefacts de build. La suite (`tests`) reste mesurée, comme avec un paquet.
+OMISSIONS_RACINE_PLATE = tuple(
+    f"{nom}/*" for nom in sorted(_HORS_SOURCES - {"tests", "test"})
+)
+
+
 def nom_paquet_sources(cible: Path) -> str | None:
     """Nom du paquet, tel que `coverage --source=` l attend."""
     dossier = paquet_sources(cible)
