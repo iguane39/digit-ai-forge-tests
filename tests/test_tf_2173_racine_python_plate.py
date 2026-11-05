@@ -376,3 +376,67 @@ class TestMesureReelle:
         modules = {m["module"]: m for m in sortie.modules}
         assert modules["compteur.py"]["exerce"] is True
         assert modules["compteur.py"]["mute"] is True
+
+
+# --- 6. La surface de l'outil plat : sans elle, sa campagne était refusée au rapport -------------
+class TestSurfaceDeLOutilPlat:
+    """Constaté en rejouant le cas du lot par la ligne de commande : une campagne de mutation jouée
+    sur un outil plat sortait en `REFUSE` (« score de mutation présent sans aucune couverture de
+    surface »). Un outil sans route ni formulaire n'a aucun autre pan qui publie une surface ; les
+    modules sources exercés par la suite sont la seule qu'il ait."""
+
+    def test_la_surface_compte_les_modules_exerces_et_ecarte_les_exclus(self) -> None:
+        inventaire = [
+            {"module": "a.py", "categorie": "metier", "exclu": None, "exerce": True},
+            {"module": "b.py", "categorie": "metier", "exclu": None, "exerce": False},
+            {"module": "conftest.py", "categorie": "exclu", "exclu": "hors sources",
+             "exerce": None},
+        ]
+        surface = mutation._surface_modules(inventaire)
+        assert surface["inventorie"] == 2 and surface["exerce"] == 1 and surface["ratio"] == 0.5
+        assert surface["elements_exerces"] == ["module:a.py"]
+        assert surface["elements_non_exerces"] == ["module:b.py"]
+        assert surface["seuil"] == 1.0
+
+    def test_sans_module_a_juger_il_n_y_a_pas_de_surface(self) -> None:
+        assert mutation._surface_modules([]) is None
+
+    def test_la_surface_est_declaree_au_registre_des_seuils(self) -> None:
+        from forge_tests import seuils
+
+        assert seuils.valeur("couverture_surface_modules") == 1.0
+        assert seuils.severite("couverture_surface_modules") == "bloquant"
+        assert "couverture_surface_modules" in seuils.au_rapport()
+
+    @pytest.mark.skipif(
+        not VENV_DU_BANC.is_file(),
+        reason=f"interpréteur portant coverage et pytest absent ({VENV_DU_BANC})",
+    )
+    def test_rouge_la_campagne_jouee_sur_un_outil_plat_passe_la_regle_conjointe(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        from forge_tests.adaptateurs import PANS_ATTENDUS
+        from forge_tests.noyau import rapport
+
+        cible = _outil_plat(tmp_path / "outil")
+        monkeypatch.setenv("FORGE_TESTS_PYTHON", str(VENV_DU_BANC))
+        monkeypatch.setenv("FORGE_TESTS_MUTATION", "1")
+        sortie = mutation.analyser(cible)
+        assert sortie.mutation, " ".join(sortie.non_juge)
+        assert sortie.surface is not None
+        assert sortie.surface["elements_exerces"] == ["module:compteur.py"]
+        assert sortie.surface["elements_non_exerces"] == ["module:rapport.py"]
+        # Avant : RapportRefuse — le score de mutation n'avait aucune surface à côté de lui.
+        publie = rapport([sortie], PANS_ATTENDUS)
+        assert publie["couverture_par_pan"]["back"]["ratio"] == 0.5
+        assert publie["mutation"]["back"]["mutants_viables"] > 0
+
+    def test_une_suite_avec_paquet_ne_publie_pas_de_surface_de_modules(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """Garde de portée : ce complément ne change rien pour un projet à paquet."""
+        cible = _outil_plat(tmp_path / "outil")
+        _ecrire(cible, "app/__init__.py", "")
+        _ecrire(cible, "app/service.py", "def f(a, b):\n    return a + b\n")
+        monkeypatch.setattr(mutation, "resume_fichiers", lambda c: None)
+        assert mutation.analyser(cible).surface is None

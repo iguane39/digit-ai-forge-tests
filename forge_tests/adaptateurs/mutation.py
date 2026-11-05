@@ -1016,6 +1016,31 @@ def _findings_modules(dossier: Path, inventaire: list[dict]) -> list[Finding]:
     return findings
 
 
+def _surface_modules(inventaire: list[dict]) -> dict | None:
+    """La surface d un outil à racine plate : ses modules sources exercés par la suite (TF-2173).
+
+    Constaté en rejouant le cas du lot par la ligne de commande : une campagne jouée sur un outil
+    plat sortait en `REFUSE` (« score de mutation présent sans aucune couverture de surface »).
+    Un outil sans route ni formulaire n a aucun autre pan qui publie une surface. Exercé = au
+    moins une ligne couverte, comme dans l inventaire des modules. Pas de finding ajouté ici :
+    `_findings_modules` nomme déjà chaque module jamais exercé. None s il n y a rien à juger.
+    """
+    modules = [e for e in inventaire if e.get("categorie") != "exclu"]
+    if not modules:
+        return None
+    exerces = sorted(f"module:{e['module']}" for e in modules if e.get("exerce"))
+    manquants = sorted(f"module:{e['module']}" for e in modules if not e.get("exerce"))
+    return {
+        "inventorie": len(modules),
+        "exerce": len(exerces),
+        "ratio": round(len(exerces) / len(modules), 4),
+        "seuil": seuils.valeur("couverture_surface_modules"),
+        "elements_exerces": exerces,
+        "elements_non_exerces": manquants,
+        "entrants_hors_ratio": [],
+    }
+
+
 def analyser(cible: Path) -> SortieAdaptateur:
     # TF-0216 (RT-2, lot COMPTA) : la racine d exécution est DÉCOUVERTE, plus ancrée en dur sur
     # `backend\`. Laisser l ancre ici pendant que `paquet_sources` suit la racine découverte
@@ -1387,6 +1412,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
         verdict="FAIL" if bloquants else "PASS",
         findings=findings,
         non_juge=non_juge,
+        surface=_surface_modules(inventaire) if plate is not None else None,
         mutation={
             "mutants_viables": viables,
             "tues": tues,

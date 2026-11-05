@@ -86,6 +86,22 @@ SEUILS: dict[str, dict] = {
             "vérifié : sur la surface d API, le standard du framework est l exhaustivité"
         ),
     },
+    # TF-2173 — la surface d un outil à racine plate (sans route ni formulaire) : ses modules.
+    "couverture_surface_modules": {
+        "valeur": 1.0,
+        "severite": "bloquant",
+        "porte_sur": (
+            "modules sources d un outil à racine plate (sans route ni formulaire) exercés par la "
+            "suite — au moins une ligne couverte"
+        ),
+        "justification": (
+            "un outil autonome n a aucune autre surface que ses modules ; un module que la suite "
+            "n importe jamais est du code que personne n exerce, et le finding "
+            "`module-non-exerce` qui le nomme est déjà bloquant — le seuil dit la même exigence "
+            "au niveau du pan, et donne au score de mutation la couverture de surface que la "
+            "règle conjointe lui réclame"
+        ),
+    },
     "couverture_surface_interface": {
         "valeur": 1.0,
         "severite": "bloquant",
