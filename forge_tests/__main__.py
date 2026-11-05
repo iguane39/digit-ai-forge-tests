@@ -28,9 +28,16 @@ SORTIE_REFUS_G1 = 4
 
 
 def analyser(cible: Path, pans: list[str] | None = None) -> dict:
+    from forge_tests.authentification import charger_env, configuration_lue
     from forge_tests.avancement import Avancement
     from forge_tests.instance import au_rapport as instance_au_rapport
     from forge_tests.qualification import qualifier
+
+    # TF-2161 — la configuration d audit du produit est lue A L ENTREE de l audit, avant le moindre
+    # pan : `FORGE_TESTS_MUTATION` n etait lue par aucun chargement, et `FORGE_TESTS_APP` ne
+    # l etait que par le pan qui passait le premier. Le reglage vit chez le produit
+    # (`forge/etapes/tests/audit.env`), plus dans la transcription de la session qui l a pose.
+    charger_env(cible)
 
     # TF-0096 (contrat TF-0094 du pilot) : un audit n'est plus silencieux — chaque pan est
     # une unité nommée, émise toutes les 3 min (stderr + <cible>/forge/avancement.jsonl si
@@ -94,6 +101,9 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
         "motif": "dossiers ignorés par git sous la racine auditée : non versionnés, donc hors "
                  "produit (TF-1767). Réclamer un dossier : son nom dans FORGE_TESTS_INCLURE",
     }
+    # TF-2161 — d'où vient la configuration : les noms des clés du fichier versionné, ceux des
+    # clés de secret écartées, jamais une valeur.
+    rap["configuration_audit"] = configuration_lue(cible)
     return rap
 
 
@@ -387,6 +397,22 @@ def main(argv: list[str] | None = None) -> int:
             "une instance déployée et ne valent que déclarées par le projet audité "
             f"(`{args.cible}/{ENV_PROJET}`) — un audit ne part jamais sur l instance laissée "
             "par le run précédent.",
+            file=sys.stderr,
+        )
+
+    # TF-2161 — même règle que ci-dessus : une clé écartée se DÉCLARE avant la mesure. Le fichier
+    # d'audit du produit est versionné ; un secret rangé là n'est pas lu, et l'opérateur doit
+    # apprendre où le mettre (`.env.forge-tests`, non versionné) plutôt que chercher son compte.
+    from forge_tests.authentification import ENV_AUDIT, cles_secretes_ignorees
+
+    secretes = cles_secretes_ignorees(args.cible.resolve())
+    if secretes:
+        print(
+            "[TF-2161] "
+            + ", ".join(secretes)
+            + f" portée(s) par `{args.cible}/{ENV_AUDIT}` : IGNORÉE(S). Ce fichier est versionné "
+            f"avec le produit et ne porte aucun secret ; les ranger dans `{ENV_PROJET}`, qui ne "
+            "l'est pas.",
             file=sys.stderr,
         )
 

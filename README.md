@@ -1143,6 +1143,14 @@ Ce que Forge Tests **suppose** du projet pour pouvoir le mesurer. Chaque convent
 est appliquée par un adaptateur ; jusqu'ici elles n'étaient découvrables qu'en lisant son code.
 Aucune n'est obligatoire : ce qui manque produit un pan **motivé**, jamais un vert.
 
+### La configuration d'audit vit chez le produit (TF-2161)
+
+Le réglage d'un audit (application ASGI désignée, campagne de mutation demandée, instance de qualif, interpréteur) ne vit plus dans la transcription de la session qui l'a posé. *Mesuré le 04/11/2026 chez Produit-86 : l'audit relancé sans `FORGE_TESTS_APP`, `FORGE_TESTS_MUTATION` ni `FORGE_TESTS_QUALIF_URL` rendait api 0/150, back et qualif en SKIP, contre 144/144 la veille avec ces variables ; la rejouer coûtait 48 minutes.* Le fichier `forge/etapes/tests/audit.env` du produit est lu d'office à l'entrée de l'audit, avant le premier pan. Format de `.env.forge-tests` (`CLE=valeur`, `#` pour un commentaire).
+
+Il est **versionné** : il ne porte aucun secret. Une clé dont le nom désigne un mot de passe, un jeton, un secret, une clé ou un cookie y est **écartée** et le dit (stderr, puis `configuration_audit.cles_secretes_ecartees` au rapport, noms seulement). Les identifiants de démonstration restent dans `.env.forge-tests`, que l'audit protège (TF-0620). Priorité, du plus fort au plus faible : l'environnement de l'opérateur, `.env.forge-tests`, `audit.env`, le `.env` de Forge Tests. Le rapport publie sous `configuration_audit` les fichiers lus et les noms des clés de `audit.env`, jamais une valeur.
+
+**Refus nommé de l'application non désignée.** Sur une application bâtie sur une fabrique (`creer_app()`, `create_app()`, ou toute fonction qui construit un `FastAPI(...)`) sans instance `app` dans `app/main.py`, et sans `FORGE_TESTS_APP` nulle part, le pan `api` **refuse** de mesurer : SKIP, `non_testables` avec le champ `FORGE_TESTS_APP`, et un motif qui cite la fabrique trouvée (`fichier:ligne`), la ligne à recopier (`FORGE_TESTS_APP=app.main:creer_app`) et l'endroit où la ranger. Il ne lance pas la suite pour rendre un 0 % qui accuserait le produit d'un défaut de désignation. Une instance `app` au niveau module, une désignation faite ailleurs ou l'absence de toute fabrique reconnaissable ne sont pas refusées.
+
 ### Ce que git ignore n'est pas du produit (TF-1767)
 
 Un dossier que le dépôt ignore (`.gitignore`) sous la racine auditée n'est ni versionné ni
@@ -1549,8 +1557,7 @@ La suite backend est lancée depuis `<projet>/backend` avec `coverage run --bran
 
 ## Variables d'environnement
 
-Lues dans `<projet>/.env.forge-tests` puis dans le `.env` de Forge Tests (gitignoré, jamais
-journalisé). Modèle : `.env.exemple`.
+Lues dans `<projet>/.env.forge-tests` (privé, non versionné), puis dans `<projet>/forge/etapes/tests/audit.env` (versionné avec le produit, **sans secret** — voir « La configuration d'audit vit chez le produit »), puis dans le `.env` de Forge Tests (gitignoré, jamais journalisé). Une variable déjà posée dans l'environnement n'est jamais écrasée : l'opérateur prime sur les trois fichiers. Modèle : `.env.exemple`.
 
 | Variable | Rôle |
 |---|---|

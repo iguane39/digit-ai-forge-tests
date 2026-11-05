@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from forge_tests import classes
+from forge_tests.application import refus_designation
 from forge_tests.disposition import paquet_sources
 from forge_tests.execution import codes_emis, motif_indisponibilite, schema_openapi
 from forge_tests.invariants import NON_JUGE as NON_JUGE_INV
@@ -463,6 +464,19 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 "FORGE_TESTS_QUALIF_ROUTES — le pan compare des routes et des codes, la "
                 "provenance lui est indifférente",
             ],
+        )
+    # TF-2161 (Produit-86, RT-12) — une fabrique d'application que rien ne désigne ne se mesure
+    # pas : la sonde ne greffe que l'instance `app.main:app`, et le pan rendait « 0/150 » sur une
+    # suite verte, contre 144/144 la veille avec la désignation. Le refus vient AVANT la mesure,
+    # il nomme la clé, la fabrique et l'endroit où la ranger, et il est un manque de
+    # configuration (`non_testables`) et non un échec du produit.
+    refus = refus_designation(cible)
+    if refus is not None:
+        from forge_tests.qualification import declarer
+
+        declarer(cible, "backend", CHAMPS_REQUIS)
+        return SortieAdaptateur(
+            NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, refus["message"]]
         )
     if exerces(cible) is None:
         # « 0 % couvert » et « couverture non mesurable » sont deux verdicts OPPOSES. Les
