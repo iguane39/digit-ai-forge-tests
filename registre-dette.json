@@ -1685,6 +1685,12 @@
       "statut": "todo"
     },
     {
+      "id": "schema-cible-001",
+      "domaine": "schema-cible",
+      "enonce": "schema cible : le relevé compare les TABLES, les COLONNES, leur nullabilité, leur identité ; un type, un défaut serveur, un déclencheur ou une contrainte absents du relevé ne sont pas comparés, et un relevé extrait d'une autre version de la cible fait comparer autre chose",
+      "statut": "todo"
+    },
+    {
       "id": "schema-sql-001",
       "domaine": "schema-sql",
       "enonce": "schema sql : la lecture suit le decoupage de `forge_tests.sql` — un corps dollar-quote ($$...$$) qui contient un `;` est coupe au mauvais endroit, et un litteral dont les espaces sont multiples est normalise par le decoupage",

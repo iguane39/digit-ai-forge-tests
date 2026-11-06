@@ -1090,6 +1090,38 @@ La revue est **textuelle** : un motif construit à l'exécution lui échappe, et
 ne sont pas relues, hormis par le saut conditionnel (les trois premiers pièges mesurés sont des idiomes de navigateur). Les deux écarts
 sont déclarés au rapport, jamais tus.
 
+## Une base d'essai se construit depuis la cible, un banc rejoue du réel (TF-2267, TF-2275)
+
+**Règle (TF-2267) : une base d'essai se construit depuis le schéma de la cible (relevé
+`INFORMATION_SCHEMA` ou extraction), jamais depuis le jeu fictif.** *Mesuré le 06/11/2026 chez
+Produit-81 : un script SQL de données validé deux fois sur une base SQL Server jetable (979 lignes
+posées, puis 0) a échoué sur la cible, Msg 544 : `ID_TRADUCTION_LIB` est une colonne d'identité dans
+la base D1, pas dans la base jetable reconstruite d'après le jeu fictif. Un run de chaîne en échec et
+un second lancement.* La forge la joue là où elle prépare une base d'essai : la fabrique de données
+(`uv run python -m forge_tests.fabrique_donnees <projet> --sortie <jeu.sql> --schema-cible
+<releve.json>`, ou `FORGE_TESTS_SCHEMA_CIBLE`) compare le schéma des migrations du projet au relevé
+de la cible, colonne par colonne (table, colonne, nullabilité, identité), et **refuse** avant
+d'écrire quoi que ce soit au premier écart, en le nommant. Sans relevé, le rapport porte
+`schema_origine` : « migrations du projet, NON relevé sur la cible » ; la fabrique ne prétend pas
+avoir comparé. Le relevé est un JSON, une ligne par colonne :
+`{"table": "…", "colonne": "…", "type": "int", "nullable": "NO", "identite": 1}`, tel que le rend
+`SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMNPROPERTY(…, 'IsIdentity') FROM
+INFORMATION_SCHEMA.COLUMNS`. Hors de la fabrique, la règle reste une consigne : tout script de
+données validé sur une base jetable se rejoue sur une base construite d'après ce relevé.
+
+**Règle (TF-2275) : un banc rejoue des réponses réalistes, et rejoue deux fois.** *Mesuré le
+06/11/2026 chez Produit-86 : le premier job réel d'un outil derrière Cloudflare Access a révélé
+quatre défauts (constats recréés à chaque tour, bilan figé, message de tour faux, jetons de la cible
+en clair dans la preuve) que 21 tests unitaires ne voyaient pas, parce que les bancs ne jouaient ni
+deux tours ni une réponse 302 avec cookie.* `forge_tests/reponses_realistes.py` fournit le jeu :
+`servir("acces-302-cookie")` rend un 302 avec `Set-Cookie`, une mire, un jeton dans l'en-tête, la
+requête et le corps ; `servir("deux-tours")` change d'état au tour 2 ; `jetons_visibles(texte)`
+relève les jetons de la cible restés en clair dans ce qu'un outil publie. **Pour une ingestion**
+(lecture des constats d'une cible, reprise d'un rapport, import), `rejouer_deux_fois(ingerer)`
+ingère la même source deux fois et nomme les `doublons`, les constats `recrees` (identifiant
+instable) et les `modifies` : une liste vide partout, sinon l'ingestion recrée ses constats à chaque
+tour.
+
 ## Une campagne se termine — définition de fin et journal de boucle (TF-0352 / TF-0353)
 
 **Le trou, et son prix.** Rien dans le contrat de l'étape tests ne disait qu'une campagne

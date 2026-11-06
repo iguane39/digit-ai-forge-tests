@@ -43,6 +43,7 @@ from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal, InvalidOperation
 from pathlib import Path
 
 from forge_tests import execution as _execution
+from forge_tests import schema_cible as _schema_cible
 from forge_tests import schema_sql
 from forge_tests.adaptateurs.migrations import _fichiers, _versions_alembic
 from forge_tests.livrables import DepotInterdit, _verifier_hors_projet
@@ -98,6 +99,11 @@ _NUMERIQUES = frozenset({"entier", "decimal", "flottant", "monnaie", "date", "ho
 
 class SchemaIntrouvable(RuntimeError):
     """Le projet ne porte aucun schéma lisible par la fabrique. Rien n est inventé à sa place."""
+
+
+class SchemaEcarteDeLaCible(RuntimeError):
+    """La base d'essai (migrations du projet) diffère de la cible relevée (TF-2267). Rien n est
+    écrit : un jeu validé sur un substitut qui diffère de la cible ne prouve rien de la cible."""
 
 
 class _Impossible:
@@ -1068,11 +1074,18 @@ def _motif_sans_schema(cible: Path) -> str:
 
 def produire(cible: Path, sortie: Path, graine: int = GRAINE_DEFAUT,
              volume: int = VOLUME_DEFAUT, volumes: dict[str, int] | None = None,
-             chargement: bool = True, python: Path | None = None) -> dict:
+             chargement: bool = True, python: Path | None = None,
+             schema_cible: Path | None = None) -> dict:
     """Lit le schéma, fabrique, vérifie, écrit `sortie`, juge par chargement réel. Rend le rapport.
 
     Lève `DepotInterdit` (sortie dans le projet, G-1), `SchemaIntrouvable`, `ValueError`
-    (volumes) et `DonneeNonSynthetique` (garde-fou) AVANT d écrire quoi que ce soit.
+    (volumes), `SchemaEcarteDeLaCible` et `DonneeNonSynthetique` (garde-fou) AVANT d écrire quoi
+    que ce soit.
+
+    TF-2267 : une base d essai se construit depuis le schéma de la CIBLE, jamais depuis le jeu
+    fictif. Le schéma des migrations du projet est comparé au relevé de la cible (`schema_cible`,
+    à défaut `FORGE_TESTS_SCHEMA_CIBLE`) ; sans relevé, le rapport dit que la base d essai n est
+    PAS relevée sur la cible.
     """
     cible, sortie = Path(cible).resolve(), Path(sortie).resolve()
     _verifier_hors_projet(sortie.parent, cible)
@@ -1082,11 +1095,33 @@ def produire(cible: Path, sortie: Path, graine: int = GRAINE_DEFAUT,
     if not schema.tables:
         raise SchemaIntrouvable(f"{len(schema.migrations)} migration(s) lue(s), aucune table "
                                 "créée : rien à fabriquer")
+    releve = schema_cible or (
+        Path(os.environ[_schema_cible.VARIABLE]) if os.environ.get(_schema_cible.VARIABLE) else None
+    )
+    if releve is not None:
+        ecarts = _schema_cible.ecarts(schema, _schema_cible.lire_releve(releve))
+        if ecarts:
+            raise SchemaEcarteDeLaCible(
+                f"{len(ecarts)} écart(s) entre la base d'essai (migrations du projet) et la cible "
+                f"relevée ({releve}) — RIEN n est écrit : " + " ; ".join(ecarts)
+            )
     jeu = fabriquer(schema, graine, volume, volumes)
     verifiees = verifier_synthetique(jeu, cible)
     sortie.parent.mkdir(parents=True, exist_ok=True)
     sortie.write_text(jeu.texte(), encoding="utf-8", newline="\n")
     rapport = rapporter(jeu, cible, sortie, verifiees)
+    if releve is not None:
+        rapport["schema_origine"] = (
+            f"migrations du projet, comparé au relevé de la cible ({releve}) : aucun écart"
+        )
+        rapport["non_juge"] = [*rapport["non_juge"], *_schema_cible.NON_JUGE]
+    else:
+        rapport["schema_origine"] = (
+            "migrations du projet, NON relevé sur la cible : la base d'essai peut différer de la "
+            f"cible (identité, nullabilité) sans que rien ne le dise ; fournir "
+            f"{_schema_cible.VARIABLE}"
+            " (relevé INFORMATION_SCHEMA) pour comparer"
+        )
     if not chargement:
         rapport.update(verdict="NON_JUGE", motif=(
             "chargement non demande (--sans-chargement) : le jeu est ecrit, il n est PAS juge"))
@@ -1222,6 +1257,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--python", type=Path, default=None, metavar="INTERPRETE",
                         help="interpreteur portant testcontainers et psycopg (defaut : celui du "
                              "projet, puis celui de la forge)")
+    parser.add_argument("--schema-cible", type=Path, default=None, metavar="RELEVE.json",
+                        help="relevé INFORMATION_SCHEMA de la cible (à défaut "
+                             f"{_schema_cible.VARIABLE}) : la fabrique REFUSE si la base d'essai "
+                             "diffère de la cible (TF-2267)")
     parser.add_argument("--sans-chargement", action="store_true",
                         help="ecrire le jeu sans le juger (verdict NON_JUGE, code 3)")
     parser.add_argument("--json", action="store_true", help="rapport machine complet")
@@ -1239,7 +1278,10 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         rapport = produire(args.cible, args.sortie, args.graine, args.volume, volumes,
-                           chargement=not args.sans_chargement, python=args.python)
+                           chargement=not args.sans_chargement, python=args.python,
+                           schema_cible=args.schema_cible)
+    except SchemaEcarteDeLaCible as refus:
+        return publier({"verdict": "REFUSE", "cible": str(args.cible), "motif": str(refus)})
     except DepotInterdit as refus:
         sys.stdout.flush()
         print(f"G-1 : jeu HORS projet requis — chemin recu : {args.sortie}\n{refus}",
