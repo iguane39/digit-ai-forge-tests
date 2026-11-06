@@ -25,6 +25,7 @@ from typing import Any
 from forge_tests import classes
 from forge_tests.adaptateurs import accessibilite
 from forge_tests.adaptateurs._parcours import parcourir
+from forge_tests.disposition import racine_front
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -108,7 +109,7 @@ def inventaire(cible: Path) -> list[Element]:
     routes, _ = accessibilite.routes_a_auditer(cible)
     return [
         Element(id=f"contraste:{route}", pan=PAN, libelle=f"contraste de {route}",
-                source=str(cible / "frontend"))
+                source=str(racine_front(cible)))
         for route in routes
     ]
 
@@ -166,7 +167,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     # l ecart se declare au dossier MEP.
                     message=f"[{route}] contraste WCAG AA — {quoi} : {detail}",
                     severite="bloquant",
-                    risque=coter(PAN, identifiant, str(cible / "frontend")),
+                    risque=coter(PAN, identifiant, str(racine_front(cible))),
                 )
             )
         # `unmeasured` est la part HONNETE de la mesure : ce que le calcul ne peut pas trancher

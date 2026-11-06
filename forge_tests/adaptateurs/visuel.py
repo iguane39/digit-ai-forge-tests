@@ -22,6 +22,7 @@ import subprocess
 from pathlib import Path
 
 from forge_tests import classes
+from forge_tests.disposition import racine_front
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -203,7 +204,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     localisation=route,
                     message=f"[{route}] {brut.get('msg', '')}",
                     severite="bloquant" if brut.get("sev") == "bloquant" else "signale",
-                    risque=coter(PAN, identifiant, str(cible / "frontend")),
+                    risque=coter(PAN, identifiant, str(racine_front(cible))),
                 )
             )
     if sautes:

@@ -37,6 +37,7 @@ from typing import Any
 from forge_tests import classes
 from forge_tests.adaptateurs import accessibilite, contraste
 from forge_tests.adaptateurs._parcours import parcourir
+from forge_tests.disposition import racine_front
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -242,7 +243,7 @@ def _lire_croisements(route: str, croisements: dict, bloquantes: dict[str, str],
                         message=(f"[{route}] filtres croises « {nom} » — {quoi_dit} : {quoi} : "
                                  f"{ecart.get('detail', '')}"),
                         severite="bloquant",
-                        risque=coter(PAN, identifiant, str(cible / "frontend")),
+                        risque=coter(PAN, identifiant, str(racine_front(cible))),
                     )
                 )
         for famille, quoi_dit in averties.items():
@@ -262,7 +263,7 @@ def inventaire(cible: Path) -> list[Element]:
     routes, _ = accessibilite.routes_a_auditer(cible)
     return [
         Element(id=f"plancher:{route}", pan=PAN, libelle=f"plancher visuel de {route}",
-                source=str(cible / "frontend"))
+                source=str(racine_front(cible)))
         for route in routes
     ]
 
@@ -355,7 +356,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                         localisation=route,
                         message=f"[{route}] {quoi_dit} — {quoi} : {detail}",
                         severite="bloquant",
-                        risque=coter(PAN, identifiant, str(cible / "frontend")),
+                        risque=coter(PAN, identifiant, str(racine_front(cible))),
                     )
                 )
         # Le PLAFOND de V1 du socle (TF-0382) : quand l inventaire a ete tronque, le total exact

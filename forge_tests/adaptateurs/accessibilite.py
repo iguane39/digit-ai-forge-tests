@@ -638,7 +638,7 @@ def source_des_routes(cible: Path, provenance: str) -> str:
     qui n existe pas : le constat devenait invérifiable.
     """
     if provenance == PROVENANCE_FRONT:
-        return str(cible / "frontend" / "src" / "routes.jsx")
+        return str(racine_front(cible) / "src" / "routes.jsx")
     if provenance == PROVENANCE_DECLAREE:
         return CHAMP_ROUTES
     if provenance == PROVENANCE_SERVIE:
@@ -730,7 +730,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                         localisation=f"{route}",
                         message=f"[{route}] {brut.get('msg', '')}",
                         severite="bloquant" if brut.get("sev") == "bloquant" else "signale",
-                        risque=coter(PAN, identifiant, str(cible / "frontend")),
+                        risque=coter(PAN, identifiant, str(racine_front(cible))),
                     )
                 )
         # N routes rendant le MEME DOM = une seule page reellement auditee. Sans ce controle,

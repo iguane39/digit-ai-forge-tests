@@ -27,6 +27,7 @@ from typing import Any
 from forge_tests import classes
 from forge_tests.adaptateurs import accessibilite
 from forge_tests.adaptateurs._parcours import parcourir
+from forge_tests.disposition import racine_front
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -174,7 +175,7 @@ def inventaire(cible: Path) -> list[Element]:
     routes, _ = accessibilite.routes_a_auditer(cible)
     return [
         Element(id=f"clavier:{route}", pan=PAN, libelle=f"navigation clavier de {route}",
-                source=str(cible / "frontend"))
+                source=str(racine_front(cible)))
         for route in routes
     ]
 
@@ -272,7 +273,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                          "quand il prend le focus : un utilisateur au clavier ne sait pas ou "
                          "il est (RGAA 10.7, WCAG 2.4.7 AA)"),
                 severite="bloquant",
-                risque=coter(PAN, identifiant, str(cible / "frontend")),
+                risque=coter(PAN, identifiant, str(racine_front(cible))),
             ))
 
         k2 = releve.get("k2")
@@ -289,7 +290,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                          f"{k2['piege']} : l utilisateur au clavier ne peut plus sortir "
                          "(WCAG 2.1.2, niveau A)"),
                 severite="bloquant",
-                risque=coter(PAN, identifiant, str(cible / "frontend")),
+                risque=coter(PAN, identifiant, str(racine_front(cible))),
             ))
         elif k2.get("hors_page"):
             non_juge.append(
@@ -308,7 +309,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                          "sur une page a navigation repetee, l utilisateur au clavier la "
                          "retraverse a chaque page (RGAA 12.7)"),
                 severite="signale",
-                risque=coter(PAN, identifiant, str(cible / "frontend")),
+                risque=coter(PAN, identifiant, str(racine_front(cible))),
             ))
         elif evitement == "cible-absente":
             identifiant = f"clavier:K3:{route}:cible"
@@ -318,7 +319,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                          "une affordance inerte est pire qu absente : elle se compte conforme "
                          "et ne mene nulle part (RGAA 12.7)"),
                 severite="bloquant",
-                risque=coter(PAN, identifiant, str(cible / "frontend")),
+                risque=coter(PAN, identifiant, str(racine_front(cible))),
             ))
 
     if not mesurees:
