@@ -314,6 +314,50 @@ def routes_du_parcours(brut: str) -> list[str]:
     return routes
 
 
+# TF-2204 (retour Produit-86 du 05/11/2026) : une route que le test porteur ATTEND en 404
+# (`/adresse-inconnue-e2e`, E-069) était comptée en défaut par le jeu : parcours-personas 2/4,
+# verdict PARTIEL et seuil bloquant sur un produit conforme. Un code que le test lui-même affirme
+# pour cette route n'est pas un défaut du produit : c'est le comportement vérifié.
+_CODE_ATTENDU = (
+    # expect(reponse.status()).toBe(404) · expect(r?.status()).toEqual(404)
+    re.compile(
+        r"status\w*\s*(?:\(\s*\))?\s*\)?\s*\.\s*(?:toBe|toEqual|toStrictEqual)\s*\(\s*(\d{3})\s*\)"
+    ),
+    # assert r.status_code == 404 · expect(r.status() === 404).toBe(true)
+    re.compile(r"status\w*\s*(?:\(\s*\))?\s*(?:===?)\s*(\d{3})"),
+    # cy.request(...).its('status').should('eq', 404)
+    re.compile(r"""should\(\s*['"]eq['"]\s*,\s*(\d{3})\s*\)"""),
+)
+_DECLARATION_DE_TEST = re.compile(r"""\b(?:test|it)(?:\.\w+)*\s*\(\s*['"`]""")
+
+
+def codes_attendus_par_route(brut: str) -> dict[str, set[int]]:
+    """{route: {codes que le test affirme pour elle}} — lus après chaque navigation littérale.
+
+    Un code compte pour la route dont il suit la navigation, jusqu'à la navigation suivante ou la
+    déclaration du test suivant : l'affirmer pour `/inconnue` n'excuse pas un 404 sur `/tableau`.
+    Les codes de redirection (3xx) sont écartés : le jeu suit les redirections et juge la page
+    d'arrivée, comme le navigateur du test.
+    """
+    attendus: dict[str, set[int]] = {}
+    navigations = [m for m in _GOTO_LITTERAL.finditer(brut)]
+    for rang, trouve in enumerate(navigations):
+        route = trouve.group("route").strip()
+        if not route.startswith("/") or "${" in route or route.startswith("//"):
+            continue
+        chemin = route.split("#")[0].split("?")[0] or "/"
+        fin = navigations[rang + 1].start() if rang + 1 < len(navigations) else len(brut)
+        suite = brut[trouve.end():fin]
+        autre_test = _DECLARATION_DE_TEST.search(suite)
+        if autre_test:
+            suite = suite[:autre_test.start()]
+        for motif in _CODE_ATTENDU:
+            for code in motif.findall(suite):
+                if not 300 <= int(code) < 400:
+                    attendus.setdefault(chemin, set()).add(int(code))
+    return attendus
+
+
 def _valeur_declaree(cible: Path, cle: str) -> str:
     """Une clé de configuration, SANS rien écrire dans l environnement du processus.
 
@@ -433,11 +477,17 @@ def _est_la_mire(chemin: str) -> bool:
     return premier in _MIRES
 
 
-def _jouer_route(base: str, route: str, etat: dict) -> tuple[str, str]:
+def _jouer_route(
+    base: str, route: str, etat: dict, attendus: frozenset[int] | set[int] = frozenset()
+) -> tuple[str, str]:
     """(issue, détail) d un GET de `route` sous l identité de `etat`.
 
     Issues : `ok` · `refuse` (401, 403) · `mire` (renvoyée vers la mire, ou hors de l instance) ·
     `erreur` (404, 5xx, autre code) · `injoignable`. GET seulement.
+
+    `attendus` (TF-2204) : les codes que le test porteur du parcours affirme pour cette route. Le
+    code reçu, s il en fait partie, est `ok` : c est le comportement vérifié par le test, pas un
+    défaut. Un autre code (un 500 là où le test attend un 404) reste un défaut.
     """
     ouvreur = urllib.request.build_opener(_SansRedirection)
     courant = base.rstrip("/") + route
@@ -460,6 +510,8 @@ def _jouer_route(base: str, route: str, etat: dict) -> tuple[str, str]:
         if 300 <= code < 400 and lieu:
             courant = urljoin(courant, lieu)
             continue
+        if code in attendus and not 300 <= code < 400:
+            return "ok", f"{code} (code attendu par le test du parcours)"
         if code in (401, 403):
             return "refuse", f"{code}"
         if 200 <= code < 300:
@@ -502,10 +554,13 @@ def jouer(cible: Path, personas_: dict[str, dict]) -> dict:
             jeu["illisibles"][cle] = motif
             continue
         routes: list[str] = []
+        attendus: dict[str, set[int]] = {}
         for relatif in fichiers:
             for route in routes_du_parcours(bruts.get(relatif, "")):
                 if route not in routes:
                     routes.append(route)
+            for route, codes in codes_attendus_par_route(bruts.get(relatif, "")).items():
+                attendus.setdefault(route, set()).update(codes)
         a_effet = [r for r in routes if _ROUTE_A_EFFET.search(_sans_accent(r))]
         if a_effet:
             jeu["ecartees"][cle] = a_effet
@@ -518,7 +573,7 @@ def jouer(cible: Path, personas_: dict[str, dict]) -> dict:
         routes = (routes or ["/"])[:PLAFOND_ROUTES]
         issues = []
         for route in routes:
-            issue, detail = _jouer_route(base, route, etat)
+            issue, detail = _jouer_route(base, route, etat, attendus.get(route, set()))
             issues.append({"route": route, "issue": issue, "detail": detail})
         if all(i["issue"] == "injoignable" for i in issues):
             jeu["injoignables"].append(cle)
