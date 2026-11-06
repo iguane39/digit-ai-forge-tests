@@ -1667,6 +1667,12 @@
       "statut": "todo"
     },
     {
+      "id": "revue-009",
+      "domaine": "revue",
+      "enonce": "revue de suite (pieges 10 et 11, TF-2216) : la non-vacuite d une boucle est acquittee par TOUTE assertion de non-vacuite du meme test, pas par celle qui porte sur CETTE collection — relier l assertion a la collection demande un flot que ce module n a pas ; une boucle dont le corps est une expression fleche sans accolade, et les suites Python, ne sont pas lues",
+      "statut": "todo"
+    },
+    {
       "id": "schema-sql-001",
       "domaine": "schema-sql",
       "enonce": "schema sql : la lecture suit le decoupage de `forge_tests.sql` — un corps dollar-quote ($$...$$) qui contient un `;` est coupe au mauvais endroit, et un litteral dont les espaces sont multiples est normalise par le decoupage",

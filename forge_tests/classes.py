@@ -87,6 +87,11 @@ COUVERTURE_FONCTIONS_SANS_SEUIL = "couverture-fonctions-sans-seuil"
 # --- Les tests qui ne s'executent pas, et que le reporting rend invisibles (TF-0605) ---------
 SAUT_CONDITIONNEL = "saut-conditionnel-en-integration-continue"
 
+# --- Un test qui passe sans avoir exécuté son assertion (TF-2216) --------------------------------
+# Une boucle d'assertions sur une collection vide, ou une attente bornée dont l'expiration est
+# avalée : le test est vert et n'a rien prouvé (Produit-86, 05/11 : 0 action approuvée).
+ASSERTION_EXECUTEE_ZERO_FOIS = "assertion-de-test-executee-zero-fois"
+
 # --- Aller-retour écriture/relecture (TF-0369) ---------------------------------------------------
 DEFAUT_EVALUE_A_L_IMPORT = "defaut-evalue-a-l-import"
 

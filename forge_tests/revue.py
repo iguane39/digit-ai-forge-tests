@@ -5,7 +5,7 @@ TF-0344 / TF-0345 (campagne du 17/08/2026), puis TF-0396, TF-0395 et TF-0593.
 Un contre-oracle mesure ce que la suite ATTEINT et ce qu'elle VÉRIFIE. Aucun ne regardait la
 suite elle-même **en tant que texte** — or trois faux verts sont tombés le même jour, sur la
 même campagne, et aucun oracle ne les a vus. C'est cette moitié-là que ce module rend mécanique.
-Le module a grandi par CAS RÉELS : huit règles à ce jour, sept mécanisées et une déclarée
+Le module a grandi par CAS RÉELS : onze règles à ce jour, dix mécanisées et une déclarée
 non détectable ici. Chacune porte son fait fondateur et sa mesure — un contrôle dont personne
 ne sait plus ce qu'il a coûté est le premier qu'une campagne pressée désactive.
 
@@ -82,6 +82,19 @@ SILENCIEUSEMENT sur son identité nominale. Ce défaut passait `tsc`, `eslint`, 
 unitaires ET le harnais de connexion lui-même ; seule l'exécution réelle des cinq workflows l'a
 montré. *Règle : la clé qui permet de RELIRE une session vit au même endroit que la session —
 les séparer recrée la divergence qu'on corrige, sous une forme moins visible.*
+
+**(10) BOUCLE D'ASSERTIONS EXÉCUTÉE ZÉRO FOIS (TF-2216, lot Produit-86 20261105g).** Une boucle
+d'approbation filtrait sur un bouton caché : la collection était vide, la boucle tournait sur
+zéro carte, aucune assertion ne s'exécutait et le test passait. Mesure du porteur : 0 action
+approuvée par tour, deux tests verts. *Règle : une boucle qui porte une assertion est acquittée
+par une assertion de NON-VACUITÉ dans le même test (`toHaveCount(n ≥ 1)`,
+`toBeGreaterThan(0)`, `not.toHaveCount(0)`, un compteur d'itérations vérifié après la boucle).*
+
+**(11) ATTENTE BORNÉE TERMINÉE SANS SA CONDITION (TF-2216, même lot).** Une attente cherchait
+un libellé que le produit ne sert jamais, expirait, et le `.catch(() => {})` qui la suivait
+laissait le test continuer comme si la condition était remplie. *Règle : l'expiration d'une
+attente est un ÉCHEC ; un `catch` qui l'avale (vide, valeur neutre, simple journal) est un défaut
+sauf attente déclarée optionnelle par `forge-tests: attente-optionnelle`.*
 """
 
 from __future__ import annotations
@@ -136,6 +149,10 @@ NON_JUGE = [
     "revue de suite (piege 9) : les sauts construits a l EXECUTION (une variable qui porte la "
     "condition, un decorateur compose) echappent a la lecture ligne a ligne. C est la limite "
     "commune a tout ce module, et elle vaut ici comme ailleurs",
+    "revue de suite (pieges 10 et 11, TF-2216) : la non-vacuite d une boucle est acquittee par "
+    "TOUTE assertion de non-vacuite du meme test, pas par celle qui porte sur CETTE collection — "
+    "relier l assertion a la collection demande un flot que ce module n a pas ; une boucle dont le "
+    "corps est une expression fleche sans accolade, et les suites Python, ne sont pas lues",
     "revue de suite (piege 8) : le rapprochement `storageState` / `sessionStorage` est fait sur "
     "le CORPUS, pas sur le flot — une recette qui persiste son etat dans un projet et ecrit le "
     "sessionStorage dans un autre serait signalee a tort. Le cas ne s est jamais presente, et "
@@ -744,8 +761,174 @@ def saut_conditionnel(cible: Path) -> list[Finding]:
     return findings
 
 
+#: TF-2216 (lot Produit-86 20261105g) — pièges (10) et (11), L'ASSERTION QUI NE S'EXÉCUTE JAMAIS.
+#:
+#: MESURÉ : une boucle d'approbation sur zéro carte (le bouton filtré était caché) et une attente
+#: sur un libellé jamais servi, expirée en silence — 2 tests verts, 0 action approuvée par tour.
+#:
+#: Deux exemptions DÉCLARÉES par la règle elle-même (TF-1912) : une boucle qui peut légitimement
+#: être vide, une attente qui peut légitimement ne pas aboutir (bandeau optionnel). Le marqueur se
+#: pose sur la ligne ou la ligne précédente et porte son motif.
+_MARQUEUR_BOUCLE_VIDE = "forge-tests: boucle-possiblement-vide"
+_MARQUEUR_ATTENTE_OPTIONNELLE = "forge-tests: attente-optionnelle"
+
+_BOUCLE_FOR_OF = re.compile(
+    r"\bfor\s*(?:await\s*)?\(\s*(?:const|let|var)\s+[^\n]*?\s+of\s+[^\n]*?\)\s*\{"
+)
+_BOUCLE_FOR = re.compile(r"\bfor\s*\(\s*(?:let|var)\s+\w+\s*=\s*0\s*;[^;\n]*;[^)\n]*\)\s*\{")
+_BOUCLE_CALLBACK = re.compile(r"\.\s*(?:forEach|each)\s*\(")
+_FLECHE_ET_CORPS = re.compile(r"=>\s*\{")
+_ASSERTION = re.compile(r"\bexpect\b|\bassert\w*\b")
+#: Une assertion de NON-VACUITÉ : la collection (ou le compteur d'itérations) n'est pas vide.
+_NON_VIDE = re.compile(
+    r"toBeGreaterThan\(\s*0\s*\)|toBeGreaterThanOrEqual\(\s*[1-9]"
+    r"|toHaveCount\(\s*[1-9]|toHaveLength\(\s*[1-9]"
+    r"|\.not\s*\.\s*to(?:HaveCount|HaveLength|BeEmpty)\(\s*(?:0\s*)?\)"
+    r"|(?:length|count\(\))\s*(?:===?|<=?)\s*0[^;{]*\)\s*\{?\s*(?:throw|test\.fail)"
+)
+
+_ATTENTE = re.compile(r"\bwaitFor\w*\s*\(|\bexpect\s*\.\s*poll\b|\bexpect\s*\(")
+#: `.catch(() => {})`, `.catch((e) => null)`, `.catch(() => false)` : l'expiration avalée.
+_CATCH_AVALE = re.compile(
+    r"\.\s*catch\s*\(\s*(?:async\s*)?(?:\(\s*\w*\s*\)|\w+)?\s*=>\s*"
+    r"(?:\{\s*(?:/\*.*?\*/\s*|//[^\n]*\n\s*)*\}|null|undefined|false|true|void\s+0|\d+"
+    r"|\(\s*\)|['\"`][^'\"`]*['\"`])\s*\)",
+    re.DOTALL,
+)
+_TRY = re.compile(r"\btry\s*\{")
+_CATCH = re.compile(r"\s*catch\s*(?:\([^)]*\))?\s*\{")
+#: Un `catch` qui réagit : il relance, échoue ou affirme. Sinon l'expiration est avalée.
+_CATCH_REAGIT = re.compile(r"\bthrow\b|\bfail\w*\s*\(|\btest\.fail\b|\bexpect\b|\bassert\w*\b")
+
+
+def _bloc_entre_accolades(texte: str, ouvrante: int) -> str:
+    """Le texte entre `texte[ouvrante]` (une `{`) et son accolade fermante. Comptage naïf : une
+    accolade dans une chaîne fausse le bloc, ce que ce module déclare (lecture TEXTUELLE)."""
+    profondeur = 0
+    for rang in range(ouvrante, len(texte)):
+        if texte[rang] == "{":
+            profondeur += 1
+        elif texte[rang] == "}":
+            profondeur -= 1
+            if profondeur == 0:
+                return texte[ouvrante + 1:rang]
+    return texte[ouvrante + 1:]
+
+
+def _marqueur_pres_de(texte: str, position: int, marqueur: str) -> bool:
+    """Le marqueur d'exemption sur la ligne de `position` ou sur la ligne qui la précède."""
+    debut_ligne = texte.rfind("\n", 0, position) + 1
+    debut_precedente = texte.rfind("\n", 0, max(debut_ligne - 1, 0)) + 1
+    fin = texte.find("\n", position)
+    return marqueur in texte[debut_precedente:fin if fin != -1 else len(texte)]
+
+
+def _boucles_a_assertion(corps: str) -> list[tuple[int, str]]:
+    """(position, corps de boucle) de chaque boucle du test dont le corps porte une assertion."""
+    boucles: list[tuple[int, str]] = []
+    for motif in (_BOUCLE_FOR_OF, _BOUCLE_FOR):
+        for trouve in motif.finditer(corps):
+            boucles.append((trouve.start(), _bloc_entre_accolades(corps, trouve.end() - 1)))
+    for trouve in _BOUCLE_CALLBACK.finditer(corps):
+        fleche = _FLECHE_ET_CORPS.search(corps, trouve.end(), trouve.end() + 200)
+        if fleche:
+            boucles.append((trouve.start(), _bloc_entre_accolades(corps, fleche.end() - 1)))
+    return sorted((p, c) for p, c in boucles if _ASSERTION.search(c))
+
+
+def boucle_sans_iteration_prouvee(cible: Path) -> list[Finding]:
+    """Piège 10 — une boucle d'assertions que rien ne prouve avoir tourné au moins une fois."""
+    findings: list[Finding] = []
+    for fichier in _specs(cible):
+        relatif = fichier.relative_to(cible).as_posix()
+        for nom, corps in _blocs_de_test(fichier.read_text(encoding="utf-8", errors="replace")):
+            if _NON_VIDE.search(corps):
+                continue
+            nues = [
+                p for p, _c in _boucles_a_assertion(corps)
+                if not _marqueur_pres_de(corps, p, _MARQUEUR_BOUCLE_VIDE)
+            ]
+            if not nues:
+                continue
+            identifiant = f"revue:boucle-sans-iteration:{relatif}:{nom}"
+            findings.append(
+                Finding(
+                    id=identifiant,
+                    classe=classes.ASSERTION_EXECUTEE_ZERO_FOIS,
+                    localisation=relatif,
+                    message=(
+                        f"« {nom} » porte une boucle d'assertions sur une collection dont rien "
+                        "ne prouve qu'elle n'est pas vide : si elle l'est, la boucle tourne ZÉRO "
+                        "fois, aucune assertion ne s'exécute et le test PASSE. Ajouter une "
+                        "assertion de non-vacuité (`toHaveCount(n)` avec n ≥ 1, "
+                        "`toBeGreaterThan(0)`, un compteur d'itérations vérifié après la "
+                        f"boucle), ou déclarer la boucle `{_MARQUEUR_BOUCLE_VIDE} — <motif>`. "
+                        "Mesure le 05/11 : une boucle d'approbation sur zéro carte (bouton "
+                        "caché), 0 action approuvée par tour, deux tests verts"
+                    ),
+                    risque=coter(PAN, identifiant, relatif),
+                )
+            )
+    return findings
+
+
+def _attentes_avalees(corps: str) -> list[int]:
+    """Positions des attentes bornées dont l'expiration est avalée par un `catch`."""
+    positions: list[int] = []
+    for trouve in _CATCH_AVALE.finditer(corps):
+        debut = max(
+            corps.rfind(";", 0, trouve.start()), corps.rfind("}\n", 0, trouve.start()),
+            corps.rfind("{\n", 0, trouve.start()), trouve.start() - 300, 0,
+        )
+        if _ATTENTE.search(corps[debut:trouve.start()]):
+            positions.append(trouve.start())
+    for essai in _TRY.finditer(corps):
+        ouvrante = essai.end() - 1
+        dans_le_try = _bloc_entre_accolades(corps, ouvrante)
+        suite = _CATCH.match(corps, ouvrante + len(dans_le_try) + 2)
+        if not suite or not _ATTENTE.search(dans_le_try):
+            continue
+        dans_le_catch = _bloc_entre_accolades(corps, suite.end() - 1)
+        if not _CATCH_REAGIT.search(dans_le_catch):
+            positions.append(essai.start())
+    return sorted(positions)
+
+
+def attente_sans_echec(cible: Path) -> list[Finding]:
+    """Piège 11 — une attente bornée dont l'expiration ne fait pas échouer le test."""
+    findings: list[Finding] = []
+    for fichier in _specs(cible):
+        relatif = fichier.relative_to(cible).as_posix()
+        for nom, corps in _blocs_de_test(fichier.read_text(encoding="utf-8", errors="replace")):
+            nues = [
+                p for p in _attentes_avalees(corps)
+                if not _marqueur_pres_de(corps, p, _MARQUEUR_ATTENTE_OPTIONNELLE)
+            ]
+            if not nues:
+                continue
+            identifiant = f"revue:attente-sans-echec:{relatif}:{nom}"
+            findings.append(
+                Finding(
+                    id=identifiant,
+                    classe=classes.ASSERTION_EXECUTEE_ZERO_FOIS,
+                    localisation=relatif,
+                    message=(
+                        f"« {nom} » termine une attente bornée SANS sa condition : l'expiration "
+                        "est avalée (`.catch(() => {})`, `try { … } catch {}`), et le test "
+                        "continue comme si ce qu'il attendait était apparu. Laisser l'attente "
+                        "échouer, ou relancer dans le `catch`, ou déclarer l'attente "
+                        f"`{_MARQUEUR_ATTENTE_OPTIONNELLE} — <motif>`. Mesure le 05/11 : une "
+                        "attente sur un libellé jamais servi, expirée en silence, un test vert "
+                        "qui ne prouvait pas l'approbation"
+                    ),
+                    risque=coter(PAN, identifiant, relatif),
+                )
+            )
+    return findings
+
+
 def analyser_suite(cible: Path) -> list[Finding]:
-    """Les huit règles mécanisables (sur neuf), sur les suites du projet. Aucune exécution,
+    """Les dix règles mécanisables (sur onze), sur les suites du projet. Aucune exécution,
     aucun réseau — un projet dont la suite ne peut pas tourner est justement celui où un faux
     vert dort le plus longtemps."""
     return [
@@ -757,4 +940,6 @@ def analyser_suite(cible: Path) -> list[Finding]:
         *session_fabriquee(cible),
         *cle_de_relecture_separee_de_la_session(cible),
         *saut_conditionnel(cible),
+        *boucle_sans_iteration_prouvee(cible),
+        *attente_sans_echec(cible),
     ]
