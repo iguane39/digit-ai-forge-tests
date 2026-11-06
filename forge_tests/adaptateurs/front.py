@@ -53,7 +53,10 @@ NON_JUGE = [
 
 
 def _racine(cible: Path) -> Path:
-    return cible / "frontend"
+    """Le front du projet : manifeste, `frontend`, puis son `package.json` (TF-2222)."""
+    from forge_tests.disposition import racine_front
+
+    return racine_front(cible)
 
 
 def _routes_tanstack(racine: Path) -> list[tuple[str, Path]]:

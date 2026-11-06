@@ -49,7 +49,7 @@ import re
 from html.parser import HTMLParser
 from pathlib import Path
 
-from forge_tests import classes, exclusions
+from forge_tests import classes, disposition, exclusions
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -798,7 +798,8 @@ def _arborescence(cible: Path) -> dict:
     from forge_tests.adaptateurs import front
 
     declarees: list[str] = list(_routes_next(cible))
-    declarees += _routes_declarees_par_le_front(cible)
+    routes_du_front = _routes_declarees_par_le_front(cible)
+    declarees += routes_du_front
     declarees += _pages_statiques(cible)
 
     chemins = {_normaliser(route) for route in declarees if route.startswith("/")}
@@ -823,6 +824,13 @@ def _arborescence(cible: Path) -> dict:
         "locales_litterales": litterales,
         "locales_configurees": configurees,
         "routage_dynamique": _locale_par_configuration(cible),
+        # TF-2222 : un front JavaScript (reconnu à son package.json) dont AUCUNE route n'a pu être
+        # inventoriée : l'arborescence ne dit rien de ses destinations, elle ne peut pas les juger.
+        "front_non_inventorie": (
+            not routes_du_front
+            and not _routes_next(cible)
+            and disposition.a_un_front_javascript(cible)
+        ),
     }
 
 
@@ -901,7 +909,10 @@ def _juger_lien(lien: dict, locale_composant: str | None, arbre: dict) -> str | 
     # 1. La destination existe-t-elle ? Contrôle DÉSACTIVÉ si rien n a pu être énuméré : accuser
     #    tous les liens d un projet dont on n a pas su lire les routes serait le faux positif
     #    massif que ce pan existe pour ne pas produire.
-    if arbre["chemins"] and not _connue(chemin, arbre):
+    #    TF-2222 : de même quand le projet porte un front JavaScript dont aucune route n a pu
+    #    être inventoriée — les pages statiques seules ne sont pas l arborescence du produit, et
+    #    46 liens d un front React ont été accusés « destination absente » (Produit-81).
+    if arbre["chemins"] and not arbre.get("front_non_inventorie") and not _connue(chemin, arbre):
         return (
             f"destination « {chemin} » absente de l arborescence : ni route déclarée, ni page "
             "servie"
@@ -1633,6 +1644,14 @@ def _declarations_de_composants(fichiers: list[Path], arbre: dict) -> list[str]:
         + " ; chacun avec SA grammaire de destination (les formes liees de Vue, `:to` et "
         "`v-bind:href`, et les interpolations Svelte sont comptees EXPRIMEES, jamais jugees)"
     ]
+    if arbre.get("front_non_inventorie"):
+        declarations.append(
+            "interface/liens : un front JavaScript est present (package.json) mais AUCUNE de ses "
+            "routes n a pu etre inventoriee (tables `routes.jsx`, TanStack, `<Route path>` lues ; "
+            "un routeur par objet ou charge a l execution ne l est pas) — « destination "
+            "absente » est SUSPENDU : accuser chaque lien d une arborescence que le pan n a pas su "
+            "lire serait le faux positif massif que ce pan existe pour ne pas produire"
+        )
     sources: list[str] = []
     if arbre["locales_litterales"]:
         sources.append(

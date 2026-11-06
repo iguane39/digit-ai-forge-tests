@@ -272,10 +272,14 @@ def mesurer(banc_str: str) -> dict | None:
     if python is None:
         _designe, motif_designation = python_designe(banc)
         essayes = ", ".join(str(v) for v in _venvs_essayes(banc))
+        # TF-2222 : un back .NET n'a pas de `.venv`. Le motif nomme la pile reconnue à ses
+        # manifestes (`*.csproj`) au lieu d'envoyer chercher un environnement Python absent.
+        pile_dotnet = disposition.motif_pile_non_python(banc)
         _declarer(
             banc,
             "backend",
             motif_designation
+            or pile_dotnet
             or (
                 f"aucun environnement Python dans le projet analysé — cherché sous {essayes} ; "
                 f"{motif_racine_execution(banc)} ; pour un outil sans `.venv`, désigner "
@@ -615,7 +619,7 @@ def front_execute(banc_str: str) -> dict | None:
     # plus bas — un réglage du projet ignoré en silence dès que ce pan tournait le premier.
     _contrat_projet(banc)
     # TF-0401 : la racine front suit la cascade — manifeste du projet > convention `frontend`.
-    front = banc / (disposition.racines_declarees(banc)[0].get("front") or "frontend")
+    front = disposition.racine_front(banc)
     if not (front / "node_modules").is_dir():
         _declarer(
             banc,

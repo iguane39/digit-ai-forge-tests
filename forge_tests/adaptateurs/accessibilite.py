@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 from forge_tests import classes
+from forge_tests.disposition import racine_front
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -371,7 +372,7 @@ def sans_objet(cible: Path) -> str | None:
     racine plate mal ancrée) — ne prouve pas qu il n y a rien à rendre : il prouve qu on n a rien
     regardé. Ce cas reste un SKIP, exactement comme l inventaire vide du noyau.
     """
-    if (cible / "frontend").is_dir():
+    if racine_front(cible).is_dir():
         return None
     if _base_servie(cible):
         return None
@@ -534,7 +535,7 @@ def _capturer(cible: Path, routes: list[str], dossier: Path) -> tuple[dict[str, 
     base = os.environ.get("FORGE_TESTS_BASE_URL")
     if base:
         return _capturer_distant(base.rstrip("/"), routes, dossier, cible)
-    front = cible / "frontend"
+    front = racine_front(cible)
     npx = shutil.which("npx")
     if npx is None or not (front / "dist").is_dir():
         return {}, []

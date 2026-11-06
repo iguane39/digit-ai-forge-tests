@@ -33,6 +33,7 @@ from forge_tests.adaptateurs.accessibilite import (
     _repond,
     _tuer_arbre,
 )
+from forge_tests.disposition import racine_front
 
 #: Une action recoit la page vivante et le nom de la route ; elle rend (valeur, motif). Elle ne
 #: leve JAMAIS — le parcours la protege, mais un pan qui compte sur cette protection pour
@@ -87,7 +88,7 @@ def parcourir(
     if base_declaree:
         return _parcourir_distant(base_declaree.rstrip("/"), routes, action, cible, prefixe)
 
-    front = cible / "frontend"
+    front = racine_front(cible)
     npx = shutil.which("npx")
     if npx is None or not (front / "dist").is_dir():
         return {}, []

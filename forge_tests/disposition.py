@@ -385,3 +385,123 @@ def motif_indetermine(cible: Path) -> str:
         f"{racine} — {', '.join(c.name for c in candidats)} ; "
         "declarer celui du produit par FORGE_TESTS_SOURCES=<nom>"
     )
+
+
+# --- La pile se reconnaît à ses manifestes, pas au nom de son dossier (TF-2222) -------------------
+# Fait remonté (Produit-81, RP-1, 05/11/2026) : forge-tests cherchait `frontend/node_modules` et un
+# `.venv`, sur un produit dont le front React vit dans `FRONT/` et le back .NET dans `BACK/`.
+# Verdict PARTIEL (sortie 3), et 46 constats « destination absente » : routes React non
+# inventoriées, donc tout lien était accusé. Le nom d'un dossier ne dit pas ce qu'il contient ; son
+# manifeste le dit (`package.json` et ses dépendances, `*.csproj`).
+#
+# Cascade du front : déclaration du manifeste projet (`[racines] front`) > dossier `frontend` > le
+# premier dossier (profondeur 2, ordre alphabétique fixe) dont le `package.json` déclare une
+# dépendance de front > `frontend` (repli historique, rendu même absent). Déterministe : à
+# disposition égale, deux projets rendent la même décision.
+_DEPENDANCES_FRONT = frozenset({
+    "react", "react-dom", "vue", "svelte", "preact", "solid-js", "next", "nuxt", "vite",
+    "@angular/core", "react-router", "react-router-dom", "@tanstack/react-router",
+})
+_DOSSIERS_SANS_MANIFESTE = frozenset({
+    "node_modules", ".git", ".venv", "venv", "dist", "build", "bin", "obj", "__pycache__",
+    "output", "old", ".oracles", ".claude", ".github", ".forge",
+})
+
+
+def _sous_dossiers(racine: Path, profondeur: int) -> list[Path]:
+    """Sous-dossiers à inspecter, ordre alphabétique FIXE, sans dépendances ni artefacts."""
+    if profondeur < 0 or not racine.is_dir():
+        return []
+    trouves: list[Path] = []
+    try:
+        entrees = sorted(racine.iterdir(), key=lambda e: e.name.lower())
+    except OSError:
+        return []
+    for entree in entrees:
+        if not entree.is_dir() or entree.name in _DOSSIERS_SANS_MANIFESTE:
+            continue
+        if entree.name.startswith(".") or exclusions.ignore_par_git(entree, racine):
+            continue
+        trouves.append(entree)
+        trouves.extend(_sous_dossiers(entree, profondeur - 1))
+    return trouves
+
+
+def _package_de_front(dossier: Path) -> bool:
+    """Le `package.json` de ce dossier déclare-t-il une dépendance de front ?"""
+    import json
+
+    manifeste = dossier / "package.json"
+    if not manifeste.is_file():
+        return False
+    try:
+        donnees = json.loads(manifeste.read_text(encoding="utf-8", errors="replace"))
+    except ValueError:
+        return False
+    if not isinstance(donnees, dict):
+        return False
+    noms: set[str] = set()
+    for cle in ("dependencies", "devDependencies", "peerDependencies"):
+        bloc = donnees.get(cle)
+        if isinstance(bloc, dict):
+            noms |= set(bloc)
+    return bool(noms & _DEPENDANCES_FRONT)
+
+
+def racine_front(cible: Path) -> Path:
+    """Dossier du front du projet — `frontend` supposé seulement en dernier repli.
+
+    Toujours un chemin : une ancre, pas une mesure (comme `racine_execution`). `front_decouvert`
+    dit si la racine vient d'un manifeste plutôt que du nom conventionnel."""
+    declarees, _motif = racines_declarees(cible)
+    if declarees.get("front"):
+        return cible / declarees["front"]
+    if (cible / "frontend").is_dir():
+        return cible / "frontend"
+    for dossier in _sous_dossiers(cible, 1):
+        if _package_de_front(dossier):
+            return dossier
+    return cible / "frontend"
+
+
+def front_decouvert(cible: Path) -> bool:
+    """Vrai si le front n'est PAS au nom conventionnel mais reconnu à son `package.json`."""
+    declarees, _motif = racines_declarees(cible)
+    if declarees.get("front") or (cible / "frontend").is_dir():
+        return False
+    return _package_de_front(racine_front(cible))
+
+
+def a_un_front_javascript(cible: Path) -> bool:
+    """Le projet porte-t-il un front JavaScript, où qu'il vive ?"""
+    return racine_front(cible).is_dir() and _package_de_front(racine_front(cible))
+
+
+def manifestes_dotnet(cible: Path) -> list[Path]:
+    """Les `*.csproj` du projet (profondeur 3, hors `bin`, `obj`, dépendances), ordre fixe."""
+    trouves: list[Path] = []
+    for dossier in [cible, *_sous_dossiers(cible, 2)]:
+        try:
+            trouves.extend(sorted(dossier.glob("*.csproj"), key=lambda e: e.name.lower()))
+        except OSError:
+            continue
+    return trouves
+
+
+def motif_pile_non_python(cible: Path) -> str:
+    """Phrase publiable quand le projet porte un back .NET : ce qui est reconnu et ce qui manque.
+
+    Un back .NET n'a ni `.venv` ni paquet Python. Annoncer « aucun environnement Python » envoie
+    chercher un problème qui n'existe pas (comme le motif de TF-0097) : la vérité est qu'aucun
+    adaptateur de cette forge ne joue `dotnet test`."""
+    projets = manifestes_dotnet(cible)
+    if not projets:
+        return ""
+    noms = ", ".join(p.relative_to(cible).as_posix() for p in projets[:4])
+    return (
+        f"back .NET reconnu à ses manifestes ({len(projets)} projet(s) `.csproj` : {noms}"
+        f"{' …' if len(projets) > 4 else ''}) — cette forge n'a PAS d'adaptateur .NET : `dotnet "
+        "test` n'est pas joué, les pans qui mesurent un back Python (api, data, migrations, "
+        "batch, fichiers, mutation, back) ne sont pas mesurés. Ce n'est ni un échec du produit "
+        "ni l'absence d'un `.venv`"
+    )
