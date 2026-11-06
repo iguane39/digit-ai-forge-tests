@@ -28,6 +28,9 @@ MUTANT_SURVIVANT = "mutant-survivant"
 # --- Confrontation code <-> déclaration -----------------------------------------------------
 DIVERGENCE = "divergence"
 SONDE_MUETTE = "sonde-muette"
+# TF-2269 : un test de la suite backend du projet est rouge. Distinct d'une couverture non mesurée
+# (SKIP) : la cause est un test nommé, pas une absence de mesure.
+SUITE_ROUGE = "suite-du-projet-rouge"
 #: TF-1747 — une route servie et déclarée au schéma manque à l inventaire : défaut de l outil.
 ENUMERATION_INCOMPLETE = "enumeration-incomplete"
 

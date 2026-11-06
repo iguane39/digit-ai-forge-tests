@@ -9,7 +9,12 @@ from pathlib import Path
 from forge_tests import classes
 from forge_tests.application import refus_designation
 from forge_tests.disposition import paquet_sources
-from forge_tests.execution import codes_emis, motif_indisponibilite, schema_openapi
+from forge_tests.execution import (
+    codes_emis,
+    motif_indisponibilite,
+    schema_openapi,
+    sortie_suite_rouge,
+)
 from forge_tests.invariants import NON_JUGE as NON_JUGE_INV
 from forge_tests.invariants import codes_par_fonction, handlers
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
@@ -479,6 +484,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
             NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, refus["message"]]
         )
     if exerces(cible) is None:
+        # TF-2269 : une suite ROUGE rend FAIL et nomme le test, elle ne se confond pas avec une
+        # suite qu on n a pas pu executer.
+        rouge = sortie_suite_rouge(NOM, PAN, cible, NON_JUGE)
+        if rouge is not None:
+            return rouge
         # « 0 % couvert » et « couverture non mesurable » sont deux verdicts OPPOSES. Les
         # confondre accuse a tort une suite qu on n a simplement pas pu executer.
         endpoints = sum(1 for e in inv if e.id.startswith("endpoint:"))

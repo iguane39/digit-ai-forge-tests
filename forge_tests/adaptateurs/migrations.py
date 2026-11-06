@@ -12,6 +12,7 @@ from forge_tests.execution import (
     instructions_sql,
     motif_indisponibilite,
     schema_obtenu,
+    sortie_suite_rouge,
     sources_sql,
 )
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
@@ -260,7 +261,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
     couvert = exerces(cible)
     if couvert is None:
         inv = inventaire(cible)
-        sortie = SortieAdaptateur(
+        # TF-2269 : une suite ROUGE rend FAIL et nomme le test ; les divergences statiques
+        # ci-dessous s y ajoutent comme à la sortie SKIP.
+        sortie = sortie_suite_rouge(NOM, PAN, cible, NON_JUGE) or SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
             non_juge=[
                 *NON_JUGE,

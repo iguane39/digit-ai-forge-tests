@@ -14,7 +14,12 @@ from pathlib import Path
 
 from forge_tests import declencheurs as _declencheurs
 from forge_tests.disposition import paquet_sources
-from forge_tests.execution import arcs_executes, executees, motif_indisponibilite
+from forge_tests.execution import (
+    arcs_executes,
+    executees,
+    motif_indisponibilite,
+    sortie_suite_rouge,
+)
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
 from forge_tests.risque import coter
 
@@ -220,6 +225,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
     findings_triggers = _findings_declencheurs(cible)
     if couvert is None:
         inv = inventaire(cible)
+        # TF-2269 : une suite ROUGE rend FAIL et nomme le test, les déclencheurs cassés restent.
+        rouge = sortie_suite_rouge(NOM, PAN, cible, [*NON_JUGE, *_declencheurs.NON_JUGE])
+        if rouge is not None:
+            rouge.findings = [*findings_triggers, *rouge.findings]
+            return rouge
         return SortieAdaptateur(
             NOM,
             PAN,

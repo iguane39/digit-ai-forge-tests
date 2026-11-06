@@ -217,6 +217,16 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "au lieu de les resoudre. Aucun agent ne peut trancher ce critere a la place de qui "
         "connait la tache ({message})",
     ),
+    # TF-2269 — un test du projet est rouge. Le remède est dans le code ou le test du produit : ni
+    # dérivable par la forge, ni un arbitrage humain. La couverture de ce pan se mesure à nouveau
+    # dès que la suite repasse au vert.
+    "suite-du-projet-rouge": (
+        "manuelle_dev",
+        "development",
+        "rendre la suite backend verte : « {id} » — {message}. Tant qu'un test échoue, aucune "
+        "couverture n'est mesurée sur les pans qui lisent cette suite (api, data, migrations, "
+        "batch, fichiers) ; rejouer l'audit une fois le test corrigé",
+    ),
     "sonde-muette": (
         "manuelle_utilisateur",
         "mep-config",

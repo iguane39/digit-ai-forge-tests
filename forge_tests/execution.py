@@ -96,6 +96,98 @@ def motif_indisponibilite(banc: Path | str, domaine: str, defaut: str) -> str:
     return _MOTIFS.get((str(banc), domaine), defaut)
 
 
+# TF-2269 (Produit-86, RP-42) — une suite ROUGE n est pas une mesure absente. Une suite à 1 test
+# rouge sur 616 rendait les pans api, data et migrations en SKIP « couverture non mesurable » et
+# le même verdict PARTIEL qu un jeu vert : le rapport ne nommait pas le test rouge, il fallait le
+# chercher pan par pan. La mesure retient désormais CE QUI est rouge, et les pans qui lisent la
+# suite le rendent en FAIL nommé (`sortie_suite_rouge`).
+_SUITES_ROUGES: dict[str, dict] = {}
+_LIGNE_ROUGE = re.compile(r"^(FAILED|ERROR) (\S+)(?: - (.*))?$", re.MULTILINE)
+#: Code de sortie de pytest quand AUCUN test n est collecté : une suite vide n est pas rouge.
+CODE_AUCUN_TEST = 5
+#: Au-delà, les constats se plafonnent ; le total se dit (aucune borne d affichage silencieuse).
+PLAFOND_TESTS_ROUGES = 50
+
+
+def _relever_suite_rouge(code: int, trace: str, complement: str) -> dict:
+    tests = [
+        {"id": trouve.group(2), "nature": trouve.group(1),
+         "message": (trouve.group(3) or "").strip()[:200]}
+        for trouve in _LIGNE_ROUGE.finditer(trace)
+    ]
+    return {"code": code, "tests": tests, "complement": complement}
+
+
+def suite_rouge(banc: Path | str) -> dict | None:
+    """Ce que la suite backend a rendu de rouge — `{"code", "tests": [{"id", "nature",
+    "message"}], "complement"}` — ou None si elle n est pas rouge (verte, jamais lancée, démon
+    de conteneurs injoignable, aucun test collecté, délai dépassé)."""
+    mesurer(str(banc))  # la mesure est jouée une fois, mémorisée ; elle alimente le relevé
+    return _SUITES_ROUGES.get(str(banc))
+
+
+def sortie_suite_rouge(nom: str, pan: str, cible: Path, non_juge: list[str]):
+    """La sortie FAIL d un pan dont la suite backend est rouge, ou None si elle ne l est pas.
+
+    Un finding bloquant par test rouge (`suite-rouge:<test>`), le test nommé dans le message ;
+    une suite qui échoue sans nommer de test (erreur avant collecte) rend un seul finding
+    `suite-rouge:suite-entiere`, sans nom fabriqué. Le motif de non-mesure de la couverture
+    reste au non-jugé : le FAIL ne remplace pas ce motif, il le complète.
+    """
+    rouge = suite_rouge(cible)
+    if rouge is None:
+        return None
+    from forge_tests import classes
+    from forge_tests.noyau import Finding, SortieAdaptateur
+    from forge_tests.risque import coter
+
+    racine = racine_execution(Path(cible))
+    complement = rouge["complement"]
+    findings = []
+    nommes = rouge["tests"][:PLAFOND_TESTS_ROUGES]
+    for test in nommes:
+        identifiant = f"suite-rouge:{test['id']}"
+        fichier = test["id"].partition("::")[0]
+        detail = f" — {test['message']}" if test["message"] else ""
+        findings.append(Finding(
+            id=identifiant,
+            classe=classes.SUITE_ROUGE,
+            localisation=str(racine / fichier),
+            message=(
+                f"[{pan}] la suite backend du projet est ROUGE : {test['nature']} "
+                f"{test['id']}{detail}. Ce n est pas une mesure absente : un test du projet "
+                f"échoue, et la couverture ne se mesure pas tant qu il échoue{complement}"
+            ),
+            severite="bloquant",
+            risque=coter(pan, identifiant, str(racine / fichier)),
+        ))
+    if not rouge["tests"]:
+        identifiant = "suite-rouge:suite-entiere"
+        findings.append(Finding(
+            id=identifiant,
+            classe=classes.SUITE_ROUGE,
+            localisation=str(racine),
+            message=(
+                f"[{pan}] la suite backend du projet s est terminée en échec (code "
+                f"{rouge['code']}) sans qu aucun test ne soit nommé (erreur avant ou pendant la "
+                f"collecte) : lire la trace de la suite{complement}"
+            ),
+            severite="bloquant",
+            risque=coter(pan, identifiant, str(racine)),
+        ))
+    lignes = [
+        *non_juge,
+        f"{pan} : couverture non mesurable tant que la suite est rouge — "
+        + motif_indisponibilite(cible, "backend", "suite backend en échec"),
+    ]
+    if len(rouge["tests"]) > len(nommes):
+        lignes.append(
+            f"{pan} : {len(rouge['tests'])} tests rouges au total, {len(nommes)} nommés "
+            f"(plafond {PLAFOND_TESTS_ROUGES}) — les autres sont dans la trace de la suite"
+        )
+    return SortieAdaptateur(nom, pan, str(cible), "FAIL", findings=findings, non_juge=lignes)
+
+
 def _run(
     commande: list[str], *, banc: Path | str, domaine: str, quoi: str, remede: str = "", **kwargs
 ) -> subprocess.CompletedProcess | None:
@@ -256,6 +348,7 @@ def mesurer(banc_str: str) -> dict | None:
     None n est pas « rien à signaler » : l appelant doit DÉCLARER qu il ne juge pas.
     """
     banc = Path(banc_str)
+    _SUITES_ROUGES.pop(str(banc), None)
     _contrat_projet(banc)
     # Inventaire seul : executer la suite d un projet REEL peut exiger son infrastructure
     # complete et durer sans borne. Ce mode la court-circuite en le DECLARANT — chaque
@@ -373,6 +466,10 @@ def mesurer(banc_str: str) -> dict | None:
                 f"la suite backend s est terminée en échec (code {lance.returncode}) — "
                 f"couverture non mesurable tant que la suite est rouge{complement}",
             )
+            if lance.returncode != CODE_AUCUN_TEST:
+                _SUITES_ROUGES[str(banc)] = _relever_suite_rouge(
+                    lance.returncode, trace, complement
+                )
             return None
         codes = json.loads(releve.read_text(encoding="utf-8")) if releve.exists() else []
         brut_data = (
