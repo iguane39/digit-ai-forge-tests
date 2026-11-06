@@ -31,6 +31,7 @@ JETONS = {
     9: "TF-0605",
     10: "boucle d'assertions",
     11: "attente terminée",
+    12: "traitement attendu",
 }
 
 

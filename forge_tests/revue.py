@@ -5,7 +5,7 @@ TF-0344 / TF-0345 (campagne du 17/08/2026), puis TF-0396, TF-0395 et TF-0593.
 Un contre-oracle mesure ce que la suite ATTEINT et ce qu'elle VÉRIFIE. Aucun ne regardait la
 suite elle-même **en tant que texte** — or trois faux verts sont tombés le même jour, sur la
 même campagne, et aucun oracle ne les a vus. C'est cette moitié-là que ce module rend mécanique.
-Le module a grandi par CAS RÉELS : onze règles à ce jour, dix mécanisées et une déclarée
+Le module a grandi par CAS RÉELS : douze règles à ce jour, onze mécanisées et une déclarée
 non détectable ici. Chacune porte son fait fondateur et sa mesure — un contrôle dont personne
 ne sait plus ce qu'il a coûté est le premier qu'une campagne pressée désactive.
 
@@ -95,6 +95,14 @@ un libellé que le produit ne sert jamais, expirait, et le `.catch(() => {})` qu
 laissait le test continuer comme si la condition était remplie. *Règle : l'expiration d'une
 attente est un ÉCHEC ; un `catch` qui l'avale (vide, valeur neutre, simple journal) est un défaut
 sauf attente déclarée optionnelle par `forge-tests: attente-optionnelle`.*
+
+**(12) TRAITEMENT ATTENDU JUSQU'À SA FIN, RÉSULTAT NON AFFIRMÉ (TF-2270, lot Produit-86
+20261106a).** Un parcours lançait un traitement, attendait son état terminal (`SUCCEEDED`) et
+s'arrêtait là : 34 parcours, 0 assertion sur le contenu d'un constat. Un traitement peut se terminer
+en rendant un résultat faux, vide ou périmé ; la vérité du lab avait été relevée à la main par une
+sonde. *Règle : un test qui attend la fin d'un traitement affirme aussi son RÉSULTAT, comparé à une
+VÉRITÉ DE RÉFÉRENCE connue d'avance, et joue sa CONTRE-ÉPREUVE (un jeu où le résultat attendu
+diffère doit échouer). Exemption déclarée : `forge-tests: etat-seul — <motif>`.*
 """
 
 from __future__ import annotations
@@ -153,6 +161,11 @@ NON_JUGE = [
     "TOUTE assertion de non-vacuite du meme test, pas par celle qui porte sur CETTE collection — "
     "relier l assertion a la collection demande un flot que ce module n a pas ; une boucle dont le "
     "corps est une expression fleche sans accolade, et les suites Python, ne sont pas lues",
+    "revue de suite (piege 12, TF-2270) : la revue releve l ABSENCE d une assertion de valeur "
+    "(contenu, compte, egalite) apres l attente d un etat terminal ; elle ne peut pas juger que la "
+    "VERITE DE REFERENCE est la bonne ni qu une CONTRE-EPREUVE existe — la regle les exige, la "
+    "lecture reste humaine. Une assertion portee par une fonction d aide, un message qui contient "
+    "lui-meme le mot d etat, ou un test Python echappent a la lecture textuelle",
     "revue de suite (piege 8) : le rapprochement `storageState` / `sessionStorage` est fait sur "
     "le CORPUS, pas sur le flot — une recette qui persiste son etat dans un projet et ecrit le "
     "sessionStorage dans un autre serait signalee a tort. Le cas ne s est jamais presente, et "
@@ -927,8 +940,71 @@ def attente_sans_echec(cible: Path) -> list[Finding]:
     return findings
 
 
+#: TF-2270 (lot Produit-86 20261106a) — piège (12), LE TRAITEMENT ATTENDU SANS SON RÉSULTAT.
+#:
+#: MESURÉ : 34 parcours, 0 assertion sur le contenu d'un constat ; seul l'état SUCCEEDED était jugé.
+#: Un état terminal prouve que le traitement s'est terminé, pas qu'il a produit ce qu'il devait.
+#:
+#: Exemption DÉCLARÉE par la règle elle-même (TF-1912) : un test de fumée dont le contenu est jugé
+#: ailleurs. Le marqueur se pose sur la ligne ou la ligne précédente et porte son motif.
+_MARQUEUR_ETAT_SEUL = "forge-tests: etat-seul"
+#: Un énoncé du test qui attend ou affirme : `expect(...)…;` ou `waitFor…(...)…;`.
+_ENONCE_ATTENTE = re.compile(r"(?:\bexpect\b|\bwaitFor\w*\s*\()[^;]*;", re.DOTALL)
+#: Le mot d'un ÉTAT TERMINAL de traitement, en anglais ou en français.
+_ETAT_TERMINAL = re.compile(
+    r"succeed|success|complet|finish|\bdone\b|termin|r[ée]uss|achev|\bended\b", re.IGNORECASE
+)
+#: Une assertion de VALEUR : le contenu, un compte, une égalité. Une simple visibilité, une URL ou
+#: un état activé/désactivé n'affirme rien du résultat produit.
+_ASSERTION_DE_VALEUR = re.compile(
+    r"\.\s*(?:toHaveText|toContainText|toEqual|toStrictEqual|toBe|toMatch|toMatchObject|toContain|"
+    r"toHaveLength|toHaveCount|toBeGreaterThan(?:OrEqual)?|toBeLessThan(?:OrEqual)?|toHaveValue|"
+    r"toHaveProperty|toHaveAttribute|toHaveJSProperty)\s*\("
+)
+
+
+def traitement_sans_resultat_asserte(cible: Path) -> list[Finding]:
+    """Piège 12 — un test qui attend l'état terminal d'un traitement sans affirmer son résultat."""
+    findings: list[Finding] = []
+    for fichier in _specs(cible):
+        relatif = fichier.relative_to(cible).as_posix()
+        for nom, corps in _blocs_de_test(fichier.read_text(encoding="utf-8", errors="replace")):
+            enonces = list(_ENONCE_ATTENTE.finditer(corps))
+            terminaux = [e for e in enonces if _ETAT_TERMINAL.search(e.group(0))]
+            if not terminaux:
+                continue
+            if any(
+                _ASSERTION_DE_VALEUR.search(e.group(0)) and e not in terminaux
+                and e.group(0).lstrip().startswith("expect")
+                for e in enonces
+            ):
+                continue
+            if any(_marqueur_pres_de(corps, e.start(), _MARQUEUR_ETAT_SEUL) for e in terminaux):
+                continue
+            identifiant = f"revue:traitement-sans-resultat:{relatif}:{nom}"
+            findings.append(
+                Finding(
+                    id=identifiant,
+                    classe=classes.TRAITEMENT_SANS_RESULTAT_ASSERTE,
+                    localisation=relatif,
+                    message=(
+                        f"« {nom} » attend la fin d'un traitement (état terminal) sans affirmer "
+                        "son RÉSULTAT : le traitement peut se terminer en rendant un résultat "
+                        "faux, vide ou périmé et le test PASSE. Affirmer le contenu produit "
+                        "(constat attendu, compte, valeur) en le comparant à une vérité de "
+                        "référence connue d'avance, et jouer sa contre-épreuve (un jeu où le "
+                        "résultat attendu diffère doit échouer), ou déclarer le test "
+                        f"`{_MARQUEUR_ETAT_SEUL} — <motif>`. Mesure le 05/11 : 34 parcours, 0 "
+                        "assertion sur le contenu d'un constat, seul l'état SUCCEEDED était jugé"
+                    ),
+                    risque=coter(PAN, identifiant, relatif),
+                )
+            )
+    return findings
+
+
 def analyser_suite(cible: Path) -> list[Finding]:
-    """Les dix règles mécanisables (sur onze), sur les suites du projet. Aucune exécution,
+    """Les onze règles mécanisables (sur douze), sur les suites du projet. Aucune exécution,
     aucun réseau — un projet dont la suite ne peut pas tourner est justement celui où un faux
     vert dort le plus longtemps."""
     return [
@@ -942,4 +1018,5 @@ def analyser_suite(cible: Path) -> list[Finding]:
         *saut_conditionnel(cible),
         *boucle_sans_iteration_prouvee(cible),
         *attente_sans_echec(cible),
+        *traitement_sans_resultat_asserte(cible),
     ]

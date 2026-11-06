@@ -1679,6 +1679,12 @@
       "statut": "todo"
     },
     {
+      "id": "revue-010",
+      "domaine": "revue",
+      "enonce": "revue de suite (piege 12, TF-2270) : la revue releve l ABSENCE d une assertion de valeur (contenu, compte, egalite) apres l attente d un etat terminal ; elle ne peut pas juger que la VERITE DE REFERENCE est la bonne ni qu une CONTRE-EPREUVE existe — la regle les exige, la lecture reste humaine. Une assertion portee par une fonction d aide, un message qui contient lui-meme le mot d etat, ou un test Python echappent a la lecture textuelle",
+      "statut": "todo"
+    },
+    {
       "id": "schema-sql-001",
       "domaine": "schema-sql",
       "enonce": "schema sql : la lecture suit le decoupage de `forge_tests.sql` — un corps dollar-quote ($$...$$) qui contient un `;` est coupe au mauvais endroit, et un litteral dont les espaces sont multiples est normalise par le decoupage",

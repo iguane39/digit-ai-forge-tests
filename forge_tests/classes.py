@@ -95,6 +95,12 @@ SAUT_CONDITIONNEL = "saut-conditionnel-en-integration-continue"
 # avalée : le test est vert et n'a rien prouvé (Produit-86, 05/11 : 0 action approuvée).
 ASSERTION_EXECUTEE_ZERO_FOIS = "assertion-de-test-executee-zero-fois"
 
+# --- Un parcours qui juge l'état d'un traitement, jamais son résultat (TF-2270) ------------------
+# Le test attend la fin d'un traitement (SUCCEEDED, « Terminé ») et s'arrête là : le traitement peut
+# se terminer en rendant un résultat faux, vide ou périmé (Produit-86 : 34 parcours, 0 assertion sur
+# le contenu d'un constat).
+TRAITEMENT_SANS_RESULTAT_ASSERTE = "traitement-attendu-sans-resultat-assert"
+
 # --- Aller-retour écriture/relecture (TF-0369) ---------------------------------------------------
 DEFAUT_EVALUE_A_L_IMPORT = "defaut-evalue-a-l-import"
 

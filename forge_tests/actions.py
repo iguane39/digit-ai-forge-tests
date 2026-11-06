@@ -227,6 +227,16 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "couverture n'est mesurée sur les pans qui lisent cette suite (api, data, migrations, "
         "batch, fichiers) ; rejouer l'audit une fois le test corrigé",
     ),
+    # TF-2270 — le test attend la fin d'un traitement sans affirmer son résultat. La vérité de
+    # référence (ce que le traitement DOIT produire) est connue du produit seul : le geste est
+    # écrit par le développeur, avec son cas qui doit être refusé.
+    "traitement-attendu-sans-resultat-assert": (
+        "manuelle_dev",
+        "development",
+        "affirmer le RÉSULTAT du traitement attendu dans « {id} » : comparer son contenu à une "
+        "vérité de référence connue d'avance, et jouer sa contre-épreuve (un jeu où le résultat "
+        "attendu diffère doit échouer) — l'état terminal seul ne prouve rien ({message})",
+    ),
     "sonde-muette": (
         "manuelle_utilisateur",
         "mep-config",
