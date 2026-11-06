@@ -109,6 +109,35 @@ CODE_AUCUN_TEST = 5
 PLAFOND_TESTS_ROUGES = 50
 
 
+# TF-2254 — les ESSAIS de la suite du produit, test par test. Le JUnit de pytest (suite backend) et
+# celui de Playwright (suite e2e) sont lus par `junit.depuis_junit` ; `essais_de_la_cible` les rend
+# au rapport, où un essai non exécuté pèse sur le verdict PARTIEL. Un fichier JUnit absent ou
+# illisible ne fabrique aucun essai : il se déclare (motif `essais-<domaine>`).
+_ESSAIS: dict[tuple[str, str], list] = {}
+
+
+def _relever_essais(banc: Path, domaine: str, pan: str, fichier: Path) -> None:
+    from forge_tests.junit import JunitIllisible, depuis_junit
+
+    _ESSAIS.pop((str(banc), domaine), None)
+    if not fichier.is_file():
+        return
+    try:
+        _ESSAIS[(str(banc), domaine)] = depuis_junit(
+            fichier.read_text(encoding="utf-8", errors="replace"), pan
+        )
+    except JunitIllisible as erreur:
+        _declarer(banc, f"essais-{domaine}", str(erreur))
+
+
+def essais_de_la_cible(banc: Path | str) -> list | None:
+    """Les essais des suites que l audit a lancées (backend puis front), ou None si aucune ne l a
+    été. Ne lance rien : lit ce que les pans ont déjà mesuré."""
+    suites = [_ESSAIS[cle] for cle in ((str(banc), "backend"), (str(banc), "front"))
+              if cle in _ESSAIS]
+    return [essai for suite in suites for essai in suite] if suites else None
+
+
 def _relever_suite_rouge(code: int, trace: str, complement: str) -> dict:
     tests = [
         {"id": trouve.group(2), "nature": trouve.group(1),
@@ -349,6 +378,7 @@ def mesurer(banc_str: str) -> dict | None:
     """
     banc = Path(banc_str)
     _SUITES_ROUGES.pop(str(banc), None)
+    _ESSAIS.pop((str(banc), "backend"), None)
     _contrat_projet(banc)
     # Inventaire seul : executer la suite d un projet REEL peut exiger son infrastructure
     # complete et durer sans borne. Ce mode la court-circuite en le DECLARANT — chaque
@@ -406,6 +436,7 @@ def mesurer(banc_str: str) -> dict | None:
     with tempfile.TemporaryDirectory() as temporaire:
         releve = Path(temporaire) / "sonde.json"
         releve_data = Path(temporaire) / "sonde-data.json"
+        junit = Path(temporaire) / "junit.xml"  # TF-2254 : hors du projet (G-1), lu ci-dessous
         env = {
             **os.environ,
             "FORGE_TESTS_SONDE": str(releve),
@@ -422,12 +453,14 @@ def mesurer(banc_str: str) -> dict | None:
                 "-m", "pytest", "-q", "--no-header",
                 "-p", "no:cacheprovider", "-p", "no:warnings",
                 "-p", "sonde_api", "-p", "sonde_data",
+                f"--junitxml={junit}",
             ],
             banc=banc, domaine="backend", quoi="suite backend sous coverage",
             remede=remede, cwd=racine, timeout=delai, env=env,
         )
         if lance is None:
             return None
+        _relever_essais(banc, "backend", "back", junit)  # TF-2254 : verte ou rouge, elle a tourné
         if lance.returncode != 0:
             trace = f"{lance.stdout or ''}\n{lance.stderr or ''}"
             # TF-0299 — PRIORITÉ ABSOLUE sur la branche « suite rouge » ci-dessous, même raison
@@ -752,18 +785,22 @@ def front_execute(banc_str: str) -> dict | None:
     commande = [npx, "playwright", "test"]
     if argument_cli:
         commande += ["--trace", argument_cli]
-    commande += ["--reporter=line"]
+    commande += ["--reporter=line,junit"]  # TF-2254 : le JUnit alimente les essais du rapport
     # G-1 (lecture seule) : `--output` route traces et captures HORS de l arbre analysé. Sans
     # lui, `--trace on` déposait 34 Mo dans `frontend/test-results/` du projet du client.
     with tempfile.TemporaryDirectory(prefix="forge-tests-front-") as artefacts:
         commande += ["--output", artefacts]
+        junit = Path(artefacts) / "junit.xml"
+        _ESSAIS.pop((str(banc), "front"), None)
         resultat = _run(
             commande,
             banc=banc, domaine="front", quoi="suite e2e Playwright",
-            cwd=front, timeout=900, env=_env_front(banc),
+            cwd=front, timeout=900,
+            env={**_env_front(banc), "PLAYWRIGHT_JUNIT_OUTPUT_NAME": str(junit)},
         )
         if resultat is None:
             return None
+        _relever_essais(banc, "front", "front", junit)  # TF-2254
         if resultat.returncode != 0:
             # TF-0136 — un port DEJA occupe par un processus etranger au banc fait echouer le
             # demarrage du webServer avant le premier test : aucune trace n est produite (aucun

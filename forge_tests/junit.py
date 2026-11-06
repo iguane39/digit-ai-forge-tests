@@ -8,10 +8,9 @@ tout ce qu il faut : le nom du cas, et, s il n a pas simplement réussi, l enfan
 
 Ce module ne sait qu une chose : lire ce XML. Il ne sait pas comment un adaptateur invoque
 pytest, ni comment brancher le résultat sur la mutation ou la couverture (le champ `couvert`
-d `Essai` reste `None` ici — c est à l appelant de le renseigner s il dispose du signal). Le
-brancher sur `execution.mesurer` (ajouter `--junitxml`, lire le fichier, construire les `Essai`
-par pan) est le jalon d intégration réelle, non couvert par cette version : cf. `restes` du
-rapport de campagne TF-0146.
+d `Essai` reste `None` ici — c est à l appelant de le renseigner s il dispose du signal).
+TF-2254 : `execution.mesurer` (pytest, `--junitxml`) et `execution.front_execute` (Playwright,
+`PLAYWRIGHT_JUNIT_OUTPUT_NAME`) lisent ce JUnit, et `__main__` le rend au rapport.
 """
 
 from __future__ import annotations

@@ -209,6 +209,10 @@ def fusionner(
         if pan not in rejoues_
     }
     mutation.update(nouveau.get("mutation") or {})
+    essais = (
+        nouveau.get("essais") if (nouveau.get("essais") or {}).get("fourni")
+        else ancien.get("essais")
+    ) or {"cas": [], "totaux": {}, "signales": [], "fourni": False}
 
     return {
         "adaptateurs": [adaptateurs[p] for p in sorted(adaptateurs)],
@@ -225,6 +229,9 @@ def fusionner(
         "bandes_de_risque": bandes,
         "findings": findings,
         "non_testables": non_testables,
+        # TF-2254 : les essais viennent du rapport qui a lancé les suites — le neuf s il les a
+        # mesurés, l ancien sinon. Un essai non exécuté continue de peser sur le verdict.
+        "essais": essais,
         # Les actions sont RECALCULEES sur le rapport fusionne, jamais reprises telles quelles :
         # une action heritee d un finding resorbe par la reprise reclamerait un travail deja
         # fait — le genre de faux positif qui fait fermer la liste.
@@ -245,7 +252,7 @@ def fusionner(
         },
         "verdict": (
             "PARTIEL"
-            if non_couverts
+            if non_couverts or (essais.get("totaux") or {}).get("non_execute")
             else (
                 "FAIL"
                 if any(e.get("verdict") == "FAIL" for e in adaptateurs.values())

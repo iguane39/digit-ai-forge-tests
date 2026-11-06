@@ -88,7 +88,12 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     # publie sur origin/main. Une affordance est cablee ou elle n'existe pas (loi transverse n° 1).
     _protection = _gab.proteger(cible)
 
+    # TF-2254 — les essais test par test des suites que cet audit a lancées (JUnit) : un essai non
+    # exécuté pèse sur le verdict. `None` quand aucune suite n a tourné : la section le dit.
+    from forge_tests import execution as _execution
+
     rap = rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins,
+                  essais=_execution.essais_de_la_cible(cible),
                   instance=instance_au_rapport(cible),
                   boucle=_boucle.verdict(_boucle.lire(cible)),
                   gabarit_env={**_depot, "protection_gitignore": _protection},

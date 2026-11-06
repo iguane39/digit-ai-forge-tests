@@ -400,10 +400,11 @@ def rapport(
     couvrir. Un motif seul est un constat ; le couple motif + chemin est une action.
 
     TF-0146 : `essais`, s il est fourni, porte le détail test-par-test (section `essais` du
-    rapport, agrégée par `resume_essais`). Paramètre optionnel et rétro-compatible : aucun
-    adaptateur actuel n en fournit encore (l intégration réelle — un adaptateur qui lit sa
-    propre trace d exécution, ex. JUnit — est un jalon ultérieur, cf. `forge_tests.sondes.junit`
-    pour le lecteur déjà prêt). Sans lui, la section reste PRÉSENTE mais déclare son absence :
+    rapport, agrégée par `resume_essais`). Paramètre optionnel et rétro-compatible.
+    TF-2254 : `__main__` l alimente avec les essais des suites que l audit a lancées (JUnit de
+    pytest et de Playwright, `execution.essais_de_la_cible`), et un essai NON EXÉCUTÉ (un test
+    sauté) pèse sur le verdict PARTIEL, au rang d un pan non couvert : « 27 passés, 1 sauté » ne
+    se lit plus PASS. Sans lui, la section reste PRÉSENTE mais déclare son absence :
     un rapport qui l omettrait silencieusement serait indiscernable d un rapport qui l a
     mesurée et n a rien trouvé, exactement le silence que ce framework interdit ailleurs.
     """
@@ -427,6 +428,7 @@ def rapport(
         for s in sorties
         if s.verdict == "SKIP"
     }
+    essais_non_executes = sorted(e.id for e in essais or [] if e.verdict == "non_execute")
     non_couverts = [
         {
             "pan": p,
@@ -494,7 +496,11 @@ def rapport(
         # ne fait que la rendre — s il la calculait, deux lecteurs du meme audit auraient deux
         # verites. Filtre MEP : `jq '.actions[] | select(.categorie=="manuelle_utilisateur")'`.
         "actions": classifier(findings_json, non_testables_json, non_couverts),
-        "non_juge": sorted({n for s in sorties for n in s.non_juge} | set(NON_JUGE_RISQUE)),
+        "non_juge": sorted(
+            {n for s in sorties for n in s.non_juge}
+            | set(NON_JUGE_RISQUE)
+            | set(_mention_essais_non_executes(essais_non_executes))
+        ),
         # TF-0146 — détail test-par-test. Présente même sans `essais` fourni : `fourni: False`
         # dit explicitement « non mesuré ici », jamais confondu avec « mesuré, rien à signaler ».
         "essais": resume_essais(essais) if essais is not None else {
@@ -517,10 +523,29 @@ def rapport(
         "vendorisation": vendorisation if vendorisation is not None else [],
         "verdict": (
             "PARTIEL"
-            if non_couverts
+            if non_couverts or essais_non_executes
             else ("FAIL" if any(s.verdict == "FAIL" for s in sorties) else "PASS")
         ),
     }
+
+
+#: Au-delà, les essais non exécutés ne sont plus tous nommés ici ; le total se dit, et la section
+#: `essais` du rapport les porte tous (aucune borne d affichage silencieuse).
+PLAFOND_ESSAIS_NOMMES = 20
+
+
+def _mention_essais_non_executes(ids: list[str]) -> list[str]:
+    if not ids:
+        return []
+    nommes = ", ".join(ids[:PLAFOND_ESSAIS_NOMMES])
+    reste = (
+        f" … et {len(ids) - PLAFOND_ESSAIS_NOMMES} autre(s), tous dans la section `essais`"
+        if len(ids) > PLAFOND_ESSAIS_NOMMES else ""
+    )
+    return [
+        f"essais : {len(ids)} essai(s) NON EXÉCUTÉ(S) — un test sauté ne prouve rien : il pèse sur "
+        f"le verdict PARTIEL au lieu de se fondre dans les passants ({nommes}{reste})"
+    ]
 
 
 def _boucle_non_mesuree() -> dict:
