@@ -29,6 +29,19 @@ injoignable, le persona n est PAS joué, et le rapport le dit : ni succès ni é
 Ce que le jeu ne fait toujours pas, et il le dit à chaque rapport : il ne clique pas, ne remplit
 aucun formulaire et n exécute aucun JavaScript. C est un parcours HTTP des routes navigées ; le pan
 qualif multi-sessions (TF-0316) parcourt l application rendue.
+
+LA SUITE DU 06/11/2026 (retours Produit-86 du 05/11, décisions R-58) :
+
+  - **TF-2204** — un code HTTP que le test porteur AFFIRME pour une route (`expect(r.status())
+    .toBe(404)` pour une adresse inconnue) n est pas compté en défaut par le jeu ;
+  - **TF-2197** — `parcours-croise` : dès que deux personas sont déclarés, au moins un parcours doit
+    les citer ENSEMBLE (l un agit, l autre voit) ; un parcours dont tous les tests peuvent être
+    SAUTÉS sous condition (`test.skip(!URL)`, `skipif`) n exerce personne ;
+  - **TF-2207** — la clé `parcours` d `EXIGENCES.json` déclare les parcours du produit ; chaque case
+    parcours x rôle (`parcours:<parcours>@<rôle>`) exige un e2e qui cite le parcours ET le rôle ;
+  - **TF-2208** — sur opt-in (`FORGE_TESTS_PARCOURS_MUTANTS=1`, l instance est modifiable), les
+    actions mutantes à adresse littérale du parcours sont rejouées sous l identité du persona, puis
+    sans identité (contre-épreuve : refusée, sinon la garde n existe pas). Élément `mute:<persona>`.
 """
 
 from __future__ import annotations
@@ -52,7 +65,10 @@ POUR_COUVRIR = (
     "écrire, pour chaque persona ou rôle déclaré (clés `personas` ou `roles` d EXIGENCES.json, "
     "`profils` de forge/matrice-droits.json, comptes de FORGE_TESTS_QUALIF_STORAGE_STATES), au "
     "moins un test de bout en bout qui pilote un navigateur, navigue, et nomme ce persona dans son "
-    "nom de fichier ou son texte ; fournir l instance servie (FORGE_TESTS_QUALIF_URL ou "
+    "nom de fichier ou son texte ; quand deux personas sont déclarés, écrire un parcours qui les "
+    "cite ensemble ; pour chaque parcours déclaré (clé `parcours` d EXIGENCES.json), un e2e par "
+    "rôle qui cite le parcours et le rôle ; ôter les sauts conditionnels qui rendent une suite "
+    "SKIPPED ; fournir l instance servie (FORGE_TESTS_QUALIF_URL ou "
     "FORGE_TESTS_BASE_URL) et un compte par rôle (FORGE_TESTS_QUALIF_STORAGE_STATES) pour que le "
     "pan JOUE ce parcours sous l identité du rôle"
 )
@@ -77,6 +93,12 @@ NON_JUGE = [
     "parcours-personas : une citation n est pas un parcours DÉDIÉ — un persona au nom courant "
     "(« admin ») cité dans un parcours écrit pour un autre est tenu pour exercé ; la lecture "
     "du fichier désigné reste humaine",
+    "parcours-personas : un parcours croisé est un parcours qui CITE deux personas ; la "
+    "citation ne prouve pas qu un profil agit pendant que l autre observe (la coexistence de "
+    "deux identités dans "
+    "un test est contrôlée par le pan qualif, TF-0342), et une suite dont chaque test peut être "
+    "sauté est écartée sur lecture du texte, pas sur le compte des tests réellement sautés à "
+    "l exécution (la forge ne lance pas la suite du produit)",
     "parcours-personas : seuls les pilotes Playwright, Cypress, Selenium et Puppeteer sont "
     "reconnus ; un parcours écrit avec un autre outil n est pas vu",
     "parcours-personas : les personas ne sont lus que dans EXIGENCES.json (clés `personas` et "
@@ -258,16 +280,153 @@ def _parcours(cible: Path) -> list[tuple[str, str]]:
     ]
 
 
+# TF-2197 (volet c) : un parcours de bout en bout dont CHAQUE test peut être sauté
+# (`test.skip(!URL)`, `skipif`) ne prouve rien le jour où la condition est vraie : la suite est
+# SKIPPED, verte, et l'audit la comptait comme un parcours. Un tel fichier ne vaut pas
+# parcours : il est écarté de ce qui exerce un persona, et le rapport le nomme.
+_PYTEST_MARQUE_DE_MODULE = re.compile(r"^\s*pytestmark\s*=.*\bskipif\b", re.MULTILINE)
+_TEST_PYTHON = re.compile(r"^\s*(?:async\s+)?def\s+test_\w+", re.MULTILINE)
+
+
+def toujours_sautable(brut: str) -> bool:
+    """Vrai si tous les tests du fichier peuvent être sautés sous condition.
+
+    Un saut conditionnel posé AVANT le premier test (niveau fichier ou `describe`), une marque
+    `pytestmark = …skipif…` de module, ou autant de sauts conditionnels que de tests : aucun test
+    ne tourne de façon certaine. Un saut inconditionnel et motivé est une décision lisible, il n'est
+    pas visé (même distinction que la règle 9 de la revue de suite).
+    """
+    from forge_tests import revue
+
+    lignes = brut.splitlines()
+    sauts = [
+        rang for rang, ligne in enumerate(lignes)
+        if revue._SAUT_CONDITIONNEL.search(ligne) and not revue._SAUT_ASSUME.search(ligne)
+    ]
+    if _PYTEST_MARQUE_DE_MODULE.search(brut):
+        return True
+    if not sauts:
+        return False
+    tests = [brut.count("\n", 0, m.start()) for m in revue._TEST.finditer(brut)]
+    tests += [brut.count("\n", 0, m.start()) for m in _TEST_PYTHON.finditer(brut)]
+    if not tests:
+        return True
+    return min(sauts) < min(tests) or len(sauts) >= len(tests)
+
+
+def sautables(cible: Path) -> set[str]:
+    """Chemins relatifs des parcours de bout en bout dont tous les tests peuvent être sautés."""
+    return {relatif for relatif, brut in _parcours_bruts(cible) if toujours_sautable(brut)}
+
+
+def _parcours_actifs(cible: Path) -> list[tuple[str, str]]:
+    """(chemin, texte normalisé) des parcours qui exercent : les sautables en sont écartés."""
+    ecartes = sautables(cible)
+    return [(relatif, texte) for relatif, texte in _parcours(cible) if relatif not in ecartes]
+
+
+def _motifs_du_persona(cle: str, entree: dict) -> list[re.Pattern[str]]:
+    return [_motif(c) for c in (cle, *entree.get("alias", ()))]
+
+
 def parcours_par_persona(cible: Path, personas: dict[str, dict]) -> dict[str, list[str]]:
     """{clé du persona: [chemins des parcours qui le citent]} — liste vide : aucun parcours."""
-    parcours = _parcours(cible)
+    parcours = _parcours_actifs(cible)
     resultat: dict[str, list[str]] = {}
     for cle, entree in personas.items():
-        motifs = [_motif(c) for c in (cle, *entree.get("alias", ()))]
+        motifs = _motifs_du_persona(cle, entree)
         resultat[cle] = [
             relatif for relatif, texte in parcours if any(m.search(texte) for m in motifs)
         ]
     return resultat
+
+
+# --- Le parcours croisé entre profils (TF-2197, volet b) ------------------------------------------
+ELEMENT_CROISE = "parcours-croise"
+
+
+def parcours_croises(cible: Path, personas: dict[str, dict]) -> list[str]:
+    """Chemins des parcours qui citent AU MOINS DEUX personas déclarés distincts.
+
+    Fait remonté (Produit-86, 05/11/2026, RP-17) : aucun parcours « l'opérateur crée, l'approbateur
+    voit ». Un parcours par persona prouve que chacun accède à son écran, jamais que ce qu'un profil
+    fait est vu par l'autre : c'est le cas nominal d'un produit à rôles (TF-0342).
+    """
+    croises = []
+    for relatif, texte in _parcours_actifs(cible):
+        cites = {
+            cle for cle, entree in personas.items()
+            if any(m.search(texte) for m in _motifs_du_persona(cle, entree))
+        }
+        if len(cites) >= 2:
+            croises.append(relatif)
+    return croises
+
+
+# --- Un e2e par parcours ET par rôle (TF-2207) ----------------------------------------------------
+def parcours_declares(cible: Path) -> tuple[dict[str, dict], list[str]]:
+    """({clé: {"libelle", "roles": [clés] ou None, "source"}}, notes) — la clé `parcours` de
+    EXIGENCES.json, convention de cette forge comme `personas` et `roles`.
+
+    Une entrée est un nom (`"Création d'une demande"`) ou un objet (`{"nom": …, "roles": [...]}`).
+    Sans `roles`, le parcours est dû à TOUS les personas déclarés ; avec `roles`, aux seuls rôles
+    nommés. Fait remonté (Produit-86, RP-27) : 9 cases parcours x rôle sur 30 portaient un e2e.
+    """
+    chemin = _chemin_exigences(cible)
+    if chemin is None:
+        return {}, []
+    try:
+        donnees = json.loads(chemin.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}, []  # l'illisibilité est déjà notée par `declares`
+    trouves: dict[str, dict] = {}
+    liste = donnees.get("parcours") if isinstance(donnees, dict) else None
+    for entree in liste if isinstance(liste, list) else []:
+        noms = _noms_de(entree)
+        cles = [c for c in (_cle(n) for n in noms) if c]
+        if not cles:
+            continue
+        roles = None
+        if isinstance(entree, dict) and isinstance(entree.get("roles"), list):
+            roles = [c for c in (_cle(str(r)) for r in entree["roles"]) if c]
+        trouves.setdefault(
+            cles[0],
+            {"libelle": noms[0], "alias": cles[1:], "roles": roles,
+             "source": f"{chemin.name}:parcours"},
+        )
+    return trouves, []
+
+
+def cases_parcours_x_role(
+    cible: Path, personas_: dict[str, dict]
+) -> list[tuple[str, str, str]]:
+    """[(clé du parcours, clé du rôle, libellé du rôle)] — la grille due, parcours x rôle."""
+    parcours, _ = parcours_declares(cible)
+    cases = []
+    for cle, entree in sorted(parcours.items()):
+        roles = entree["roles"] if entree["roles"] is not None else sorted(personas_)
+        for role in roles:
+            libelle = personas_[role]["libelle"] if role in personas_ else role
+            cases.append((cle, role, libelle))
+    return cases
+
+
+def cases_exercees(cible: Path, personas_: dict[str, dict]) -> set[str]:
+    """Les cases `parcours:<p>@<rôle>` qu'un e2e cite ENSEMBLE (le parcours et le rôle)."""
+    parcours, _ = parcours_declares(cible)
+    actifs = _parcours_actifs(cible)
+    exercees = set()
+    for cle, role, _libelle in cases_parcours_x_role(cible, personas_):
+        entree = parcours[cle]
+        motifs_parcours = [_motif(c) for c in (cle, *entree["alias"])]
+        motifs_role = _motifs_du_persona(role, personas_.get(role, {}))
+        for _relatif, texte in actifs:
+            if any(m.search(texte) for m in motifs_parcours) and any(
+                m.search(texte) for m in motifs_role
+            ):
+                exercees.add(f"parcours:{cle}@{role}")
+                break
+    return exercees
 
 
 # --- Le jeu des parcours contre l instance servie (TF-2123, suite) ------------------------------
@@ -351,11 +510,20 @@ def codes_attendus_par_route(brut: str) -> dict[str, set[int]]:
         autre_test = _DECLARATION_DE_TEST.search(suite)
         if autre_test:
             suite = suite[:autre_test.start()]
-        for motif in _CODE_ATTENDU:
-            for code in motif.findall(suite):
-                if not 300 <= int(code) < 400:
-                    attendus.setdefault(chemin, set()).add(int(code))
+        codes = _codes_dans(suite)
+        if codes:
+            attendus.setdefault(chemin, set()).update(codes)
     return attendus
+
+
+def _codes_dans(suite: str) -> set[int]:
+    """Les codes HTTP (hors 3xx) que le texte affirme par l'une des formes reconnues."""
+    return {
+        int(code)
+        for motif in _CODE_ATTENDU
+        for code in motif.findall(suite)
+        if not 300 <= int(code) < 400
+    }
 
 
 def _valeur_declaree(cible: Path, cle: str) -> str:
@@ -590,6 +758,269 @@ def jouer(cible: Path, personas_: dict[str, dict]) -> dict:
     return jeu
 
 
+# --- Les actions mutantes du parcours, rejouées profil par profil (TF-2208) ----------------------
+# Fait remonté (Produit-86, RP-28) : le jeu ne rejouait qu'en GET. Il ne jugeait donc jamais ce
+# qu'un profil FAIT (créer, valider, agir) : seuls ses écrans étaient lus.
+#
+# Ce jeu MODIFIE l'instance. Il n'a donc lieu que sur déclaration explicite de l'opérateur
+# (`FORGE_TESTS_PARCOURS_MUTANTS=1`, environnement ou `.env.forge-tests`) : poser la variable dit
+# « cette instance peut être modifiée par l'audit ». Sans elle, les actions trouvées sont NOMMÉES au
+# rapport, jamais rejouées.
+#
+# Ce qui est rejoué : les appels mutants à adresse LITTÉRALE du parcours (`request.post('/api/x',
+# { data: {…} })`, `cy.request('POST', '/api/x', {…})`), sous l'identité du persona dont le parcours
+# les porte, avec le corps littéral quand il se lit. La contre-épreuve : le MÊME appel sans aucune
+# identité doit être refusé (401, 403, renvoi vers la mire) ; accepté, la garde n'existe pas.
+# Ce qui ne l'est pas : un enchaînement dont une étape dépend de la réponse d'une autre (identifiant
+# créé puis validé par un autre profil) — le rapport le dit.
+_ENV_MUTANTS = "FORGE_TESTS_PARCOURS_MUTANTS"
+_MUTANT_METHODE = re.compile(
+    r"""\.\s*(?P<m>post|put|patch|delete)\s*\(\s*(?P<q>['"`])(?P<route>/[^'"`$]*)(?P=q)""",
+    re.IGNORECASE,
+)
+_MUTANT_CYPRESS = re.compile(
+    r"""\bcy\.request\s*\(\s*['"`](?P<m>POST|PUT|PATCH|DELETE)['"`]\s*,\s*"""
+    r"""['"`](?P<route>/[^'"`$]*)['"`]""",
+    re.IGNORECASE,
+)
+_CORPS_CLE = re.compile(r"""\b(?:data|json|body)\s*[:=]\s*(?=\{)""")
+_FENETRE_CORPS = 600
+
+
+def _objet_litteral(texte: str) -> dict | None:
+    """Le premier objet littéral qui suit `data:`/`json=`/`body:`, lu comme JSON — ou None.
+
+    Une valeur construite (`${id}`, variable, appel) n'est pas devinée : le corps n'est alors pas
+    rejoué, et l'appel est rejoué sans corps (le rapport le dit)."""
+    cle = _CORPS_CLE.search(texte)
+    if not cle:
+        return None
+    debut = cle.end()
+    profondeur = 0
+    for rang in range(debut, len(texte)):
+        if texte[rang] == "{":
+            profondeur += 1
+        elif texte[rang] == "}":
+            profondeur -= 1
+            if profondeur == 0:
+                brut = texte[debut:rang + 1]
+                break
+    else:
+        return None
+    brut = re.sub(
+        r"""(['"`])((?:\\.|(?!\1).)*)\1""", lambda m: json.dumps(m.group(2)), brut, flags=re.DOTALL
+    )
+    brut = re.sub(r"([{,]\s*)([A-Za-z_]\w*)\s*:", r'\1"\2":', brut)
+    brut = re.sub(r",\s*([}\]])", r"\1", brut)
+    try:
+        objet = json.loads(brut)
+    except ValueError:
+        return None
+    return objet if isinstance(objet, dict) else None
+
+
+def actions_mutantes(brut: str) -> list[dict]:
+    """Les appels mutants à adresse littérale du parcours, dans l'ordre, sans doublon.
+
+    `{"methode", "route", "corps" (dict ou None), "attendus" (codes affirmés par le test)}`."""
+    trouves = sorted(
+        [*_MUTANT_METHODE.finditer(brut), *_MUTANT_CYPRESS.finditer(brut)],
+        key=lambda m: m.start(),
+    )
+    actions: list[dict] = []
+    for rang, trouve in enumerate(trouves):
+        route = trouve.group("route").split("#")[0].split("?")[0] or "/"
+        if _ROUTE_A_EFFET.search(_sans_accent(route)):
+            continue
+        fin = trouves[rang + 1].start() if rang + 1 < len(trouves) else len(brut)
+        suite = brut[trouve.end():fin]
+        autre_test = _DECLARATION_DE_TEST.search(suite)
+        if autre_test:
+            suite = suite[:autre_test.start()]
+        action = {
+            "methode": trouve.group("m").upper(), "route": route,
+            "corps": _objet_litteral(suite[:_FENETRE_CORPS]), "attendus": _codes_dans(suite),
+        }
+        if not any(a["methode"] == action["methode"] and a["route"] == route for a in actions):
+            actions.append(action)
+    return actions
+
+
+def _mutation_declaree(cible: Path) -> bool:
+    return _valeur_declaree(cible, _ENV_MUTANTS).lower() in ("1", "true", "oui", "yes")
+
+
+def _jouer_mutation(base: str, action: dict, etat: dict | None) -> tuple[str, str]:
+    """(issue, code) d'un appel mutant, sous l'identité de `etat` (None : sans identité).
+
+    Issues : `ok` (2xx, ou code attendu par le test) · `refuse` (401, 403) · `mire` (renvoi vers la
+    mire de connexion) · `erreur` · `injoignable`. Les redirections ne sont PAS suivies : une
+    mutation rejouée deux fois par un suivi de 307 serait une double écriture."""
+    url = base.rstrip("/") + action["route"]
+    entetes = _en_tetes(etat, base, action["route"]) if etat else {}
+    donnees = None
+    if action["corps"] is not None:
+        donnees = json.dumps(action["corps"]).encode("utf-8")
+        entetes["Content-Type"] = "application/json"
+    requete = urllib.request.Request(  # noqa: S310 — l'URL est celle que l'opérateur déclare
+        url, data=donnees, headers=entetes, method=action["methode"]
+    )
+    try:
+        with urllib.request.build_opener(_SansRedirection).open(  # noqa: S310
+            requete, timeout=_DELAI_REQUETE_S
+        ) as reponse:
+            code, lieu = reponse.status, ""
+    except urllib.error.HTTPError as erreur:
+        code, lieu = erreur.code, erreur.headers.get("Location", "")
+    except (urllib.error.URLError, OSError, ValueError) as erreur:
+        return "injoignable", type(getattr(erreur, "reason", erreur)).__name__
+    if code in action["attendus"] and not 300 <= code < 400:
+        return "ok", f"{code}"
+    if 300 <= code < 400 and _est_la_mire(urlsplit(urljoin(url, lieu)).path or "/"):
+        return "mire", f"{code} vers la mire"
+    if code in (401, 403):
+        return "refuse", f"{code}"
+    if 200 <= code < 300:
+        return "ok", f"{code}"
+    return "erreur", f"{code}"
+
+
+def jouer_mutations(cible: Path, personas_: dict[str, dict], jeu: dict) -> dict:
+    """Rejoue les actions mutantes du parcours de chaque persona dont le parcours a été joué.
+
+    Rend `{"autorise", "nommees", "jouees"}` : `nommees[cle]` = les actions trouvées (rejouées ou
+    non), `jouees[cle]` = `{"role", "actions": [{methode, route, sous_identite, contre_epreuve}],
+    "ok"}`. Sans instance, ou sans l'opt-in, rien n'est rejoué : les actions sont seulement
+    nommées."""
+    resultat: dict = {"autorise": _mutation_declaree(cible), "nommees": {}, "jouees": {}}
+    if not jeu["instance"]:
+        return resultat
+    bruts = dict(_parcours_bruts(cible))
+    cites = parcours_par_persona(cible, personas_)
+    comptes = identites(cible)
+    for cle, entree in sorted(personas_.items()):
+        actions: list[dict] = []
+        for relatif in cites.get(cle) or []:
+            for action in actions_mutantes(bruts.get(relatif, "")):
+                if not any(a["methode"] == action["methode"] and a["route"] == action["route"]
+                           for a in actions):
+                    actions.append(action)
+        if not actions:
+            continue
+        resultat["nommees"][cle] = actions
+        compte = _identite_du_persona(cle, entree, comptes)
+        if not resultat["autorise"] or compte is None:
+            continue
+        role, chemin = compte
+        etat, _motif_illisible = _lire_etat(cible, chemin)
+        if etat is None:
+            continue
+        rejouees = []
+        for action in actions:
+            issue, code = _jouer_mutation(jeu["instance"], action, etat)
+            contre = None
+            if issue == "ok":
+                # La contre-épreuve n'a de sens que si l'appel passe sous l'identité du rôle.
+                contre = _jouer_mutation(jeu["instance"], action, None)
+            rejouees.append({
+                "methode": action["methode"], "route": action["route"],
+                "sans_corps_lisible": action["corps"] is None,
+                "sous_identite": (issue, code), "contre_epreuve": contre,
+            })
+        if all(r["sous_identite"][0] == "injoignable" for r in rejouees):
+            continue
+        resultat["jouees"][cle] = {
+            "role": role, "actions": rejouees,
+            "ok": all(
+                r["sous_identite"][0] == "ok"
+                and r["contre_epreuve"] is not None and r["contre_epreuve"][0] in ("refuse", "mire")
+                for r in rejouees
+            ),
+        }
+    return resultat
+
+
+def _elements_des_mutations(
+    cible: Path, mutations: dict, personas_: dict[str, dict]
+) -> list[Element]:
+    return [
+        Element(
+            f"mute:{cle}",
+            PAN,
+            f"actions mutantes du parcours de « {personas_[cle]['libelle']} » rejouées sous "
+            f"l'identité du rôle « {joue['role']} », avec contre-épreuve sans identité",
+            str(Path(cible) / "forge" / "EXIGENCES.json"),
+        )
+        for cle, joue in sorted(mutations["jouees"].items())
+    ]
+
+
+def _message_des_mutations(libelle: str, joue: dict) -> str:
+    fautes = []
+    for action in joue["actions"]:
+        appel = f"{action['methode']} {action['route']}"
+        issue, code = action["sous_identite"]
+        if issue != "ok":
+            fautes.append(f"{appel} : refusé ou en erreur sous l'identité du rôle (HTTP {code})")
+        elif action["contre_epreuve"] is not None and action["contre_epreuve"][0] not in (
+            "refuse", "mire"
+        ):
+            fautes.append(
+                f"{appel} : CONTRE-ÉPREUVE ratée — le même appel SANS identité a répondu "
+                f"HTTP {action['contre_epreuve'][1]} ({action['contre_epreuve'][0]}) au lieu "
+                "d'un refus : la garde n'existe pas"
+            )
+    return (
+        f"persona « {libelle} » : action(s) mutante(s) de son parcours rejouée(s) sous "
+        f"l'identité du rôle « {joue['role']} » — {len(fautes)} sur {len(joue['actions'])} "
+        "en défaut : "
+        + "; ".join(fautes[:5])
+    )
+
+
+def _mentions_des_mutations(mutations: dict, personas_: dict[str, dict]) -> list[str]:
+    nommees = mutations["nommees"]
+    if not nommees:
+        return [
+            "parcours-personas : aucune action MUTANTE à adresse littérale trouvée dans les "
+            "parcours (`request.post('/api/…')`, `cy.request('POST', '/api/…')`) : ce que chaque "
+            "profil FAIT n'est pas jugé ici, seuls ses écrans le sont (GET)"
+        ]
+    lignes = []
+    for cle, actions in sorted(nommees.items()):
+        noms = ", ".join(f"{a['methode']} {a['route']}" for a in actions[:5])
+        if cle in mutations["jouees"]:
+            sans_corps = [a for a in actions if a["corps"] is None and a["methode"] != "DELETE"]
+            lignes.append(
+                "parcours-personas : ACTIONS MUTANTES REJOUÉES pour "
+                f"« {personas_[cle]['libelle']} » ({noms}) sous son identité, puis sans "
+                "identité (contre-épreuve) ; l'instance a été MODIFIÉE (opt-in "
+                + _ENV_MUTANTS + ")"
+                + (f" ; {len(sans_corps)} appel(s) rejoué(s) sans corps (corps non littéral)"
+                   if sans_corps else "")
+            )
+        elif not mutations["autorise"]:
+            lignes.append(
+                f"parcours-personas : {len(actions)} action(s) mutante(s) du parcours de "
+                f"« {personas_[cle]['libelle']} » NON rejouée(s) ({noms}) : les rejouer modifie "
+                f"l'instance, ce qui exige {_ENV_MUTANTS}=1 (instance déclarée modifiable)"
+            )
+        else:
+            lignes.append(
+                f"parcours-personas : action(s) mutante(s) de « {personas_[cle]['libelle']} » "
+                f"({noms}) NON rejouée(s) : aucun compte pour son rôle ({_ENV_COMPTES}) ou compte "
+                "illisible, ou instance injoignable"
+            )
+    lignes.append(
+        "parcours-personas : un ENCHAÎNEMENT entre profils dont une étape dépend de la réponse "
+        "d'une autre (l'opérateur prépare → l'approbateur valide l'identifiant créé → l'agent "
+        "agit → l'opérateur voit) n'est PAS rejoué : chaque action l'est isolément, sous le "
+        "seul profil dont le parcours la porte ; l'enchaînement reste à écrire en test de bout "
+        "en bout"
+    )
+    return lignes
+
+
 # --- Contrat d adaptateur -----------------------------------------------------------------------
 def _fichier_source(cible: Path, source: str) -> str:
     """Le fichier qui porte la déclaration (jamais un nom de variable), pour localiser."""
@@ -601,7 +1032,7 @@ def _fichier_source(cible: Path, source: str) -> str:
 
 def inventaire(cible: Path) -> list[Element]:
     personas, _ = declares(cible)
-    return [
+    elements = [
         Element(
             f"persona:{cle}",
             PAN,
@@ -611,12 +1042,40 @@ def inventaire(cible: Path) -> list[Element]:
         )
         for cle, entree in sorted(personas.items())
     ]
+    source = _chemin_exigences(cible)
+    if len(personas) >= 2:
+        # TF-2197 (b) : plusieurs profils déclarés exigent un parcours qui les fait AGIR ensemble.
+        premier = personas[sorted(personas)[0]]
+        elements.append(
+            Element(
+                ELEMENT_CROISE,
+                PAN,
+                "parcours croisé entre profils — exige au moins un parcours de bout en bout qui "
+                f"cite deux des {len(personas)} personas déclarés (l'un agit, l'autre voit)",
+                _fichier_source(cible, premier["sources"][0]),
+            )
+        )
+    parcours, _ = parcours_declares(cible)
+    for cle, role, libelle_role in cases_parcours_x_role(cible, personas):
+        elements.append(
+            Element(
+                f"parcours:{cle}@{role}",
+                PAN,
+                f"parcours « {parcours[cle]['libelle']} » x rôle « {libelle_role} » — exige un "
+                "parcours de bout en bout qui cite le parcours ET le rôle",
+                str(source) if source else str(cible),
+            )
+        )
+    return elements
 
 
 def exerces(cible: Path) -> set[str]:
     personas, _ = declares(cible)
     cites = parcours_par_persona(cible, personas)
-    return {f"persona:{cle}" for cle, parcours in cites.items() if parcours}
+    exerces_ = {f"persona:{cle}" for cle, parcours in cites.items() if parcours}
+    if len(personas) >= 2 and parcours_croises(cible, personas):
+        exerces_.add(ELEMENT_CROISE)
+    return exerces_ | cases_exercees(cible, personas)
 
 
 def _elements_du_jeu(cible: Path, jeu: dict, personas_: dict[str, dict]) -> list[Element]:
@@ -764,10 +1223,17 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # Le jeu contre l instance servie (TF-2123, suite) : il ajoute un élément `joue:<persona>` par
     # parcours effectivement joué, exercé quand chacune de ses routes a répondu sous l identité.
     jeu = jouer(cible, personas_)
-    exerce = exerces(cible) | {f"joue:{cle}" for cle, j in jeu["joues"].items() if j["ok"]}
+    # TF-2208 : les actions mutantes du parcours, rejouées profil par profil sur opt-in.
+    mutations = jouer_mutations(cible, personas_, jeu)
+    exerce = (
+        exerces(cible)
+        | {f"joue:{cle}" for cle, j in jeu["joues"].items() if j["ok"]}
+        | {f"mute:{cle}" for cle, j in mutations["jouees"].items() if j["ok"]}
+    )
     sortie = evaluer_surface(
         NOM, PAN, str(cible),
-        [*inventaire(cible), *_elements_du_jeu(cible, jeu, personas_)],
+        [*inventaire(cible), *_elements_du_jeu(cible, jeu, personas_),
+         *_elements_des_mutations(cible, mutations, personas_)],
         exerce, SEUIL, NON_JUGE,
     )
     for constat in sortie.findings:
@@ -777,5 +1243,56 @@ def analyser(cible: Path) -> SortieAdaptateur:
             constat.message = _message_du_jeu(
                 personas_[cle]["libelle"], jeu["joues"][cle], jeu["instance"]
             )
-    sortie.non_juge = [*sortie.non_juge, *notes, *_mentions_du_jeu(jeu, personas_)]
+        elif constat.id.startswith("mute:"):
+            cle = constat.id[len("mute:"):]
+            constat.classe = classes.PARCOURS_PERSONA_REFUSE
+            constat.message = _message_des_mutations(
+                personas_[cle]["libelle"], mutations["jouees"][cle]
+            )
+    ecartes = _parcours_sautables_nommes(cible)
+    for constat in sortie.findings:
+        if constat.id == ELEMENT_CROISE or constat.id.startswith(("parcours:", "persona:")):
+            constat.message += _suite_du_defaut(constat.id, ecartes)
+    sortie.non_juge = [
+        *sortie.non_juge, *notes, *_mentions_du_jeu(jeu, personas_),
+        *(_mentions_des_mutations(mutations, personas_) if jeu["instance"] else []),
+        *_mentions_des_parcours_sautables(ecartes),
+    ]
     return sortie
+
+
+def _parcours_sautables_nommes(cible: Path) -> list[str]:
+    return sorted(sautables(cible))
+
+
+def _suite_du_defaut(identifiant: str, ecartes: list[str]) -> str:
+    """Ce que le lecteur fait du constat : où chercher, et ce qui est écarté du décompte."""
+    if ecartes:
+        ecart = (
+            f" ; {len(ecartes)} parcours dont tous les tests peuvent être SAUTÉS sous condition "
+            f"({', '.join(ecartes[:3])}) ne comptent pas"
+        )
+    else:
+        ecart = ""
+    if identifiant == ELEMENT_CROISE:
+        return (
+            " — écrire un parcours où un profil agit et un autre voit le résultat (nommer les "
+            f"deux dans le test){ecart}"
+        )
+    if identifiant.startswith("parcours:"):
+        return (
+            " — écrire le parcours de bout en bout pour ce rôle (nommer le parcours et le rôle "
+            f"dans son fichier ou son texte){ecart}"
+        )
+    return ecart
+
+
+def _mentions_des_parcours_sautables(ecartes: list[str]) -> list[str]:
+    if not ecartes:
+        return []
+    return [
+        f"parcours-personas : {len(ecartes)} parcours de bout en bout dont TOUS les tests peuvent "
+        f"être sautés sous condition ({', '.join(ecartes[:5])}) sont écartés de ce qui exerce un "
+        "persona : une suite SKIPPED (URL absente, variable non posée) est verte et ne prouve "
+        "rien ; ôter la condition ou faire échouer explicitement son absence les rétablit"
+    ]

@@ -110,6 +110,9 @@ def test_rouge_le_nom_d_un_persona_est_cite_en_mot_entier(tmp_path: Path) -> Non
 # --- VERT -----------------------------------------------------------------------------------------
 def test_vert_un_parcours_par_persona_et_le_non_jeu_reste_publie(tmp_path: Path) -> None:
     racine = _produit(tmp_path, ["Gestionnaire", "Approbateur"], ["gestionnaire", "approbateur"])
+    # TF-2197 (b) : deux personas déclarés exigent aussi un parcours qui les cite ensemble.
+    _ecrire(racine, "e2e/circuit.spec.ts",
+            PARCOURS.format(nom="le Gestionnaire crée, l Approbateur voit"))
     sortie = personas.analyser(racine)
     assert sortie.verdict == "PASS"
     assert sortie.findings == []

@@ -1571,6 +1571,12 @@
       "statut": "todo"
     },
     {
+      "id": "parcours-personas-008",
+      "domaine": "parcours-personas",
+      "enonce": "parcours-personas : un parcours croisé est un parcours qui CITE deux personas ; la citation ne prouve pas qu un profil agit pendant que l autre observe (la coexistence de deux identités dans un test est contrôlée par le pan qualif, TF-0342), et une suite dont chaque test peut être sauté est écartée sur lecture du texte, pas sur le compte des tests réellement sautés à l exécution (la forge ne lance pas la suite du produit)",
+      "statut": "todo"
+    },
+    {
       "id": "plancher-rendu-002",
       "domaine": "plancher-rendu",
       "enonce": "plancher : V5 croisements de fleches et V6 images deformees restent une inspection HUMAINE sur captures — ce pan ne produit pas d image, il lit des mesures du DOM",

@@ -167,6 +167,7 @@ def _produit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, instance: Instance,
     parcours: dict[str, tuple[str, ...]], etats: dict[str, str],
     declares: tuple[str, ...] | None = None,
+    croise: bool = False,
 ) -> Path:
     """Un produit dont EXIGENCES.json déclare ses personas, avec un parcours par entrée de
     `parcours` (nom de persona -> routes navigées) et un storage state par entrée de `etats`."""
@@ -176,6 +177,10 @@ def _produit(
             json.dumps({"projet": "p", "personas": [n.capitalize() for n in noms]}))
     for nom, routes in parcours.items():
         _ecrire(racine, f"e2e/{nom}.spec.ts", _parcours(nom, *routes))
+    if croise:
+        # TF-2197 (b) : deux personas déclarés exigent un parcours qui les cite ensemble.
+        _ecrire(racine, "e2e/croisement.spec.ts",
+                _parcours(f"{noms[0]} agit, {noms[1]} voit", "/tableau"))
     comptes = []
     for role, contenu in etats.items():
         chemin = _ecrire(racine, f"forge/etats/{role}.json", contenu)
@@ -199,6 +204,7 @@ def test_vert_chaque_persona_joue_ses_routes_sous_l_identite_de_son_role(
         tmp_path, monkeypatch, instance,
         {"agent": ("/tableau",), "admin": ("/tableau", "/admin")},
         {"agent": _etat_cookie("agent-ok"), "admin": _etat_cookie("admin-ok")},
+        croise=True,
     )
     sortie = personas.analyser(racine)
     assert sortie.verdict == "PASS", [f.message for f in sortie.findings]
@@ -341,6 +347,7 @@ def test_un_persona_sans_identite_n_est_pas_joue_et_n_est_pas_accuse(
         tmp_path, monkeypatch, instance,
         {"agent": ("/tableau",), "superviseur": ("/tableau",)},
         {"agent": _etat_cookie("agent-ok")},
+        croise=True,
     )
     sortie = personas.analyser(racine)
     assert sortie.verdict == "PASS"

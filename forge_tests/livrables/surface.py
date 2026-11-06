@@ -92,7 +92,13 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
     # TF-2123 : le pan parcours-personas range par PERSONA — un rôle sans parcours se lit à côté
     # des autres rôles du même produit.
     # TF-2123 (suite) : le jeu du parcours (`joue:<persona>`) se range sous le même persona.
-    "persona": ((re.compile(r"^(?:persona|joue):(?P<v>\S+)$"), "persona {v}"),),
+    # TF-2207 : une case parcours x rôle (`parcours:<parcours>@<rôle>`) se range sous son RÔLE ;
+    # TF-2197 : le parcours croisé entre profils n'appartient à aucun persona : sous-chapitre.
+    "persona": (
+        (re.compile(r"^(?:persona|joue):(?P<v>\S+)$"), "persona {v}"),
+        (re.compile(r"^parcours:[^@\s]+@(?P<v>\S+)$"), "persona {v}"),
+        (re.compile(r"^parcours-croise$"), "parcours croisé entre profils"),
+    ),
     "module": (
         (re.compile(r"^mutant:(?P<v>[^:]+):"), "module {v}"),
         (re.compile(r"^seuil:mutation-module:(?P<v>\S+)$"), "module {v}"),

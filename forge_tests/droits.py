@@ -87,6 +87,10 @@ def lire(cible: Path | str) -> dict:
 
     `non_tenues` : les cases que le PRODUIT ne tient pas aujourd'hui. Elles ne disparaissent pas
     de la matrice — elles deviennent des `xfail(strict=True)`.
+
+    `sans_garde` (TF-2197) : motif d'une action volontairement ouverte à tous. Sans lui, une action
+    dont le contrat n'affirme que des succès (ou que des refus) est un constat : une garde se
+    prouve des deux côtés.
     """
     source = Path(cible) / FICHIER
     if not source.exists():
@@ -240,6 +244,67 @@ _COEXISTENCE = re.compile(
 )
 
 
+# --- TF-2197 : la contre-épreuve d'une garde -----------------------------------------------
+#: Codes qui disent « refusé » : non authentifié, interdit, introuvable pour ce profil. Le 409 n'en
+#: est pas un : il dit « état en conflit », pas « ce profil n'a pas le droit ».
+CODES_DE_REFUS = frozenset({401, 403, 404})
+
+
+def gardes_sans_contre_epreuve(matrice: dict) -> list[Finding]:
+    """Une garde se prouve des DEUX côtés : un profil qui passe, un profil qui est refusé.
+
+    Fait remonté (Produit-86, lot du 05/11/2026, RP-17) : la garde E-097 n'était tenue que par son
+    cas positif. Une garde qui laisse passer tout le monde, ou qui refuse tout le monde, a le même
+    test vert qu'une garde juste. Une action de la matrice dont le contrat n'affirme que des succès
+    (aucun profil refusé) n'a pas de contre-épreuve ; celle qui n'affirme que des refus n'a pas de
+    cas positif. Une action volontairement ouverte à tous se déclare `"sans_garde": "<motif>"`.
+    """
+    findings: list[Finding] = []
+    for action in matrice.get("actions") or []:
+        if not isinstance(action, dict) or action.get("sans_garde"):
+            continue
+        nom = str(action.get("nom") or action.get("route") or "?")
+        codes = [c for c in (action.get("attendu") or {}).values() if isinstance(c, int)]
+        if not codes:
+            continue
+        passent = [c for c in codes if 200 <= c < 300]
+        refus = [c for c in codes if c in CODES_DE_REFUS]
+        if passent and not refus:
+            identifiant = f"qualif:matrice-droits:garde-sans-contre-epreuve:{nom}"
+            findings.append(
+                Finding(
+                    id=identifiant,
+                    classe=classes.MATRICE_DES_DROITS,
+                    localisation=FICHIER,
+                    message=(
+                        f"l'action « {nom} » n'affirme que des SUCCÈS : aucun profil n'y est "
+                        "refusé (401, 403 ou 404). Une garde qui laisse passer tout le monde a "
+                        "le même test vert qu'une garde juste. Ajouter la cellule refusée "
+                        "(un profil sans droit, ou `anonyme` attendu 401), ou déclarer "
+                        '`"sans_garde": "<motif>"` si l\'action est ouverte à tous. Mesure le '
+                        "05/11 : la garde E-097 n'était tenue que par son cas positif"
+                    ),
+                    risque=coter(PAN, identifiant, FICHIER),
+                )
+            )
+        elif refus and not passent:
+            identifiant = f"qualif:matrice-droits:garde-sans-cas-positif:{nom}"
+            findings.append(
+                Finding(
+                    id=identifiant,
+                    classe=classes.MATRICE_DES_DROITS,
+                    localisation=FICHIER,
+                    message=(
+                        f"l'action « {nom} » n'affirme que des REFUS : aucun profil n'y est "
+                        "autorisé (2xx). Une garde qui refuse tout le monde a le même test vert "
+                        "qu'une garde juste : ajouter la cellule du profil qui doit passer"
+                    ),
+                    risque=coter(PAN, identifiant, FICHIER),
+                )
+            )
+    return findings
+
+
 def controles(cible: Path, sessions: list[dict], specs: list[Path]) -> list[Finding]:
     """Les deux exigences de socle dès qu'un produit DÉCLARE des rôles.
 
@@ -267,6 +332,8 @@ def controles(cible: Path, sessions: list[dict], specs: list[Path]) -> list[Find
     profils = [str(p) for p in matrice.get("profils") or []]
     if not profils:
         return []
+
+    findings.extend(gardes_sans_contre_epreuve(matrice))
 
     outillees = {str(s.get("role") or "") for s in sessions if s.get("role")}
     manquantes = sorted(set(profils) - outillees)
