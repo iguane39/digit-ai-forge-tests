@@ -288,13 +288,67 @@ _PYTEST_MARQUE_DE_MODULE = re.compile(r"^\s*pytestmark\s*=.*\bskipif\b", re.MULT
 _TEST_PYTHON = re.compile(r"^\s*(?:async\s+)?def\s+test_\w+", re.MULTILINE)
 
 
-def toujours_sautable(brut: str) -> bool:
+# TF-2274 (Produit-86, RP-47) : la condition d'un saut se juge dans le CONTEXTE où le pan joue.
+# Un e2e qui se saute sans instance désignée (`PENTEST_E2E_URL`) ne se saute pas quand l'instance
+# est fournie au pan : l'écarter alors faisait perdre 2 adresses sur 5 par profil, sans un mot au
+# rapport. Seul un saut dont la condition NOMME l'instance (une URL, un hôte, un serveur) est levé
+# par l'instance fournie ; toute autre condition (`CI`, un drapeau, un navigateur) reste tenue pour
+# sautable, et le rapport le dit.
+_IDENTIFIANT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_NOM_D_INSTANCE = re.compile(r"url|uri|host|instance|endpoint|server|serveur", re.IGNORECASE)
+
+
+def _condition_du_saut(lignes: list[str], rang: int) -> str:
+    """Le texte du saut posé à la ligne `rang`, parenthèses équilibrées (6 lignes au plus),
+    sans les chaînes en prose (le motif « pas d URL » n'est pas la condition)."""
+    texte = ""
+    profondeur = 0
+    for ligne in lignes[rang:rang + 6]:
+        texte += ligne + "\n"
+        profondeur += ligne.count("(") - ligne.count(")")
+        if profondeur <= 0:
+            break
+    return _sans_prose(texte)
+
+
+def _sans_prose(texte: str) -> str:
+    """`texte` sans le contenu des chaînes qui portent un espace (motif en prose) : les chaînes
+    sans espace (`'PENTEST_E2E_URL'`, nom d'une variable d'environnement) sont gardées."""
+    sortie: list[str] = []
+    i = 0
+    while i < len(texte):
+        guillemet = texte[i]
+        if guillemet in "'\"`":
+            fin = texte.find(guillemet, i + 1)
+            if fin == -1:
+                sortie.append(texte[i:])
+                break
+            contenu = texte[i + 1:fin]
+            sortie.append(" " if any(c.isspace() for c in contenu) else texte[i:fin + 1])
+            i = fin + 1
+        else:
+            sortie.append(guillemet)
+            i += 1
+    return "".join(sortie)
+
+
+def _saut_d_instance(lignes: list[str], rang: int) -> bool:
+    """Vrai si la condition de ce saut nomme l'instance : sans instance fournie il se déclenche,
+    avec elle il ne se déclenche pas."""
+    condition = _condition_du_saut(lignes, rang)
+    return any(_NOM_D_INSTANCE.search(mot) for mot in _IDENTIFIANT.findall(condition))
+
+
+def toujours_sautable(brut: str, instance_fournie: bool = False) -> bool:
     """Vrai si tous les tests du fichier peuvent être sautés sous condition.
 
     Un saut conditionnel posé AVANT le premier test (niveau fichier ou `describe`), une marque
     `pytestmark = …skipif…` de module, ou autant de sauts conditionnels que de tests : aucun test
     ne tourne de façon certaine. Un saut inconditionnel et motivé est une décision lisible, il n'est
     pas visé (même distinction que la règle 9 de la revue de suite).
+
+    `instance_fournie` (TF-2274) : le pan a reçu l'instance servie ; un saut dont la condition ne
+    tient qu'à l'instance ne se déclenche pas dans ce contexte, il n'est donc plus compté.
     """
     from forge_tests import revue
 
@@ -303,7 +357,13 @@ def toujours_sautable(brut: str) -> bool:
         rang for rang, ligne in enumerate(lignes)
         if revue._SAUT_CONDITIONNEL.search(ligne) and not revue._SAUT_ASSUME.search(ligne)
     ]
-    if _PYTEST_MARQUE_DE_MODULE.search(brut):
+    if instance_fournie:
+        sauts = [rang for rang in sauts if not _saut_d_instance(lignes, rang)]
+    marque = _PYTEST_MARQUE_DE_MODULE.search(brut)
+    if marque and not (
+        instance_fournie
+        and _saut_d_instance(lignes, brut.count("\n", 0, brut.index("pytestmark", marque.start())))
+    ):
         return True
     if not sauts:
         return False
@@ -314,9 +374,19 @@ def toujours_sautable(brut: str) -> bool:
     return min(sauts) < min(tests) or len(sauts) >= len(tests)
 
 
-def sautables(cible: Path) -> set[str]:
-    """Chemins relatifs des parcours de bout en bout dont tous les tests peuvent être sautés."""
-    return {relatif for relatif, brut in _parcours_bruts(cible) if toujours_sautable(brut)}
+def sautables(cible: Path, instance_fournie: bool | None = None) -> set[str]:
+    """Chemins relatifs des parcours de bout en bout dont tous les tests peuvent être sautés.
+
+    TF-2274 : jugés dans le contexte du pan. `instance_fournie` à `None` lit ce contexte (une
+    instance déclarée au pan, `instance_declaree`) ; le passer à `True` ou `False` rejoue l'autre
+    contexte, ce que le rapport fait pour dire ce que l'instance changerait.
+    """
+    if instance_fournie is None:
+        instance_fournie = bool(instance_declaree(cible))
+    return {
+        relatif for relatif, brut in _parcours_bruts(cible)
+        if toujours_sautable(brut, instance_fournie)
+    }
 
 
 def _parcours_actifs(cible: Path) -> list[tuple[str, str]]:
@@ -1256,7 +1326,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     sortie.non_juge = [
         *sortie.non_juge, *notes, *_mentions_du_jeu(jeu, personas_),
         *(_mentions_des_mutations(mutations, personas_) if jeu["instance"] else []),
-        *_mentions_des_parcours_sautables(ecartes),
+        *_mentions_des_parcours_sautables(cible, ecartes),
     ]
     return sortie
 
@@ -1270,7 +1340,7 @@ def _suite_du_defaut(identifiant: str, ecartes: list[str]) -> str:
     if ecartes:
         ecart = (
             f" ; {len(ecartes)} parcours dont tous les tests peuvent être SAUTÉS sous condition "
-            f"({', '.join(ecartes[:3])}) ne comptent pas"
+            f"({', '.join(ecartes[:3])}{' …' if len(ecartes) > 3 else ''}) ne comptent pas"
         )
     else:
         ecart = ""
@@ -1287,12 +1357,36 @@ def _suite_du_defaut(identifiant: str, ecartes: list[str]) -> str:
     return ecart
 
 
-def _mentions_des_parcours_sautables(ecartes: list[str]) -> list[str]:
+def _mentions_des_parcours_sautables(cible: Path, ecartes: list[str]) -> list[str]:
+    """Les fichiers écartés, TOUS nommés (aucune borne d'affichage), avec le contexte du jugement
+    (TF-2274) : instance fournie ou non, et ce que l'instance changerait."""
     if not ecartes:
         return []
+    if instance_declaree(cible):
+        contexte = (
+            "instance fournie : les sauts qui ne tiennent qu'à l'instance ne comptent plus, "
+            "ceux-ci "
+            "tiennent à une autre condition (variable d'environnement, intégration continue, "
+            "drapeau) que fournir l'instance ne lève pas"
+        )
+    else:
+        levables = sorted(set(ecartes) - sautables(cible, True))
+        if levables:
+            contexte = (
+                f"aucune instance fournie : {len(levables)} d'entre eux ({', '.join(levables)}) ne "
+                "se sautent que faute d'instance et compteraient dès que FORGE_TESTS_QUALIF_URL "
+                "ou FORGE_TESTS_BASE_URL est fourni"
+            )
+        else:
+            contexte = (
+                "aucune instance fournie, mais aucun d'eux ne tient à la seule instance : la "
+                "fournir ne les rétablirait pas"
+            )
     return [
         f"parcours-personas : {len(ecartes)} parcours de bout en bout dont TOUS les tests peuvent "
-        f"être sautés sous condition ({', '.join(ecartes[:5])}) sont écartés de ce qui exerce un "
-        "persona : une suite SKIPPED (URL absente, variable non posée) est verte et ne prouve "
-        "rien ; ôter la condition ou faire échouer explicitement son absence les rétablit"
+        f"être sautés sous condition sont écartés de ce qui exerce un persona : "
+        f"{', '.join(ecartes)}. Une suite SKIPPED (URL absente, variable non posée) est verte et "
+        f"ne prouve rien ; ôter la condition ou faire échouer explicitement son absence les "
+        f"rétablit. Contexte du jugement : {contexte}. Une condition qui ne nomme ni URL, ni hôte, "
+        "ni instance, ni serveur est tenue pour sautable dans les deux contextes"
     ]
