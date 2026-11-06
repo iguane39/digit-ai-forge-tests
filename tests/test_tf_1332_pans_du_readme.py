@@ -90,8 +90,10 @@ def test_le_verrou_ATTRAPE_la_liste_PERIMEE_du_23_09_2026() -> None:
     # Fixture relue le 29/10/2026 (TF-1998, TF-2008) : `workers` et `supabase` n'existaient pas le
     # 23/09 ; la liste périmée les manque donc aussi, en plus des quatre pans de l'époque.
     # Relue le 04/11/2026 (TF-2123) : `parcours-personas`, né ce jour-là, manque aussi.
+    # Relue le 06/11/2026 (TF-2229) : `reglages-plateforme`, né ce jour-là, manque aussi.
     assert manquants == [
-        "clavier", "contraste", "i18n", "parcours-personas", "plancher", "supabase", "workers"
+        "clavier", "contraste", "i18n", "parcours-personas", "plancher", "reglages-plateforme",
+        "supabase", "workers"
     ], (
         "la liste périmée du 23/09 manquait exactement ces quatre pans — si ce n'est plus le "
         "cas, PANS_ATTENDUS a changé et cette fixture historique doit être relue, pas supprimée"
@@ -200,7 +202,8 @@ def test_le_verrou_ATTRAPE_l_absence_de_contraste_clavier_plancher_du_02_10_2026
     # Relue le 04/11/2026 (TF-2123) : `parcours-personas`, né ce jour-là, manque aussi au README
     # du 24/09.
     assert manquants == [
-        "clavier", "contraste", "parcours-personas", "plancher", "supabase", "workers"
+        "clavier", "contraste", "parcours-personas", "plancher", "reglages-plateforme",
+        "supabase", "workers"
     ], (
         "la fixture historique du README périmé du 24/09 ne manque plus exactement ces trois "
         "pans — si PANS_ATTENDUS a changé, relire cette fixture plutôt que la supprimer"

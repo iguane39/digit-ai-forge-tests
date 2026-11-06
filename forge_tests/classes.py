@@ -101,6 +101,12 @@ ASSERTION_EXECUTEE_ZERO_FOIS = "assertion-de-test-executee-zero-fois"
 # le contenu d'un constat).
 TRAITEMENT_SANS_RESULTAT_ASSERTE = "traitement-attendu-sans-resultat-assert"
 
+# --- Réglages de plateforme exigés par le produit, lus en campagne (TF-2229) ----------------------
+# Le réglage lu n'est pas celui que le registre des réglages sûrs attend (classement défaut), ou
+# l'écart accepté par le porteur n'est pas tenu tel que décidé (classement décision).
+REGLAGE_PLATEFORME_HORS_ATTENDU = "reglage-plateforme-hors-attendu"
+REGLAGE_DECIDE_NON_TENU = "reglage-decide-non-tenu"
+
 # --- Aller-retour écriture/relecture (TF-0369) ---------------------------------------------------
 DEFAUT_EVALUE_A_L_IMPORT = "defaut-evalue-a-l-import"
 

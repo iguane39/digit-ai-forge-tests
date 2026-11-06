@@ -1661,6 +1661,24 @@
       "statut": "todo"
     },
     {
+      "id": "reglages-plateforme-001",
+      "domaine": "reglages-plateforme",
+      "enonce": "reglages-plateforme : l'état lu est celui que la commande `cmd_lire` du registre rend AU MOMENT de l'audit, avec les droits du jeton fourni ; un jeton qui ne voit pas le réglage rend une lecture refusée, nommée, jamais un succès",
+      "statut": "todo"
+    },
+    {
+      "id": "reglages-plateforme-002",
+      "domaine": "reglages-plateforme",
+      "enonce": "reglages-plateforme : la comparaison à l'attendu est mécanique pour une valeur simple (`true`, `on`, `enabled`, `0`) et pour « contient a, b et c » ; toute autre forme d'attendu (plages déclarées, seuils) est lue mais NON COMPARÉE, nommée au non-jugé avec la valeur lue",
+      "statut": "todo"
+    },
+    {
+      "id": "reglages-plateforme-003",
+      "domaine": "reglages-plateforme",
+      "enonce": "reglages-plateforme : le registre est une référence datée, sourcée à la date de sa lecture (`source_lue_le`) ; un réglage dont l'éditeur a changé depuis se lit au registre à jour",
+      "statut": "todo"
+    },
+    {
       "id": "revue-007",
       "domaine": "revue",
       "enonce": "revue de suite (piege 9, saut conditionnel) : la LICEITE d un saut. L oracle distingue une forme CONDITIONNELLE d une forme inconditionnelle motivee ; il ne peut pas savoir si le prealable d un saut conditionnel est en realite garanti par le harnais — auquel cas le saut ne se declenchera jamais et le constat est excedentaire. Le declarer coute une ligne de reponse ; le taire coute des mois de tests ignores en silence",

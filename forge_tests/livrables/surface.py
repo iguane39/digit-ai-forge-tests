@@ -99,6 +99,9 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (re.compile(r"^parcours:[^@\s]+@(?P<v>\S+)$"), "persona {v}"),
         (re.compile(r"^parcours-croise$"), "parcours croisé entre profils"),
     ),
+    # TF-2229 : le pan reglages-plateforme range par EXIGENCE — les réglages d'une même exigence se
+    # lisent ensemble.
+    "reglage": ((re.compile(r"^reglage:(?P<v>[^:]+):"), "exigence {v}"),),
     "module": (
         (re.compile(r"^mutant:(?P<v>[^:]+):"), "module {v}"),
         (re.compile(r"^seuil:mutation-module:(?P<v>\S+)$"), "module {v}"),

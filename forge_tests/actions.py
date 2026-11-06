@@ -237,6 +237,23 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "vérité de référence connue d'avance, et jouer sa contre-épreuve (un jeu où le résultat "
         "attendu diffère doit échouer) — l'état terminal seul ne prouve rien ({message})",
     ),
+    # TF-2229 — un réglage de plateforme exigé n'a pas la valeur du registre. La commande
+    # d'application est écrite au registre : la voie automatique (loi n° 5) est de la rejouer, puis
+    # de relire. Le jeton qui l'autorise relève de qui tient la plateforme.
+    "reglage-plateforme-hors-attendu": (
+        "auto_ia",
+        "mep-config",
+        "rejouer la commande `cmd_appliquer` du registre des réglages sûrs pour « {id} », puis "
+        "relire avec `cmd_lire` et rejouer l'audit : {message}",
+    ),
+    # TF-2229 — l'écart accepté par le porteur n'est pas tenu tel que décidé, ou la décision manque.
+    # Ni le registre ni la forge ne peuvent trancher : la décision est humaine (R-29).
+    "reglage-decide-non-tenu": (
+        "manuelle_utilisateur",
+        "mep-config",
+        "TRANCHER pour « {id} » : consigner la décision (appliquer le réglage, ou accepter l'écart "
+        "avec sa valeur et son motif) ou rétablir l'état décidé : {message}",
+    ),
     "sonde-muette": (
         "manuelle_utilisateur",
         "mep-config",

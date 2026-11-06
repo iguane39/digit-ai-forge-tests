@@ -17,6 +17,7 @@ from forge_tests.adaptateurs import (
     plancher,
     prompts,
     qualif,
+    reglages,
     securite,
     supabase,
     visuel,
@@ -57,10 +58,14 @@ REGISTRE = {
     # personas ou rôles que le produit déclare sont lus ; un persona qu aucun parcours ne cite
     # est un FAIL nommé. Statique : le jeu contre l instance servie n est pas simulé.
     "parcours-personas": personas,
+    # TF-2229 (06/11/2026, D-178) : un réglage de plateforme que le produit exige est LU en campagne
+    # et comparé à l attendu du registre des réglages sûrs, relié à l exigence. Sans exigence de
+    # réglage : sans objet.
+    "reglages-plateforme": reglages,
 }
 
 PANS_ATTENDUS = [
     "front", "interface", "api", "data", "migrations", "batch", "fichiers", "back", "securite",
     "accessibilite", "contraste", "clavier", "visuel", "plancher", "qualif", "prompts", "i18n",
-    "workers", "supabase", "parcours-personas",
+    "workers", "supabase", "parcours-personas", "reglages-plateforme",
 ]
