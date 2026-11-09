@@ -115,6 +115,24 @@ def _cible_existe(cible: Path, designation: str) -> bool:
         if mot.startswith("-") or mot in ("python", "python3", "bash", "sh", "node", "uv", "run"):
             continue
         candidat = mot.split("::")[0]
+        # TF-2298 — un workflow de CI est un FICHIER, pas un module pointé : `derive-nocturne.yml`
+        # se cherchait comme `derive-nocturne/yml.py` et trois workflows planifiés présents
+        # sous `.github/workflows/` sortaient `trigger-non-cable` bloquants. Un NOM nu de workflow
+        # est câblé s'il désigne un fichier de ce dossier ; un `.yml` rangé ailleurs n'en est pas
+        # un. Un chemin `dossier/fichier.yml` suit la recherche par nom des autres fichiers.
+        if "/" not in candidat and candidat.endswith((".yml", ".yaml")):
+            if (cible / candidat).is_file():
+                return True
+            nom = Path(candidat).name
+            if any(
+                p.is_file()
+                and p.parent.name == "workflows"
+                and p.parent.parent.name == ".github"
+                and not any(partie in _EXCLUS for partie in p.relative_to(cible).parts)
+                for p in cible.rglob(nom)
+            ):
+                return True
+            continue
         if "/" in candidat or candidat.endswith((".py", ".sh", ".js", ".mjs")):
             if (cible / candidat).exists():
                 return True
