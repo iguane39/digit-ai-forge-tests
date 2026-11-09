@@ -152,6 +152,31 @@ def test_une_table_exemptee_ou_nue_ne_declenche_rien() -> None:
     assert dash._ecarts_comptes_de_table('<table id="t" data-filterable="off"></table>') == []
 
 
+# --- 3 bis. TF-2279 : la colonne « Élément testé » quitte la facette, motivée -------------------
+def test_la_colonne_element_du_chapitre_quitte_la_facette_avec_son_motif(page: str) -> None:
+    """Fixture verte : chaque cellule de la colonne est une clé composite (libellé + identifiant),
+    la facette aurait une valeur par ligne (G12 bloquant d'oracle-filtres-tableau). L'en-tête
+    porte `data-filter-col="off"` ET `data-filter-reason` : la sortie est motivée, pas muette."""
+    entetes = re.findall(r"<th\b[^>]*>Élément testé</th>", page)
+
+    assert entetes
+    chapitre = [e for e in entetes if 'data-filter-col="off"' in e]
+    assert chapitre, "la colonne composite du chapitre doit sortir de la facette"
+    assert all(re.search(r'data-filter-reason="[^"]{10,}"', e) for e in chapitre)
+
+
+def test_une_colonne_sortie_de_la_facette_sans_demande_reste_dans_la_facette() -> None:
+    """Fixture rouge : sans le paramètre, `_tableau` ne pose rien — la sortie n'est pas un défaut
+    appliqué à toute colonne, elle se demande colonne par colonne, avec son motif."""
+    lignes = [["a", "x"], ["b", "y"]]
+
+    sans = dash._tableau(["élément", "état"], lignes)
+    avec = dash._tableau(["élément", "état"], lignes, colonnes_hors_facette={"élément": "clé"})
+
+    assert "data-filter-col" not in sans
+    assert avec.count('data-filter-col="off" data-filter-reason="clé"') == 1
+
+
 # --- 4. L oracle externe, quand le poste l a ----------------------------------------------------
 ORACLE = (
     Path.home() / ".claude" / "skills" / "quality-oracles" / "scripts"

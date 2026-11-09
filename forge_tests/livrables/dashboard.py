@@ -1390,6 +1390,7 @@ def _tableau(
     chapitre: bool = False,
     details_lignes: list[str] | None = None,
     outille_force: bool = False,
+    colonnes_hors_facette: dict[str, str] | None = None,
 ) -> str:
     """Tableau accessible. Chaque cellule porte son intitulé de colonne (`data-label`).
 
@@ -1400,6 +1401,11 @@ def _tableau(
     identifiants de colonnes restant ceux du rapport. Dès `_SEUIL_FILTRE` lignes, le tableau
     est OUTILLÉ (standard H) : recherche insensible aux accents, réinitialisation, compteur
     `aria-live`, tri par en-tête — en plus des filtres de colonne D-12 (`data-filterable`).
+
+    `colonnes_hors_facette` (TF-2279) : en-tête → motif. Une colonne dont chaque cellule est
+    une clé composite (libellé + identifiant) ne regroupe rien ; le `<th>` porte alors
+    `data-filter-col="off"` et `data-filter-reason`, la recherche de page suffit (G12/G13
+    d'`oracle-filtres-tableau`).
     """
     if not lignes:
         return '<p class="discret">Aucune entrée.</p>'
@@ -1418,6 +1424,10 @@ def _tableau(
         attribut = f' aria-describedby="{_DESCRIBEDBY[t]}"' if t in _DESCRIBEDBY else ""
         attribut += f' title="{_e(info)}"' if info else ""
         attribut += ' data-tri=""' if (outille or chapitre) else ""
+        if t in (colonnes_hors_facette or {}):
+            attribut += (
+                f' data-filter-col="off" data-filter-reason="{_e(colonnes_hors_facette[t])}"'
+            )
         tete += f"<th{attribut}>{_e(affiche)}</th>"
     # L identifiant est arrêté AVANT le corps : les lignes de détail s y accrochent (L17), et
     # sa graine se prend sur les cellules D ORIGINE — la dériver après l injection des
@@ -2152,6 +2162,12 @@ def _panneau_chapitres(
                 _tableau(
                     colonnes, lignes, attributs=attributs, chapitre=True,
                     details_lignes=details_lignes,
+                    # TF-2279 : la colonne « élément » est une clé (un élément par ligne,
+                    # cellule composite libellé + identifiant) ; sa facette aurait une valeur
+                    # par ligne. La recherche de page la trouve, le filtre de colonne la quitte.
+                    colonnes_hors_facette={
+                        "élément": "clé unique par ligne : la recherche de la page suffit"
+                    },
                     # Identifiant PARLANT et stable : c'est lui que le compte par table nomme
                     # (G5), et le rang du sous-chapitre suffit à le rendre unique dans la page.
                     identifiant=f"table-chap-{_e(chapitre['code'])}-{rang}",
