@@ -13,6 +13,7 @@ from forge_tests.execution import (
     codes_emis,
     motif_indisponibilite,
     schema_openapi,
+    sortie_delai_depasse,
     sortie_suite_rouge,
 )
 from forge_tests.invariants import NON_JUGE as NON_JUGE_INV
@@ -485,8 +486,10 @@ def analyser(cible: Path) -> SortieAdaptateur:
         )
     if exerces(cible) is None:
         # TF-2269 : une suite ROUGE rend FAIL et nomme le test, elle ne se confond pas avec une
-        # suite qu on n a pas pu executer.
-        rouge = sortie_suite_rouge(NOM, PAN, cible, NON_JUGE)
+        # suite qu on n a pas pu executer. TF-2311 : un delai depasse rend DELAI_DEPASSE.
+        rouge = sortie_suite_rouge(NOM, PAN, cible, NON_JUGE) or sortie_delai_depasse(
+            NOM, PAN, cible, NON_JUGE
+        )
         if rouge is not None:
             return rouge
         # « 0 % couvert » et « couverture non mesurable » sont deux verdicts OPPOSES. Les

@@ -12,6 +12,7 @@ from forge_tests.execution import (
     instructions_sql,
     motif_indisponibilite,
     schema_obtenu,
+    sortie_delai_depasse,
     sortie_suite_rouge,
     sources_sql,
 )
@@ -263,7 +264,10 @@ def analyser(cible: Path) -> SortieAdaptateur:
         inv = inventaire(cible)
         # TF-2269 : une suite ROUGE rend FAIL et nomme le test ; les divergences statiques
         # ci-dessous s y ajoutent comme à la sortie SKIP.
-        sortie = sortie_suite_rouge(NOM, PAN, cible, NON_JUGE) or SortieAdaptateur(
+        # TF-2311 : un délai dépassé rend DELAI_DEPASSE (les divergences statiques s'y ajoutent).
+        sortie = sortie_suite_rouge(NOM, PAN, cible, NON_JUGE) or sortie_delai_depasse(
+            NOM, PAN, cible, NON_JUGE
+        ) or SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
             non_juge=[
                 *NON_JUGE,

@@ -11,6 +11,7 @@ from forge_tests.execution import (
     instructions_sql,
     motif_indisponibilite,
     schema_obtenu,
+    sortie_delai_depasse,
     sortie_suite_rouge,
     sources_sql,
     violations_levees,
@@ -343,8 +344,11 @@ def exerces(cible: Path) -> set[str] | None:
 def analyser(cible: Path) -> SortieAdaptateur:
     couvert = exerces(cible)
     if couvert is None:
-        # TF-2269 : une suite ROUGE rend FAIL et nomme le test.
-        rouge = sortie_suite_rouge(NOM, PAN, cible, NON_JUGE)
+        # TF-2269 : une suite ROUGE rend FAIL et nomme le test ; TF-2311 : un délai dépassé rend
+        # DELAI_DEPASSE.
+        rouge = sortie_suite_rouge(NOM, PAN, cible, NON_JUGE) or sortie_delai_depasse(
+            NOM, PAN, cible, NON_JUGE
+        )
         if rouge is not None:
             return rouge
         return SortieAdaptateur(

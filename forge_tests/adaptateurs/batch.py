@@ -18,6 +18,7 @@ from forge_tests.execution import (
     arcs_executes,
     executees,
     motif_indisponibilite,
+    sortie_delai_depasse,
     sortie_suite_rouge,
 )
 from forge_tests.noyau import Element, Finding, SortieAdaptateur, evaluer_surface
@@ -226,9 +227,15 @@ def analyser(cible: Path) -> SortieAdaptateur:
     if couvert is None:
         inv = inventaire(cible)
         # TF-2269 : une suite ROUGE rend FAIL et nomme le test, les déclencheurs cassés restent.
-        rouge = sortie_suite_rouge(NOM, PAN, cible, [*NON_JUGE, *_declencheurs.NON_JUGE])
+        # TF-2311 : un délai dépassé rend DELAI_DEPASSE, sauf déclencheur cassé (FAIL, comme SKIP).
+        non_juge = [*NON_JUGE, *_declencheurs.NON_JUGE]
+        rouge = sortie_suite_rouge(NOM, PAN, cible, non_juge) or sortie_delai_depasse(
+            NOM, PAN, cible, non_juge
+        )
         if rouge is not None:
             rouge.findings = [*findings_triggers, *rouge.findings]
+            if findings_triggers and rouge.verdict == "DELAI_DEPASSE":
+                rouge.verdict = "FAIL"
             return rouge
         return SortieAdaptateur(
             NOM,

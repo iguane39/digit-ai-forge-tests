@@ -651,6 +651,24 @@ def classifier(
     for entree in pans_non_couverts or []:
         pan = str(entree.get("pan") or "")
         chemin = str(entree.get("pour_couvrir") or "")
+        # TF-2311 — une suite qui a dépassé son DÉLAI n est ni un défaut d auditeur ni un arbitrage
+        # de conception : le geste est un réglage mécanique, que le motif chiffre (délai atteint,
+        # valeur suggérée). Sans cette branche l action tombait en `manuelle_dev` / `forge`.
+        if entree.get("cause") == "delai-depasse":
+            actions.append(
+                {
+                    "finding_ref": f"{PREFIXE_PAN_NON_COUVERT}{pan}",
+                    "categorie": "auto_ia",
+                    "etape_cible": "mep-config",
+                    "attendu": (
+                        f"laisser à la suite du projet le temps de finir pour le pan « {pan} », "
+                        f"aujourd'hui NON MESURÉ (DELAI_DEPASSE). Pourquoi : "
+                        f"{entree.get('motif') or 'sans motif'}. Comment (vous obtiendrez le pan "
+                        f"mesuré au prochain audit) : {chemin}"
+                    ),
+                }
+            )
+            continue
         # Un pan non couvert FAUTE DE CONFIGURATION est un geste d exploitant ; un pan non
         # couvert faute d ADAPTATEUR est un défaut de la forge. Les confondre adresserait le
         # travail au mauvais destinataire — le reproche exact que ce module existe pour ôter.

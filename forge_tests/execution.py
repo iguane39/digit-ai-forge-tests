@@ -108,6 +108,16 @@ CODE_AUCUN_TEST = 5
 #: Au-delà, les constats se plafonnent ; le total se dit (aucune borne d affichage silencieuse).
 PLAFOND_TESTS_ROUGES = 50
 
+# TF-2311 — un DÉLAI dépassé n est ni une suite rouge ni une mesure impossible. Sous couverture, la
+# suite backend d un produit dépassait 900 s quand le poste jouait aussi la préproduction : api,
+# data et migrations rendaient SKIP à 2 jeux sur 3, indiscernables d une configuration absente,
+# alors qu avec `FORGE_TESTS_DELAI_BACKEND_S=1800` les trois jeux passaient (173/173, 140/140,
+# 12/12). `_run` retient ce qu il a interrompu ; la mesure en garde la suite backend ; les pans
+# qui la lisent la rendent en DELAI_DEPASSE (`sortie_delai_depasse`).
+_DEPASSEMENTS: dict[tuple[str, str], dict] = {}
+_DELAIS_DEPASSES: dict[str, dict] = {}
+QUOI_SUITE_BACKEND = "suite backend sous coverage"
+
 # TF-2286 — pendant front de TF-2269 : une suite Playwright ROUGE rendait le pan front en SKIP
 # « couverture non mesurable », indiscernable d'une suite qu'on n'a pas pu lancer. Le relevé
 # est celui du backend, pour la suite e2e : les tests rouges viennent du JUnit de Playwright
@@ -188,6 +198,38 @@ def suite_rouge(banc: Path | str) -> dict | None:
     de conteneurs injoignable, aucun test collecté, délai dépassé)."""
     mesurer(str(banc))  # la mesure est jouée une fois, mémorisée ; elle alimente le relevé
     return _SUITES_ROUGES.get(str(banc))
+
+
+def delai_depasse(banc: Path | str) -> dict | None:
+    """`{"delai", "duree"}` (secondes) si la suite backend a été interrompue faute de temps, ou None
+    (verte, rouge, jamais lancée, démon injoignable : autre chose qu un délai)."""
+    mesurer(str(banc))  # la mesure est jouée une fois, mémorisée ; elle alimente le relevé
+    return _DELAIS_DEPASSES.get(str(banc))
+
+
+def sortie_delai_depasse(nom: str, pan: str, cible: Path, non_juge: list[str]):
+    """La sortie DELAI_DEPASSE d un pan dont la suite backend a manqué de temps, ou None (TF-2311).
+
+    Ni SKIP (la suite a démarré : la mesure n était pas impossible), ni FAIL (aucun test n a
+    échoué, aucun n est nommé). Le pan n est pas mesuré et pèse sur PARTIEL ; son motif donne le
+    délai, la durée atteinte, le réglage et une valeur à essayer. Cette valeur est le DOUBLE du
+    délai atteint : la durée réelle de la suite est inconnue, elle est seulement supérieure.
+    """
+    depasse = delai_depasse(cible)
+    if depasse is None:
+        return None
+    from forge_tests.noyau import DELAI_DEPASSE, SortieAdaptateur
+
+    delai, duree = int(depasse["delai"]), float(depasse["duree"])
+    motif = (
+        f"{DELAI_DEPASSE} : suite interrompue à {duree:.0f} s (délai {delai} s) — régler "
+        f"{ENV_DELAI_BACKEND} (secondes) dans `<projet>/.env.forge-tests`, par exemple "
+        f"{ENV_DELAI_BACKEND}={2 * delai} (le double du délai atteint ; la durée réelle de la "
+        f"suite backend est inconnue, supérieure à {duree:.0f} s). Ce n est ni une suite rouge "
+        f"(aucun test n a échoué) ni une mesure impossible (la suite a démarré) : le pan {pan} "
+        "n est pas mesuré, les autres le restent"
+    )
+    return SortieAdaptateur(nom, pan, str(cible), DELAI_DEPASSE, non_juge=[*non_juge, motif])
 
 
 def sortie_suite_rouge(
@@ -279,11 +321,13 @@ def _run(
         # TF-1675 — la durée ATTEINTE est écrite à côté du délai, et le réglage qui le lève est
         # nommé quand il existe (`remede`) : « 900 s dépassé » seul ne disait ni de combien la
         # suite manquait, ni où se règle le délai.
+        duree = time.monotonic() - debut
+        _DEPASSEMENTS[(str(banc), quoi)] = {"delai": kwargs.get("timeout"), "duree": duree}  # 2311
         _declarer(
             banc,
             domaine,
             f"{quoi} : délai de {kwargs.get('timeout')} s dépassé (interrompu après "
-            f"{time.monotonic() - debut:.0f} s) — pan non mesuré, les autres pans restent "
+            f"{duree:.0f} s) — pan non mesuré, les autres pans restent "
             "mesurés" + (f" ; {remede}" if remede else ""),
         )
         return None
@@ -379,6 +423,7 @@ def _coverage_present(banc: Path, python: Path) -> bool:
 
 #: Délai par défaut de la suite backend sous coverage, en secondes.
 DELAI_BACKEND_DEFAUT = 900
+ENV_DELAI_BACKEND = "FORGE_TESTS_DELAI_BACKEND_S"
 
 
 def delai_backend() -> tuple[int, str]:
@@ -419,6 +464,8 @@ def mesurer(banc_str: str) -> dict | None:
     """
     banc = Path(banc_str)
     _SUITES_ROUGES.pop(str(banc), None)
+    _DELAIS_DEPASSES.pop(str(banc), None)
+    _DEPASSEMENTS.pop((str(banc), QUOI_SUITE_BACKEND), None)
     _ESSAIS.pop((str(banc), "backend"), None)
     _contrat_projet(banc)
     # Inventaire seul : executer la suite d un projet REEL peut exiger son infrastructure
@@ -496,10 +543,13 @@ def mesurer(banc_str: str) -> dict | None:
                 "-p", "sonde_api", "-p", "sonde_data",
                 f"--junitxml={junit}",
             ],
-            banc=banc, domaine="backend", quoi="suite backend sous coverage",
+            banc=banc, domaine="backend", quoi=QUOI_SUITE_BACKEND,
             remede=remede, cwd=racine, timeout=delai, env=env,
         )
         if lance is None:
+            depasse = _DEPASSEMENTS.get((str(banc), QUOI_SUITE_BACKEND))
+            if depasse is not None:  # TF-2311 : la suite a démarré et manqué de temps
+                _DELAIS_DEPASSES[str(banc)] = depasse
             return None
         _relever_essais(banc, "backend", "back", junit)  # TF-2254 : verte ou rouge, elle a tourné
         if lance.returncode != 0:

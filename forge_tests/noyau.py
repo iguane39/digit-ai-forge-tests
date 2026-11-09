@@ -28,7 +28,15 @@ from forge_tests import classes
 # il prouve que l'adaptateur n'a RIEN SU ÉNUMÉRER ici ». NA exige donc une preuve POSITIVE
 # d'absence, fournie par l'adaptateur (`sans_objet=` d'`evaluer_surface`) : il a cherché aux
 # endroits qu'il déclare, et ces endroits n'existent pas. Sans cette preuve, on reste en SKIP.
-Verdict = Literal["PASS", "FAIL", "SKIP", "NA"]
+#
+# DELAI_DEPASSE (TF-2311) — la suite du projet a DÉMARRÉ et a été interrompue faute de temps. Ce
+# n'est ni un SKIP (la mesure n'était pas impossible : elle a commencé), ni un FAIL (aucun test
+# n'a échoué : une suite rouge se nomme par ses tests). Le pan n'est pas mesuré, il compte comme
+# un manque et rend PARTIEL, mais son verdict dit CE QUI manque : du temps, et le réglage qui en
+# donne. Un SKIP « délai dépassé » se lisait comme une configuration absente.
+Verdict = Literal["PASS", "FAIL", "SKIP", "NA", "DELAI_DEPASSE"]
+DELAI_DEPASSE: Verdict = "DELAI_DEPASSE"
+CAUSE_DELAI_DEPASSE = "delai-depasse"
 # TF-0146 — verdict d un ESSAI individuel (un cas exécuté), distinct du Verdict d ADAPTATEUR
 # ci-dessus (un pan entier). Trois valeurs, jamais un vert par défaut : un cas dont l issue
 # n a pas été observée est NON_EXECUTE, jamais tacitement PASSANT.
@@ -381,6 +389,23 @@ POUR_COUVRIR_DEFAUT = (
     "écrire l adaptateur du pan, ou fournir au projet la convention qu il attend — voir "
     "« Contrat du projet audité » au README"
 )
+#: TF-2311 — le chemin de couverture d un pan dont la suite a dépassé son délai : relever le délai,
+#: dont le motif nomme le réglage, puis rejouer. Écrit ici pour ne pas citer un outil de test.
+POUR_COUVRIR_DELAI = (
+    "relever le délai nommé au motif dans `<projet>/.env.forge-tests`, puis relancer avec "
+    "`--reprendre <rapport.json>`"
+)
+
+
+def entree_non_couverte(pan: str, motif: str, chemin: str, verdict: str | None) -> dict:
+    """L entrée de `pans_non_couverts` d un pan. Un pan en DELAI_DEPASSE porte sa cause, que les
+    actions lisent : ce n est ni un adaptateur manquant ni une configuration absente."""
+    if verdict == DELAI_DEPASSE:
+        return {
+            "pan": pan, "motif": motif, "pour_couvrir": POUR_COUVRIR_DELAI,
+            "cause": CAUSE_DELAI_DEPASSE,
+        }
+    return {"pan": pan, "motif": motif, "pour_couvrir": chemin}
 
 
 def rapport(
@@ -414,7 +439,7 @@ def rapport(
 
     verifier_regle_conjointe(sorties)
     chemins = pour_couvrir or {}
-    couverts = {s.pan for s in sorties if s.verdict not in ("SKIP", "NA")}
+    couverts = {s.pan for s in sorties if s.verdict not in ("SKIP", "NA", DELAI_DEPASSE)}
     # NA — sans objet, PROUVE : le pan sort du calcul de couverture sans compter comme manque.
     # Il reste NOMME au rapport avec son motif : un pan qui disparaitrait laisserait croire que
     # le sujet n existe pas dans le framework, exactement l absence silencieuse interdite.
@@ -426,15 +451,17 @@ def rapport(
     motifs_skip = {
         s.pan: s.non_juge[-1] if s.non_juge else "sans motif"
         for s in sorties
-        if s.verdict == "SKIP"
+        if s.verdict in ("SKIP", DELAI_DEPASSE)
     }
+    verdicts_par_pan = {s.pan: s.verdict for s in sorties}
     essais_non_executes = sorted(e.id for e in essais or [] if e.verdict == "non_execute")
     non_couverts = [
-        {
-            "pan": p,
-            "motif": motifs_skip.get(p, "adaptateur absent : aucun module ne traite ce pan"),
-            "pour_couvrir": chemins.get(p, POUR_COUVRIR_DEFAUT),
-        }
+        entree_non_couverte(
+            p,
+            motifs_skip.get(p, "adaptateur absent : aucun module ne traite ce pan"),
+            chemins.get(p, POUR_COUVRIR_DEFAUT),
+            verdicts_par_pan.get(p),
+        )
         for p in pans_attendus
         if p not in couverts and p not in sans_objet
     ]

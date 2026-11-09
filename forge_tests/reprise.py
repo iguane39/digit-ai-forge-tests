@@ -25,7 +25,7 @@ import json
 from pathlib import Path
 
 from forge_tests.actions import classifier
-from forge_tests.noyau import POUR_COUVRIR_DEFAUT, bande
+from forge_tests.noyau import DELAI_DEPASSE, POUR_COUVRIR_DEFAUT, bande, entree_non_couverte
 
 NON_JUGE = [
     "reprise : la re-execution a la granularite du PAN — un pan qui doit etre rejoue l est en "
@@ -186,7 +186,9 @@ def fusionner(
         **(ancien.get("motifs_non_couverture") or {}),
         **(nouveau.get("motifs_non_couverture") or {}),
     }
-    couverts = {pan for pan, e in adaptateurs.items() if e.get("verdict") != "SKIP"}
+    couverts = {
+        pan for pan, e in adaptateurs.items() if e.get("verdict") not in ("SKIP", DELAI_DEPASSE)
+    }
     # A-5 : le chemin de couverture de chaque pan est repris du rapport qui le portait — le
     # neuf d abord, l ancien à défaut. Il n est jamais réinventé ici.
     chemins: dict[str, str] = {}
@@ -195,11 +197,12 @@ def fusionner(
             if isinstance(entree, dict) and entree.get("pan") and entree.get("pour_couvrir"):
                 chemins.setdefault(entree["pan"], entree["pour_couvrir"])
     non_couverts = [
-        {
-            "pan": p,
-            "motif": motifs.get(p, "adaptateur absent : aucun module ne traite ce pan"),
-            "pour_couvrir": chemins.get(p, POUR_COUVRIR_DEFAUT),
-        }
+        entree_non_couverte(
+            p,
+            motifs.get(p, "adaptateur absent : aucun module ne traite ce pan"),
+            chemins.get(p, POUR_COUVRIR_DEFAUT),
+            (adaptateurs.get(p) or {}).get("verdict"),
+        )
         for p in pans_attendus
         if p not in couverts
     ]
