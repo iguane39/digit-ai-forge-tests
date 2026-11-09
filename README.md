@@ -103,7 +103,7 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 | Code | Signification |
 |---|---|
 | `0` | `PASS` — tous les pans attendus couverts, aucun défaut bloquant |
-| `1` | `FAIL` — au moins un élément inventorié n'est pas exercé, ou un seuil n'est pas tenu, ou un test de la suite backend du projet est rouge (TF-2269 : constat `suite-rouge:<test>` nommé, jamais un SKIP « couverture non mesurable ») |
+| `1` | `FAIL` — au moins un élément inventorié n'est pas exercé, ou un seuil n'est pas tenu, ou un test de la suite backend du projet, ou de sa suite e2e Playwright, est rouge (TF-2269 et TF-2286 : constat `suite-rouge:<test>` nommé, jamais un SKIP « couverture non mesurable ») |
 | `2` | **Rapport refusé** (règle d'affichage conjoint) ou **erreur d'exécution**. Dans les deux cas stdout porte un JSON `{"verdict": "REFUSE"\|"ERREUR", "motif": "…"}` et la trace part sur stderr |
 | `3` | `PARTIEL` — au moins un pan attendu n'a pas pu être couvert. Chaque pan non couvert est nommé **avec son motif ET son chemin de couverture**. Non bloquant par décision de conception : un projet dont un pan n'a pas d'adaptateur reste auditable. Un **essai non exécuté** (TF-2254) — un test sauté dans la suite backend ou e2e que l'audit a lancée, lue en JUnit — rend aussi `PARTIEL`, nommé au non-jugé : « 27 passés, 1 sauté » ne se lit plus `PASS` |
 | `4` | **Refus G-1** — le dossier passé à `--livrables` tombe dans le projet audité. Distinct du `2` : ce n'est pas une panne de génération mais un dossier mal désigné, et le remède n'est pas le même. Le motif est imprimé **en queue de sortie** : `G-1 : livrables HORS projet requis — chemin reçu : <chemin>`. Le rapport, lui, reste publié |

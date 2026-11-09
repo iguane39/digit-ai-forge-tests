@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from forge_tests.execution import front_execute, motif_indisponibilite
+from forge_tests.execution import front_execute, motif_indisponibilite, sortie_suite_rouge
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "front-react", "front", 0.90
@@ -276,6 +276,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
     inv = inventaire(cible)
     couvert = exerces(cible, inv)
     if couvert is None:
+        # TF-2286 : une suite e2e ROUGE rend FAIL et nomme le test rouge, comme le backend
+        # (TF-2269) ; elle ne se confond pas avec une suite qu on n a pas pu lancer.
+        rouge = sortie_suite_rouge(
+            NOM, PAN, cible, [*NON_JUGE, *revue.NON_JUGE, *couverture.NON_JUGE], domaine="front"
+        )
+        if rouge is not None:
+            rouge.findings.extend(faux_verts)
+            return rouge
         routes = sum(1 for e in inv if e.id.startswith("route:"))
         return SortieAdaptateur(
             NOM, PAN, str(cible), "FAIL" if faux_verts else "SKIP",

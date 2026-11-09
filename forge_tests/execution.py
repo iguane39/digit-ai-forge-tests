@@ -108,6 +108,17 @@ CODE_AUCUN_TEST = 5
 #: Au-delà, les constats se plafonnent ; le total se dit (aucune borne d affichage silencieuse).
 PLAFOND_TESTS_ROUGES = 50
 
+# TF-2286 — pendant front de TF-2269 : une suite Playwright ROUGE rendait le pan front en SKIP
+# « couverture non mesurable », indiscernable d'une suite qu'on n'a pas pu lancer. Le relevé
+# est celui du backend, pour la suite e2e : les tests rouges viennent du JUnit de Playwright
+# (`_ESSAIS`), à défaut de la trace de la ligne de commande.
+_SUITES_ROUGES_FRONT: dict[str, dict] = {}
+#: Playwright rend le code 1 quand il ne trouve AUCUN test : une suite vide n est pas rouge
+#: (même règle que le code 5 de pytest), elle reste une mesure absente.
+_AUCUN_TEST_PLAYWRIGHT = re.compile(r"No tests found", re.IGNORECASE)
+#: « 1) [chromium] › e2e/a.spec.ts:3:5 › titre ─────── » : un échec nommé par la ligne de commande.
+_LIGNE_ROUGE_PLAYWRIGHT = re.compile(r"^\s+\d+\) (.+?)(?:\s+[─—-]{2,})?\s*$", re.MULTILINE)
+
 
 # TF-2254 — les ESSAIS de la suite du produit, test par test. Le JUnit de pytest (suite backend) et
 # celui de Playwright (suite e2e) sont lus par `junit.depuis_junit` ; `essais_de_la_cible` les rend
@@ -147,6 +158,30 @@ def _relever_suite_rouge(code: int, trace: str, complement: str) -> dict:
     return {"code": code, "tests": tests, "complement": complement}
 
 
+def _relever_front_rouge(banc: Path, code: int, trace: str, complement: str) -> dict:
+    """Les tests rouges de la suite e2e : ceux du JUnit (`non_passant`), sinon ceux que la
+    ligne de commande numérote. Aucun nom n est fabriqué : sans l un ni l autre, `tests` est vide.
+    """
+    tests = [
+        {"id": essai.id, "nature": "FAILED", "message": (essai.pourquoi or "").strip()[:200]}
+        for essai in _ESSAIS.get((str(banc), "front"), [])
+        if essai.verdict == "non_passant"
+    ]
+    if not tests:
+        noms = dict.fromkeys(
+            trouve.group(1).strip() for trouve in _LIGNE_ROUGE_PLAYWRIGHT.finditer(trace)
+        )
+        tests = [{"id": nom, "nature": "FAILED", "message": ""} for nom in noms]
+    return {"code": code, "tests": tests, "complement": complement}
+
+
+def suite_rouge_front(banc: Path | str) -> dict | None:
+    """Ce que la suite e2e Playwright a rendu de rouge — même forme que `suite_rouge` — ou None
+    si elle n est pas rouge (verte, jamais lancée, port occupé, trace indisponible, aucun test)."""
+    front_execute(str(banc))  # la mesure est jouée une fois, mémorisée ; elle alimente le relevé
+    return _SUITES_ROUGES_FRONT.get(str(banc))
+
+
 def suite_rouge(banc: Path | str) -> dict | None:
     """Ce que la suite backend a rendu de rouge — `{"code", "tests": [{"id", "nature",
     "message"}], "complement"}` — ou None si elle n est pas rouge (verte, jamais lancée, démon
@@ -155,22 +190,28 @@ def suite_rouge(banc: Path | str) -> dict | None:
     return _SUITES_ROUGES.get(str(banc))
 
 
-def sortie_suite_rouge(nom: str, pan: str, cible: Path, non_juge: list[str]):
-    """La sortie FAIL d un pan dont la suite backend est rouge, ou None si elle ne l est pas.
+def sortie_suite_rouge(
+    nom: str, pan: str, cible: Path, non_juge: list[str], domaine: str = "backend"
+):
+    """La sortie FAIL d un pan dont la suite est rouge, ou None si elle ne l est pas.
+
+    `domaine` : "backend" (pytest, défaut) ou "front" (Playwright, TF-2286).
 
     Un finding bloquant par test rouge (`suite-rouge:<test>`), le test nommé dans le message ;
     une suite qui échoue sans nommer de test (erreur avant collecte) rend un seul finding
     `suite-rouge:suite-entiere`, sans nom fabriqué. Le motif de non-mesure de la couverture
     reste au non-jugé : le FAIL ne remplace pas ce motif, il le complète.
     """
-    rouge = suite_rouge(cible)
+    front = domaine == "front"
+    rouge = suite_rouge_front(cible) if front else suite_rouge(cible)
     if rouge is None:
         return None
     from forge_tests import classes
     from forge_tests.noyau import Finding, SortieAdaptateur
     from forge_tests.risque import coter
 
-    racine = racine_execution(Path(cible))
+    racine = disposition.racine_front(Path(cible)) if front else racine_execution(Path(cible))
+    libelle = "e2e (Playwright)" if front else "backend"
     complement = rouge["complement"]
     findings = []
     nommes = rouge["tests"][:PLAFOND_TESTS_ROUGES]
@@ -183,7 +224,7 @@ def sortie_suite_rouge(nom: str, pan: str, cible: Path, non_juge: list[str]):
             classe=classes.SUITE_ROUGE,
             localisation=str(racine / fichier),
             message=(
-                f"[{pan}] la suite backend du projet est ROUGE : {test['nature']} "
+                f"[{pan}] la suite {libelle} du projet est ROUGE : {test['nature']} "
                 f"{test['id']}{detail}. Ce n est pas une mesure absente : un test du projet "
                 f"échoue, et la couverture ne se mesure pas tant qu il échoue{complement}"
             ),
@@ -197,7 +238,7 @@ def sortie_suite_rouge(nom: str, pan: str, cible: Path, non_juge: list[str]):
             classe=classes.SUITE_ROUGE,
             localisation=str(racine),
             message=(
-                f"[{pan}] la suite backend du projet s est terminée en échec (code "
+                f"[{pan}] la suite {libelle} du projet s est terminée en échec (code "
                 f"{rouge['code']}) sans qu aucun test ne soit nommé (erreur avant ou pendant la "
                 f"collecte) : lire la trace de la suite{complement}"
             ),
@@ -207,7 +248,7 @@ def sortie_suite_rouge(nom: str, pan: str, cible: Path, non_juge: list[str]):
     lignes = [
         *non_juge,
         f"{pan} : couverture non mesurable tant que la suite est rouge — "
-        + motif_indisponibilite(cible, "backend", "suite backend en échec"),
+        + motif_indisponibilite(cible, domaine, f"suite {libelle} en échec"),
     ]
     if len(rouge["tests"]) > len(nommes):
         lignes.append(
@@ -792,6 +833,7 @@ def front_execute(banc_str: str) -> dict | None:
         commande += ["--output", artefacts]
         junit = Path(artefacts) / "junit.xml"
         _ESSAIS.pop((str(banc), "front"), None)
+        _SUITES_ROUGES_FRONT.pop(str(banc), None)
         resultat = _run(
             commande,
             banc=banc, domaine="front", quoi="suite e2e Playwright",
@@ -842,9 +884,8 @@ def front_execute(banc_str: str) -> dict | None:
                 return None
             from forge_tests.qualification import detecter
 
-            manquants = detecter(
-                banc, "front", f"{resultat.stdout or ''}\n{resultat.stderr or ''}"
-            )
+            trace = f"{resultat.stdout or ''}\n{resultat.stderr or ''}"
+            manquants = detecter(banc, "front", trace)
             complement = (
                 f" — configuration absente citée par la trace : {', '.join(sorted(manquants))}"
                 if manquants
@@ -856,6 +897,10 @@ def front_execute(banc_str: str) -> dict | None:
                 f"la suite e2e s est terminée en échec (code {resultat.returncode}) — "
                 f"couverture front non mesurable tant que la suite est rouge{complement}",
             )
+            if not _AUCUN_TEST_PLAYWRIGHT.search(trace):
+                _SUITES_ROUGES_FRONT[str(banc)] = _relever_front_rouge(
+                    banc, resultat.returncode, trace, complement
+                )
             return None
         # TF-0138 — meme distinction que ci-dessus, cote SUCCES. Un projet qui a fixe
         # `trace` dans SON PROPRE playwright.config (mode_effectif != "on", cf. `_mode_trace` —

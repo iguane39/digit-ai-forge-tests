@@ -220,12 +220,14 @@ _REGLES: dict[str, tuple[str, str, str]] = {
     # TF-2269 — un test du projet est rouge. Le remède est dans le code ou le test du produit : ni
     # dérivable par la forge, ni un arbitrage humain. La couverture de ce pan se mesure à nouveau
     # dès que la suite repasse au vert.
+    # TF-2286 — la suite e2e Playwright rouge rend la même classe (pan front) : même destinataire.
     "suite-du-projet-rouge": (
         "manuelle_dev",
         "development",
-        "rendre la suite backend verte : « {id} » — {message}. Tant qu'un test échoue, aucune "
-        "couverture n'est mesurée sur les pans qui lisent cette suite (api, data, migrations, "
-        "batch, fichiers) ; rejouer l'audit une fois le test corrigé",
+        "rendre la suite verte : « {id} » — {message}. Tant qu'un test échoue, aucune "
+        "couverture n'est mesurée sur les pans qui lisent cette suite (backend : api, data, "
+        "migrations, batch, fichiers ; e2e Playwright : front) ; rejouer l'audit une fois le "
+        "test corrigé",
     ),
     # TF-2270 — le test attend la fin d'un traitement sans affirmer son résultat. La vérité de
     # référence (ce que le traitement DOIT produire) est connue du produit seul : le geste est
