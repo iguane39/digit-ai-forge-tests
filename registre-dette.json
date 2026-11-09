@@ -1577,6 +1577,12 @@
       "statut": "todo"
     },
     {
+      "id": "parcours-personas-009",
+      "domaine": "parcours-personas",
+      "enonce": "parcours-personas : un appel mutant dont l adresse se construit à l exécution dans le test du produit (`${id}`, concaténation) n est pas rejouable depuis le source — l adresse n existe qu après la réponse d une étape ; un enchaînement ne se rejoue que DÉCLARÉ (clé `enchainements` d EXIGENCES.json), et ce que la déclaration omet n est pas rejoué ; les atteindre sans déclaration exigerait d exécuter la suite du produit sous trace, ce que ce pan ne fait pas",
+      "statut": "todo"
+    },
+    {
       "id": "plancher-rendu-002",
       "domaine": "plancher-rendu",
       "enonce": "plancher : V5 croisements de fleches et V6 images deformees restent une inspection HUMAINE sur captures — ce pan ne produit pas d image, il lit des mesures du DOM",

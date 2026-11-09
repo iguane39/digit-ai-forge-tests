@@ -98,6 +98,8 @@ _REGLES: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
         (re.compile(r"^(?:persona|joue):(?P<v>\S+)$"), "persona {v}"),
         (re.compile(r"^parcours:[^@\s]+@(?P<v>\S+)$"), "persona {v}"),
         (re.compile(r"^parcours-croise$"), "parcours croisé entre profils"),
+        # TF-2208 (reste) : un enchaînement entre profils n'appartient à aucun persona seul.
+        (re.compile(r"^enchaine:(?P<v>\S+)$"), "enchaînement {v}"),
     ),
     # TF-2229 : le pan reglages-plateforme range par EXIGENCE — les réglages d'une même exigence se
     # lisent ensemble.

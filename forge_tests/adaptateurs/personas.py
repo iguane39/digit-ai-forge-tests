@@ -41,7 +41,14 @@ LA SUITE DU 06/11/2026 (retours Produit-86 du 05/11, décisions R-58) :
     parcours x rôle (`parcours:<parcours>@<rôle>`) exige un e2e qui cite le parcours ET le rôle ;
   - **TF-2208** — sur opt-in (`FORGE_TESTS_PARCOURS_MUTANTS=1`, l instance est modifiable), les
     actions mutantes à adresse littérale du parcours sont rejouées sous l identité du persona, puis
-    sans identité (contre-épreuve : refusée, sinon la garde n existe pas). Élément `mute:<persona>`.
+    sans identité (contre-épreuve : refusée, sinon la garde n existe pas). Élément `mute:<clé>` ;
+  - **TF-2208 (reste)** — un ENCHAÎNEMENT entre profils dont une étape dépend de la réponse d une
+    autre (l opérateur prépare, l approbateur valide l identifiant créé, l agent agit, l opérateur
+    voit) se rejoue étape par étape quand le produit le DÉCLARE (clé `enchainements` d
+    EXIGENCES.json, `capture` puis `{nom}` dans l adresse suivante), sous l identité de chaque
+    persona, avec la contre-épreuve sans identité et, si déclarée, la contre-épreuve par profil.
+    Élément `enchaine:<clé>`. Les appels dont l adresse se construit à l exécution DANS le test du
+    produit ne sont pas lisibles dans le source : ils sont nommés au rapport, jamais rejoués.
 """
 
 from __future__ import annotations
@@ -53,7 +60,7 @@ import unicodedata
 import urllib.error
 import urllib.request
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
 from forge_tests import classes, droits, exclusions
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
@@ -104,6 +111,12 @@ NON_JUGE = [
     "parcours-personas : les personas ne sont lus que dans EXIGENCES.json (clés `personas` et "
     "`roles`, convention de cette forge : le schéma du référentiel ne les définit pas), la matrice "
     "des droits et les comptes par rôle ; un persona seulement décrit en prose n est pas vu",
+    "parcours-personas : un appel mutant dont l adresse se construit à l exécution dans le test du "
+    "produit (`${id}`, concaténation) n est pas rejouable depuis le source — l adresse n existe "
+    "qu après la réponse d une étape ; un enchaînement ne se rejoue que DÉCLARÉ (clé "
+    "`enchainements` d EXIGENCES.json), et ce que la déclaration omet n est pas rejoué ; les "
+    "atteindre sans déclaration exigerait d exécuter la suite du produit sous trace, ce que ce "
+    "pan ne fait pas",
 ]
 
 _CLES_EXIGENCES = ("personas", "roles")
@@ -899,6 +912,11 @@ def actions_mutantes(brut: str) -> list[dict]:
     )
     actions: list[dict] = []
     for rang, trouve in enumerate(trouves):
+        # TF-2208 (reste) : `'/api/missions/' + id` n'est pas l'adresse littérale `/api/missions/` ;
+        # la concaténation construit l'adresse à l'exécution, et la rejouer tronquée appelait une
+        # route que le test ne vise pas. Elle est nommée par `appels_construits`.
+        if brut[trouve.end():].lstrip().startswith("+"):
+            continue
         route = trouve.group("route").split("#")[0].split("?")[0] or "/"
         if _ROUTE_A_EFFET.search(_sans_accent(route)):
             continue
@@ -944,7 +962,13 @@ def _jouer_mutation(base: str, action: dict, etat: dict | None) -> tuple[str, st
         code, lieu = erreur.code, erreur.headers.get("Location", "")
     except (urllib.error.URLError, OSError, ValueError) as erreur:
         return "injoignable", type(getattr(erreur, "reason", erreur)).__name__
-    if code in action["attendus"] and not 300 <= code < 400:
+    return _classer_reponse(code, lieu, url, action["attendus"])
+
+
+def _classer_reponse(code: int, lieu: str, url: str, attendus: set[int]) -> tuple[str, str]:
+    """(issue, code) d'une réponse à un appel mutant : `ok` (2xx, ou code attendu) · `mire` ·
+    `refuse` (401, 403) · `erreur`. Partagée par les actions isolées et les enchaînements."""
+    if code in attendus and not 300 <= code < 400:
         return "ok", f"{code}"
     if 300 <= code < 400 and _est_la_mire(urlsplit(urljoin(url, lieu)).path or "/"):
         return "mire", f"{code} vers la mire"
@@ -1081,13 +1105,453 @@ def _mentions_des_mutations(mutations: dict, personas_: dict[str, dict]) -> list
                 f"({noms}) NON rejouée(s) : aucun compte pour son rôle ({_ENV_COMPTES}) ou compte "
                 "illisible, ou instance injoignable"
             )
-    lignes.append(
-        "parcours-personas : un ENCHAÎNEMENT entre profils dont une étape dépend de la réponse "
-        "d'une autre (l'opérateur prépare → l'approbateur valide l'identifiant créé → l'agent "
-        "agit → l'opérateur voit) n'est PAS rejoué : chaque action l'est isolément, sous le "
-        "seul profil dont le parcours la porte ; l'enchaînement reste à écrire en test de bout "
-        "en bout"
+    return lignes
+
+
+# --- Les enchaînements entre profils, rejoués étape par étape (TF-2208, reste du 06/11) ----------
+# Fait remonté (Produit-86, RP-28), reste du 06/11/2026 : l'enchaînement dont une étape
+# dépend de la réponse d'une autre (l'opérateur prépare → l'approbateur valide l'identifiant créé →
+# l'agent agit → l'opérateur voit) n'était pas rejoué : chaque action littérale l'est isolément.
+#
+# La source est DÉCLARÉE par le produit, jamais devinée, comme les personas et les parcours : la
+# clé `enchainements` d'EXIGENCES.json (convention de cette forge). Chaque enchaînement est une
+# suite d'étapes ; chacune porte le persona qui agit, la méthode, l'adresse, un corps, et :
+#   - `capture` : `{"mission": "id"}` retient, dans la réponse JSON de l'étape, la valeur du champ
+#     `id` (chemin à points, `data.id`, `items.0.id`) sous le nom `mission` ;
+#   - `{mission}` dans l'adresse ou dans une valeur du corps d'une étape suivante est remplacé par
+#     la valeur RENDUE : l'adresse est construite à l'exécution, comme dans le test du produit ;
+#   - `attendu` : `{"statut": "executee"}` exige cette valeur dans la réponse (l'opérateur voit) ;
+#   - `codes` : codes acceptés en plus de 2xx ; `refuse_a` : les personas à qui l'étape doit être
+#     REFUSÉE (contre-épreuve par profil : seul l'approbateur valide).
+# Une étape qui change l'état (hors GET) reçoit aussi la contre-épreuve sans identité (TF-2208).
+#
+# Même opt-in que les actions isolées (`FORGE_TESTS_PARCOURS_MUTANTS=1`) : l'instance est MODIFIÉE.
+# Le premier écart arrête l'enchaînement, car les étapes suivantes dépendent de lui ; les étapes non
+# jouées sont comptées au constat.
+#
+# Ce que ce jeu n'atteint PAS : les appels dont l'adresse est construite à l'exécution DANS LE TEST
+# du produit (`request.post(`/api/missions/${id}/valider`)`). L'adresse n'existe qu'après la
+# réponse précédente : aucune lecture du source ne la donne, et la rejouer exigerait d'exécuter la
+# suite du produit sous trace. Le rapport les NOMME (`appels_construits`) et renvoie à la
+# déclaration, qui est le moyen de les rejouer sans toucher au produit.
+_METHODES_ENCHAINEMENT = ("GET", "POST", "PUT", "PATCH", "DELETE")
+_ESPACE_RESERVE = re.compile(r"\{([A-Za-z_]\w*)\}")
+_ABSENT = object()
+_PLAFOND_REPONSE = 1024 * 1024
+_MUTANT_CONSTRUIT = re.compile(
+    r"""\.\s*(?P<m>post|put|patch|delete)\s*\(\s*"""
+    r"""(?:`(?P<gabarit>/[^`]*\$\{[^`]*)`|(?P<q>['"])(?P<concat>/[^'"`]*)(?P=q)\s*\+)""",
+    re.IGNORECASE,
+)
+_CYPRESS_CONSTRUIT = re.compile(
+    r"""\bcy\.request\s*\(\s*['"`](?P<m>POST|PUT|PATCH|DELETE)['"`]\s*,\s*"""
+    r"""(?:`(?P<gabarit>/[^`]*\$\{[^`]*)`|(?P<q>['"])(?P<concat>/[^'"`]*)(?P=q)\s*\+)""",
+    re.IGNORECASE,
+)
+
+
+def appels_construits(brut: str) -> list[str]:
+    """Les appels mutants du parcours dont l'adresse se construit à l'exécution (`${id}`, `'/a/' +
+    id`), nommés par leur gabarit, dans l'ordre, sans doublon. Ils ne se rejouent pas depuis le
+    source : leur adresse n'existe qu'après la réponse de l'étape précédente."""
+    trouves = sorted(
+        [*_MUTANT_CONSTRUIT.finditer(brut), *_CYPRESS_CONSTRUIT.finditer(brut)],
+        key=lambda m: m.start(),
     )
+    noms: list[str] = []
+    for trouve in trouves:
+        route = trouve.group("gabarit") or f"{trouve.group('concat')}…"
+        nom = f"{trouve.group('m').upper()} {route}"
+        if nom not in noms:
+            noms.append(nom)
+    return noms
+
+
+def _persona_declare(personas_: dict[str, dict], brut: object) -> str | None:
+    """La clé du persona que `brut` désigne (sa clé ou l'un de ses alias), ou None."""
+    voulu = _cle(str(brut))
+    for cle, entree in personas_.items():
+        if voulu and (voulu == cle or voulu in entree.get("alias", ())):
+            return cle
+    return None
+
+
+def _etape_declaree(
+    brut: object, rang: int, personas_: dict[str, dict], connues: set[str]
+) -> tuple[dict | None, str | None]:
+    """(étape lue, motif de refus). Une étape invalide invalide TOUT l'enchaînement : en rejouer
+    une partie ferait passer pour jouée une suite qui ne l'a pas été."""
+    avant = f"étape {rang}"
+    if not isinstance(brut, dict):
+        return None, f"{avant} : un objet est attendu"
+    persona = _persona_declare(personas_, brut.get("persona"))
+    if persona is None:
+        return None, f"{avant} : persona « {brut.get('persona')} » non déclaré"
+    methode = str(brut.get("methode") or "GET").upper()
+    if methode not in _METHODES_ENCHAINEMENT:
+        return None, f"{avant} : méthode « {methode} » inconnue"
+    route = brut.get("route")
+    if not isinstance(route, str) or not route.startswith("/") or route.startswith("//"):
+        return None, f"{avant} : `route` doit être une adresse de l'instance commençant par `/`"
+    corps = brut.get("corps")
+    if corps is not None and not isinstance(corps, dict):
+        return None, f"{avant} : `corps` doit être un objet"
+    capture = brut.get("capture") or {}
+    attendu = brut.get("attendu") or {}
+    if not isinstance(capture, dict) or not all(
+        isinstance(v, str) and v for v in capture.values()
+    ):
+        return None, f"{avant} : `capture` doit associer un nom à un chemin du JSON rendu"
+    if not isinstance(attendu, dict):
+        return None, f"{avant} : `attendu` doit associer un chemin du JSON rendu à une valeur"
+    codes = brut.get("codes") or []
+    if not isinstance(codes, list) or not all(isinstance(c, int) for c in codes):
+        return None, f"{avant} : `codes` doit être une liste de codes HTTP"
+    refuse_a = []
+    for nom in brut.get("refuse_a") or []:
+        refuse = _persona_declare(personas_, nom)
+        if refuse is None:
+            return None, f"{avant} : `refuse_a` nomme « {nom} », persona non déclaré"
+        refuse_a.append(refuse)
+    utilisees = set(_ESPACE_RESERVE.findall(route))
+    utilisees |= set(_ESPACE_RESERVE.findall(json.dumps(corps, ensure_ascii=False)))
+    inconnues = sorted(utilisees - connues)
+    if inconnues:
+        return None, (
+            f"{avant} : {{{inconnues[0]}}} n'est capturé par aucune étape précédente — l'adresse "
+            "ne peut pas être construite"
+        )
+    return {
+        "persona": persona, "methode": methode, "route": route, "corps": corps,
+        "capture": dict(capture), "attendu": dict(attendu), "codes": set(codes),
+        "refuse_a": refuse_a,
+    }, None
+
+
+def enchainements_declares(
+    cible: Path, personas_: dict[str, dict]
+) -> tuple[list[dict], list[str]]:
+    """([{cle, libelle, etapes, invalide, source}], notes) — clé `enchainements` d'EXIGENCES.json.
+
+    Un enchaînement invalide reste NOMMÉ avec son motif (`invalide`) : le taire laisserait croire
+    qu'il n'est pas déclaré. Les étapes d'un enchaînement valide portent persona, méthode, route,
+    corps, capture, attendu, codes et refuse_a."""
+    chemin = _chemin_exigences(cible)
+    if chemin is None:
+        return [], []
+    try:
+        donnees = json.loads(chemin.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [], []  # l'illisibilité est déjà notée par `declares`
+    liste = donnees.get("enchainements") if isinstance(donnees, dict) else None
+    chaines: list[dict] = []
+    for entree in liste if isinstance(liste, list) else []:
+        noms = _noms_de(entree)
+        cle = _cle(noms[0]) if noms else ""
+        if not cle:
+            continue
+        invalide, etapes, connues = None, [], set()
+        brutes = entree.get("etapes") if isinstance(entree, dict) else None
+        if not isinstance(brutes, list) or not brutes:
+            invalide = "aucune étape déclarée (clé `etapes`)"
+        else:
+            for rang, brute in enumerate(brutes, 1):
+                etape, motif = _etape_declaree(brute, rang, personas_, connues)
+                if etape is None:
+                    invalide = motif
+                    break
+                connues |= set(etape["capture"])
+                etapes.append(etape)
+        chaines.append({
+            "cle": cle, "libelle": noms[0], "etapes": [] if invalide else etapes,
+            "invalide": invalide, "source": f"{chemin.name}:enchainements",
+        })
+    return chaines, []
+
+
+def _valeur_json(donnees: object, chemin: str) -> object:
+    """La valeur au chemin à points (`id`, `data.id`, `items.0.id`) du JSON lu, ou `_ABSENT`."""
+    courant = donnees
+    for segment in chemin.split("."):
+        if isinstance(courant, dict) and segment in courant:
+            courant = courant[segment]
+        elif isinstance(courant, list) and segment.isdigit() and int(segment) < len(courant):
+            courant = courant[int(segment)]
+        else:
+            return _ABSENT
+    return courant
+
+
+def _substituer(valeur: object, variables: dict[str, str], dans_adresse: bool = False) -> object:
+    """Remplace `{nom}` par la valeur rendue par une étape précédente. Dans une adresse, la valeur
+    est encodée comme un segment : un identifiant rendu ne peut pas changer le chemin appelé."""
+    if isinstance(valeur, str):
+        return _ESPACE_RESERVE.sub(
+            lambda m: quote(variables[m.group(1)], safe="") if dans_adresse
+            else variables[m.group(1)],
+            valeur,
+        )
+    if isinstance(valeur, dict):
+        return {k: _substituer(v, variables) for k, v in valeur.items()}
+    if isinstance(valeur, list):
+        return [_substituer(v, variables) for v in valeur]
+    return valeur
+
+
+def _appeler(
+    base: str, methode: str, route: str, corps: dict | None, etat: dict | None
+) -> tuple[int | None, str, object, str]:
+    """(code, Location, JSON rendu ou None, cause d'indisponibilité) d'un appel sous l'identité de
+    `etat` (None : sans identité). Les redirections ne sont PAS suivies : une mutation suivie
+    deux fois serait une double écriture."""
+    url = base.rstrip("/") + route
+    entetes = _en_tetes(etat, base, route) if etat else {}
+    donnees = None
+    if corps is not None:
+        donnees = json.dumps(corps).encode("utf-8")
+        entetes["Content-Type"] = "application/json"
+    requete = urllib.request.Request(  # noqa: S310 — l'URL est celle que l'opérateur déclare
+        url, data=donnees, headers=entetes, method=methode
+    )
+    try:
+        with urllib.request.build_opener(_SansRedirection).open(  # noqa: S310
+            requete, timeout=_DELAI_REQUETE_S
+        ) as reponse:
+            code, lieu = reponse.status, ""
+            brut = reponse.read(_PLAFOND_REPONSE)
+    except urllib.error.HTTPError as erreur:
+        code, lieu = erreur.code, erreur.headers.get("Location", "")
+        brut = erreur.read(_PLAFOND_REPONSE)
+    except (urllib.error.URLError, OSError, ValueError) as erreur:
+        return None, "", None, type(getattr(erreur, "reason", erreur)).__name__
+    try:
+        lu = json.loads(brut.decode("utf-8")) if brut else None
+    except ValueError:
+        lu = None
+    return code, lieu, lu, ""
+
+
+def _montrer(valeur: object) -> str:
+    """Une valeur lue dans la réponse, pour un message : scalaire court, jamais un objet entier."""
+    if valeur is _ABSENT:
+        return "absent"
+    if isinstance(valeur, (str, int, float, bool)) or valeur is None:
+        return repr(valeur)[:60]
+    return f"un {type(valeur).__name__}"
+
+
+def _jouer_etape(
+    base: str, etape: dict, route: str, corps: dict | None, etat: dict, etats: dict[str, dict],
+    libelles: dict[str, str],
+) -> tuple[dict, object]:
+    """Joue une étape, puis ses contre-épreuves. Rend (relevé, JSON rendu par l'étape)."""
+    code, lieu, lu, cause = _appeler(base, etape["methode"], route, corps, etat)
+    if code is None:
+        return {"issue": "injoignable", "detail": cause, "fautes": [], "non_verifies": []}, None
+    url = base.rstrip("/") + route
+    issue, detail = _classer_reponse(code, lieu, url, etape["codes"])
+    releve: dict = {"issue": issue, "detail": detail, "fautes": [], "non_verifies": []}
+    if issue != "ok":
+        return releve, lu
+    if etape["methode"] != "GET":
+        anonyme = _appeler(base, etape["methode"], route, corps, None)
+        contre = ("injoignable", anonyme[3]) if anonyme[0] is None else _classer_reponse(
+            anonyme[0], anonyme[1], url, set()
+        )
+        releve["contre_epreuve"] = contre
+        if contre[0] not in ("refuse", "mire"):
+            releve["fautes"].append(
+                f"CONTRE-ÉPREUVE ratée — le même appel SANS identité a répondu HTTP {contre[1]} "
+                f"({contre[0]}) au lieu d'un refus : la garde n'existe pas"
+            )
+    for refuse in etape["refuse_a"]:
+        if refuse == etape["persona"]:
+            continue
+        if refuse not in etats:
+            releve["non_verifies"].append(libelles[refuse])
+            continue
+        autre = _appeler(base, etape["methode"], route, corps, etats[refuse])
+        verdict = ("injoignable", autre[3]) if autre[0] is None else _classer_reponse(
+            autre[0], autre[1], url, set()
+        )
+        if verdict[0] not in ("refuse", "mire"):
+            releve["fautes"].append(
+                f"garde de PROFIL absente — « {libelles[refuse]} » a obtenu HTTP {verdict[1]} "
+                f"({verdict[0]}) sur un appel réservé à « {libelles[etape['persona']]} »"
+            )
+    return releve, lu
+
+
+def jouer_enchainements(cible: Path, personas_: dict[str, dict], jeu: dict) -> dict:
+    """Rejoue les enchaînements déclarés, étape par étape, chacune sous l'identité de son persona.
+
+    Rend `{"autorise", "declares", "jouees", "non_jouees"}`. `jouees[cle]` = `{"personas",
+    "etapes": [{n, persona, methode, route, issue, detail, fautes, …}], "ok", "arret"}` ;
+    `non_jouees[cle]` = le motif pour lequel l'enchaînement n'a pas eu lieu (ce n'est ni un succès
+    ni un échec du produit)."""
+    declares, _notes = enchainements_declares(cible, personas_)
+    resultat: dict = {
+        "autorise": _mutation_declaree(cible), "declares": declares, "jouees": {},
+        "non_jouees": {},
+    }
+    base = jeu["instance"]
+    if not base or not declares:
+        return resultat
+    comptes = identites(cible)
+    libelles = {cle: entree["libelle"] for cle, entree in personas_.items()}
+    for chaine in declares:
+        cle = chaine["cle"]
+        if chaine["invalide"]:
+            resultat["non_jouees"][cle] = f"déclaration invalide — {chaine['invalide']}"
+            continue
+        if not resultat["autorise"]:
+            resultat["non_jouees"][cle] = (
+                f"les rejouer modifie l'instance, ce qui exige {_ENV_MUTANTS}=1 (instance "
+                "déclarée modifiable)"
+            )
+            continue
+        etats: dict[str, dict] = {}
+        manques: list[str] = []
+        voulus = {e["persona"] for e in chaine["etapes"]}
+        for persona in sorted(voulus | {r for e in chaine["etapes"] for r in e["refuse_a"]}):
+            compte = _identite_du_persona(persona, personas_[persona], comptes)
+            etat = _lire_etat(cible, compte[1])[0] if compte else None
+            if etat is not None:
+                etats[persona] = etat
+            elif persona in voulus:
+                manques.append(libelles[persona])
+        if manques:
+            resultat["non_jouees"][cle] = (
+                f"aucun compte exploitable pour {', '.join(manques)} ({_ENV_COMPTES}, "
+                "`role=chemin`)"
+            )
+            continue
+        variables: dict[str, str] = {}
+        etapes: list[dict] = []
+        arret: int | None = None
+        for rang, etape in enumerate(chaine["etapes"], 1):
+            route = str(_substituer(etape["route"], variables, dans_adresse=True))
+            corps = _substituer(etape["corps"], variables) if etape["corps"] else None
+            releve, lu = _jouer_etape(
+                base, etape, route, corps if isinstance(corps, dict) else None,
+                etats[etape["persona"]], etats, libelles,
+            )
+            releve.update({
+                "n": rang, "persona": libelles[etape["persona"]], "methode": etape["methode"],
+                "route": route,
+            })
+            if releve["issue"] == "ok":
+                for nom, chemin_json in etape["capture"].items():
+                    valeur = _valeur_json(lu, chemin_json)
+                    if isinstance(valeur, (str, int)) and not isinstance(valeur, bool):
+                        variables[nom] = str(valeur)
+                    else:
+                        releve["fautes"].append(
+                            f"la réponse ne rend pas `{chemin_json}` (valeur lue : "
+                            f"{_montrer(valeur)}) : {{{nom}}} ne peut pas alimenter la suite"
+                        )
+                for chemin_json, voulu in etape["attendu"].items():
+                    vu = _valeur_json(lu, chemin_json)
+                    if vu != voulu:
+                        releve["fautes"].append(
+                            f"`{chemin_json}` attendu {_montrer(voulu)}, lu {_montrer(vu)}"
+                        )
+            etapes.append(releve)
+            if releve["issue"] != "ok" or releve["fautes"]:
+                arret = rang
+                break
+        if etapes[0]["issue"] == "injoignable":
+            resultat["non_jouees"][cle] = f"instance injoignable ({etapes[0]['detail']})"
+            continue
+        resultat["jouees"][cle] = {
+            "personas": [libelles[p] for p in sorted(voulus)], "libelle": chaine["libelle"],
+            "etapes": etapes, "total": len(chaine["etapes"]), "arret": arret,
+            "ok": arret is None,
+        }
+    return resultat
+
+
+def _elements_des_enchainements(cible: Path, chaines: dict) -> list[Element]:
+    source = _chemin_exigences(cible)
+    return [
+        Element(
+            f"enchaine:{cle}",
+            PAN,
+            f"enchaînement « {joue['libelle']} » rejoué étape par étape ({joue['total']} "
+            f"étapes, sous « {' », « '.join(joue['personas'])} »), l'identifiant rendu par une "
+            "étape alimentant la suivante, avec contre-épreuves",
+            str(source) if source else str(cible),
+        )
+        for cle, joue in sorted(chaines["jouees"].items())
+    ]
+
+
+def _message_de_l_enchainement(joue: dict) -> str:
+    arret = joue["arret"]
+    etape = joue["etapes"][arret - 1]
+    appel = f"{etape['methode']} {etape['route']}"
+    if etape["issue"] == "injoignable":
+        cause = f"instance injoignable ({etape['detail']})"
+    elif etape["issue"] != "ok":
+        cause = (
+            f"refusée ou en erreur sous l'identité de « {etape['persona']} » "
+            f"({etape['issue']} : {etape['detail']})"
+        )
+    else:
+        cause = "; ".join(etape["fautes"])
+    suite = joue["total"] - arret
+    return (
+        f"enchaînement « {joue['libelle']} » : étape {arret} sur {joue['total']} en défaut "
+        f"({appel}, par « {etape['persona']} ») — {cause}. "
+        + (f"{suite} étape(s) suivante(s) NON jouée(s), elles dépendent de celle-ci"
+           if suite else "dernière étape")
+    )
+
+
+def _mentions_des_enchainements(
+    chaines: dict, construits: dict[str, list[str]], instance: bool
+) -> list[str]:
+    """Ce que les enchaînements ont fait, et ce qu'ils n'ont pas fait : une ligne par réserve."""
+    lignes: list[str] = []
+    declares = chaines["declares"]
+    for _cle_joue, joue in sorted(chaines["jouees"].items()):
+        lignes.append(
+            f"parcours-personas : ENCHAÎNEMENT « {joue['libelle']} » REJOUÉ — "
+            f"{len(joue['etapes'])} étape(s) jouée(s) sur {joue['total']}, sous "
+            f"« {' », « '.join(joue['personas'])} », l'identifiant rendu par une étape alimentant "
+            "la suivante, chaque changement d'état suivi de sa contre-épreuve sans identité ; "
+            f"l'instance a été MODIFIÉE (opt-in {_ENV_MUTANTS})"
+        )
+        sans_garde = sorted({n for e in joue["etapes"] for n in e["non_verifies"]})
+        if sans_garde:
+            lignes.append(
+                f"parcours-personas : enchaînement « {joue['libelle']} » : contre-épreuve par "
+                f"profil NON jouée pour {', '.join(sans_garde)} (aucun compte, "
+                f"{_ENV_COMPTES}) — la garde de profil n'est pas vérifiée pour eux"
+            )
+    for cle, motif in sorted(chaines["non_jouees"].items()):
+        libelle = next(c["libelle"] for c in declares if c["cle"] == cle)
+        lignes.append(f"parcours-personas : enchaînement « {libelle} » NON rejoué — {motif}")
+    if not declares and instance:
+        lignes.append(
+            "parcours-personas : aucun ENCHAÎNEMENT entre profils déclaré (clé `enchainements` "
+            "d'EXIGENCES.json) : un enchaînement dont une étape dépend de la réponse d'une autre "
+            "(l'opérateur prépare → l'approbateur valide l'identifiant créé → l'agent agit → "
+            "l'opérateur voit) n'est PAS rejoué ; chaque action littérale l'est isolément, sous le "
+            "seul profil dont le parcours la porte"
+        )
+    total = sum(len(noms) for noms in construits.values())
+    if total:
+        nommes = [nom for noms in construits.values() for nom in noms]
+        lignes.append(
+            f"parcours-personas : {total} appel(s) mutant(s) dont l'adresse est CONSTRUITE À "
+            f"L'EXÉCUTION dans les parcours ({'; '.join(nommes[:5])}"
+            f"{f' … et {total - 5} autre(s)' if total > 5 else ''}) NON rejoué(s) : l'adresse "
+            "n'existe qu'après la réponse d'une étape précédente et aucune lecture du source ne la "
+            "donne. Les rejouer exige de les DÉCLARER comme étapes d'un enchaînement (clé "
+            "`enchainements` d'EXIGENCES.json, `capture` puis `{nom}` dans l'adresse), ou "
+            "d'exécuter la suite du produit sous trace — pas d'instrumenter le produit"
+        )
     return lignes
 
 
@@ -1295,15 +1759,19 @@ def analyser(cible: Path) -> SortieAdaptateur:
     jeu = jouer(cible, personas_)
     # TF-2208 : les actions mutantes du parcours, rejouées profil par profil sur opt-in.
     mutations = jouer_mutations(cible, personas_, jeu)
+    # TF-2208 (reste) : les enchaînements entre profils, déclarés, rejoués étape par étape.
+    chaines = jouer_enchainements(cible, personas_, jeu)
     exerce = (
         exerces(cible)
         | {f"joue:{cle}" for cle, j in jeu["joues"].items() if j["ok"]}
         | {f"mute:{cle}" for cle, j in mutations["jouees"].items() if j["ok"]}
+        | {f"enchaine:{cle}" for cle, j in chaines["jouees"].items() if j["ok"]}
     )
     sortie = evaluer_surface(
         NOM, PAN, str(cible),
         [*inventaire(cible), *_elements_du_jeu(cible, jeu, personas_),
-         *_elements_des_mutations(cible, mutations, personas_)],
+         *_elements_des_mutations(cible, mutations, personas_),
+         *_elements_des_enchainements(cible, chaines)],
         exerce, SEUIL, NON_JUGE,
     )
     for constat in sortie.findings:
@@ -1319,6 +1787,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
             constat.message = _message_des_mutations(
                 personas_[cle]["libelle"], mutations["jouees"][cle]
             )
+        elif constat.id.startswith("enchaine:"):
+            constat.classe = classes.PARCOURS_PERSONA_REFUSE
+            constat.message = _message_de_l_enchainement(
+                chaines["jouees"][constat.id[len("enchaine:"):]]
+            )
     ecartes = _parcours_sautables_nommes(cible)
     for constat in sortie.findings:
         if constat.id == ELEMENT_CROISE or constat.id.startswith(("parcours:", "persona:")):
@@ -1326,6 +1799,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
     sortie.non_juge = [
         *sortie.non_juge, *notes, *_mentions_du_jeu(jeu, personas_),
         *(_mentions_des_mutations(mutations, personas_) if jeu["instance"] else []),
+        *(
+            _mentions_des_enchainements(
+                chaines,
+                {r: n for r, brut in _parcours_bruts(cible) if (n := appels_construits(brut))},
+                bool(jeu["instance"]),
+            )
+            if jeu["instance"] else []
+        ),
         *_mentions_des_parcours_sautables(cible, ecartes),
     ]
     return sortie
