@@ -261,6 +261,223 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "dans `<projet>/.env.forge-tests`), puis `--reprendre` le rapport : la mesure est "
         "aveugle tant que la configuration manque ({message})",
     ),
+    # TF-2285 — les 28 classes de constats qui sortaient « DÉFAUT D'AUDITEUR » faute de règle. Une
+    # règle par classe de `classes.CLASSES` ; `tests/test_tf_2285_regles_par_classe.py` compare les
+    # deux ensembles et devient rouge à la première classe déclarée sans suite.
+    #
+    # --- Revue statique de la suite de tests du projet (TF-0344 / TF-0345) ------------------------
+    # Le correctif d'un faux vert s'écrit dans la suite du produit, et seul qui connaît l'écran ou
+    # la route sait quelle assertion de présence ou quelle cible exacte poser : `manuelle_dev`.
+    "faux-vert-absence-sans-presence": (
+        "manuelle_dev",
+        "tests-suite",
+        "faire précéder l'assertion d'ABSENCE de « {id} » d'une assertion de PRÉSENCE sur le même "
+        "écran : sur une page encore en chargement, rien n'est affiché parce que rien n'est encore "
+        "là, et le test passe à vide ({message})",
+    ),
+    "faux-vert-motif-du-declencheur": (
+        "manuelle_dev",
+        "tests-suite",
+        "resserrer le motif d'assertion de « {id} » pour qu'il ne puisse pas être satisfait par le "
+        "libellé de l'élément cliqué avant toute action : le test est instable et attend son "
+        "délai à chaque occurrence ({message})",
+    ),
+    "faux-vert-prefixe-d-un-chemin-valide": (
+        "manuelle_dev",
+        "tests-suite",
+        "affirmer la cible EXACTE dans « {id} » (égalité, ou ensemble énuméré) : un préfixe est "
+        "vert pour le comportement voulu comme pour le défectueux ({message})",
+    ),
+    "donnee-de-test-recopiee": (
+        "manuelle_dev",
+        "tests-suite",
+        "ne garder qu'une source de la donnée de test recopiée (« {id} ») — fixture ou module "
+        "partagé — : deux copies divergent sans qu'aucun test ne le dise ({message})",
+    ),
+    "trou-de-couverture-inter-suites": (
+        "manuelle_dev",
+        "tests-suite",
+        "trancher pour « {id} » : ajouter à cette suite les assertions que ses suites sœurs "
+        "portent, ou déclarer pourquoi la variante diffère. Trou SIGNALÉ, pas un échec : deux "
+        "variantes peuvent différer légitimement ({message})",
+    ),
+    "session-fabriquee-hors-parcours-d-entree": (
+        "manuelle_dev",
+        "tests-suite",
+        "obtenir la session de « {id} » par le parcours d'entrée réel (connexion, puis "
+        "`storageState`) au lieu de l'écrire de toutes pièces dans le stockage : une session "
+        "composée sur place ne rejoue pas ce que le navigateur désérialise ({message})",
+    ),
+    "cle-de-relecture-hors-du-stockage-de-la-session": (
+        "manuelle_dev",
+        "tests-suite",
+        "ranger la clé qui permet de RELIRE la session au même endroit que la session persistée "
+        "(« {id} ») : `storageState` ne sauvegarde pas le `sessionStorage`, la clé est perdue au "
+        "rejeu ({message})",
+    ),
+    "saut-conditionnel-en-integration-continue": (
+        "manuelle_dev",
+        "tests-suite",
+        "remplacer le saut conditionnel de « {id} » par un préalable garanti par le harnais, ou "
+        "par un échec explicite qui nomme ce qui manque ; un saut inconditionnel et motivé reste "
+        "licite ({message})",
+    ),
+    "assertion-de-test-executee-zero-fois": (
+        "manuelle_dev",
+        "tests-suite",
+        "faire exécuter l'assertion de « {id} » : ajouter une assertion de non-vacuité sur la "
+        "collection ou l'attente (≥ 1 itération), ou déclarer la boucle vide licite avec son "
+        "motif. Un test qui n'exécute aucune assertion passe sans rien prouver ({message})",
+    ),
+    # --- Configuration de couverture : le chiffre avant la mesure (TF-0604) -----------------------
+    "couverture-perimetre-non-declare": (
+        "manuelle_dev",
+        "tests-suite",
+        "déclarer le périmètre de la couverture EN POSITIF (`include`, `source` ou "
+        "`collectCoverageFrom`) dans « {id} » : sans lui, le dénominateur dérive à chaque fichier "
+        "ajouté ou retiré et le chiffre n'est pas une mesure ({message})",
+    ),
+    "couverture-seuil-global-sans-seuil-par-fichier": (
+        "manuelle_dev",
+        "tests-suite",
+        "ajouter un seuil PAR FICHIER (`perFile: true` ou l'équivalent de l'outil) dans « {id} », "
+        "calé SOUS le niveau atteint et non dessus : un seuil global ne peut pas échouer sur un "
+        "écran non testé ({message})",
+    ),
+    "couverture-fonctions-sans-seuil": (
+        "manuelle_dev",
+        "tests-suite",
+        "poser un seuil sur les FONCTIONS à côté de celui sur les instructions dans « {id} » : "
+        "une ligne couverte par un simple rendu ne prouve rien d'un geste utilisateur. Constat "
+        "SIGNALÉ, non bloquant ({message})",
+    ),
+    # --- Matrice des droits (TF-0343 / TF-0342) ---------------------------------------------------
+    # Une seule suite pour la classe : la cellule manquante (refus ou succès) s'écrit dans la suite
+    # du produit. Le constat « rôle sans identité » (`qualif:multi-profils:identites-manquantes`)
+    # relève de la même classe et demande en plus une session par rôle : son message nomme la
+    # variable (FORGE_TESTS_QUALIF_STORAGE_STATES), la suite d'action reste celle du développeur
+    # tant que la classe ne se scinde pas.
+    "matrice-des-droits": (
+        "manuelle_dev",
+        "tests-suite",
+        "compléter la matrice des droits pour « {id} » : ajouter la cellule manquante (profil "
+        "refusé ou profil autorisé) ou déclarer la garde ouverte à tous avec son motif ; un "
+        "produit à rôles se vérifie sous une identité par rôle, pas sous une seule ({message})",
+    ),
+    # --- Instance servie et surface appelée (qualif, interface) -----------------------------------
+    "etat-perdu-a-la-navigation": (
+        "manuelle_dev",
+        "development",
+        "conserver l'état saisi sur « {id} » à travers l'aller-retour de navigation : le "
+        "visiteur perd ce qu'il vient de remplir en ouvrant une autre page puis en revenant "
+        "({message})",
+    ),
+    "destination-non-pertinente": (
+        "manuelle_dev",
+        "development",
+        "aligner la destination réellement atteinte par « {id} » et l'attente déclarée pour cette "
+        "affordance : corriger la cible, ou corriger la déclaration si c'est elle qui a dérivé "
+        "({message})",
+    ),
+    "identifiants-affiches-dans-le-texte-servi": (
+        "manuelle_dev",
+        "development",
+        "retirer de la page servie le couple identifiant / mot de passe affiché en texte (« {id} »)"
+        " avant toute exposition publique, et tenir ce mot de passe pour exposé s'il ouvre un "
+        "compte réel ({message})",
+    ),
+    "url-auto-referente-etrangere": (
+        "manuelle_dev",
+        "development",
+        "corriger l'origine que la page publie d'elle-même (« {id} ») : elle est annoncée à tout "
+        "tiers qui la lit. Si l'origine est légitime, la déclarer par "
+        "FORGE_TESTS_QUALIF_ORIGINES ({message})",
+    ),
+    "parcours-persona-refuse-sous-son-identite": (
+        "manuelle_dev",
+        "development",
+        "aligner le parcours du persona et les droits de son rôle pour « {id} » : une route que "
+        "le parcours navigue est refusée à ce rôle, renvoie vers la connexion ou répond en erreur "
+        "sur l'instance servie ({message})",
+    ),
+    "route-appelee-non-servie": (
+        "manuelle_dev",
+        "development",
+        "enregistrer à l'hôte la route que le code client appelle (« {id} »), ou retirer l'appel : "
+        "la requête rend 404 en service, c'est une fonction morte ({message})",
+    ),
+    "ressource-referencee-absente": (
+        "manuelle_dev",
+        "development",
+        "livrer au build la ressource que la page référence (« {id} »), ou retirer la référence : "
+        "le navigateur obtient 404 au moment où le repli devrait servir ({message})",
+    ),
+    # --- Pans spécialisés -------------------------------------------------------------------------
+    "fournisseur-jetons-sans-identifiant": (
+        "manuelle_dev",
+        "development",
+        "passer l'identifiant de l'identité assignée (`client_id` / `managed_identity_client_id`) "
+        "au fournisseur de jetons de « {id} » : sans lui il résout l'identité SYSTÈME de l'hôte, "
+        "ou échoue ({message})",
+    ),
+    # TF-0369 — le correctif est mécanique (passer la fonction, pas son résultat) et la source qui
+    # fait foi, le constat lui-même, nomme l'appel. La contre-épreuve (un second enregistrement
+    # porte un autre instant) reste à relire : `auto_ia` ne dit pas « sans relecture ».
+    "defaut-evalue-a-l-import": (
+        "auto_ia",
+        "development",
+        "passer la FONCTION et non son résultat à l'argument par défaut de « {id} » "
+        "(`default=now`, ou `default_factory=`), puis vérifier que deux enregistrements "
+        "successifs portent deux instants différents ({message})",
+    ),
+    # --- Supabase (TF-2008) -----------------------------------------------------------------------
+    # Activer la RLS sans politique ferme l'accès : le gabarit dit quoi écrire, la politique qui
+    # suit est un arbitrage du produit (qui lit, qui écrit) — `manuelle_dev`, pas `auto_ia`.
+    "rls-absente": (
+        "manuelle_dev",
+        "development",
+        "activer la RLS de « {id} » dans une migration (`alter table … enable row level "
+        "security`) ET écrire les politiques qui disent qui lit et qui écrit : une table d'un "
+        "schéma exposé sans RLS est lisible et modifiable par tout rôle qui a un droit dessus "
+        "({message})",
+    ),
+    # Le correctif est la suppression d'une ligne que le constat désigne au fichier et à la ligne.
+    "realtime-rls-reactivee": (
+        "auto_ia",
+        "development",
+        "retirer de la migration (« {id} ») la ligne `alter table realtime.messages … enable row "
+        "level security` : la RLS y est déjà active, la migration échoue en 42501 et arrête "
+        "les politiques qui suivent ({message})",
+    ),
+    # --- Lots et déclencheurs (batch) -------------------------------------------------------------
+    "job-sans-declencheur": (
+        "manuelle_dev",
+        "development",
+        "câbler un déclencheur au traitement par lot (« {id} »), ou déclarer qu'il est enclenché "
+        "hors du dépôt : sans l'un des deux, rien ne le fait tourner ({message})",
+    ),
+    "trigger-non-cable": (
+        "manuelle_dev",
+        "development",
+        "pointer le déclencheur « {id} » vers une cible qui existe dans le dépôt, ou le retirer : "
+        "le lot ne partira jamais et rien ne le signale au déploiement ({message})",
+    ),
+    "cron-invalide": (
+        "manuelle_dev",
+        "development",
+        "corriger l'expression de planification « {id} » (5 ou 6 champs, ou un raccourci nommé) : "
+        "illisible, la planification est silencieusement inopérante ({message})",
+    ),
+    # --- Défaut de l'outil (TF-1747) --------------------------------------------------------------
+    # `forge` : le constat dit lui-même « défaut de l'outil ou de la désignation, pas du produit ».
+    "enumeration-incomplete": (
+        "manuelle_dev",
+        "forge",
+        "compléter l'énumération du pan (« {id} ») : des routes servies et déclarées au schéma "
+        "manquent à l'inventaire, donc la couverture calculée ne mesure pas l'application. "
+        "Vérifier d'abord la désignation FORGE_TESTS_APP du projet, puis l'énumération de la "
+        "forge ({message})",
+    ),
 }
 
 
