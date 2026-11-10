@@ -207,6 +207,12 @@ def fusionner(
         if p not in couverts
     ]
 
+    # TF-2387 : la section des scripts Node vient du rapport qui l a mesurée (le neuf d abord) ; ses
+    # tests rouges pèsent sur le verdict, sa limite reste au non-jugé.
+    scripts = nouveau.get("scripts_node") or ancien.get("scripts_node")
+    if scripts:
+        non_juge |= set(scripts.get("non_juge") or [])
+
     mutation = {
         pan: valeur for pan, valeur in (ancien.get("mutation") or {}).items()
         if pan not in rejoues_
@@ -235,6 +241,7 @@ def fusionner(
         # TF-2254 : les essais viennent du rapport qui a lancé les suites — le neuf s il les a
         # mesurés, l ancien sinon. Un essai non exécuté continue de peser sur le verdict.
         "essais": essais,
+        **({"scripts_node": scripts} if scripts else {}),
         # Les actions sont RECALCULEES sur le rapport fusionne, jamais reprises telles quelles :
         # une action heritee d un finding resorbe par la reprise reclamerait un travail deja
         # fait — le genre de faux positif qui fait fermer la liste.
@@ -259,6 +266,7 @@ def fusionner(
             else (
                 "FAIL"
                 if any(e.get("verdict") == "FAIL" for e in adaptateurs.values())
+                or (scripts or {}).get("echecs")
                 else "PASS"
             )
         ),

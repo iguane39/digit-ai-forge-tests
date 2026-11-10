@@ -80,6 +80,8 @@ GLOSES: dict[str, str] = {
                                    "(défaut 900, TF-1675)",
     "FORGE_TESTS_DELAI_FRONT_S": "délai de la suite e2e Playwright, en secondes "
                                  "(défaut 900, TF-2389)",
+    "FORGE_TESTS_DELAI_SCRIPTS_S": "délai de la suite `node --test` d'un produit en scripts Node "
+                                   "sans package.json, en secondes (défaut 900, TF-2387)",
     "FORGE_TESTS_DELAI_MIGRATIONS_S": "délai du rejeu des migrations sur base neuve, en secondes "
                                       "(défaut 900, TF-2389)",
 }

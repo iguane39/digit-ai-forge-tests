@@ -1757,6 +1757,24 @@
       "statut": "todo"
     },
     {
+      "id": "scripts-node-001",
+      "domaine": "scripts-node",
+      "enonce": "scripts : la suite `node:test` du produit est jouée EN PLACE, depuis sa racine (comme la suite backend) : un test qui écrit dans l'arbre le fait sous le nom du produit, la lecture seule (G-1) ne peut pas être garantie sur ce chemin",
+      "statut": "todo"
+    },
+    {
+      "id": "scripts-node-002",
+      "domaine": "scripts-node",
+      "enonce": "scripts : seuls les scripts `.mjs` du dossier `scripts/` sont inventoriés ; un module `.cjs`, `.js` ou `.ts`, ou un script rangé ailleurs, n'entre pas dans l'inventaire",
+      "statut": "todo"
+    },
+    {
+      "id": "scripts-node-003",
+      "domaine": "scripts-node",
+      "enonce": "scripts : « exercé » veut dire chargé par au moins une ligne de test (rapporteur lcov de `node --test --experimental-test-coverage`) ; une ligne atteinte n'implique pas qu'elle soit ASSERTÉE, et la mutation ne rejoue pas ces scripts",
+      "statut": "todo"
+    },
+    {
       "id": "securite-oracles-005",
       "domaine": "securite-oracles",
       "enonce": "securite : le code VENDORISE (dossier de convention `vendor`) n est PAS scanne — dependance tierce EPINGLEE, copiee dans le depot pour la figer, jamais servie ni modifiee par le produit. Meme perimetre que `.venv` et que la gate `vendor/` de forge-development : un secret commis DANS un vendored se corrige en changeant l epingle, pas la ligne. Un projet qui nommerait `vendor` un dossier de SON produit le verrait donc ignore ici",

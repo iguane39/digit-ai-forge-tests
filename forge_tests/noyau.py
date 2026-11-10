@@ -418,6 +418,7 @@ def rapport(
     boucle: dict | None = None,
     gabarit_env: dict | None = None,
     vendorisation: list[dict] | None = None,
+    scripts_node: dict | None = None,
 ) -> dict:
     """Assemble le rapport. Un pan sans adaptateur est NOMME, jamais omis.
 
@@ -527,6 +528,7 @@ def rapport(
             {n for s in sorties for n in s.non_juge}
             | set(NON_JUGE_RISQUE)
             | set(_mention_essais_non_executes(essais_non_executes))
+            | set((scripts_node or {}).get("non_juge", []))
         ),
         # TF-0146 — détail test-par-test. Présente même sans `essais` fourni : `fourni: False`
         # dit explicitement « non mesuré ici », jamais confondu avec « mesuré, rien à signaler ».
@@ -548,10 +550,24 @@ def rapport(
         # TF-0580 : les copies vendorisees et leur ecart a l amont — « non comparable » n est
         # JAMAIS « a jour », sinon l outil reproduit le defaut qu il detecte.
         "vendorisation": vendorisation if vendorisation is not None else [],
+        # TF-2387 — les scripts Node d un produit sans `package.json` : inventaire, scripts
+        # exercés ou jamais chargés par un test, tests rouges. Section toujours présente : son
+        # absence serait indiscernable d un produit dont les scripts ont été jugés sans défaut.
+        "scripts_node": scripts_node if scripts_node is not None else {
+            "applicable": None, "statut": "non_mesure", "inventaire": [], "exerces": [],
+            "non_exerces": [], "echecs": [], "non_juge": [],
+            "motif": "section non alimentée par cet appelant (`rapport(..., scripts_node=...)`) "
+                     "— les scripts Node du produit n ont pas été inventoriés",
+        },
         "verdict": (
             "PARTIEL"
             if non_couverts or essais_non_executes
-            else ("FAIL" if any(s.verdict == "FAIL" for s in sorties) else "PASS")
+            else (
+                "FAIL"
+                if any(s.verdict == "FAIL" for s in sorties)
+                or (scripts_node or {}).get("echecs")
+                else "PASS"
+            )
         ),
     }
 

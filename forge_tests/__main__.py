@@ -92,8 +92,18 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     # exécuté pèse sur le verdict. `None` quand aucune suite n a tourné : la section le dit.
     from forge_tests import execution as _execution
 
+    # TF-2387 — un produit en scripts Node sans `package.json` : les scripts sont inventoriés et
+    # `node --test` est joué ; sinon la section dit que ce code n est pas couvert. Ses essais
+    # rejoignent ceux des suites backend et front.
+    from forge_tests import scripts_node as _scripts_node
+
+    _section_scripts = _scripts_node.section(cible)
+    _essais = [*(_execution.essais_de_la_cible(cible) or []),
+               *(_scripts_node.essais_de_la_cible(cible) or [])] or None
+
     rap = rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins,
-                  essais=_execution.essais_de_la_cible(cible),
+                  essais=_essais,
+                  scripts_node=_section_scripts,
                   instance=instance_au_rapport(cible),
                   boucle=_boucle.verdict(_boucle.lire(cible)),
                   gabarit_env={**_depot, "protection_gitignore": _protection},
