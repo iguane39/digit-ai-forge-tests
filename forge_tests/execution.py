@@ -118,6 +118,14 @@ _DEPASSEMENTS: dict[tuple[str, str], dict] = {}
 _DELAIS_DEPASSES: dict[str, dict] = {}
 QUOI_SUITE_BACKEND = "suite backend sous coverage"
 
+# TF-2389 — le même verdict pour les deux autres chemins qui fixaient 900 s dans le code : la suite
+# e2e Playwright du front et le rejeu des migrations sur base neuve. Un dépassement y rendait le pan
+# `front` en SKIP « couverture non mesurable » et laissait `migrations` et `data` à côté d un PASS,
+# « schéma réel non introspectable ». Clé : (projet, domaine), domaine = "front" ou "schema".
+_DELAIS_AUTRES: dict[tuple[str, str], dict] = {}
+QUOI_SUITE_FRONT = "suite e2e Playwright"
+QUOI_REJEU_MIGRATIONS = "rejeu des migrations sur base neuve"
+
 # TF-2286 — pendant front de TF-2269 : une suite Playwright ROUGE rendait le pan front en SKIP
 # « couverture non mesurable », indiscernable d'une suite qu'on n'a pas pu lancer. Le relevé
 # est celui du backend, pour la suite e2e : les tests rouges viennent du JUnit de Playwright
@@ -200,34 +208,64 @@ def suite_rouge(banc: Path | str) -> dict | None:
     return _SUITES_ROUGES.get(str(banc))
 
 
-def delai_depasse(banc: Path | str) -> dict | None:
-    """`{"delai", "duree"}` (secondes) si la suite backend a été interrompue faute de temps, ou None
-    (verte, rouge, jamais lancée, démon injoignable : autre chose qu un délai)."""
+def delai_depasse(banc: Path | str, domaine: str = "backend") -> dict | None:
+    """`{"delai", "duree"}` (secondes) si la mesure du `domaine` a été interrompue faute de temps,
+    ou None (verte, rouge, jamais lancée, démon injoignable : autre chose qu un délai).
+
+    `domaine` : "backend" (suite sous coverage, défaut), "front" (suite e2e, TF-2389) ou "schema"
+    (rejeu des migrations, TF-2389).
+    """
+    if domaine == "front":
+        front_execute(str(banc))  # la mesure est jouée une fois, mémorisée
+        return _DELAIS_AUTRES.get((str(banc), "front"))
+    if domaine == "schema":
+        schema_obtenu(str(banc))
+        return _DELAIS_AUTRES.get((str(banc), "schema"))
     mesurer(str(banc))  # la mesure est jouée une fois, mémorisée ; elle alimente le relevé
     return _DELAIS_DEPASSES.get(str(banc))
 
 
-def sortie_delai_depasse(nom: str, pan: str, cible: Path, non_juge: list[str]):
-    """La sortie DELAI_DEPASSE d un pan dont la suite backend a manqué de temps, ou None (TF-2311).
+def sortie_delai_depasse(
+    nom: str, pan: str, cible: Path, non_juge: list[str], domaine: str = "backend"
+):
+    """La sortie DELAI_DEPASSE d un pan dont la mesure a manqué de temps, ou None (TF-2311).
 
-    Ni SKIP (la suite a démarré : la mesure n était pas impossible), ni FAIL (aucun test n a
-    échoué, aucun n est nommé). Le pan n est pas mesuré et pèse sur PARTIEL ; son motif donne le
-    délai, la durée atteinte, le réglage et une valeur à essayer. Cette valeur est le DOUBLE du
-    délai atteint : la durée réelle de la suite est inconnue, elle est seulement supérieure.
+    Ni SKIP (la mesure a démarré : elle n était pas impossible), ni FAIL (aucun test n a échoué,
+    aucun n est nommé). Le pan n est pas mesuré et pèse sur PARTIEL ; son motif donne le délai, la
+    durée atteinte, le réglage et une valeur à essayer. Cette valeur est le DOUBLE du délai
+    atteint : la durée réelle de la mesure est inconnue, elle est seulement supérieure.
+
+    `domaine` : "backend" (suite sous coverage), "front" (suite e2e Playwright) ou "schema"
+    (rejeu des migrations sur base neuve) — TF-2389.
     """
-    depasse = delai_depasse(cible)
+    depasse = delai_depasse(cible, domaine)
     if depasse is None:
         return None
     from forge_tests.noyau import DELAI_DEPASSE, SortieAdaptateur
 
     delai, duree = int(depasse["delai"]), float(depasse["duree"])
+    env = {"backend": ENV_DELAI_BACKEND, "front": ENV_DELAI_FRONT,
+           "schema": ENV_DELAI_MIGRATIONS}[domaine]
+    if domaine == "schema":
+        quoi = "rejeu des migrations interrompu"
+        inconnue = f"la durée réelle du rejeu est inconnue, supérieure à {duree:.0f} s"
+        ni = (
+            "Ce n est ni un schéma divergent (le rejeu n a échoué pour aucune raison qui lui soit "
+            "propre) ni une mesure impossible (le rejeu a démarré) : le pan "
+            f"{pan} n a pas vérifié l effet réel des migrations, les autres mesures restent"
+        )
+    else:
+        suite = "suite e2e" if domaine == "front" else "suite backend"
+        quoi = "suite e2e interrompue" if domaine == "front" else "suite interrompue"
+        inconnue = f"la durée réelle de la {suite} est inconnue, supérieure à {duree:.0f} s"
+        ni = (
+            "Ce n est ni une suite rouge (aucun test n a échoué) ni une mesure impossible (la "
+            f"suite a démarré) : le pan {pan} n est pas mesuré, les autres le restent"
+        )
     motif = (
-        f"{DELAI_DEPASSE} : suite interrompue à {duree:.0f} s (délai {delai} s) — régler "
-        f"{ENV_DELAI_BACKEND} (secondes) dans `<projet>/.env.forge-tests`, par exemple "
-        f"{ENV_DELAI_BACKEND}={2 * delai} (le double du délai atteint ; la durée réelle de la "
-        f"suite backend est inconnue, supérieure à {duree:.0f} s). Ce n est ni une suite rouge "
-        f"(aucun test n a échoué) ni une mesure impossible (la suite a démarré) : le pan {pan} "
-        "n est pas mesuré, les autres le restent"
+        f"{DELAI_DEPASSE} : {quoi} à {duree:.0f} s (délai {delai} s) — régler "
+        f"{env} (secondes) dans `<projet>/.env.forge-tests`, par exemple "
+        f"{env}={2 * delai} (le double du délai atteint ; {inconnue}). {ni}"
     )
     return SortieAdaptateur(nom, pan, str(cible), DELAI_DEPASSE, non_juge=[*non_juge, motif])
 
@@ -424,36 +462,44 @@ def _coverage_present(banc: Path, python: Path) -> bool:
 #: Délai par défaut de la suite backend sous coverage, en secondes.
 DELAI_BACKEND_DEFAUT = 900
 ENV_DELAI_BACKEND = "FORGE_TESTS_DELAI_BACKEND_S"
+#: TF-2389 — délai par défaut de la suite e2e Playwright et du rejeu des migrations, en secondes.
+DELAI_FRONT_DEFAUT = 900
+ENV_DELAI_FRONT = "FORGE_TESTS_DELAI_FRONT_S"
+DELAI_MIGRATIONS_DEFAUT = 900
+ENV_DELAI_MIGRATIONS = "FORGE_TESTS_DELAI_MIGRATIONS_S"
 
 
-def delai_backend() -> tuple[int, str]:
+def _delai_regle(env: str, defaut: int) -> tuple[int, str]:
     """(délai retenu en secondes, phrase qui dit d où il vient et comment le lever) — TF-1675.
 
-    Le délai de 900 s était fixé dans le code. Le 12/10/2026 chez Produit-80, sur un backend
-    identique, l audit 14 a mesuré api, data et migrations ; l audit 15 et sa reprise les ont
-    perdus avec deux autres pans, « délai de 900 s dépassé », la suite seule prenant 398 s sur le
-    poste. Le projet n avait aucun moyen de régler ce délai. Il le règle désormais par
-    `FORGE_TESTS_DELAI_BACKEND_S`, lu après le contrat du projet (`.env.forge-tests`). Une
-    valeur illisible n est pas devinée : le défaut s applique, et le motif le dit.
+    Le délai de 900 s de la suite backend était fixé dans le code. Le 12/10/2026 chez Produit-80,
+    sur un backend identique, l audit 14 a mesuré api, data et migrations ; l audit 15 et sa
+    reprise les ont perdus avec deux autres pans, « délai de 900 s dépassé », la suite seule
+    prenant 398 s sur le poste. Le projet n avait aucun moyen de régler ce délai. Il le règle
+    désormais par une variable, lue après le contrat du projet (`.env.forge-tests`) ; TF-2389
+    étend ce mécanisme à la suite e2e et au rejeu des migrations. Une valeur illisible n est pas
+    devinée : le défaut s applique, et le motif le dit.
     """
-    brut = (os.environ.get("FORGE_TESTS_DELAI_BACKEND_S") or "").strip()
-    conseil = (
-        "regler FORGE_TESTS_DELAI_BACKEND_S (secondes) dans `<projet>/.env.forge-tests` "
-        "pour lever ce delai"
-    )
+    brut = (os.environ.get(env) or "").strip()
+    conseil = f"regler {env} (secondes) dans `<projet>/.env.forge-tests` pour lever ce delai"
     if not brut:
-        return DELAI_BACKEND_DEFAUT, f"delai par defaut de la forge — {conseil}"
+        return defaut, f"delai par defaut de la forge — {conseil}"
     try:
         valeur = int(brut)
     except ValueError:
         valeur = 0
     if valeur <= 0:
         return (
-            DELAI_BACKEND_DEFAUT,
-            f"FORGE_TESTS_DELAI_BACKEND_S={brut!r} illisible (entier positif attendu), "
-            f"defaut de {DELAI_BACKEND_DEFAUT} s retenu — {conseil}",
+            defaut,
+            f"{env}={brut!r} illisible (entier positif attendu), "
+            f"defaut de {defaut} s retenu — {conseil}",
         )
-    return valeur, f"delai regle par le projet (FORGE_TESTS_DELAI_BACKEND_S={valeur})"
+    return valeur, f"delai regle par le projet ({env}={valeur})"
+
+
+def delai_backend() -> tuple[int, str]:
+    """(délai de la suite backend en secondes, phrase qui dit d où il vient) — TF-1675."""
+    return _delai_regle(ENV_DELAI_BACKEND, DELAI_BACKEND_DEFAUT)
 
 
 @lru_cache(maxsize=32)
@@ -884,13 +930,19 @@ def front_execute(banc_str: str) -> dict | None:
         junit = Path(artefacts) / "junit.xml"
         _ESSAIS.pop((str(banc), "front"), None)
         _SUITES_ROUGES_FRONT.pop(str(banc), None)
+        _DELAIS_AUTRES.pop((str(banc), "front"), None)  # TF-2389
+        _DEPASSEMENTS.pop((str(banc), QUOI_SUITE_FRONT), None)
+        delai, remede = _delai_regle(ENV_DELAI_FRONT, DELAI_FRONT_DEFAUT)
         resultat = _run(
             commande,
-            banc=banc, domaine="front", quoi="suite e2e Playwright",
-            cwd=front, timeout=900,
+            banc=banc, domaine="front", quoi=QUOI_SUITE_FRONT, remede=remede,
+            cwd=front, timeout=delai,
             env={**_env_front(banc), "PLAYWRIGHT_JUNIT_OUTPUT_NAME": str(junit)},
         )
         if resultat is None:
+            depasse = _DEPASSEMENTS.get((str(banc), QUOI_SUITE_FRONT))
+            if depasse is not None:  # TF-2389 : la suite a démarré et manqué de temps
+                _DELAIS_AUTRES[(str(banc), "front")] = depasse
             return None
         _relever_essais(banc, "front", "front", junit)  # TF-2254
         if resultat.returncode != 0:
@@ -996,9 +1048,12 @@ def front_execute(banc_str: str) -> dict | None:
 def schema_obtenu(banc_str: str) -> dict | None:
     """Schema REELLEMENT produit par l application des migrations sur une base neuve."""
     banc = Path(banc_str)
+    _DELAIS_AUTRES.pop((str(banc), "schema"), None)  # TF-2389
+    _DEPASSEMENTS.pop((str(banc), QUOI_REJEU_MIGRATIONS), None)
     python = _python(banc)
     if python is None:
         return None
+    delai, remede = _delai_regle(ENV_DELAI_MIGRATIONS, DELAI_MIGRATIONS_DEFAUT)
     with tempfile.TemporaryDirectory() as temporaire:
         sortie = Path(temporaire) / "schema.json"
         resultat = _run(
@@ -1010,11 +1065,14 @@ def schema_obtenu(banc_str: str) -> dict | None:
             # le rejeu des migrations se publiait sous le motif que lisent `api` et `batch`, et
             # un préalable déclaré ici écraserait celui de la suite backend — reclasser une suite
             # VRAIMENT rouge en poste mal équipé est le défaut symétrique, celui qui absout.
-            banc=banc, domaine="schema", quoi="rejeu des migrations sur base neuve",
-            cwd=racine_execution(banc), timeout=900,  # TF-0216 — racine DÉCOUVERTE
+            banc=banc, domaine="schema", quoi=QUOI_REJEU_MIGRATIONS, remede=remede,
+            cwd=racine_execution(banc), timeout=delai,  # TF-0216 — racine DÉCOUVERTE
             env={**os.environ, "PYTHONPATH": ".", "PYTHONDONTWRITEBYTECODE": "1"},
         )
         if resultat is None:
+            depasse = _DEPASSEMENTS.get((str(banc), QUOI_REJEU_MIGRATIONS))
+            if depasse is not None:  # TF-2389 : le rejeu a démarré et manqué de temps
+                _DELAIS_AUTRES[(str(banc), "schema")] = depasse
             return None  # `_run` a déjà déclaré (délai, lancement impossible)
         if resultat.returncode != 0 or not sortie.exists():
             # TF-0309 — ce chemin rendait None SANS MOTIF : les deux pans qui le consultent

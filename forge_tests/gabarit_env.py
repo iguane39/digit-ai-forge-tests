@@ -78,6 +78,10 @@ GLOSES: dict[str, str] = {
     "FORGE_TESTS_AVANCEMENT_S": "période d'émission de l'avancement, en secondes",
     "FORGE_TESTS_DELAI_BACKEND_S": "délai de la suite backend sous coverage, en secondes "
                                    "(défaut 900, TF-1675)",
+    "FORGE_TESTS_DELAI_FRONT_S": "délai de la suite e2e Playwright, en secondes "
+                                 "(défaut 900, TF-2389)",
+    "FORGE_TESTS_DELAI_MIGRATIONS_S": "délai du rejeu des migrations sur base neuve, en secondes "
+                                      "(défaut 900, TF-2389)",
 }
 
 

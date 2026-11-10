@@ -333,6 +333,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
             "migrations : schema reel non introspectable, effet non verifie. Cause : "
             + motif_indisponibilite(cible, "schema", "non declaree par le rejeu")
         )
+        # TF-2389 : un rejeu INTERROMPU faute de temps n a pas verifie l effet reel — le PASS de
+        # la couverture ne le dit pas. Un FAIL (divergence statique, downgrade vide) reste FAIL.
+        interrompu = sortie_delai_depasse(NOM, PAN, cible, [], domaine="schema")
+        if interrompu is not None:
+            sortie.non_juge.append(interrompu.non_juge[-1])
+            if sortie.verdict == "PASS":
+                sortie.verdict = interrompu.verdict
         return sortie
     presents = set(schema["tables"]) | set(schema["contraintes"]) | set(schema["index"])
     for fichier in _fichiers(cible):

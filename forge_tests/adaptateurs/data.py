@@ -381,6 +381,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # Ce qui existe VRAIMENT apres application des migrations, pas ce que leur texte annonce :
     # une instruction peut s executer sans produire l objet qu on croit qu elle produit.
     schema = schema_obtenu(str(cible))
+    interrompu = None  # TF-2389 : la sortie DELAI_DEPASSE du rejeu, s il a manqué de temps
     if schema is None:
         reference = " ".join(
             sans_commentaires(f.read_text(encoding="utf-8")) for f in _sql(cible)
@@ -393,6 +394,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
             "migrations. Cause : "
             + motif_indisponibilite(cible, "schema", "non declaree par le rejeu")
         )
+        # TF-2389 : un rejeu INTERROMPU faute de temps rend DELAI_DEPASSE au lieu du PASS de la
+        # couverture, sauf constat qui rend FAIL ; le verdict se prononce en fin de pan.
+        interrompu = sortie_delai_depasse(NOM, PAN, cible, [], domaine="schema")
     else:
         reference = " ".join(schema["contraintes"] + schema["index"] + schema["tables"])
     for modeles in _fichiers_modeles(cible):
@@ -424,4 +428,8 @@ def analyser(cible: Path) -> SortieAdaptateur:
     if figes:
         sortie.findings.extend(figes)
         sortie.verdict = "FAIL"
+    if interrompu is not None:  # TF-2389 : le motif est la DERNIÈRE ligne, celle que le rapport lit
+        sortie.non_juge.append(interrompu.non_juge[-1])
+        if sortie.verdict == "PASS":
+            sortie.verdict = interrompu.verdict
     return sortie

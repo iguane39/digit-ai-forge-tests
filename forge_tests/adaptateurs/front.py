@@ -9,7 +9,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from forge_tests.execution import front_execute, motif_indisponibilite, sortie_suite_rouge
+from forge_tests.execution import (
+    front_execute,
+    motif_indisponibilite,
+    sortie_delai_depasse,
+    sortie_suite_rouge,
+)
 from forge_tests.noyau import Element, SortieAdaptateur, evaluer_surface
 
 NOM, PAN, SEUIL = "front-react", "front", 0.90
@@ -278,11 +283,16 @@ def analyser(cible: Path) -> SortieAdaptateur:
     if couvert is None:
         # TF-2286 : une suite e2e ROUGE rend FAIL et nomme le test rouge, comme le backend
         # (TF-2269) ; elle ne se confond pas avec une suite qu on n a pas pu lancer.
-        rouge = sortie_suite_rouge(
-            NOM, PAN, cible, [*NON_JUGE, *revue.NON_JUGE, *couverture.NON_JUGE], domaine="front"
+        # TF-2389 : une suite e2e INTERROMPUE faute de temps rend DELAI_DEPASSE (sauf constat
+        # statique de la revue de suite, qui reste un FAIL et dit le délai).
+        non_juge_front = [*NON_JUGE, *revue.NON_JUGE, *couverture.NON_JUGE]
+        rouge = sortie_suite_rouge(NOM, PAN, cible, non_juge_front, domaine="front") or (
+            sortie_delai_depasse(NOM, PAN, cible, non_juge_front, domaine="front")
         )
         if rouge is not None:
             rouge.findings.extend(faux_verts)
+            if faux_verts and rouge.verdict == "DELAI_DEPASSE":
+                rouge.verdict = "FAIL"
             return rouge
         routes = sum(1 for e in inv if e.id.startswith("route:"))
         return SortieAdaptateur(
