@@ -1090,6 +1090,12 @@
       "statut": "todo"
     },
     {
+      "id": "accessibilite-a11y-007",
+      "domaine": "accessibilite-a11y",
+      "enonce": "accessibilite : la capture attend la fin des animations et transitions FINIES, 5 s au plus ; une animation SANS FIN (spinner, pulsation) ou en pause n est pas attendue, et une page qui porte encore une animation finie apres 5 s est jugee dans cet etat — le rapport le dit route par route",
+      "statut": "todo"
+    },
+    {
       "id": "adoption-003",
       "domaine": "adoption",
       "enonce": "adoption : un cas `non_testable` ou `ecarte` (R-40) est pris au mot — ce module exige que le motif soit NOMME (champs_requis, ou qui/quand/pourquoi) et jamais que la raison soit bonne ; le solde compte des etats declares, il ne juge pas un arbitrage humain",
@@ -1177,6 +1183,12 @@
       "id": "contraste-wcag-005",
       "domaine": "contraste-wcag",
       "enonce": "contraste : l audit RGAA complet reste un livrable HUMAIN — un tiers des criteres n est pas mecanisable, la machine prepare l audit, elle ne rend pas la declaration",
+      "statut": "todo"
+    },
+    {
+      "id": "contraste-wcag-006",
+      "domaine": "contraste-wcag",
+      "enonce": "contraste : la mesure attend la fin des animations et transitions FINIES, 5 s au plus ; une animation SANS FIN (spinner, pulsation) ou en pause n est pas attendue — un texte qui la porte est mesure a la phase atteinte — et une page qui porte encore une animation finie apres 5 s est mesuree dans cet etat, ce que le rapport dit route par route",
       "statut": "todo"
     },
     {

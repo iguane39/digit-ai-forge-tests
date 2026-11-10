@@ -25,6 +25,7 @@ from forge_tests import classes
 from forge_tests.disposition import racine_front
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
+from forge_tests.stabilite import attendre_animations_finies, note_si_instable
 
 NOM, PAN = "accessibilite-a11y", "accessibilite"
 
@@ -84,6 +85,11 @@ NON_JUGE = [
     "accessibilite : les routes RELEVEES sur l instance servie sont celles que la racine LIE — "
     "une page atteinte seulement apres une action (formulaire poste, menu ouvert) ou par une URL "
     "que rien ne lie n y figure pas ; la declarer par FORGE_TESTS_QUALIF_ROUTES (TF-0217)",
+    # TF-2313 : une couleur calculee au milieu d une transition CSS est un etat intermediaire.
+    "accessibilite : la capture attend la fin des animations et transitions FINIES, 5 s au plus ; "
+    "une animation SANS FIN (spinner, pulsation) ou en pause n est pas attendue, et une page qui "
+    "porte encore une animation finie apres 5 s est jugee dans cet etat — le rapport le dit "
+    "route par route",
 ]
 
 
@@ -480,7 +486,8 @@ def _caviarder(html: str) -> str:
 
 
 def _capturer_une_route(
-    page, base: str, route: str, dossier: Path, timeout: int | None = None
+    page, base: str, route: str, dossier: Path, timeout: int | None = None,
+    notes: list[str] | None = None,
 ) -> tuple[Path | None, str | None]:
     """Concretise puis navigue UNE route ; ne leve JAMAIS. (fichier, None) en succes,
     (None, motif) si ecartee ou injoignable.
@@ -505,6 +512,11 @@ def _capturer_une_route(
             f"accessibilite : route {route} non capturee — navigation impossible "
             f"({type(erreur).__name__})"
         )
+    # TF-2313 : le DOM s ecrit une fois les animations finies terminees, 5 s au plus. `notes`
+    # recoit la limite quand la page n a pas pu etre vue stable (plafond atteint).
+    note = note_si_instable(attendre_animations_finies(page), "accessibilite", route)
+    if note is not None and notes is not None:
+        notes.append(note)
     fichier = (dossier / _nom_fichier(concret)).with_suffix(".html")
     try:
         fichier.write_text(_caviarder(page.content()), encoding="utf-8")
@@ -566,7 +578,9 @@ def _capturer(cible: Path, routes: list[str], dossier: Path) -> tuple[dict[str, 
             page = navigateur.new_page()
             base_locale = f"http://127.0.0.1:{port}"
             for route in routes:
-                fichier, motif = _capturer_une_route(page, base_locale, route, dossier)
+                fichier, motif = _capturer_une_route(
+                    page, base_locale, route, dossier, notes=motifs
+                )
                 if fichier is not None:
                     captures[route] = fichier
                 else:
@@ -601,7 +615,9 @@ def _capturer_distant(
             contexte.add_init_script(script_injection(jeton))
         page = contexte.new_page()
         for route in routes:
-            fichier, motif = _capturer_une_route(page, base, route, dossier, timeout=45000)
+            fichier, motif = _capturer_une_route(
+                page, base, route, dossier, timeout=45000, notes=motifs
+            )
             if fichier is not None:
                 captures[route] = fichier
             else:

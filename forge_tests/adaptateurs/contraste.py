@@ -28,6 +28,7 @@ from forge_tests.adaptateurs._parcours import parcourir
 from forge_tests.disposition import racine_front
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
+from forge_tests.stabilite import attendre_animations_finies, note_si_instable
 
 NOM, PAN = "contraste-wcag", "contraste"
 
@@ -63,6 +64,12 @@ NON_JUGE = [
     "l ARIA avance (roles, ordre de focus) n est couvert par aucun oracle du parc a ce jour",
     "contraste : l audit RGAA complet reste un livrable HUMAIN — un tiers des criteres n est "
     "pas mecanisable, la machine prepare l audit, elle ne rend pas la declaration",
+    # TF-2313 : un contraste lu au milieu d une transition CSS (1,53:1 mesure sur un toast qui en
+    # tient 7,16 affiche) est celui de l image prise, pas de la page.
+    "contraste : la mesure attend la fin des animations et transitions FINIES, 5 s au plus ; "
+    "une animation SANS FIN (spinner, pulsation) ou en pause n est pas attendue — un texte qui "
+    "la porte est mesure a la phase atteinte — et une page qui porte encore une animation finie "
+    "apres 5 s est mesuree dans cet etat, ce que le rapport dit route par route",
 ]
 
 
@@ -129,7 +136,13 @@ def analyser(cible: Path) -> SortieAdaptateur:
     if not routes:
         return accessibilite.verdict_sans_route(NOM, PAN, cible, NON_JUGE)
 
-    def action(page: Any, _route: str) -> tuple[Any, str | None]:
+    limites: list[str] = []  # TF-2313 : routes mesurees sans avoir pu etre vues stables
+
+    def action(page: Any, route: str) -> tuple[Any, str | None]:
+        # TF-2313 : on attend la FIN des animations finies (5 s au plus) AVANT de mesurer.
+        note = note_si_instable(attendre_animations_finies(page), "contraste", route)
+        if note is not None:
+            limites.append(note)
         page.wait_for_timeout(150)  # styles et polices posees avant de mesurer
         return page.evaluate(mesure), None
 
@@ -146,7 +159,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
         )
 
     findings: list[Finding] = []
-    non_juge = [*socle, *motifs]
+    non_juge = [*socle, *motifs, *limites]
     mesurees: list[str] = []
     for route, issues in resultats.items():
         if not isinstance(issues, dict):
