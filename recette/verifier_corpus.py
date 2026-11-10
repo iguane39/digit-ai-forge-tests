@@ -26,6 +26,7 @@ import re
 import socketserver
 import sys
 import threading
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -954,6 +955,61 @@ def verifier_registre_dette() -> int:
     return echecs
 
 
+#: TF-2392 — la section unitaire se PARALLÉLISE (un `pytest` par fichier de test) et son délai se
+#: règle. Le 09/11/2026, `pytest` lancé en un seul processus avec un délai de 600 s fixé dans le
+#: code dépassait ce délai sur ce poste, et la section n'était pas prononcée. Mesuré le 10/11/2026
+#: sur ce poste : 1 951 s en un processus.
+DELAI_UNITAIRE_DEFAUT_S = 1800
+ENV_DELAI_UNITAIRE = "RECETTE_DELAI_UNITAIRE_S"
+ENV_PROCESSUS_UNITAIRE = "RECETTE_PROCESSUS_UNITAIRE"
+#: Code de sortie de pytest quand AUCUN test n est collecté : un fichier sans test n est pas rouge.
+CODE_AUCUN_TEST = 5
+_BILAN_PYTEST = re.compile(r"(\d+) (passed|failed|skipped|errors?|xfailed|xpassed|deselected)")
+
+
+def _reglage_entier(nom: str, defaut: int) -> tuple[int, str]:
+    """(valeur retenue, note à dire si le réglage est illisible). Jamais deviné : le défaut
+    s'applique et la note le nomme."""
+    brut = (os.environ.get(nom) or "").strip()
+    if not brut:
+        return defaut, ""
+    try:
+        valeur = int(brut)
+    except ValueError:
+        valeur = 0
+    if valeur <= 0:
+        return defaut, f"{nom}={brut!r} illisible (entier positif attendu), défaut {defaut} retenu"
+    return valeur, ""
+
+
+def _jouer_un_fichier(fichier: Path, fin: float) -> dict:
+    """Un `pytest` sur UN fichier, borné par ce qui reste du délai global (`fin`, horloge
+    monotone). Rend {fichier, code, sortie} ; `delai` = vrai si le fichier a été interrompu,
+    `code` = None si le délai global était déjà écoulé avant son lancement."""
+    import subprocess
+
+    restant = fin - time.monotonic()
+    if restant <= 0:
+        return {"fichier": fichier, "code": None, "sortie": "", "delai": True}
+    try:
+        resultat = subprocess.run(
+            [sys.executable, "-m", "pytest", str(fichier.relative_to(RACINE))],
+            cwd=RACINE, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=restant,
+        )
+    except subprocess.TimeoutExpired:
+        return {"fichier": fichier, "code": None, "sortie": "", "delai": True}
+    except (OSError, subprocess.SubprocessError) as erreur:
+        return {
+            "fichier": fichier, "code": 1, "delai": False,
+            "sortie": f"pytest non lancable : {type(erreur).__name__}: {erreur}",
+        }
+    return {
+        "fichier": fichier, "code": resultat.returncode, "delai": False,
+        "sortie": f"{resultat.stdout or ''}\n{resultat.stderr or ''}",
+    }
+
+
 def verifier_suite_unitaire() -> int:
     """La suite unitaire du dépôt, jouée PAR la recette — sinon rien ne la lance.
 
@@ -961,34 +1017,66 @@ def verifier_suite_unitaire() -> int:
     rien » était l écart déclaré au README. Une suite unitaire qu aucune vérification ne joue
     serait le même écart sous un autre nom — la loi du dépôt vaut d abord pour lui-même. Elle
     est donc une section comme les autres, et son échec fait tomber S-01.
+
+    TF-2392 : un processus `pytest` par fichier de test, `RECETTE_PROCESSUS_UNITAIRE` à la fois
+    (défaut : la moitié des cœurs, entre 2 et 8), sous un délai global `RECETTE_DELAI_UNITAIRE_S`
+    (défaut 1 800 s). Les fichiers les plus gros partent d abord, pour que le plus long ne parte
+    pas le dernier. Un délai dépassé rend `DELAI_DEPASSE`, nomme les fichiers interrompus et le
+    réglage ; la section échoue quand même : un délai n est pas un vert (G-2).
     """
-    import subprocess
+    import concurrent.futures
 
     print("-" * 78)
     print("  TF-0006 — suite unitaire du depot (pytest)")
-    try:
-        resultat = subprocess.run(
-            # Pas de `-q` ici : `addopts` le porte deja, et un second `-q` supprimerait
-            # justement la ligne de bilan (« N passed ») que la recette affiche.
-            [sys.executable, "-m", "pytest"],
-            cwd=RACINE,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=600,
-        )
-    except (OSError, subprocess.SubprocessError) as erreur:
-        print(f"  [ECHEC  ] pytest non lancable : {type(erreur).__name__}: {erreur}")
+    delai, note_delai = _reglage_entier(ENV_DELAI_UNITAIRE, DELAI_UNITAIRE_DEFAUT_S)
+    parallele, note_processus = _reglage_entier(
+        ENV_PROCESSUS_UNITAIRE, max(2, min(8, (os.cpu_count() or 2) // 2))
+    )
+    for note in (note_delai, note_processus):
+        if note:
+            print(f"             {note}")
+    fichiers = sorted(
+        (RACINE / "tests").glob("test_*.py"), key=lambda f: (-f.stat().st_size, f.name)
+    )
+    if not fichiers:
+        print("  [ECHEC  ] pytest : aucun fichier tests/test_*.py à jouer")
         return 1
-    lignes = [ligne.strip() for ligne in resultat.stdout.splitlines() if ligne.strip()]
-    bilans = [ligne for ligne in lignes if "passed" in ligne or "failed" in ligne]
-    resume = bilans[-1] if bilans else (lignes[-1] if lignes else "aucune sortie")
-    ok = resultat.returncode == 0
-    print(f"  [{'OK     ' if ok else 'ECHEC  '}] pytest : {resume[:80]}")
-    if not ok:
+    debut = time.monotonic()
+    fin = debut + delai
+    with concurrent.futures.ThreadPoolExecutor(max_workers=parallele) as piscine:
+        resultats = list(piscine.map(lambda f: _jouer_un_fichier(f, fin), fichiers))
+    duree = time.monotonic() - debut
+
+    interrompus = [r for r in resultats if r["delai"]]
+    rouges = [r for r in resultats if not r["delai"] and r["code"] not in (0, CODE_AUCUN_TEST)]
+    totaux: dict[str, int] = {}
+    for r in resultats:
+        lignes_bilan = [ligne for ligne in r["sortie"].splitlines() if " in " in ligne]
+        for nombre, statut in _BILAN_PYTEST.findall(lignes_bilan[-1] if lignes_bilan else ""):
+            statut = "errors" if statut == "error" else statut
+            totaux[statut] = totaux.get(statut, 0) + int(nombre)
+    ordre = ("passed", "failed", "errors", "skipped", "xfailed", "xpassed", "deselected")
+    bilan = ", ".join(f"{totaux[s]} {s}" for s in ordre if s in totaux) or "aucun bilan lu"
+    contexte = f"{len(fichiers)} fichiers, {parallele} processus, {duree:.0f} s"
+    ok = not interrompus and not rouges
+    print(f"  [{'OK     ' if ok else 'ECHEC  '}] pytest : {bilan} ({contexte})"[:200])
+    if interrompus:
+        print(
+            f"             DELAI_DEPASSE : {len(interrompus)} fichier(s) interrompu(s) ou non "
+            f"lancé(s) à {delai} s — ni vert, ni rouge, la section n est pas prononcée. Régler "
+            f"{ENV_DELAI_UNITAIRE} (secondes), par exemple {ENV_DELAI_UNITAIRE}={2 * delai}"
+        )
+        for r in interrompus[:10]:
+            print(f"             -> {r['fichier'].name}")
+        if len(interrompus) > 10:
+            print(f"             -> ... et {len(interrompus) - 10} autre(s)")
+    for r in rouges[:5]:
+        lignes = [ligne.strip() for ligne in r["sortie"].splitlines() if ligne.strip()]
+        print(f"             {r['fichier'].name} : code {r['code']}")
         for ligne in lignes[-15:]:
-            print(f"             {ligne}")
+            print(f"               {ligne}")
+    if len(rouges) > 5:
+        print(f"             ... et {len(rouges) - 5} autre(s) fichier(s) rouge(s)")
     return 0 if ok else 1
 
 
@@ -1799,6 +1887,33 @@ def prealables_absents(rapports: dict[str, dict | None]) -> dict[str, dict[str, 
     return absents
 
 
+def indice_avis_depuis_le_verrou(bloquants: list[dict]) -> list[str]:
+    """Les lignes d'indice quand le banc vert rougit par des AVIS DE DÉPENDANCES (TF-2392).
+
+    Le verrou du banc vert épingle des versions que la base d'avis publique continue d'enrichir :
+    le 09/11/2026, cinq bloquants `securite:sca` sont apparus sur un banc dont aucun octet n'avait
+    bougé depuis le 12/08. Ce n'est pas une régression de la forge, et le chiffre nu ne le dit pas.
+    L'indice nomme les paquets et la commande qui remonte leur verrou ; elle a été jouée le
+    10/11/2026 (certifi 2026.7.22 -> 2026.10.23, urllib3 2.7.0 -> 2.8.0). Rien n'est atténué : les
+    bloquants restent comptés, la section reste en échec.
+    """
+    paquets = sorted({
+        trouve.group(1)
+        for f in bloquants
+        if str(f.get("id", "")).startswith("securite:sca:")
+        for trouve in [re.search(r"PyPI (\S+?)@", str(f.get("message", "")))]
+        if trouve
+    })
+    if not paquets:
+        return []
+    options = " ".join(f"--upgrade-package {p}" for p in paquets)
+    return [
+        f"AVIS PUBLIÉS DEPUIS LE VERROU du banc vert ({', '.join(paquets)}) : le calendrier, pas "
+        "une régression de la forge. Remonter ces paquets, puis rejouer la recette :",
+        f"cd fixtures/banc-vert/backend && uv lock {options}",
+    ]
+
+
 def verifier_corpus_des_bancs(
     rouge: dict, vert: dict, alteres: list[str], empreintes_avant: dict,
     prealables: dict[str, dict[str, str]] | None = None,
@@ -1856,6 +1971,8 @@ def verifier_corpus_des_bancs(
             f"                 ! {f['id']} [{f.get('pan', '?')}/{f.get('classe', '?')}] "
             f"{str(f.get('message', '')).splitlines()[0][:120]}"
         )
+    for ligne in indice_avis_depuis_le_verrou(bloquants_vert):  # TF-2392
+        print(f"               {ligne}")
     # TF-0299 — « 0 bloquant » sur un banc dont des pans n ont pas ete mesures est un vert
     # partiel : le dire est le meme devoir que pour le rouge, sinon la moitie saine du critere
     # se lit comme une preuve alors qu elle n en est pas une.

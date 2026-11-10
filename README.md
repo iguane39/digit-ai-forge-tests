@@ -1840,6 +1840,23 @@ La recette rejoue le framework sur la paire de bancs de `fixtures/` : **chacune*
 l'imprime au verdict) doit produire un finding **nommé** par SON propre défaut planté au banc
 rouge, le banc vert aucun finding bloquant.
 
+Deux choses dépendent du poste ou du calendrier, et la recette les dit au lieu de les subir
+(TF-2392). La section `unitaire` joue **un `pytest` par fichier de test**, plusieurs à la fois
+(`RECETTE_PROCESSUS_UNITAIRE`, défaut : la moitié des cœurs, entre 2 et 8), sous un délai global
+`RECETTE_DELAI_UNITAIRE_S` (défaut 1 800 s) ; mesuré le 10/11/2026 sur un poste partagé : 1 951 s
+en un seul processus (le délai fixe de 600 s était dépassé et la section n'était pas prononcée),
+395 s à 535 s en parallèle, mêmes 2 089 tests. Un délai dépassé rend `DELAI_DEPASSE`, nomme les
+fichiers interrompus et le réglage, et la section échoue quand même : un délai n'est pas un vert.
+Le banc vert épingle des versions (`fixtures/banc-vert/backend/uv.lock`) que la base d'avis
+publique continue d'enrichir : quand ses bloquants sont des avis `securite:sca`, la recette nomme
+les paquets et la commande qui remonte le verrou (`uv lock --upgrade-package …`), sans rien
+atténuer. Le 10/11/2026, `certifi` 2026.7.22 → 2026.10.23 et `urllib3` 2.7.0 → 2.8.0 ont ramené le
+pan `securite` du banc vert de 5 bloquants à 0. Une base d'avis figée (`oracle-sca --osv-fige`) a
+été essayée et écartée : en mode figé l'oracle demande la version de la plage du `package.json`
+(`vite ^5.4.8`), juge tout avis OSV sans filtre de sévérité, et même répondu sur les versions du
+`package-lock.json` il restait 4 avis publiés avant le gel (`vite` 5.4.21 ×3, `react-router-dom`
+6.30.4 ×1), donc 4 bloquants npm que le pan ne rend pas en mode vif.
+
 Le pan `qualif` juge une application **en service** : il ne pourrait donc pas être exercé par
 un banc de fichiers, comme les autres pans. La recette **sert elle-même** `fixtures/banc-*/
 qualif-web/` sur un port libre (serveur de la bibliothèque standard) et déclare l'URL au pan.
