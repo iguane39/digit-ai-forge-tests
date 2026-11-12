@@ -1865,7 +1865,16 @@ pan `securite` du banc vert de 5 bloquants à 0. Une base d'avis figée (`oracle
 été essayée et écartée : en mode figé l'oracle demande la version de la plage du `package.json`
 (`vite ^5.4.8`), juge tout avis OSV sans filtre de sévérité, et même répondu sur les versions du
 `package-lock.json` il restait 4 avis publiés avant le gel (`vite` 5.4.21 ×3, `react-router-dom`
-6.30.4 ×1), donc 4 bloquants npm que le pan ne rend pas en mode vif.
+6.30.4 ×1). **Ces 4 avis n'étaient pas un écart de l'oracle, mais un angle mort du pan**
+(TF-2403, 12/11/2026) : le pan ne remettait aux oracles que la racine d'exécution (`backend/`),
+et le front, rangé à côté avec son `package.json` et son verrou, n'était ni lu ni cité — un audit
+de sécurité vert sur des avis connus. `oracle-sca` reçoit désormais les **manifestes** de toute la
+racine du projet (`package.json`, `package-lock.json`, `requirements.txt`, `uv.lock`,
+`poetry.lock`, copiés sans les dossiers de dépendances), `sast` et `secrets` gardent la racine
+d'exécution ; le `non_juge` nomme les manifestes remis, et un finding SCA se localise sur le
+chemin réel du manifeste. Rejoué sur le banc vert, le pan rendait alors un bloquant npm ; le verrou
+du front est remonté à son tour (`vite` ^6.4.6, `react-router-dom` ^7.18.5, `nanoid` et
+`source-map-js` par `npm audit fix` : 0 avis, suite Playwright du banc 5/5).
 
 Le pan `qualif` juge une application **en service** : il ne pourrait donc pas être exercé par
 un banc de fichiers, comme les autres pans. La recette **sert elle-même** `fixtures/banc-*/

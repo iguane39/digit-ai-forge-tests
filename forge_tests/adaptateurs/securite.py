@@ -233,6 +233,56 @@ def _sources_du_produit(
     return cible
 
 
+# --- TF-2403 : les DEPENDANCES se lisent sur toute la racine du PROJET --------------------------
+# Constat du 10/11/2026, cause mesuree le 12/11 : `oracle-sca` joue a la main sur le banc vert
+# voyait quatre avis publies (`vite` x3, `react-router-dom` x1), le pan n'en rendait aucun. Le pan
+# ne remettait aux oracles que la RACINE D'EXECUTION (`backend/` sur ce banc) : le front, rangé a
+# cote avec son `package.json` et son verrou, n'etait ni lu ni cite — un audit de securite vert sur
+# des avis connus. SAST et secrets lisent du CODE et gardent cette racine (l'elargir leur ferait
+# lire les bancs et les livrables du depot) ; SCA ne lit que des manifestes, et un manifeste
+# de dependances appartient au produit ou qu'il soit range. On ne lui remet donc QUE les
+# manifestes, copies sans les dossiers de dependances (meme filtre que ci-dessus).
+_MANIFESTES_DE_DEPENDANCES = (
+    "package.json", "package-lock.json", "npm-shrinkwrap.json",
+    "requirements.txt", "uv.lock", "poetry.lock",
+)
+
+
+def _manifestes_du_produit(
+    racines: list[Path], tmp: Path, origine: dict[str, Path]
+) -> Path:
+    """Copie des seuls MANIFESTES DE DÉPENDANCES du projet, sans les dossiers de dépendances.
+
+    `racines[0]` est la racine du projet ; les suivantes (une racine d'exécution déclarée hors du
+    projet par `FORGE_TESTS_SOURCES`) sont rangées sous `hors-projet-<n>` pour ne rien perdre de
+    ce que le pan lisait avant. `origine` associe le chemin RELATIF d'un manifeste dans la copie
+    (séparateur `/`, tel que l'oracle le publie) à son chemin RÉEL : une `localisation` qui
+    pointerait un dossier temporaire détruit serait illisible (voir `_relocaliser`).
+    """
+    copie = tmp / "manifestes"
+    copie.mkdir()
+    ecartes = shutil.ignore_patterns(*_EXCLUS_DEPENDANCES)
+    for rang, racine in enumerate(racines):
+        forge = est_la_forge_elle_meme(racine)
+        for dossier, sous_dossiers, fichiers in os.walk(racine):
+            exclus = set(ecartes(dossier, sous_dossiers))
+            if forge and Path(dossier) == racine:
+                exclus.update(n for n in sous_dossiers if n in _MATIERE_DE_TEST_DE_LA_FORGE)
+            sous_dossiers[:] = [n for n in sous_dossiers if n not in exclus]
+            for nom in fichiers:
+                if nom not in _MANIFESTES_DE_DEPENDANCES:
+                    continue
+                reel = Path(dossier) / nom
+                relatif = reel.relative_to(racine)
+                if rang:
+                    relatif = Path(f"hors-projet-{rang}") / relatif
+                destination = copie / relatif
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(reel, destination)
+                origine[relatif.as_posix()] = reel
+    return copie
+
+
 def _relocaliser(texte: str, scan: Path, application: Path) -> str:
     """Réécrit un chemin sous la copie filtrée en chemin sous l arbre réel du projet audité.
 
@@ -507,12 +557,28 @@ def analyser(cible: Path) -> SortieAdaptateur:
             non_juge.append(
                 "securite : code VENDORISE ECARTE de ce scan — " + ", ".join(sorted(vendorises))
             )
+        # TF-2403 : SCA reçoit les manifestes de TOUT le projet (voir `_manifestes_du_produit`) ; la
+        # liste de ce qui lui est remis se DIT, sans quoi « aucun avis » ne se distingue pas de
+        # « manifeste jamais lu ».
+        racines_manifestes = [cible]
+        if application != cible and cible not in application.parents:
+            racines_manifestes.append(application)
+        origine_manifestes: dict[str, Path] = {}
+        manifestes = _manifestes_du_produit(
+            racines_manifestes, Path(brouillon), origine_manifestes
+        )
+        if origine_manifestes:
+            non_juge.append(
+                "securite : manifestes de dependances remis a oracle-sca (toute la racine du "
+                "projet, pas seulement la racine d execution) — "
+                + ", ".join(sorted(origine_manifestes))
+            )
         for nom in ORACLES:
             script = racine / f"oracle-{nom}.mjs"
             if not script.exists():
                 non_juge.append(f"securite : oracle-{nom} absent du registre, non joue")
                 continue
-            rapport = _lancer(script, scan)
+            rapport = _lancer(script, manifestes if nom == "sca" else scan)
             if rapport is None:
                 non_juge.append(f"securite : oracle-{nom} n a produit aucun verdict exploitable")
                 continue
@@ -531,7 +597,12 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 if nom == "sast" and not django_present and _REGLE_DJANGO.search(message):
                     ecartes_django.append(message)
                     continue
-                ou = _relocaliser(str(brut.get("where") or application), scan, application)
+                # TF-2403 : un finding SCA se localise sur le manifeste RÉEL (et deux manifestes
+                # de même nom, dans deux dossiers, restent deux identifiants).
+                if nom == "sca" and brut.get("where") in origine_manifestes:
+                    ou = str(origine_manifestes[brut["where"]])
+                else:
+                    ou = _relocaliser(str(brut.get("where") or application), scan, application)
                 identifiant = f"securite:{nom}:{ou}"
                 findings.append(
                     Finding(
