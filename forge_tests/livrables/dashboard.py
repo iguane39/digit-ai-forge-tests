@@ -256,7 +256,10 @@ _STYLE = f"""
     /* CLAIR PAR DÉFAUT, STRICTEMENT (TF-0153, retour humain du 13/08). L auto-sombre hérité
        de l OS (`prefers-color-scheme`) est retiré : un livrable d audit circule et doit
        s ouvrir identique chez tous ses lecteurs. Le sombre reste à un clic, persisté. */
-    :root {{{_TOKENS_CLAIRS}
+    :root {{
+      /* TF-2448 (SC4 de forge-design) : chaque thème déclare son color-scheme EN CSS ; la
+         balise meta annonce ce que la page supporte, elle ne suit pas la bascule. */
+      color-scheme:light;{_TOKENS_CLAIRS}
       /* Encres des pastilles. Le ton d accent de la charte sert aux FILETS ; posé en TEXTE sur
          son propre fond pâle, l ambre tombe à 3,07:1 — sous les 4,5:1 de WCAG AA, mesuré par
          `render_page.py`. Un statut illisible est un statut qu on ne lit pas : la pastille a
@@ -278,7 +281,8 @@ _STYLE = f"""
          PRESCRIT (T8) : un anneau et son décalage, consommés par toutes les règles :focus. */
       --on-solid:#F8FAFF; --focus-anneau:var(--blue); --focus-decalage:2px;
     }}
-    :root[data-theme="dark"] {{{_TOKENS_SOMBRES}}}
+    :root[data-theme="dark"] {{
+      color-scheme:dark;{_TOKENS_SOMBRES}}}
     * {{ box-sizing:border-box; }}
     /* L23 (TF-0733) — LA GARDE DE L ATTRIBUT `hidden`, et elle n est pas cosmetique. Ce
        tableau de bord masque par PROPRIETE : `p.hidden` pour les panneaux d onglet,
@@ -549,7 +553,8 @@ _STYLE = f"""
     @page {{ size:A4 landscape; margin:14mm; }}
     @media print {{
       /* Le papier est TOUJOURS clair, même si le lecteur avait choisi le sombre à l écran. */
-      :root, :root[data-theme="dark"] {{{_TOKENS_CLAIRS}}}
+      :root, :root[data-theme="dark"] {{
+        color-scheme:light;{_TOKENS_CLAIRS}}}
       body {{ background:var(--surface); }}
       .wrap {{ max-width:none; padding:0; }}
       nav.onglets, .filtres, .theme-toggle, .outillage, .tuile-va,
