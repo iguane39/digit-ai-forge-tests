@@ -582,6 +582,18 @@ def analyser(cible: Path) -> SortieAdaptateur:
             if rapport is None:
                 non_juge.append(f"securite : oracle-{nom} n a produit aucun verdict exploitable")
                 continue
+            # TF-2449 : un oracle qui rend SKIP n a RIEN verifie (outil absent, reseau injoignable,
+            # aucun manifeste). Le compter « joue » faisait rendre PASS a ce pan sur une
+            # verification qui n a pas eu lieu. Il se dit non joue, avec le motif de l oracle.
+            if rapport.get("verdict") == "SKIP":
+                motif = rapport.get("motif") or " ; ".join(
+                    str(brut.get("msg", "")) for brut in rapport.get("findings", [])
+                ) or "motif non publie par l oracle"
+                non_juge.append(f"securite : oracle-{nom} a rendu SKIP — non joue : {motif}")
+                non_juge.extend(
+                    f"securite/{nom} : {ligne}" for ligne in rapport.get("non_juge", [])
+                )
+                continue
             joues.append(nom)
             # Les limites de l oracle delegue deviennent de la dette DECLAREE du framework.
             non_juge.extend(f"securite/{nom} : {ligne}" for ligne in rapport.get("non_juge", []))
