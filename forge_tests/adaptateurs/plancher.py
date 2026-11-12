@@ -38,6 +38,7 @@ from forge_tests import classes
 from forge_tests.adaptateurs import accessibilite, contraste
 from forge_tests.adaptateurs._parcours import parcourir
 from forge_tests.disposition import racine_front
+from forge_tests.execution import motif_front_non_servi
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -329,7 +330,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     if not resultats and not motifs:
         return SortieAdaptateur(
             NOM, PAN, str(cible), "SKIP",
-            non_juge=[*socle, "front non servi : build absent, npm ou navigateur manquant"],
+            non_juge=[*socle, motif_front_non_servi(cible)],
         )
 
     findings: list[Finding] = []

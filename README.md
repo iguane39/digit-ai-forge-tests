@@ -2002,6 +2002,23 @@ fixtures/banc-rouge/backend`), les dépendances des fronts (`npm ci` puis `npm r
 `fixtures/banc-*/frontend`), un navigateur Playwright et Docker. Elle neutralise
 `FORGE_TESTS_BASE_URL` : elle porte sur les bancs locaux, jamais sur l'instance de l'opérateur.
 
+**Dans un arbre de travail neuf** (`git worktree add`, clone), ces préalables manquent, et la
+recette le dit au lieu de s'accuser (TF-2402, 12/11/2026). Mesuré sur `955454a` : sans `.venv` des
+bancs, sans `node_modules` ni `dist`, la section `corpus` rendait 13 défauts « MANQUE » sur 23,
+des régressions annoncées là où la mesure n'avait pas eu lieu, et le banc vert sortait PARTIEL à
+0 bloquant sans une ligne pour l'expliquer (front, api, data, migrations, batch, fichiers, back,
+accessibilité, contraste, clavier, visuel et plancher n'avaient pas de mesure). Les trois
+préalables portent désormais le marqueur `PRÉALABLE D ENVIRONNEMENT ABSENT` dans le motif du pan (celui de TF-0299) :
+`.venv` absent (api, data, migrations, batch, fichiers, back), `node_modules` absent (front),
+`dist`, `node_modules` ou `npx` absent (accessibilité, contraste, clavier, plancher, visuel). La
+recette écrit alors `[NON MESURABLE]` avec le préalable et la commande qui le crée (`uv sync`,
+`npm ci`, `npm run build`), déclare le « 0 bloquant » du banc vert PARTIEL, et ne prononce pas
+S-01 (code 3 quand le reste est vert). Un front qui a tous ses préalables et ne répond pas garde son motif générique : l'absoudre serait
+le défaut inverse. La section `cahiers` ne lit plus `USERPROFILE` comme une valeur de configuration
+du projet : le nom contient `USER`, sa valeur préfixe tout chemin absolu d'un arbre posé sous le
+dossier personnel, et le jeu de données dérivé du rapport (qui cite ces chemins) était refusé par
+le garde-fou (`DonneeNonSynthetique`). La liste des variables de session exemptées est fermée.
+
 `registre-dette.json` est **régénéré depuis le code** : les `non_juge` déclarés par le noyau,
 le risque, l'exécution et les adaptateurs y deviennent des entrées à statut. Ne pas éditer les
 énoncés à la main, seulement les statuts, les preuves et les notes.

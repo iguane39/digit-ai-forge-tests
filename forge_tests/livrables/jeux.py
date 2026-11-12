@@ -199,6 +199,24 @@ _LIBELLES = ("Alpha", "Bravo", "Charlie", "Delta", "Écho", "Foxtrot", "Golf", "
 JOUR_PIVOT = "2026-01-15"
 
 
+# TF-2402 (12/11/2026) — LE DOSSIER DE SESSION DE L OPÉRATEUR N EST PAS UNE VALEUR DU PROJET.
+#
+# Fait mesuré : la section `cahiers` de la recette levait `DonneeNonSynthetique` dans un arbre de
+# travail posé sous le dossier personnel de l opérateur (`C:\Users\<compte>\…`). Le nom
+# `USERPROFILE` contient le segment `USER` du cercle large `_NOM_CONFIG` (pensé pour `DB_USER`,
+# `APP_USER`…), sa valeur dépasse `_LONGUEUR_COMPARABLE`, et chaque identifiant du rapport qui
+# porte un chemin absolu du projet audité (`securite:sast:C:\Users\…\recherche.py:13`) contient
+# cette valeur comme préfixe : le jeu était refusé comme « donnée de configuration ». L agent du
+# lot FT a contourné en jouant depuis `C:\tmp`, ce qui cache le défaut au lieu de le lever.
+#
+# `USERPROFILE` est posée par le SYSTÈME à l ouverture de session ; elle LOCALISE le dossier
+# personnel, elle n authentifie rien et n appartient à aucun projet. Même raisonnement que
+# TF-0841 (le segment qui localise prime sur celui qui authentifie), appliqué à la seule variable
+# du système qui le demande. La liste est FERMÉE : un nom voisin posé par un projet
+# (`APP_USERPROFILE_TOKEN`) reste dans le corpus, et `USERNAME` aussi (c est un identifiant).
+_VARIABLES_DE_SESSION_DU_SYSTEME = frozenset({"USERPROFILE"})
+
+
 def _valeurs_de_configuration(cible: Path | None, secrets_seulement: bool = False) -> set[str]:
     """Valeurs qu il serait grave de recopier : env sensibles et `.env*` du projet audité.
 
@@ -208,6 +226,8 @@ def _valeurs_de_configuration(cible: Path | None, secrets_seulement: bool = Fals
     motif = _NOM_SECRET if secrets_seulement else _NOM_CONFIG
     valeurs: set[str] = set()
     for nom, valeur in os.environ.items():
+        if nom.upper() in _VARIABLES_DE_SESSION_DU_SYSTEME:  # TF-2402
+            continue
         valeur = (valeur or "").strip()
         # TF-0215 : une variable qui configure l auditeur sans authentifier n est pas une valeur
         # sensible du PROJET — elle ne peut pas rendre un jeu « non synthétique ». TF-0841 : la

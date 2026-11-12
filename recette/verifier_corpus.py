@@ -1882,6 +1882,16 @@ def prealables_absents(rapports: dict[str, dict | None]) -> dict[str, dict[str, 
             for pan, motif in (rapport.get("motifs_non_couverture") or {}).items()
             if PREALABLE_ABSENT in motif
         }
+        # TF-2402 : un pan peut rendre FAIL sur un constat STATIQUE (le pan `batch`, déclencheur
+        # cassé) tout en ne pouvant pas mesurer sa couverture faute de préalable : son verdict
+        # n est pas SKIP, il n entre donc pas dans `motifs_non_couverture`, et ses défauts de
+        # couverture (H-06) s écrivaient « MANQUE » dans un arbre neuf. Sa ligne de `non_juge`,
+        # préfixée par le nom du pan, porte le même marqueur : elle est lue aussi.
+        pans_du_corpus = {pan for _code, pan, *_reste in CORPUS}
+        for ligne in rapport.get("non_juge") or []:
+            pan, separateur, _reste = str(ligne).partition(" : ")
+            if separateur and pan in pans_du_corpus and PREALABLE_ABSENT in ligne:
+                touches.setdefault(pan, ligne)
         if touches:
             absents[nom] = touches
     return absents

@@ -1145,7 +1145,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 motif_python
                 or f"mutation : aucun environnement Python du projet ({racine / '.venv'}) ; "
                 "pour un outil sans `.venv`, désigner l'interpréteur par `--python`",
-                f"mutation : {len(retenus)} module(s) inventorié(s), aucun muté",
+                # TF-2402 : le motif publié au rapport est le DERNIER de la liste. Sans interpréteur
+                # du projet, rien n est muté faute de PRÉALABLE, pas faute de défaut : le
+                # marqueur y est, pour que la recette dise « non mesurable » et non « manque ».
+                f"mutation : {PREALABLE_ABSENT} — {len(retenus)} module(s) inventorié(s), aucun "
+                "muté faute d'interpréteur Python du projet",
             ],
             modules=inventaire,
         )

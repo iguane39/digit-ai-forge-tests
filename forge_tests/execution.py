@@ -96,6 +96,39 @@ def motif_indisponibilite(banc: Path | str, domaine: str, defaut: str) -> str:
     return _MOTIFS.get((str(banc), domaine), defaut)
 
 
+#: Le motif générique des cinq pans qui rendent le front SERVI (accessibilité, contraste, clavier,
+#: plancher, visuel) quand aucune route n a pu être capturée.
+MOTIF_FRONT_NON_SERVI = "front non servi : build absent, npm ou navigateur manquant"
+
+
+def motif_front_non_servi(cible: Path) -> str:
+    """Pourquoi le front n a pas été servi — TF-2402.
+
+    Un arbre de travail neuf n a ni `node_modules`, ni `dist`, ni Node dans le PATH de la session :
+    ce sont des PRÉALABLES de la mesure. Les confondre avec un front qui ne répond pas rendait les
+    cinq pans « SKIP » indiscernables d une régression, et la recette les écrivait « MANQUE ». Le
+    motif porte donc le marqueur `PREALABLE_ABSENT` quand un de ces trois préalables manque, et
+    NOMME lequel (et la commande qui le crée). Quand ils sont tous là et que le front ne répond
+    pas, ou quand une instance distante est désignée (`FORGE_TESTS_BASE_URL` : le build local
+    n y est pour rien), c est un autre fait, et le motif générique reste : absoudre un front qui
+    ne démarre pas serait le défaut symétrique.
+    """
+    if os.environ.get("FORGE_TESTS_BASE_URL"):
+        return MOTIF_FRONT_NON_SERVI
+    front = disposition.racine_front(cible)
+    manquants: list[str] = []
+    if not (front / "node_modules").is_dir():
+        manquants.append(f"dépendances front non installées ({front / 'node_modules'} absent ; "
+                         f"`npm ci` dans {front})")
+    if not (front / "dist").is_dir():
+        manquants.append(f"build absent ({front / 'dist'} absent ; `npm run build` dans {front})")
+    if shutil.which("npx") is None:
+        manquants.append("npx introuvable dans le PATH (Node.js non installé)")
+    if not manquants:
+        return MOTIF_FRONT_NON_SERVI
+    return f"{PREALABLE_ABSENT} — front non servi : " + " ; ".join(manquants)
+
+
 # TF-2269 (Produit-86, RP-42) — une suite ROUGE n est pas une mesure absente. Une suite à 1 test
 # rouge sur 616 rendait les pans api, data et migrations en SKIP « couverture non mesurable » et
 # le même verdict PARTIEL qu un jeu vert : le rapport ne nommait pas le test rouge, il fallait le
@@ -538,8 +571,10 @@ def mesurer(banc_str: str) -> dict | None:
             motif_designation
             or pile_dotnet
             or (
-                f"aucun environnement Python dans le projet analysé — cherché sous {essayes} ; "
-                f"{motif_racine_execution(banc)} ; pour un outil sans `.venv`, désigner "
+                # TF-2402 : un `.venv` absent est un PRÉALABLE de la mesure, pas une régression.
+                f"{PREALABLE_ABSENT} — aucun environnement Python dans le projet analysé — "
+                f"cherché sous {essayes} ; {motif_racine_execution(banc)} ; `uv sync` dans la "
+                "racine d'exécution le crée ; pour un outil sans `.venv`, désigner "
                 f"l'interpréteur par `--python` ou {ENV_PYTHON}"
             ),
         )
@@ -891,7 +926,9 @@ def front_execute(banc_str: str) -> dict | None:
         _declarer(
             banc,
             "front",
-            f"dépendances front non installées — {front / 'node_modules'} absent",
+            # TF-2402 : `node_modules` absent est un PRÉALABLE de la mesure, pas une régression.
+            f"{PREALABLE_ABSENT} — dépendances front non installées — "
+            f"{front / 'node_modules'} absent (`npm ci` dans {front})",
         )
         return None
     # TF-0098 : sans config Playwright, `npx playwright test` ramasse les *.test.tsx de vitest
