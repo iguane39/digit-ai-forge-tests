@@ -39,6 +39,7 @@ os.environ["FORGE_TESTS_BASE_URL"] = ""
 
 from forge_tests import classes as noms_de_classes  # noqa: E402
 from forge_tests.__main__ import analyser  # noqa: E402
+from recette import preparer_arbre  # noqa: E402
 
 RACINE = Path(__file__).resolve().parent.parent
 ROUGE = RACINE / "fixtures" / "banc-rouge"
@@ -1750,6 +1751,7 @@ def verifier_dashboard(rouge: dict) -> int:
     ecrire_journal_oracles(identite)
 
     cas: list[tuple[str, bool]] = []
+    prealables_du_rouge = prealables_absents({"rouge": rouge}).get("rouge", {})
     with tempfile.TemporaryDirectory() as temporaire:
         chemins = produire(rouge, ROUGE, Path(temporaire), jour=JOUR_RECETTE, rapport_nom="r.json")
         page = chemins["dashboard"].read_text(encoding="utf-8")
@@ -1823,8 +1825,20 @@ def verifier_dashboard(rouge: dict) -> int:
                 [sys.executable, str(oracle), str(chemins["dashboard"]), *arguments],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
             )
-            cas.append((f"{nom} : PASS (code {issue.returncode})", issue.returncode == 0))
-            if issue.returncode != 0:
+            jugement = jugement_de_forme(issue.returncode, prealables_du_rouge)
+            if jugement == "PREREQUIS_ABSENT":
+                # TF-2467 : ni PASS ni FAIL. Le rapport dont la page dérive n'a pas été mesuré en
+                # entier ; la page sera rejugée sur un arbre prêt. La sortie de l'oracle reste
+                # imprimée : suspendre le jugement ne revient pas à le taire.
+                print(
+                    f"  [PRÉREQUIS ABSENT] {nom} : code {issue.returncode} NON PRONONCÉ — la page "
+                    f"dérive d'un rapport dont {len(prealables_du_rouge)} pan(s) n'ont pas été "
+                    "mesurés (préalable d'environnement absent)"
+                )
+                print((issue.stdout or "")[-1200:])
+                continue
+            cas.append((f"{nom} : PASS (code {issue.returncode})", jugement == "PASS"))
+            if jugement != "PASS":
                 print((issue.stdout or "")[-1200:])
 
     # Zero secret : une valeur d environnement sensible qui se retrouverait dans la page.
@@ -1895,6 +1909,24 @@ def prealables_absents(rapports: dict[str, dict | None]) -> dict[str, dict[str, 
         if touches:
             absents[nom] = touches
     return absents
+
+
+def jugement_de_forme(code_retour: int, prealables: dict[str, str]) -> str:
+    """PASS, FAIL ou PREREQUIS_ABSENT — le jugement d'un oracle de FORME sur un livrable dérivé.
+
+    TF-2467. Le dashboard se dérive du rapport du banc rouge. Quand ce rapport porte des pans dont
+    le préalable d'environnement manque (arbre de travail neuf : ni `.venv` des bancs, ni
+    `node_modules`, ni `dist`), la page cite leurs motifs, longs et chaînés de points-virgules, et
+    `check_html.py` rend code 1 (règle L12, cinq constats bloquants mesurés le 13/11/2026) : un
+    faux rouge, qui s'écrivait « S-01 NON TENU ». Ce que la page dit alors n'est pas ce qu'elle
+    dirait sur un arbre prêt : le jugement n'est PAS prononcé, il est suspendu et dit pourquoi.
+
+    Le suspens n'absout rien : le code d'un oracle qui PASSE reste PASS, un échec sans préalable
+    absent reste FAIL, et `verdict_s01` ne prononce jamais TENU tant qu'un préalable manque.
+    """
+    if code_retour == 0:
+        return "PASS"
+    return "PREREQUIS_ABSENT" if prealables else "FAIL"
 
 
 def indice_avis_depuis_le_verrou(bloquants: list[dict]) -> list[str]:
@@ -2067,7 +2099,10 @@ SECTIONS: dict[str, dict] = {
 
 
 def verdict_s01(
-    succes: bool, partielle: bool, prealables: dict[str, dict[str, str]]
+    succes: bool,
+    partielle: bool,
+    prealables: dict[str, dict[str, str]],
+    commande: str | None = None,
 ) -> tuple[list[str], int]:
     """(lignes à imprimer, code de sortie) — le verdict, et RIEN d autre : TF-0299.
 
@@ -2092,6 +2127,9 @@ def verdict_s01(
                 f"  PRÉALABLE D ENVIRONNEMENT ABSENT — banc {banc} : "
                 f"{len(pans)} pan(s) sans mesure ({', '.join(sorted(pans))})"
             )
+    if commande and prealables:
+        # TF-2467 : l'arbre de travail est neuf, et la commande qui le prépare se lit ici.
+        lignes.append(f"  PRÉREQUIS ABSENT — préparer l'arbre, hors ligne : {commande}")
     if partielle:
         return lignes, 0 if succes else 1
     if prealables and succes:
@@ -2186,6 +2224,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  ARBRE : {len(arbre_avant)} fichier(s) empreinté(s) à l ouverture (TF-0294)")
     print("=" * 78)
 
+    # TF-2467 — l'arbre est-il prêt ? Relevé sans rien exécuter, AVANT les audits : un arbre de
+    # travail neuf n'a ni `.venv` des bancs, ni `node_modules`, ni `dist`, et la recette le dit en
+    # tête avec LA commande, au lieu de laisser un faux rouge le découvrir en fin de parcours.
+    absents_arbre = preparer_arbre.prerequis_absents(RACINE) if a_auditer else []
+    if absents_arbre:
+        for ligne in preparer_arbre.lignes_prerequis_absents(absents_arbre, RACINE):
+            print(ligne)
+    commande_arbre = preparer_arbre.COMMANDE if absents_arbre else None
+
     rouge = vert = None
     contexte: dict = {"alteres": [], "empreintes_avant": {}, "prealables": {}}
     if a_auditer:
@@ -2212,7 +2259,15 @@ def main(argv: list[str] | None = None) -> int:
 
     print("=" * 78)
     for nom, compte in echecs.items():
-        print(f"  {'OK   ' if not compte else 'ECHEC'}  {nom:<14} {SECTIONS[nom]['titre']}")
+        # TF-2467 : une section qui dérive d'un audit de banc dont des pans n'ont pas été mesurés
+        # ne se lit pas « OK » seul : la mesure est partielle, et la ligne le dit.
+        partiel = not compte and any(
+            contexte["prealables"].get(banc) for banc in SECTIONS[nom]["bancs"]
+        )
+        suffixe = "  [mesure partielle : préalable absent]" if partiel else ""
+        print(
+            f"  {'OK   ' if not compte else 'ECHEC'}  {nom:<14} {SECTIONS[nom]['titre']}{suffixe}"
+        )
     succes = not any(echecs.values())
     if bouges:
         # Verdict DISTINCT : ni TENU, ni NON TENU. Ce que la recette a mesuré porte sur un état
@@ -2239,7 +2294,7 @@ def main(argv: list[str] | None = None) -> int:
             f"  RECETTE PARTIELLE — S-01 NON PRONONCÉ ({len(non_jouees)} section(s) non "
             f"jouée(s) : {', '.join(non_jouees)})"
         )
-    lignes, code = verdict_s01(succes, partielle, contexte["prealables"])
+    lignes, code = verdict_s01(succes, partielle, contexte["prealables"], commande_arbre)
     for ligne in lignes:
         print(ligne)
     return code

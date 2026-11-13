@@ -981,6 +981,11 @@ portée — l'instruction serait coupée au mauvais endroit.
   (`oracle-a11y.py`, `oracle-visual-diff.py`, oracles de sécurité). Racine surchargeable par
   `FORGE_TESTS_ORACLES`.
 - Docker seulement pour rejouer la recette des bancs (leur suite monte un PostgreSQL éphémère).
+- Un arbre de travail neuf (`git worktree add`, clone) n'a pas les préalables des bancs : `.venv` du
+  back, `node_modules` et `dist` du front (TF-2467). Une commande unique, hors ligne, les prépare,
+  depuis la racine du dépôt : `uv run --frozen --offline python recette/preparer_arbre.py`
+  (`--verifier` liste ce qui manque sans rien modifier). Sans eux, la recette rend « PRÉREQUIS
+  ABSENT » et ne prononce pas S-01 (code 3) ; elle ne le déclare plus « NON TENU ».
 
 **Dans le projet ANALYSÉ**
 
