@@ -585,13 +585,30 @@ def analyser(cible: Path) -> SortieAdaptateur:
             # TF-2449 : un oracle qui rend SKIP n a RIEN verifie (outil absent, reseau injoignable,
             # aucun manifeste). Le compter « joue » faisait rendre PASS a ce pan sur une
             # verification qui n a pas eu lieu. Il se dit non joue, avec le motif de l oracle.
-            if rapport.get("verdict") == "SKIP":
-                motif = rapport.get("motif") or " ; ".join(
-                    str(brut.get("msg", "")) for brut in rapport.get("findings", [])
+            # TF-2468 : seuls PASS et FAIL sont un verdict PRONONCE. Un champ `verdict` absent, un
+            # verdict hors vocabulaire (WARN, ERROR, « pass »…) ou une sortie qui n est pas un
+            # objet disent la meme chose que SKIP : on ne sait pas si la verification a eu lieu.
+            # Le compter joue ferait rendre PASS a ce pan sur une mesure non prononcee.
+            if not isinstance(rapport, dict) or rapport.get("verdict") not in ("PASS", "FAIL"):
+                brut_rapport = rapport if isinstance(rapport, dict) else {}
+                verdict = brut_rapport.get("verdict")
+                if not isinstance(rapport, dict):
+                    cause = (
+                        f"a rendu une sortie qui n est pas un objet JSON ({type(rapport).__name__})"
+                    )
+                elif verdict == "SKIP":
+                    cause = "a rendu SKIP"
+                elif "verdict" not in brut_rapport:
+                    cause = "n a rendu aucun verdict (champ « verdict » absent)"
+                else:
+                    cause = f"a rendu le verdict « {verdict} » (hors PASS, FAIL)"
+                constats = brut_rapport.get("findings", [])
+                motif = brut_rapport.get("motif") or " ; ".join(
+                    str(brut.get("msg", "")) for brut in constats if isinstance(brut, dict)
                 ) or "motif non publie par l oracle"
-                non_juge.append(f"securite : oracle-{nom} a rendu SKIP — non joue : {motif}")
+                non_juge.append(f"securite : oracle-{nom} {cause} — non joue : {motif}")
                 non_juge.extend(
-                    f"securite/{nom} : {ligne}" for ligne in rapport.get("non_juge", [])
+                    f"securite/{nom} : {ligne}" for ligne in brut_rapport.get("non_juge", [])
                 )
                 continue
             joues.append(nom)
