@@ -516,6 +516,19 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 ),
             ],
         )
+    # TF-2423 (Produit-86, 10/11/2026) — un relevé VIDE sur une suite verte, quand le projet porte
+    # une fabrique d application que rien ne designe : meme refus nomme que ci-dessus, meme si une
+    # instance `app` existe au niveau module. La sonde ne greffait que cette instance, la suite
+    # batissait son application par `creer_app()` : api 0/173, contre 173/173 avec la designation.
+    if inv and not couvert:
+        refus = refus_designation(cible, releve_vide=True)
+        if refus is not None:
+            from forge_tests.qualification import declarer
+
+            declarer(cible, "backend", CHAMPS_REQUIS)
+            return SortieAdaptateur(
+                NOM, PAN, str(cible), "SKIP", non_juge=[*NON_JUGE, refus["message"]]
+            )
     # Le controle de divergence repose sur l analyse STATIQUE des gardes : ses limites (RT-9,
     # un seul niveau d appel resolu) appartiennent au rapport de CE pan, pas a un module que
     # personne ne lit. Elles etaient importees ici sans jamais etre publiees.

@@ -13,7 +13,10 @@ la désignation manque-t-elle sur un produit qui ne peut pas s'en passer ? Si ou
 pan `api` poursuit comme avant.
 
 Ce qu'il ne refuse PAS : un produit dont `app/main.py` porte une instance `app` (la désignation par
-défaut de la sonde fonctionne), un produit sans fabrique reconnaissable (rien à nommer : le refus
+défaut de la sonde fonctionne) — tant que la sonde n'a pas rendu un relevé vide : après un relevé
+vide sur une suite verte, une fabrique reconnue est refusée même si l'instance existe (TF-2423, la
+suite bâtissait son application par `creer_app()` et n'exerçait jamais l'instance) —, un produit
+sans fabrique reconnaissable (rien à nommer : le refus
 serait une accusation sans objet), et un produit dont la désignation est faite quelque part, dans
 l'environnement de l'opérateur, `.env.forge-tests` ou `forge/etapes/tests/audit.env`.
 """
@@ -120,12 +123,19 @@ def designation_trouvee(cible: Path) -> bool:
     return bool((os.environ.get(VARIABLE) or "").strip())
 
 
-def refus_designation(cible: Path) -> dict | None:
+def refus_designation(cible: Path, releve_vide: bool = False) -> dict | None:
     """Le refus à rendre, ou `None` quand l'analyse peut poursuivre.
 
     Le dictionnaire porte `fabrique` (`module:nom`), `fichier` (chemin:ligne de la fabrique) et
     `message` (la phrase publiée au rapport, qui cite la valeur à recopier et le fichier où la
     ranger).
+
+    `releve_vide` (TF-2423) : la sonde a déjà tourné et rendu un relevé vide sur une suite verte.
+    Avant la mesure, une instance `app` au niveau module suffit à ne pas refuser (la sonde la
+    greffe, rien n'est prouvé contre elle). Après un relevé vide, elle ne suffit plus : une
+    fabrique que la suite appelle à chaque test (`creer_app()`) coexiste très bien avec une
+    instance module que personne n'exerce, et la sonde, qui ne greffe que celle-ci, rendait 0 %
+    sans le dire (Produit-86, 10/11/2026 : api 0/173 contre 173/173 avec la désignation).
     """
     if designation_trouvee(cible):
         return None
@@ -136,7 +146,8 @@ def refus_designation(cible: Path) -> dict | None:
 
     defaut = racine.joinpath(*MODULE_PAR_DEFAUT[:-1], MODULE_PAR_DEFAUT[-1] + ".py")
     arbre_defaut = _arbre(defaut) if defaut.is_file() else None
-    if arbre_defaut is not None and _a_une_instance(arbre_defaut, INSTANCE_PAR_DEFAUT):
+    instance = arbre_defaut is not None and _a_une_instance(arbre_defaut, INSTANCE_PAR_DEFAUT)
+    if instance and not releve_vide:
         return None
 
     for nom_module in _MODULES_D_ENTREE:
@@ -157,10 +168,24 @@ def refus_designation(cible: Path) -> dict | None:
             lieu = f"{fichier.relative_to(cible).as_posix()}:{ligne}"
         except ValueError:
             lieu = f"{fichier}:{ligne}"
-        return {
-            "fabrique": valeur,
-            "fichier": lieu,
-            "message": (
+        if instance:
+            # TF-2423 : l'instance existe, la sonde l'a greffée, la suite verte ne l'a pas exercée.
+            motif = (
+                f"api : REFUS — {VARIABLE} n'est désignée nulle part (ni dans l'environnement, "
+                f"ni dans `{ENV_PROJET}`, ni dans `{ENV_AUDIT}`), la suite est verte et la sonde "
+                f"a rendu un relevé VIDE : elle n'a greffé que l'instance `{INSTANCE_PAR_DEFAUT}` "
+                f"du module `{'.'.join(MODULE_PAR_DEFAUT)}`, alors que ce projet porte aussi une "
+                f"fabrique d'application (`{nom}`, {lieu}) que la suite appelle sans doute à "
+                "chaque test. Le pan rendrait 0 % sur une suite verte, un défaut de désignation "
+                "et non du produit (Produit-86, 10/11/2026 : api 0/173 contre 173/173 avec la "
+                f"désignation de la fabrique). Le pan n'est pas mesuré. À faire : ajouter la "
+                f"ligne `{VARIABLE}={valeur}` dans `{ENV_AUDIT}` (versionné avec le produit), "
+                "puis `--reprendre` le rapport ; si la suite exerce bien l'instance, la désigner "
+                f"(`{VARIABLE}={'.'.join(MODULE_PAR_DEFAUT)}:{INSTANCE_PAR_DEFAUT}`) : le relevé "
+                "vide est alors celui d'une suite qui n'appelle pas l'application"
+            )
+        else:
+            motif = (
                 f"api : REFUS — {VARIABLE} n'est désignée nulle part (ni dans l'environnement, "
                 f"ni dans `{ENV_PROJET}`, ni dans `{ENV_AUDIT}`) et l'application de ce projet "
                 f"est une fabrique (`{nom}`, {lieu}) sans instance `app` au niveau module. La "
@@ -169,6 +194,6 @@ def refus_designation(cible: Path) -> dict | None:
                 "contre 144/144 la veille). Le pan n'est pas mesuré. À faire : ajouter la ligne "
                 f"`{VARIABLE}={valeur}` dans `{ENV_AUDIT}` (versionné avec le produit), puis "
                 "`--reprendre` le rapport"
-            ),
-        }
+            )
+        return {"fabrique": valeur, "fichier": lieu, "message": motif}
     return None
