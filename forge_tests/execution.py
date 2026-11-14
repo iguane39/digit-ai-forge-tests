@@ -80,11 +80,19 @@ def prealable_conteneur(trace: str) -> str | None:
     Rendre la ligne plutôt qu un booléen : le motif publié cite la preuve. « le conteneur manque »
     sans la trace serait un diagnostic à croire sur parole, et le lecteur ne saurait pas si le
     démon est arrêté, mal configuré ou hors de portée de ce compte.
+
+    TF-2524 (cause mesurée le 14/11/2026) : la trace que rend Python 3.13 CITE le code de la
+    bibliothèque sous chaque cadre, et l un de ces cadres porte la chaîne du message
+    (`f'Error while fetching server API version: {e}'`). La première ligne qui correspondait était
+    donc ce code source, pas l exception : la preuve publiée ne nommait plus « DockerException »,
+    et `test_demon_injoignable_la_sonde_reelle…` restait rouge sur un arbre intact. L exception
+    est la DERNIÈRE ligne d une trace (celle d une cause chaînée précède, un code cité aussi) : la
+    preuve est la dernière ligne qui correspond, quelle que soit la forme que l outil rend.
     """
-    for ligne in (trace or "").splitlines():
-        if _CONTENEUR_INJOIGNABLE.search(ligne):
-            return " ".join(ligne.split())[:200]
-    return None
+    retenues = [
+        ligne for ligne in (trace or "").splitlines() if _CONTENEUR_INJOIGNABLE.search(ligne)
+    ]
+    return " ".join(retenues[-1].split())[:200] if retenues else None
 
 
 def _declarer(banc: Path | str, domaine: str, motif: str) -> None:

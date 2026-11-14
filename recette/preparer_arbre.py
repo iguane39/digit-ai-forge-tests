@@ -25,6 +25,7 @@ ou, avec `--verifier`, des préalables manquent. `--verifier` ne modifie rien.
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -87,6 +88,34 @@ def lignes_prerequis_absents(absents: Sequence[Etape], racine: Path = RACINE) ->
     return lignes
 
 
+#: Les deux formes RÉELLES du message d'un paquet absent du cache quand l'étape tourne hors ligne,
+#: relevées le 14/11/2026 en jouant chaque étape sur un cache vide (TF-2524) :
+#:   npm : « request to https://registry.npmjs.org/yallist/-/yallist-3.1.1.tgz failed: cache mode
+#:         is 'only-if-cached' but no cached response is available » (code ENOTCACHED) ;
+#:   uv  : « Network connectivity is disabled, but the requested data wasn't found in the cache
+#:         for: `https://files.pythonhosted.org/…/pywin32-312-cp313-cp313-win_amd64.whl` ».
+#: Motifs SPÉCIFIQUES : un échec d'une autre nature (build, version, droits) ne se dit pas « réseau
+#: requis » — le symétrique du défaut ferait chercher le réseau là où il n'est pas la cause.
+_PAQUET_ABSENT_DU_CACHE = (
+    re.compile(r"request to (\S+) failed: cache mode is 'only-if-cached'"),
+    re.compile(r"requested data wasn't found in the cache for:\s*`([^`]+)`"),
+)
+
+
+def paquet_absent_du_cache(sortie: str) -> str | None:
+    """Le fichier du paquet que le cache du poste n'a pas, lu dans la sortie de l'outil, ou None."""
+    for motif in _PAQUET_ABSENT_DU_CACHE:
+        trouve = motif.search(re.sub(r"\s+", " ", sortie or ""))
+        if trouve:
+            return trouve.group(1).rstrip("/").rsplit("/", 1)[-1]
+    return None
+
+
+def commande_en_ligne(etape: Etape) -> str:
+    """La commande de l'étape SANS `--offline` : celle qui remplit le cache, depuis son dossier."""
+    return " ".join(arg for arg in etape.argv if arg != "--offline")
+
+
 def preparer(
     racine: Path = RACINE,
     executer: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
@@ -115,11 +144,24 @@ def preparer(
             return 1
         duree = time.monotonic() - debut
         if issue.returncode != 0:
-            fin = ((issue.stdout or "") + (issue.stderr or "")).strip()[-1200:]
+            sortie = (issue.stdout or "") + (issue.stderr or "")
             print(f"ÉCHEC — « {etape.libelle} » : code {issue.returncode} après {duree:.0f} s")
-            print(fin)
-            print("  Hors ligne, l'étape lit le cache du poste : s'il est incomplet, le remplir en "
-                  "ligne (uv sync, npm ci sans --offline), puis rejouer la commande.")
+            print(sortie.strip()[-1200:])
+            absent = paquet_absent_du_cache(sortie)
+            if absent is not None:
+                # TF-2524 : la cause est lue, pas supposée — et dite en clair, avec le geste.
+                try:
+                    dossier = etape.dossier.relative_to(racine).as_posix()
+                except ValueError:
+                    dossier = str(etape.dossier)
+                print(f"  RÉSEAU REQUIS — le paquet « {absent} » manque au cache du poste, et "
+                      f"cette étape tourne HORS LIGNE : elle ne peut pas le télécharger. Remplir "
+                      f"le cache en ligne, depuis {dossier} : `{commande_en_ligne(etape)}`, "
+                      f"puis rejouer : {COMMANDE}")
+            else:
+                print("  Hors ligne, l'étape lit le cache du poste : s'il est incomplet, le "
+                      "remplir en ligne (uv sync, npm ci sans --offline), puis rejouer la "
+                      "commande.")
             return 1
         if not etape.produit.is_dir():
             print(f"ÉCHEC — « {etape.libelle} » : code 0 mais {etape.produit} reste absent")
