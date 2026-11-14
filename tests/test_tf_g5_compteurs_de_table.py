@@ -273,6 +273,59 @@ def test_une_colonne_a_une_valeur_par_ligne_rend_G13_tant_qu_elle_reste_dans_la_
     assert "G13" not in _regles_de_l_oracle(avec, tmp_path)
 
 
+@pytest.fixture(scope="module")
+def page_d_un_audit_etoffe() -> str:
+    """La page de recette ne porte que 2 seuils et 1 chapitre : G13 ne s'y arme pas (8 à 15
+    lignes). Celle d'un audit réel (banc rouge : 9 seuils, 10 et 17 chapitres) arme aussi les
+    deux tableaux de synthèse ; on l'étoffe de la même matière, valeurs de seuil répétées comme
+    dans un vrai rapport."""
+    import copy
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "preuve_socle_etoffee", RACINE / "recette" / "preuve_dashboard_socle.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    rapport = copy.deepcopy(module.RAPPORT)
+    rapport["seuils"] = {
+        f"seuil_{i}": {"valeur": (0.9, 0.6, 1.0)[i % 3], "severite": "majeur",
+                       "porte_sur": f"pan p{i}"}
+        for i in range(9)
+    }
+    chapitres = []
+    for i in range(10):
+        chapitre = copy.deepcopy(module.CHAPITRES[0])
+        chapitre.update(code=f"F{i + 1}", titre=f"Parcours {i + 1}", pans=[f"pan{i}"])
+        chapitres.append(chapitre)
+    return dash.construire(rapport, module.CONTEXTE, chapitres)
+
+
+def test_les_tableaux_de_synthese_quittent_la_facette_pour_chapitre_seuil_et_cible(
+    page_d_un_audit_etoffe: str,
+) -> None:
+    """Fixture verte, sans l'oracle du poste : la colonne « chapitre (pan) » des deux synthèses
+    par pan, « seuil » et « porte sur » du tableau des seuils portent la sortie motivée."""
+    page = page_d_un_audit_etoffe
+    en_tete = re.compile(r"<th\b([^>]*)>(chapitre \(pan\)|seuil|porte sur)</th>")
+    trouves = [(texte, attributs) for attributs, texte in en_tete.findall(page)]
+
+    assert sorted(t for t, _ in trouves) == [
+        "chapitre (pan)", "chapitre (pan)", "porte sur", "seuil"
+    ]
+    for texte, attributs in trouves:
+        assert 'data-filter-col="off"' in attributs, texte
+        assert re.search(r'data-filter-reason="[^"]{10,}"', attributs), texte
+
+
+@pytest.mark.skipif(not ORACLE.exists(), reason="quality-oracles absent du poste")
+def test_oracle_filtres_tableau_ne_rend_aucun_G13_sur_la_page_d_un_audit_etoffe(
+    page_d_un_audit_etoffe: str, tmp_path: Path
+) -> None:
+    """Fixture verte : 5 G13 sur cette page avant (chapitre ×2, seuil, porte sur…), 0 après."""
+    assert "G13" not in _regles_de_l_oracle(page_d_un_audit_etoffe, tmp_path)
+
+
 def test_le_dashboard_reste_DETERMINISTE(page: str) -> None:
     """Les identifiants dérivés du contenu ne doivent pas faire diverger deux rendus du même
     rapport : le sceau des livrables en dépend."""

@@ -1612,6 +1612,11 @@ def _synthese_par_pan(chapitres: list[dict], identifiant: str = "table-par-pan")
          "non testables", "résultat", "lecture"],
         lignes,
         identifiant=identifiant,
+        # TF-2292 : un chapitre par ligne, sa facette n'a aucun regroupement (G13 dès 8 lignes, G11
+        # dès 16 : mesuré sur la page d'un audit réel du banc rouge, 10 et 17 chapitres).
+        colonnes_hors_facette={
+            "chapitre (pan)": "un chapitre par ligne : la recherche de la page suffit"
+        },
     )
 
 
@@ -2720,6 +2725,11 @@ def construire(
         _tableau(
             ["seuil", "valeur", "sévérité", "état constaté", "porte sur"],
             lignes_seuils,
+            # TF-2292 : un seuil par ligne, nommé par son libellé et sa cible (G13 dès 8 seuils).
+            colonnes_hors_facette={
+                "seuil": "un seuil par ligne : la recherche de la page suffit",
+                "porte sur": "cible propre à chaque seuil : la recherche de la page suffit",
+            },
         ),
         '<p class="discret">L état est dérivé des findings <code>seuil-non-tenu</code> qui '
         "citent la valeur du seuil. Deux seuils de même valeur ne sont pas discernables par ce "
