@@ -1793,6 +1793,12 @@
       "statut": "todo"
     },
     {
+      "id": "securite-oracles-008",
+      "domaine": "securite-oracles",
+      "enonce": "securite/secrets : une affectation VIDE (`CLE=`) dont la ligne suivante ne porte aucune valeur (autre affectation vide, commentaire, fin de fichier) n est pas jugee un secret : le constat est ECARTE et dit au rapport, et le gabarit `.env.forge-tests.exemple` depose par la forge sort du scan tant qu aucune valeur n y est renseignee. Un secret ecrit SOUS une cle vide, sur la ligne suivante, reste signale ; un gabarit renseigne reste scanne",
+      "statut": "todo"
+    },
+    {
       "id": "supabase-pgtap-002",
       "domaine": "supabase-pgtap",
       "enonce": "supabase : les migrations se lisent par motif ; une table créée par du SQL dynamique, par `create table … as`, renommée par `alter table … rename`, ou décrite dans un schéma déclaratif `supabase/schemas/` n est pas inventoriée",

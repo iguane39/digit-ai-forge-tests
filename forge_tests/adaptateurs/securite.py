@@ -20,7 +20,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from forge_tests import classes, exclusions
+from forge_tests import classes, exclusions, gabarit_env
 from forge_tests.disposition import motif_racine_execution, racine_execution
 from forge_tests.noyau import Finding, SortieAdaptateur
 from forge_tests.risque import coter
@@ -86,6 +86,14 @@ NON_JUGE = [
     "Identity, Okta), une identite assignee declaree uniquement dans l infrastructure (Bicep, "
     "Terraform, portail Azure, non lus ici) ou transmise par un fichier different echappe a ce "
     "controle",
+    # TF-2418 : la regle `generic-api-key` de gitleaks prend la ligne SUIVANTE pour la valeur d une
+    # affectation vide (le `\s` apres le `=` franchit le saut de ligne) ; le gabarit que la forge
+    # depose chez le produit en etait accuse a chaque campagne.
+    "securite/secrets : une affectation VIDE (`CLE=`) dont la ligne suivante ne porte aucune "
+    "valeur (autre affectation vide, commentaire, fin de fichier) n est pas jugee un secret : "
+    "le constat est ECARTE et dit au rapport, et le gabarit `.env.forge-tests.exemple` depose "
+    "par la forge sort du scan tant qu aucune valeur n y est renseignee. Un secret ecrit SOUS "
+    "une cle vide, sur la ligne suivante, reste signale ; un gabarit renseigne reste scanne",
 ]
 
 # --- TF-0291, le LARSEN du pan securite -------------------------------------------------------
@@ -111,6 +119,58 @@ _SIGNATURE_FORGE_TESTS = (
 # factices figes —, pas le code de la forge ») ; `tests\` est le dossier des chaines de montage.
 # Ancres a la RACINE de l application : un `tests\` niche dans `forge_tests\` resterait scanne.
 _MATIERE_DE_TEST_DE_LA_FORGE = ("fixtures", "tests")
+
+# TF-2418 : une affectation sans valeur (`CLE=`, `export CLE=`, `CLE=""`). Le gabarit que la forge
+# depose chez le produit n en porte que de telles lignes, et gitleaks (`generic-api-key`) les
+# accusait : sa regle franchit le saut de ligne et prend la cle d apres pour la valeur.
+_AFFECTATION_VIDE = re.compile(r"""^\s*(?:export\s+)?[A-Za-z_][\w.\-]*\s*[=:]\s*(?:""|'')?\s*$""")
+# `oracle-secrets` publie `fichier:ligne · 4 premiers caracteres`.
+_LIEU_GITLEAKS = re.compile(r"^(?P<fichier>.+):(?P<ligne>\d+)(?: · .*)?$")
+
+
+def _ligne_sans_valeur(ligne: str) -> bool:
+    """Ligne blanche, commentaire ou affectation vide : rien qui puisse etre un secret."""
+    nue = ligne.strip()
+    return not nue or nue.startswith("#") or bool(_AFFECTATION_VIDE.match(ligne))
+
+
+def _est_le_gabarit_intact(chemin: Path) -> bool:
+    """Le gabarit deposé par la forge, dont aucune valeur n a ete renseignee.
+
+    Renseigne, il n est plus le gabarit de la forge : le projet y a ecrit ses valeurs, il reste
+    un fichier du produit et reste scanne.
+    """
+    if chemin.name != gabarit_env.FICHIER:
+        return False
+    try:
+        lignes = chemin.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return False
+    return all(_ligne_sans_valeur(ligne) for ligne in lignes)
+
+
+def _sur_une_affectation_vide(lieu: str, scan: Path) -> bool:
+    """Le constat `fichier:ligne` de gitleaks tombe-t-il sur une affectation vide ?
+
+    La ligne accusee doit etre une affectation vide ET la suivante (la premiere non blanche,
+    celle que la regle a prise pour la valeur) ne porter aucune valeur : si elle en porte une,
+    c est elle que gitleaks a vue, et l ecarter masquerait un secret.
+    """
+    trouve = _LIEU_GITLEAKS.match(lieu)
+    if trouve is None:
+        return False
+    chemin = Path(trouve["fichier"])
+    if not chemin.is_absolute():
+        chemin = scan / chemin
+    try:
+        lignes = chemin.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return False
+    rang = int(trouve["ligne"]) - 1
+    if not 0 <= rang < len(lignes) or not _AFFECTATION_VIDE.match(lignes[rang]):
+        return False
+    suivante = next((ligne for ligne in lignes[rang + 1:] if ligne.strip()), "")
+    return _ligne_sans_valeur(suivante)
 
 
 def est_la_forge_elle_meme(application: Path) -> bool:
@@ -183,6 +243,7 @@ def _sources_du_produit(
     vendorises: list[str] | None = None,
     bancs: list[str] | None = None,
     aspires: list[str] | None = None,
+    gabarits: list[str] | None = None,
 ) -> Path:
     """Copie FILTRÉE de `application`, sans les dossiers de dépendances.
 
@@ -215,6 +276,11 @@ def _sources_du_produit(
                 exclus.add(nom)
                 if aspires is not None:
                     aspires.append(str(chemin.relative_to(application)))
+            # TF-2418 : le gabarit que la forge depose chez le produit, tant qu il est vide.
+            elif nom not in exclus and chemin.is_file() and _est_le_gabarit_intact(chemin):
+                exclus.add(nom)
+                if gabarits is not None:
+                    gabarits.append(str(chemin.relative_to(application)))
         if forge and Path(dossier) == Path(application):
             for nom in noms:
                 if nom in _MATIERE_DE_TEST_DE_LA_FORGE and (application / nom).is_dir():
@@ -520,8 +586,12 @@ def analyser(cible: Path) -> SortieAdaptateur:
     vendorises: list[str] = []
     aspires: list[str] = []
     bancs: list[str] = []
+    gabarits: list[str] = []
+    ecartes_vides: list[str] = []
     with tempfile.TemporaryDirectory(prefix="forge-tests-securite-") as brouillon:
-        scan = _sources_du_produit(application, Path(brouillon), vendorises, bancs, aspires)
+        scan = _sources_du_produit(
+            application, Path(brouillon), vendorises, bancs, aspires, gabarits
+        )
         # TF-0291 : la MESURE de l exclusion — ce que CE scan a reellement ecarte parce que le
         # projet audite est la forge elle-meme. La regle vit dans `NON_JUGE` ; ici on nomme les
         # dossiers, et seulement s il y en a. Un lecteur doit pouvoir distinguer « rien a
@@ -552,6 +622,16 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 + ", ".join(sorted(aspires))
                 + " — reconnus a leur marqueur « saved from url » : du code de tiers reecrit "
                 "par un navigateur, que le projet ne peut ni revoquer ni corriger"
+            )
+        if gabarits:
+            # TF-2418 : meme doctrine que les artefacts de navigateur — l exclusion se DIT.
+            non_juge.append(
+                f"securite : gabarit `{gabarit_env.FICHIER}` depose par la forge ECARTE de ce "
+                "scan — "
+                + ", ".join(sorted(gabarits))
+                + " — aucune valeur n y est renseignee (des affectations vides et des "
+                "commentaires) : gitleaks y prenait la cle suivante pour la valeur de la "
+                "precedente. Renseigne, il redevient un fichier du produit et reste scanne"
             )
         if vendorises:
             non_juge.append(
@@ -626,6 +706,15 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 if nom == "sast" and not django_present and _REGLE_DJANGO.search(message):
                     ecartes_django.append(message)
                     continue
+                # TF-2418 : gitleaks prend la ligne d apres pour la valeur d une affectation vide.
+                lieu = str(brut.get("where") or "")
+                if (
+                    nom == "secrets"
+                    and "generic-api-key" in message
+                    and _sur_une_affectation_vide(lieu, scan)
+                ):
+                    ecartes_vides.append(_relocaliser(lieu.split(" · ")[0], scan, application))
+                    continue
                 # TF-2403 : un finding SCA se localise sur le manifeste RÉEL (et deux manifestes
                 # de même nom, dans deux dossiers, restent deux identifiants).
                 if nom == "sca" and brut.get("where") in origine_manifestes:
@@ -643,6 +732,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
                         risque=coter(PAN, identifiant, str(application)),
                     )
                 )
+        if ecartes_vides:
+            non_juge.append(
+                f"securite/secrets : {len(ecartes_vides)} constat(s) `generic-api-key` sur une "
+                "affectation VIDE ECARTE(S) — la ligne accusee est une cle sans valeur et la "
+                "suivante n en porte aucune : gitleaks franchit le saut de ligne et prend la "
+                "cle d apres pour la valeur (TF-2418). Ecartes : "
+                + ", ".join(sorted(ecartes_vides)[:6])
+            )
         if ecartes_django:
             non_juge.append(
                 f"securite/sast : {len(ecartes_django)} constat(s) de regle Django ECARTE(S) "
