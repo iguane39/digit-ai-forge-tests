@@ -2389,6 +2389,26 @@ def conclure(
                         risque=coter(PAN, cle_identifiants, str(cible)),
                     )
                 )
+                # TF-2525 — le second geste du même constat est de l utilisateur : retirer le
+                # couple de la page (développeur) ne révoque pas un mot de passe déjà publié. Une
+                # classe par destinataire (TF-2294). SIGNALÉ : le retrait reste le bloquant, et
+                # l outil ne sait pas si ce mot de passe ouvre un compte réel — il ne le répète
+                # pas non plus dans ce constat.
+                cle_rotation = _identifiant(page_vue, f"identifiants-a-renouveler:{route}")
+                findings.append(
+                    Finding(
+                        id=cle_rotation,
+                        classe=classes.IDENTIFIANTS_AFFICHES_A_RENOUVELER,
+                        localisation=f"{config['base']}{route}",
+                        message=(
+                            f"{route} — le mot de passe affiché EN TEXTE dans la page servie "
+                            "est publié : le tenir pour exposé et, s il ouvre un compte réel, "
+                            "le renouveler (rotation) ; le retirer de la page ne le révoque pas"
+                        ),
+                        severite="signale",
+                        risque=coter(PAN, cle_rotation, str(cible)),
+                    )
+                )
 
         for affordance in page_vue["affordances"]:
             cle = _identifiant(

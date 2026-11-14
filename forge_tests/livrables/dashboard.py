@@ -1615,7 +1615,15 @@ def _synthese_par_pan(chapitres: list[dict], identifiant: str = "table-par-pan")
         # TF-2292 : un chapitre par ligne, sa facette n'a aucun regroupement (G13 dès 8 lignes, G11
         # dès 16 : mesuré sur la page d'un audit réel du banc rouge, 10 et 17 chapitres).
         colonnes_hors_facette={
-            "chapitre (pan)": "un chapitre par ligne : la recherche de la page suffit"
+            "chapitre (pan)": "un chapitre par ligne : la recherche de la page suffit",
+            # TF-2525 : « KO » et « lecture » mêlent plusieurs fragments de texte balisés (le
+            # compte puis « dont N bloq. », la phrase puis le libellé cité) : sans
+            # `data-tf-valeur`, le composant les prend en entier pour valeur de facette, soit une
+            # valeur par ligne (G12, 4 bloquants mesurés sur la page d'un audit réel du banc rouge).
+            "KO": "le compte est suivi de « dont N bloq. » : une valeur composite par chapitre, "
+                  "le tri par en-tête classe les chapitres par KO",
+            "lecture": "une phrase propre à chaque chapitre, libellé cité compris : la recherche "
+                       "de la page suffit",
         },
     )
 

@@ -57,6 +57,10 @@ DESTINATION_NON_PERTINENTE = "destination-non-pertinente"
 # TEXTE dans une page SERVIE hors environnement local — ni le pan `interface` (cablage, jamais le
 # texte rendu) ni forge-websec (corps de la reponse explicitement hors perimetre) ne le voyaient.
 IDENTIFIANTS_AFFICHES = "identifiants-affiches-dans-le-texte-servi"
+# TF-2525 : le même constat demande un second geste, de l'utilisateur — tenir le mot de passe
+# affiché pour exposé et le renouveler (rotation). Le retirer de la page est le geste du
+# développeur (`IDENTIFIANTS_AFFICHES`) ; une classe par destinataire, comme TF-2294.
+IDENTIFIANTS_AFFICHES_A_RENOUVELER = "identifiants-affiches-a-renouveler"
 
 # --- Pans spécialisés ---------------------------------------------------------------------------
 SECURITE = "securite"

@@ -409,8 +409,16 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "manuelle_dev",
         "development",
         "retirer de la page servie le couple identifiant / mot de passe affiché en texte (« {id} »)"
-        " avant toute exposition publique, et tenir ce mot de passe pour exposé s'il ouvre un "
-        "compte réel ({message})",
+        " avant toute exposition publique ({message})",
+    ),
+    # TF-2525 : le second geste du même constat est de l'utilisateur, seul à tenir les comptes
+    # (règle du destinataire, TF-2294) : une classe par destinataire.
+    "identifiants-affiches-a-renouveler": (
+        "manuelle_utilisateur",
+        "mep-config",
+        "renouveler le mot de passe affiché en texte dans la page servie (« {id} ») s'il ouvre un "
+        "compte réel : il a été publié en clair, donc exposé, et le retirer de la page ne le "
+        "révoque pas. Aucun agent ne tient ce compte à la place de qui l'exploite ({message})",
     ),
     "url-auto-referente-etrangere": (
         "manuelle_dev",
