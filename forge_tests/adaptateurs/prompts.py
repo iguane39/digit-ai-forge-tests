@@ -280,8 +280,8 @@ def _candidats(cible: Path) -> list[Path]:
     """Fichiers texte du projet avant le filtre « suivi par git » (TF-2118)."""
     retenus: list[Path] = []
     for chemin in sorted(cible.rglob("*")):
-        if any(partie in _EXCLUS for partie in chemin.parts):
-            continue
+        if any(partie in _EXCLUS for partie in exclusions.parties_du_projet(chemin, cible)):
+            continue  # TF-2523 : les segments du projet, pas ceux de son chemin absolu
         if exclusions.ignore_par_git(chemin, cible):  # TF-1767
             continue
         if not chemin.is_file() or chemin.name in _NOMS_IGNORES:

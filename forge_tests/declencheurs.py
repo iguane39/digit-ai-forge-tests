@@ -80,7 +80,8 @@ def _fichiers(cible: Path, motifs: tuple[str, ...]) -> list[Path]:
         for chemin in cible.rglob(motif):
             if (
                 chemin.is_file()
-                and not any(p in _EXCLUS for p in chemin.parts)
+                # TF-2523 : les segments du projet, pas ceux de son chemin absolu
+                and not any(p in _EXCLUS for p in exclusions.parties_du_projet(chemin, cible))
                 and not exclusions.ignore_par_git(chemin, cible)  # TF-1767
                 and not exclusions.non_suivi_par_git(chemin, cible)  # TF-2134
             ):

@@ -116,9 +116,35 @@ def dossier_exclu(nom: str, *, avec_hors_produit: bool = True) -> bool:
     return nom in socle(avec_hors_produit=avec_hors_produit) or nom.endswith(MOTIFS_ASPIRES)
 
 
-def chemin_exclu(chemin: os.PathLike[str] | str, *, avec_hors_produit: bool = True) -> bool:
-    r"""Un CHEMIN traverse-t-il un segment hors périmètre ?"""
-    return any(dossier_exclu(p, avec_hors_produit=avec_hors_produit) for p in Path(chemin).parts)
+def parties_du_projet(
+    chemin: os.PathLike[str] | str, racine: os.PathLike[str] | str
+) -> tuple[str, ...]:
+    r"""Les segments de `chemin` RELATIFS à `racine` — jamais ceux du chemin absolu de la racine.
+
+    TF-2523 (14/11/2026) : un pan qui testait `chemin.parts` contre `OUTILLAGE` jugeait aussi les
+    dossiers PARENTS du dépôt audité. Un clone posé sous `…\.claude\…` voyait donc tout son contenu
+    exclu, et quatre tests de la recette rendaient un faux échec sur un chemin qui n'était pas leur
+    sujet. L'exclusion juge ce que le projet contient, pas où il est posé. Un chemin hors de
+    `racine` rend ses segments entiers : sans racine commune, il n'y a rien à retrancher.
+    """
+    try:
+        return Path(chemin).relative_to(racine).parts
+    except ValueError:
+        return Path(chemin).parts
+
+
+def chemin_exclu(
+    chemin: os.PathLike[str] | str,
+    *,
+    avec_hors_produit: bool = True,
+    racine: os.PathLike[str] | str | None = None,
+) -> bool:
+    r"""Un CHEMIN traverse-t-il un segment hors périmètre ?
+
+    Avec `racine` (TF-2523), seuls les segments sous cette racine comptent.
+    """
+    parties = Path(chemin).parts if racine is None else parties_du_projet(chemin, racine)
+    return any(dossier_exclu(p, avec_hors_produit=avec_hors_produit) for p in parties)
 
 
 # --- ce que le dépôt lui-même déclare hors de lui : `.gitignore` ------------------------------

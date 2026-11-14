@@ -272,8 +272,8 @@ def _fichiers(cible: Path, extensions: tuple[str, ...]) -> list[Path]:
     for chemin in sorted(cible.rglob("*")):
         if chemin.suffix.lower() not in extensions or not chemin.is_file():
             continue
-        if any(partie in _EXCLUS for partie in chemin.parts):
-            continue
+        if any(partie in _EXCLUS for partie in exclusions.parties_du_projet(chemin, cible)):
+            continue  # TF-2523 : les segments du projet, pas ceux de son chemin absolu
         if exclusions.ignore_par_git(chemin, cible):  # TF-1767
             continue
         if exclusions.non_suivi_par_git(chemin, cible):  # TF-2134 : écrit hors de git

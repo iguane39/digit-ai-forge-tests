@@ -449,7 +449,8 @@ def _findings_identite_assignee(application: Path) -> list[Finding]:
     """Fournisseurs de jetons Azure construits sans l identifiant assigne — TF-1229."""
     findings: list[Finding] = []
     for chemin in sorted(application.rglob("*.py")):
-        if any(partie in _EXCLUS_DEPENDANCES for partie in chemin.parts):
+        parties = exclusions.parties_du_projet(chemin, application)  # TF-2523
+        if any(partie in _EXCLUS_DEPENDANCES for partie in parties):
             continue
         try:
             texte = chemin.read_text(encoding="utf-8", errors="replace")
