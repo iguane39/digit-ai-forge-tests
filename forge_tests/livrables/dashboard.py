@@ -2170,8 +2170,17 @@ def _panneau_chapitres(
                     # TF-2279 : la colonne « élément » est une clé (un élément par ligne,
                     # cellule composite libellé + identifiant) ; sa facette aurait une valeur
                     # par ligne. La recherche de page la trouve, le filtre de colonne la quitte.
+                    # TF-2292 : « constat mesuré » et « action » sont du texte libre propre à
+                    # chaque ligne, « risque » un score de 1 à 125 : aucune des trois ne
+                    # regroupe (G13). La recherche de page trouve le texte, le tri ordonne le score.
                     colonnes_hors_facette={
-                        "élément": "clé unique par ligne : la recherche de la page suffit"
+                        "élément": "clé unique par ligne : la recherche de la page suffit",
+                        "constat mesuré": "texte libre propre à chaque ligne : la recherche de "
+                        "la page suffit",
+                        "action": "remède propre à chaque constat : la recherche de la page "
+                        "suffit",
+                        "risque": "score de 1 à 125, quasi unique par ligne : le tri par "
+                        "en-tête l'ordonne",
                     },
                     # Identifiant PARLANT et stable : c'est lui que le compte par table nomme
                     # (G5), et le rang du sous-chapitre suffit à le rendre unique dans la page.
@@ -2751,6 +2760,16 @@ def construire(
                 for f in (rapport.get("findings") or [])
             ],
             identifiant="table-echecs",
+            # TF-2292 : clé, score et texte libre n'ont pas de regroupement (G13).
+            colonnes_hors_facette={
+                "risque": "score de 1 à 125, quasi unique par ligne : le tri par en-tête "
+                "l'ordonne",
+                "élément": "clé unique par ligne : la recherche de la page suffit",
+                "raison mesurée": "texte libre propre à chaque constat : la recherche de la "
+                "page suffit",
+                "localisation": "emplacement propre à chaque constat : la recherche de la "
+                "page suffit",
+            },
         ),
         _section_declarations(rapport, valeurs),
     ]
@@ -2776,6 +2795,10 @@ def construire(
             # Retour humain du 14/08 : recherche, tri et filtres sur CET onglet aussi,
             # quel que soit le volume — on y cherche un pan ou un champ précis.
             outille_force=True,
+            # TF-2292 : un élément par ligne, sa facette n'aurait aucun regroupement (G13).
+            colonnes_hors_facette={
+                "élément": "clé unique par ligne : la recherche de la page suffit"
+            },
         ),
         '<h3 id="pans-non-couverts">Pans non couverts — motif ET chemin de couverture</h3>',
         _tableau(
@@ -2870,6 +2893,12 @@ def construire(
             lignes_actions,
             attributs=attributs_actions,
             identifiant="table-actions",
+            # TF-2292 : référence et résultat attendu sont propres à chaque action (G13).
+            colonnes_hors_facette={
+                "référence": "clé unique par ligne : la recherche de la page suffit",
+                "attendu": "résultat attendu propre à chaque action : la recherche de la page "
+                "suffit",
+            },
         ),
     ]
 

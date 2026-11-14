@@ -202,6 +202,77 @@ def test_l_oracle_de_la_grille_G1_G6_rend_PASS(page: str, tmp_path: Path) -> Non
     assert resultat.returncode == 0, (resultat.stdout or "") + (resultat.stderr or "")
 
 
+# --- 4 bis. TF-2292 : aucune colonne du tableau de bord ne rend G13 -----------------------------
+def _regles_de_l_oracle(html: str, tmp_path: Path) -> list[str]:
+    """Les règles qu'`oracle-filtres-tableau` lève sur `html` (avertissements compris)."""
+    import json
+    import shutil
+
+    node = shutil.which("node")
+    if node is None:  # pragma: no cover — dépend du poste
+        pytest.skip("node absent du poste")
+    fichier = tmp_path / "page.html"
+    fichier.write_text(html, encoding="utf-8")
+    resultat = subprocess.run(
+        [node, str(ORACLE), str(fichier)], capture_output=True, text=True, encoding="utf-8"
+    )
+    return [f["regle"] for f in json.loads(resultat.stdout)["findings"]]
+
+
+_CLES_DU_TABLEAU_DE_BORD = {
+    "table-chap-F1-0": ["Constat mesuré — pourquoi", "Action — remède", "Risque"],
+    "table-echecs": ["Risque", "Élément testé", "raison mesurée", "localisation"],
+    "table-non-testables": ["Élément testé"],
+    "table-actions": ["référence", "attendu"],
+}
+
+
+@pytest.mark.parametrize("table", sorted(_CLES_DU_TABLEAU_DE_BORD))
+def test_les_colonnes_sans_regroupement_du_dashboard_quittent_la_facette_avec_leur_motif(
+    page: str, table: str
+) -> None:
+    """Fixture verte, sans l'oracle du poste : chaque colonne qui rendait G13 (une valeur par
+    ligne) porte `data-filter-col="off"` ET un motif, dans la table nommée."""
+    corps = re.search(rf'<table id="{table}"[^>]*>(.*?)</thead>', page, re.S)
+    assert corps, f"la table {table} manque à la page de recette"
+    entetes = re.findall(r"<th\b([^>]*)>([^<]*)</th>", corps.group(1))
+
+    for libelle in _CLES_DU_TABLEAU_DE_BORD[table]:
+        attributs = [a for a, texte in entetes if texte == libelle]
+        assert attributs, f"colonne « {libelle} » absente de {table}"
+        assert 'data-filter-col="off"' in attributs[0], (table, libelle)
+        assert re.search(r'data-filter-reason="[^"]{10,}"', attributs[0]), (table, libelle)
+
+
+@pytest.mark.skipif(not ORACLE.exists(), reason="quality-oracles absent du poste")
+def test_oracle_filtres_tableau_ne_rend_aucun_G13_sur_le_dashboard(
+    page: str, tmp_path: Path
+) -> None:
+    """Fixture verte : le juge externe, sur la page de recette, ne lève plus d'avertissement.
+    La page portait 10 G13 (constat, action, risque, élément, raison, localisation, référence,
+    attendu) avant TF-2292."""
+    assert "G13" not in _regles_de_l_oracle(page, tmp_path)
+
+
+@pytest.mark.skipif(not ORACLE.exists(), reason="quality-oracles absent du poste")
+def test_une_colonne_a_une_valeur_par_ligne_rend_G13_tant_qu_elle_reste_dans_la_facette(
+    tmp_path: Path,
+) -> None:
+    """Fixture rouge, puis remède joué : sans déclaration, la colonne « référence » (une valeur
+    par ligne, 10 lignes) lève G13 ; avec `colonnes_hors_facette`, la même table n'en lève plus.
+    Prouve que le test précédent n'est pas vide."""
+    lignes = [[f"réf-{i}", "ok" if i % 2 else "ko"] for i in range(10)]
+
+    sans = dash._tableau(["référence", "état"], lignes, outille_force=True, identifiant="t")
+    avec = dash._tableau(
+        ["référence", "état"], lignes, outille_force=True, identifiant="t",
+        colonnes_hors_facette={"référence": "clé unique par ligne : la recherche suffit"},
+    )
+
+    assert "G13" in _regles_de_l_oracle(sans, tmp_path)
+    assert "G13" not in _regles_de_l_oracle(avec, tmp_path)
+
+
 def test_le_dashboard_reste_DETERMINISTE(page: str) -> None:
     """Les identifiants dérivés du contenu ne doivent pas faire diverger deux rendus du même
     rapport : le sceau des livrables en dépend."""
