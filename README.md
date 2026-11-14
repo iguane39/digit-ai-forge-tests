@@ -1146,7 +1146,7 @@ verts** (dont un dormant depuis le 12/08), et divisé par six la durée de la su
 | 3 | 1 | une **course** — la classe la plus coûteuse à retrouver plus tard |
 | 4 | 0 | trois passages verts consécutifs |
 
-**69 % des anomalies n'existaient pas au tour 1.** Un mandat qui s'arrête au rapport en manque
+**10 anomalies sur 14 (71 %) n'existaient pas au tour 1.** Un mandat qui s'arrête au rapport en manque
 4 sur 4 ; un mandat qui s'arrête après avoir corrigé une fois en laisse 10 sur 14 et rend une
 suite rouge. Une clôture au tour 2 aurait livré la course du tour 3.
 
