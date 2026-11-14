@@ -342,7 +342,7 @@ def controles(cible: Path, sessions: list[dict], specs: list[Path]) -> list[Find
         findings.append(
             Finding(
                 id=identifiant,
-                classe=classes.MATRICE_DES_DROITS,
+                classe=classes.IDENTITES_DE_ROLES_MANQUANTES,
                 localisation=FICHIER,
                 message=(
                     f"le produit declare {len(profils)} role(s) et l audit n en outille que "

@@ -116,6 +116,10 @@ RESSOURCE_REFERENCEE_ABSENTE = "ressource-referencee-absente"
 
 # --- Matrice des droits et recette multi-profils (TF-0343 / TF-0342) ----------------------------
 MATRICE_DES_DROITS = "matrice-des-droits"
+# TF-2294 : un rôle déclaré sans session. Le geste est de l'utilisateur (fournir une identité par
+# rôle), pas du développeur : une classe par destinataire, `matrice-des-droits` gardant les
+# constats qui se ferment dans la suite du produit.
+IDENTITES_DE_ROLES_MANQUANTES = "identites-de-roles-manquantes"
 
 # --- Jeu du parcours d'un persona sous l'identité de son rôle (TF-2123) --------------------------
 # Une route que le parcours du persona navigue est refusée à son rôle, renvoie vers la mire de

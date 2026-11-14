@@ -11,6 +11,23 @@ existent réellement et se confondent tout le temps :
     faire : fournir un identifiant, servir une instance peuplée, valider qu un rendu modifié
     est bien le rendu voulu. Aucun agent ne peut se substituer à lui.
 
+**La règle du destinataire (TF-2294, écrite pour que les 28 classes de TF-2285 se relisent contre
+elle) :**
+
+  1. `manuelle_utilisateur` quand la suite se ferme par un geste que le code du produit ne
+     contient pas — une identité, une instance, un déploiement, un arbitrage — et que seul
+     l humain qui exploite le produit détient. L étape est alors `mep-config` ou `design`, jamais
+     `development` ni `tests-suite` ;
+  2. `auto_ia` quand le constat nomme la source qui fait foi et que cette source dicte la
+     correction sans choix de conception ni secret : la ligne à retirer, l argument à passer ;
+  3. `manuelle_dev` pour tout le reste : la suite se ferme par une modification du code, de la
+     suite de tests ou de la déclaration du produit, et il faut choisir laquelle.
+
+Une classe dont les constats se ferment par les gestes de destinataires DIFFÉRENTS se scinde, une
+classe par destinataire : une règle unique imposerait à l un le geste de l autre (`matrice-des-
+droits` et `identites-de-roles-manquantes`). `tests/test_tf_2294_destinataires.py` tient cette
+règle et la relecture des 28 classes.
+
 Et cinq étapes cibles, qui disent OÙ la correction atterrit : `development`, `tests-suite`,
 `design`, `mep-config`, et `forge` — cette dernière étant réservée au défaut d AUDITEUR : la
 forge ne sait pas classer, ou n a pas d adaptateur. Un défaut de la forge se nomme comme les
@@ -354,17 +371,24 @@ _REGLES: dict[str, tuple[str, str, str]] = {
         "SIGNALÉ, non bloquant ({message})",
     ),
     # --- Matrice des droits (TF-0343 / TF-0342) ---------------------------------------------------
-    # Une seule suite pour la classe : la cellule manquante (refus ou succès) s'écrit dans la suite
-    # du produit. Le constat « rôle sans identité » (`qualif:multi-profils:identites-manquantes`)
-    # relève de la même classe et demande en plus une session par rôle : son message nomme la
-    # variable (FORGE_TESTS_QUALIF_STORAGE_STATES), la suite d'action reste celle du développeur
-    # tant que la classe ne se scinde pas.
+    # Deux classes, deux destinataires (TF-2294). La cellule manquante (refus ou succès), la matrice
+    # illisible et l'absence de coexistence s'écrivent dans la suite du produit : le développeur.
     "matrice-des-droits": (
         "manuelle_dev",
         "tests-suite",
         "compléter la matrice des droits pour « {id} » : ajouter la cellule manquante (profil "
         "refusé ou profil autorisé) ou déclarer la garde ouverte à tous avec son motif ; un "
         "produit à rôles se vérifie sous une identité par rôle, pas sous une seule ({message})",
+    ),
+    # Le constat « rôle sans identité » (`qualif:multi-profils:identites-manquantes`) ne s'écrit
+    # dans aucune suite : il demande un compte par rôle, que seul qui tient les comptes fournit.
+    "identites-de-roles-manquantes": (
+        "manuelle_utilisateur",
+        "mep-config",
+        "fournir une session par RÔLE déclaré pour « {id} » (FORGE_TESTS_QUALIF_STORAGE_STATES = "
+        "« role=chemin », virgule) puis `--reprendre` : un produit à rôles n'est pas vérifiable "
+        "sous une identité unique, et aucun agent ne peut ouvrir un compte à la place de qui "
+        "les tient ({message})",
     ),
     # --- Instance servie et surface appelée (qualif, interface) -----------------------------------
     "etat-perdu-a-la-navigation": (
