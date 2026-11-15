@@ -210,7 +210,7 @@ def _specs(cible: Path) -> list[Path]:
         for chemin in sorted(cible.rglob("*"))
         if chemin.is_file()
         and chemin.name.endswith(SUFFIXES_SPEC)
-        and "node_modules" not in chemin.parts
+        and "node_modules" not in exclusions.parties_du_projet(chemin, cible)  # TF-2577
         and not exclusions.ignore_par_git(chemin, cible)  # TF-1767
         and not exclusions.non_suivi_par_git(chemin, cible)  # TF-2134
     ]
@@ -647,7 +647,8 @@ def cle_de_relecture_separee_de_la_session(cible: Path) -> list[Finding]:
     configs = [
         chemin
         for chemin in sorted(cible.rglob("*"))
-        if chemin.is_file() and chemin.name in _CONFIGS and "node_modules" not in chemin.parts
+        if chemin.is_file() and chemin.name in _CONFIGS
+        and "node_modules" not in exclusions.parties_du_projet(chemin, cible)  # TF-2577
         and not exclusions.ignore_par_git(chemin, cible)  # TF-1767
         and not exclusions.non_suivi_par_git(chemin, cible)  # TF-2134
     ]
@@ -722,7 +723,7 @@ def _fichiers_de_test(cible: Path) -> list[Path]:
     """Les suites de navigateur ET les suites Python — pour la règle (9) seulement."""
     fichiers = list(_specs(cible))
     for chemin in sorted(cible.rglob("*.py")):
-        if "node_modules" in chemin.parts or ".venv" in chemin.parts:
+        if {"node_modules", ".venv"} & set(exclusions.parties_du_projet(chemin, cible)):  # TF-2577
             continue
         if exclusions.ignore_par_git(chemin, cible):  # TF-1767
             continue

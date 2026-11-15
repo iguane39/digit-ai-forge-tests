@@ -30,7 +30,7 @@ import xml.etree.ElementTree as ET
 from functools import lru_cache
 from pathlib import Path
 
-from forge_tests import execution
+from forge_tests import exclusions, execution
 from forge_tests.junit import JunitIllisible, depuis_junit
 from forge_tests.noyau import Essai
 
@@ -63,7 +63,10 @@ def _scripts(cible: Path) -> list[Path]:
     racine = cible / DOSSIER
     if not racine.is_dir():
         return []
-    return sorted(p for p in racine.rglob("*.mjs") if "node_modules" not in p.parts)
+    return sorted(
+        p for p in racine.rglob("*.mjs")
+        if "node_modules" not in exclusions.parties_du_projet(p, cible)  # TF-2577
+    )
 
 
 def inventaire(cible: Path) -> list[str]:

@@ -311,25 +311,34 @@ def _texte(chemin: Path) -> str:
         return ""
 
 
-def est_un_prompt(chemin: Path) -> bool:
+def _dossiers_du_chemin(chemin: Path, cible: Path | None) -> set[str]:
+    """Les noms de dossier du chemin, en minuscules. Avec `cible` (TF-2577), seuls ceux du
+    PROJET comptent : le dossier où le clone est posé ne dit rien de ce que le fichier est."""
+    parties = chemin.parent.parts if cible is None else exclusions.parties_du_projet(
+        chemin.parent, cible
+    )
+    return {partie.lower() for partie in parties}
+
+
+def est_un_prompt(chemin: Path, cible: Path | None = None) -> bool:
     """Le fichier est-il un prompt ADRESSABLE ? Trois formes reconnues, aucune devinée."""
     nom = chemin.name
     if chemin.suffix.lower() == _SUFFIXE_PROMPT or nom.lower().endswith(_DOUBLE_SUFFIXE_PROMPT):
         return True
     if nom in _NOMS_PROMPT:
         return True
-    dossiers = {partie.lower() for partie in chemin.parent.parts}
+    dossiers = _dossiers_du_chemin(chemin, cible)
     return bool(dossiers & set(_DOSSIERS_PROMPT)) and chemin.suffix.lower() in (
         _EXTENSIONS_EN_DOSSIER
     )
 
 
-def est_un_corpus(chemin: Path) -> bool:
+def est_un_corpus(chemin: Path, cible: Path | None = None) -> bool:
     """Le fichier porte-t-il des cas (question / réponse attendue) ?"""
     nom = chemin.name.lower()
     if nom.endswith(_SUFFIXES_CORPUS) or nom in _NOMS_CORPUS:
         return True
-    dossiers = {partie.lower() for partie in chemin.parent.parts}
+    dossiers = _dossiers_du_chemin(chemin, cible)
     return bool(dossiers & set(_DOSSIERS_CORPUS)) and chemin.suffix.lower() in _EXTENSIONS_CORPUS
 
 
@@ -406,7 +415,7 @@ def _collecte(cible: Path) -> dict:
             continue
         relatif = _relatif(chemin, cible)
 
-        if est_un_prompt(chemin):
+        if est_un_prompt(chemin, cible):
             prompts[f"prompt:{relatif}"] = (chemin, str(chemin))
             declare = _DECLARE_CORPUS.search(texte)
             if declare:
@@ -417,7 +426,7 @@ def _collecte(cible: Path) -> dict:
             for nom, _valeur in _constantes_de_prompt(chemin, texte):
                 prompts[f"prompt:{relatif}:{nom}"] = (chemin, str(chemin))
 
-        if est_un_corpus(chemin):
+        if est_un_corpus(chemin, cible):
             cas.extend(_cas(texte))
 
         for nom in modeles_cites(texte):
@@ -597,7 +606,7 @@ _CONFIG_DE_TEST = re.compile(
 _DEBUT_DE_COMMENTAIRE = ("#", "//", "*", "/*")
 
 
-def est_un_fichier_de_test(chemin: Path) -> bool:
+def est_un_fichier_de_test(chemin: Path, cible: Path | None = None) -> bool:
     """Nommage d un fichier de TEST : `test_*.py`, `*_test.py`, `*.test.*`, `*.spec.*`.
 
     Un fichier sous `__tests__/` compte pour JavaScript et TypeScript. Un fichier d aide qui ne
@@ -607,7 +616,8 @@ def est_un_fichier_de_test(chemin: Path) -> bool:
     if extension == ".py":
         return nom.startswith("test_") or chemin.stem.endswith("_test")
     if extension in _EXTENSIONS_JAVASCRIPT:
-        return bool(_TEST_JAVASCRIPT.search(nom)) or "__tests__" in chemin.parts
+        parties = chemin.parts if cible is None else exclusions.parties_du_projet(chemin, cible)
+        return bool(_TEST_JAVASCRIPT.search(nom)) or "__tests__" in parties
     return False
 
 
@@ -647,7 +657,7 @@ def _findings_appels_reels(cible: Path) -> list[Finding]:
     findings: list[Finding] = []
     memo: dict[Path, bool] = {}
     for chemin in _fichiers(cible):
-        if not est_un_fichier_de_test(chemin):
+        if not est_un_fichier_de_test(chemin, cible):
             continue
         texte = _texte(chemin)
         if not texte or est_un_artefact_d_auditeur(texte):
@@ -774,11 +784,11 @@ def _non_suivis_porteurs(cible: Path) -> list[str]:
         if not texte or est_un_artefact_d_auditeur(texte):
             continue
         if (
-            est_un_prompt(chemin)
-            or est_un_corpus(chemin)
+            est_un_prompt(chemin, cible)
+            or est_un_corpus(chemin, cible)
             or modeles_cites(texte)
             or (chemin.suffix.lower() == ".py" and _constantes_de_prompt(chemin, texte))
-            or (est_un_fichier_de_test(chemin) and _APPEL_FOURNISSEUR.search(texte))
+            or (est_un_fichier_de_test(chemin, cible) and _APPEL_FOURNISSEUR.search(texte))
         ):
             trouves.append(_relatif(chemin, cible))
     return trouves

@@ -662,7 +662,7 @@ def _routes_next(cible: Path) -> list[str]:
     """
     routes: list[str] = []
     for fichier in _fichiers(cible, _EXTENSIONS_ROUTE):
-        parties = fichier.parts
+        parties = exclusions.parties_du_projet(fichier, cible)  # TF-2577
         if fichier.stem == "page" and "app" in parties:
             rang = len(parties) - 1 - parties[::-1].index("app")
             segments = _segments_next(parties[rang + 1:-1])
@@ -789,7 +789,7 @@ def _locale_par_configuration(cible: Path) -> bool:
     return any(
         partie in _SEGMENTS_DYNAMIQUES_LOCALE
         for fichier in _fichiers(cible, _EXTENSIONS_ROUTE)
-        for partie in fichier.parts
+        for partie in exclusions.parties_du_projet(fichier, cible)  # TF-2577
     )
 
 

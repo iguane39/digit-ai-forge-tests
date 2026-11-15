@@ -102,8 +102,7 @@ def _configs(cible: Path) -> list[Path]:
         for chemin in sorted(cible.rglob("*"))
         if chemin.is_file()
         and chemin.name in CONFIGS
-        and "node_modules" not in chemin.parts
-        and ".venv" not in chemin.parts
+        and not {"node_modules", ".venv"} & set(exclusions.parties_du_projet(chemin, cible))
         and not exclusions.ignore_par_git(chemin, cible)  # TF-1767
         and not exclusions.non_suivi_par_git(chemin, cible)  # TF-2134
     ]

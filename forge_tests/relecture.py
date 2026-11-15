@@ -66,7 +66,7 @@ def _fichiers_modeles(cible: Path) -> list[Path]:
         return []
     return [
         f for f in sorted(cible.rglob("*.py"))
-        if not (IGNORES & {p.name for p in f.parents})
+        if not (IGNORES & set(exclusions.parties_du_projet(f.parent, cible)))  # TF-2577
         and not exclusions.ignore_par_git(f, cible)  # TF-1767
         and not exclusions.non_suivi_par_git(f, cible)  # TF-2134
     ]

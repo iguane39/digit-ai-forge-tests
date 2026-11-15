@@ -57,7 +57,7 @@ def _fichiers(cible: Path, suffixes: tuple[str, ...]) -> list[Path]:
     return [
         f for f in sorted(cible.rglob("*"))
         if f.is_file() and f.suffix.lower() in suffixes
-        and not (IGNORES & {p.name for p in f.parents})
+        and not (IGNORES & set(exclusions.parties_du_projet(f.parent, cible)))  # TF-2577
         and not exclusions.ignore_par_git(f, cible)  # TF-1767
         and not exclusions.non_suivi_par_git(f, cible)  # TF-2134
     ]

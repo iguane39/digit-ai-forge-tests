@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from forge_tests import classes
+from forge_tests import classes, exclusions
 
 # « NA » (sans objet) — décision humaine du 14/08 : « les pans qui n'ont pas de périmètre dans
 # un projet doivent ressortir en Non Applicable lors des tests, puisqu'il n'y a rien à tester ».
@@ -73,15 +73,22 @@ class Element:
 FAMILLES_ENTRANTES = ("input",)
 
 
-def provenance_de(source: str | Path) -> str:
+def provenance_de(source: str | Path, racine: str | Path | None = None) -> str:
     """`entrant` si le chemin traverse une famille d entrants declaree, `produit` sinon.
 
     Deduite du CHEMIN et non d une liste tenue a la main : une famille ajoutee a la convention
     profite a tous les pans sans qu un adaptateur change. Le sens de l erreur est voulu — ce qui
     n est pas reconnu comme entrant reste `produit`, donc COMPTE dans la couverture : mieux vaut
     exiger a tort la couverture d un fichier recu que de dispenser a tort celle d un livrable.
+
+    Avec `racine` (TF-2577), seuls les segments SOUS le projet comptent : un projet pose sous un
+    dossier `input` n est pas un entrant, ce sont ses propres sous-dossiers qui le disent.
     """
-    parties = {p.lower() for p in Path(str(source)).parts}
+    chemin = Path(str(source))
+    parties = {
+        p.lower()
+        for p in (chemin.parts if racine is None else exclusions.parties_du_projet(chemin, racine))
+    }
     return "entrant" if parties & {f.lower() for f in FAMILLES_ENTRANTES} else "produit"
 
 
@@ -284,7 +291,7 @@ def evaluer_surface(
     # client est un reproche qu il ne peut pas honorer, et le compter comme couvert est pire —
     # c est le « ratio 1,0 » qui a fait passer un audit pour vert.
     def _provenance(e: Element) -> str:
-        return e.provenance or provenance_de(e.source)
+        return e.provenance or provenance_de(e.source, cible)
 
     entrants = [e for e in inventaire if _provenance(e) == "entrant"]
     produits = [e for e in inventaire if _provenance(e) != "entrant"]

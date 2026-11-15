@@ -6,7 +6,7 @@ import ast
 import re
 from pathlib import Path
 
-from forge_tests import classes
+from forge_tests import classes, exclusions
 from forge_tests.application import refus_designation
 from forge_tests.disposition import paquet_sources
 from forge_tests.execution import (
@@ -343,7 +343,10 @@ def _fichiers_sources(cible: Path) -> list[Path]:
     racine = paquet_sources(cible) or cible / "backend" / "app"
     if not racine.is_dir():
         return []
-    return sorted(p for p in racine.rglob("*.py") if "__pycache__" not in p.parts)
+    return sorted(
+        p for p in racine.rglob("*.py")
+        if "__pycache__" not in exclusions.parties_du_projet(p, cible)  # TF-2577
+    )
 
 
 def _divergences_gardes(

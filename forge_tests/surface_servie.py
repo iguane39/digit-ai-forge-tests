@@ -95,7 +95,7 @@ def _fichiers(
     return [
         f for f in sorted(racine.rglob("*"))
         if f.is_file() and f.suffix.lower() in suffixes
-        and not (interdits & {p.name for p in f.parents})
+        and not (interdits & set(exclusions.parties_du_projet(f.parent, racine)))  # TF-2577
         and not exclusions.ignore_par_git(f, racine)  # TF-1767
         and not (suivis_seulement and exclusions.non_suivi_par_git(f, racine))  # TF-2134
     ]

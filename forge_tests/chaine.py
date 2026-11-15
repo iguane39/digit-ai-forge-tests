@@ -47,6 +47,8 @@ import tomllib
 from pathlib import Path
 from typing import Protocol
 
+from forge_tests import exclusions
+
 _MOTIFS_SUITE = ("test_*.py", "*_test.py")
 _EXCLUS = {".venv", "venv", "__pycache__", "node_modules", ".git", "vendor", "build", "dist"}
 
@@ -75,8 +77,9 @@ class Executeur(Protocol):
     def __call__(self, args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]: ...
 
 
-def _exclu(chemin: Path) -> bool:
-    return any(part in _EXCLUS for part in chemin.parts)
+def _exclu(chemin: Path, racine: Path) -> bool:
+    # TF-2577 : les segments du dépôt, pas ceux du chemin où il est posé
+    return any(part in _EXCLUS for part in exclusions.parties_du_projet(chemin, racine))
 
 
 def _testpaths(racine: Path) -> list[str]:
@@ -107,7 +110,7 @@ def suites_du_depot(racine: Path) -> list[Path]:
             continue
         for motif in _MOTIFS_SUITE:
             trouves.update(
-                p.resolve() for p in base.rglob(motif) if p.is_file() and not _exclu(p)
+                p.resolve() for p in base.rglob(motif) if p.is_file() and not _exclu(p, racine)
             )
     return sorted(trouves)
 
