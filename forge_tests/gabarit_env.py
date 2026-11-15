@@ -96,7 +96,8 @@ def cles_connues(racine_forge: Path | str | None = None) -> list[str]:
     base = Path(racine_forge) if racine_forge else Path(__file__).parent
     cles: set[str] = set()
     for source in base.rglob("*.py"):
-        if "__pycache__" in source.parts:
+        # TF-2583 : les segments du paquet lu, pas ceux du dossier où il est posé.
+        if "__pycache__" in source.relative_to(base).parts:
             continue
         try:
             cles |= set(_CLE.findall(source.read_text(encoding="utf-8")))
