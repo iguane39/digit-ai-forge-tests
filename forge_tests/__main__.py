@@ -40,6 +40,12 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     # (`forge/etapes/tests/audit.env`), plus dans la transcription de la session qui l a pose.
     charger_env(cible)
 
+    # TF-2661 — le décompte des objets métier de l instance, pris AVANT le premier pan : la
+    # campagne crée des données, et seul l écart avant/après dit ce qu elle laisse derrière elle.
+    from forge_tests import residus_instance as _residus
+
+    _decompte_avant = _residus.avant(cible)
+
     # TF-0096 (contrat TF-0094 du pilot) : un audit n'est plus silencieux — chaque pan est
     # une unité nommée, émise toutes les 3 min (stderr + <cible>/forge/avancement.jsonl si
     # le dossier de run existe ; jamais de création dans un projet audité sans forge/).
@@ -54,6 +60,7 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
         sorties.append(module.analyser(cible))
         av.unite_finie(module.PAN)
     av.final()
+    _residus_instance = _residus.au_rapport(_decompte_avant, cible)
     # RT-6a — point d application UNIQUE : ce qu aucune execution ne pouvait atteindre FAUTE DE
     # CONFIGURATION est nomme ici, pour tous les adaptateurs, avec les champs a fournir.
     qualifier(sorties, cible, REGISTRE)
@@ -104,6 +111,7 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
     rap = rapport(sorties, PANS_ATTENDUS, pour_couvrir=chemins,
                   essais=_essais,
                   scripts_node=_section_scripts,
+                  residus_instance=_residus_instance,
                   instance=instance_au_rapport(cible),
                   boucle=_boucle.verdict(_boucle.lire(cible)),
                   gabarit_env={**_depot, "protection_gitignore": _protection},

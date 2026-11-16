@@ -1308,6 +1308,30 @@ Le format de provenance n'est **pas** propre à cette forge : le scellé `forge-
 
 La section `instance` du rapport est **toujours présente**, même sans instance déclarée — une section qui disparaîtrait serait indiscernable d'une section qui a mesuré et n'a rien trouvé. La confrontation rend les **trois issues** de l'écart servi ↔ versionné (TF-0288), généralisé de la page à l'instance entière : `concordant` · `divergent`, l'écart nommé fichier par fichier et la phrase qui compte (*ce n'est pas le code qui est en retard, c'est l'instance*) · `non_determinable`, en disant **lequel** des deux termes manque. La comparaison n'est pas symétrique, et c'est déclaré : un fichier neuf que l'empreinte ne connaît pas ne déclenche rien.
 
+### Ce qu'une campagne laisse sur l'instance (TF-2661)
+
+*Produit-82, 13/11/2026 : la suite du produit, rejouée à chaque déploiement sur la base réelle de
+la recette, créait organisations et identités sans les effacer — 315 organisations et 465
+identités non marquées, et aucun contrôle ne comparait l'état de l'instance avant et après.*
+
+La forge joue le contrôle ; le **décompte est celui du produit**, seul à savoir ce que sont ses
+objets métier. Il déclare `FORGE_TESTS_INSTANCE_DECOMPTE` : une commande, lancée depuis la racine
+auditée sans interpréteur de commandes, qui imprime un objet JSON d'entiers positifs ou nuls :
+
+```json
+{"organisations": 315, "identites": 465}
+```
+
+La forge la joue **avant le premier pan** et **après le dernier**. Le rapport porte la section
+`residus_instance`, toujours présente, avec quatre issues : `conforme` (deux décomptes identiques) ·
+`residus` (au moins un objet dont le compte a changé : **verdict FAIL**, chaque objet nommé avec son
+compte avant, après et son écart — un objet qui disparaît est un écart comme un objet qui apparaît)
+· `non_mesure` (décompte absent ou illisible, ou instance hébergée sans commande déclarée : le
+motif est publié, le verdict ne change pas) · `sans_objet` (aucune commande et aucune instance
+hébergée : une instance locale se jette avec sa campagne). Un FAIL ne s'invente pas sur une mesure
+manquante, et un silence ne se lit pas « conforme ». L'écart est mesuré sur l'instance, pas attribué :
+un tiers qui y écrit pendant la campagne s'y lirait aussi, et le rapport le dit.
+
 ### Application ASGI — pan `api`
 
 | Convention | Effet si elle n'est pas tenue |

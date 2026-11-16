@@ -426,6 +426,7 @@ def rapport(
     gabarit_env: dict | None = None,
     vendorisation: list[dict] | None = None,
     scripts_node: dict | None = None,
+    residus_instance: dict | None = None,
 ) -> dict:
     """Assemble le rapport. Un pan sans adaptateur est NOMME, jamais omis.
 
@@ -536,6 +537,7 @@ def rapport(
             | set(NON_JUGE_RISQUE)
             | set(_mention_essais_non_executes(essais_non_executes))
             | set((scripts_node or {}).get("non_juge", []))
+            | set((residus_instance or {}).get("non_juge", []))
         ),
         # TF-0146 — détail test-par-test. Présente même sans `essais` fourni : `fourni: False`
         # dit explicitement « non mesuré ici », jamais confondu avec « mesuré, rien à signaler ».
@@ -566,6 +568,15 @@ def rapport(
             "motif": "section non alimentée par cet appelant (`rapport(..., scripts_node=...)`) "
                      "— les scripts Node du produit n ont pas été inventoriés",
         },
+        # TF-2661 — le décompte des objets métier de l instance, avant et après la campagne. Section
+        # toujours présente : « non mesuré » se lit, il ne se confond pas avec « rien laissé ».
+        "residus_instance": residus_instance if residus_instance is not None else {
+            "statut": "non_mesure", "verdict": None, "commande": None, "avant": None,
+            "apres": None, "ecarts": [], "non_juge": [],
+            "motif": "section non alimentée par cet appelant "
+                     "(`rapport(..., residus_instance=...)`) — l état de l instance n a pas été "
+                     "confronté avant et après la campagne",
+        },
         "verdict": (
             "PARTIEL"
             if non_couverts or essais_non_executes
@@ -573,6 +584,7 @@ def rapport(
                 "FAIL"
                 if any(s.verdict == "FAIL" for s in sorties)
                 or (scripts_node or {}).get("echecs")
+                or (residus_instance or {}).get("statut") == "residus"
                 else "PASS"
             )
         ),
