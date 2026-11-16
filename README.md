@@ -948,6 +948,51 @@ déclaré, rien de jugé, et le rapport le dit ; une borne sans `source` ni `ver
 déclare comme une approche de la largeur réelle. Recette à double sens :
 `tests/test_tf_1318_dimensionnement_serp.py`.
 
+### Site rendu côté serveur : l'export statique (TF-2670)
+
+Le pan lit un **dossier de pages**, jamais un serveur. Un site rendu côté serveur (FastAPI et
+gabarits, contenus en Markdown…) n'en émet pas : sans catalogue de chaînes JSON, le pan sort en
+SKIP, et son motif renvoie ici. *Mesuré le 16/11/2026 sur le site public d'un produit : aucun dossier
+construit, aucune route déclarée, donc aucune parité jugée.* La recette tient en trois gestes, tous
+chez le produit :
+
+1. **Déclarer les routes** de chaque locale dans le fichier de `FORGE_TESTS_I18N_ROUTES`
+   (`{"fr": ["/", "/tarifs"], "en": ["/en", "/en/pricing"]}`) : le pan juge déjà leur parité sans
+   build.
+2. **Exporter** : un script du produit appelle l'application **en process** (le `TestClient` de
+   FastAPI, aucun réseau, aucun navigateur) pour chaque route déclarée et écrit la réponse HTML
+   dans `<dossier>/<locale>/<route>/index.html` — la locale par défaut sans préfixe, les autres
+   préfixées (`out/en/pricing/index.html`).
+3. **Désigner le dossier** : `FORGE_TESTS_I18N_BUILD=out`. Le dossier d'export est un artefact : le
+   produit le régénère avant l'audit et ne le versionne pas (`.gitignore`).
+
+Le pan juge alors, sur ce dossier, la parité de routes et de navigation et la langue du contenu,
+comme sur un build statique. L'export est le **produit** de la forge du site, pas de cette forge :
+elle ne monte pas l'application et n'écrit rien chez l'audité (G-1).
+
+### Une traduction dont la source a changé (TF-2670)
+
+Une page traduite à partir d'une source qui a changé depuis est bien formée, servie, et fausse :
+aucune arborescence ne le montre. Le produit déclare, pour chaque traduction, sa **source** et
+l'**empreinte** qu'avait cette source quand la traduction a été faite, dans un fichier JSON versionné
+désigné par `FORGE_TESTS_I18N_PEREMPTION` :
+
+```json
+{"traductions": [
+  {"traduction": "contenu/en/tarifs.md", "source": "contenu/fr/tarifs.md",
+   "empreinte": "<sha256 de la source au moment de la traduction>"}
+]}
+```
+
+Les chemins sont relatifs à la racine auditée ; un chemin qui en sort n'est pas lu. L'empreinte se
+calcule par `python -m forge_tests.peremption_i18n contenu/fr/tarifs.md`, fins de ligne
+normalisées (un dépôt extrait sous Windows ne périme pas tout d'un coup). Le pan recalcule
+l'empreinte de chaque source : si elle diffère, constat `i18n:peremption:<traduction>` qui nomme la
+source et les deux empreintes ; une source ou une traduction introuvable en est un aussi. On
+re-scelle en retraduisant, puis en recopiant l'empreinte. Le contrôle dit que la source a changé,
+**jamais** que la traduction est fausse : une virgule corrigée la périme aussi, et le projet juge,
+d'un geste, qu'elle dit toujours la même chose. Rien de déclaré, rien de jugé, et le rapport le dit.
+
 ## Lecture du SQL — filtrer avant de découper
 
 Un `;` posé **dans un commentaire** de migration fabriquait une instruction qui n'avait jamais

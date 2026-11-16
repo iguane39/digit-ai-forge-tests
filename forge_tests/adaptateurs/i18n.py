@@ -41,6 +41,7 @@ from forge_tests import catalogue_i18n as _catalogue
 from forge_tests import classes, exclusions, seuils
 from forge_tests import glossaire as _glossaire
 from forge_tests import orphelins as _orphelins
+from forge_tests import peremption_i18n as _peremption
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
 
@@ -61,7 +62,12 @@ POUR_COUVRIR = (
     "LEVÉE PARTIELLE le 23/08 (TF-0470) : les routes attendues par locale se DÉCLARENT dans un "
     "fichier JSON versionné désigné par FORGE_TESTS_I18N_ROUTES — la parité entre locales est "
     "alors jugée SANS arborescence, et le déclaré est confronté au servi quand un build existe. "
-    "Rien de déclaré, rien de jugé"
+    "SITE RENDU CÔTÉ SERVEUR (FastAPI, contenus Markdown…, TF-2670) : exécuter un export statique, "
+    "c'est-à-dire un script du produit qui appelle l'application en process pour chaque route "
+    "déclarée et écrit le HTML dans un dossier (`out/<locale>/<route>/index.html`, locale par "
+    "défaut sans préfixe), puis désigner ce dossier dans FORGE_TESTS_I18N_BUILD — recette dans le "
+    "README, section « Site rendu côté serveur ». Une TRADUCTION PÉRIMÉE (sa source a changé) se "
+    "déclare dans FORGE_TESTS_I18N_PEREMPTION. Rien de déclaré, rien de jugé"
 )
 
 # Chapitre(s) de cahier de tests que ce pan alimente. Le cahier et le dashboard les
@@ -1295,6 +1301,18 @@ def analyser(cible: Path) -> SortieAdaptateur:
             "Rien de declare, rien de juge — le pan ne devine pas les routes d un produit"
         )
 
+    # TF-2670 — la PÉREMPTION se juge aussi sans build : une traduction dont la source a changé
+    # est bien formée, servie, et fausse ; aucune arborescence ne le montre.
+    constats_peremption, motifs_peremption, peremption_declaree = _peremption.constats(cible)
+    non_juge.extend(motifs_peremption)
+    findings_peremption = [
+        Finding(
+            id=identifiant, classe=classes.I18N, localisation=localisation, message=message,
+            severite="signale", risque=coter(PAN, identifiant, str(cible)),
+        )
+        for identifiant, localisation, message in constats_peremption
+    ]
+
     # (l) TF-1318 — les bornes SERP se LISENT d'abord : sans build, le rapport doit pouvoir dire
     # qu'elles étaient déclarées et n'ont pas été jouées, plutôt que se taire.
     bornes, motif_bornes = bornes_serp()
@@ -1308,7 +1326,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
                    "`title` et `description` se mesurent sur les pages servies")
             )
         catalogue_a_parle = any("catalogue `" in m for m in motifs_catalogue)
-        if findings_catalogue or findings_routes or catalogue_a_parle:
+        if findings_catalogue or findings_routes or catalogue_a_parle or peremption_declaree:
             # Le catalogue a parle : le pan MESURE, meme sans build. Le build reste nomme comme
             # ce qui manque pour juger la parite de routes et la langue servie.
             non_juge.append(
@@ -1319,8 +1337,9 @@ def analyser(cible: Path) -> SortieAdaptateur:
             )
             return SortieAdaptateur(
                 NOM, PAN, str(cible),
-                "FAIL" if (findings_catalogue or findings_routes) else "PASS",
-                findings=[*findings_catalogue, *findings_routes],
+                "FAIL" if (findings_catalogue or findings_routes or findings_peremption)
+                else "PASS",
+                findings=[*findings_catalogue, *findings_routes, *findings_peremption],
                 non_juge=non_juge,
             )
         motif = sans_objet(cible)
@@ -1335,7 +1354,11 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 "i18n : produit multilingue par ses sources, mais AUCUN build servi lu NI "
                 "catalogue de chaines JSON par locale — "
                 f"declarer le dossier construit dans FORGE_TESTS_I18N_BUILD (cherche : "
-                f"{', '.join(DOSSIERS_BUILD)} sous {cible})",
+                f"{', '.join(DOSSIERS_BUILD)} sous {cible}). Un site rendu côté serveur (FastAPI, "
+                "contenus Markdown…) n'émet aucune arborescence : le pan ne le mesure qu'après un "
+                "export statique — un script du produit qui appelle l'application en process pour "
+                "chaque route et écrit le HTML dans un dossier, désigné ensuite dans "
+                "FORGE_TESTS_I18N_BUILD. Recette : README, section « Site rendu côté serveur »",
             ],
         )
 
@@ -1369,7 +1392,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     )
     non_juge.extend(f"i18n : {motif}" for motif in motifs_lexique)
 
-    findings: list[Finding] = []
+    findings: list[Finding] = [*findings_peremption]
     tenus: list[str] = []
 
     # (a) PARITÉ DE ROUTES — une comparaison exacte : la route est servie dans cette locale, ou
