@@ -148,7 +148,8 @@ def test_contraste_charge_la_mesure_du_socle_sans_la_dupliquer() -> None:
         for chemin in sorted(racine.rglob("*"))
         if chemin.is_file() and chemin.suffix in {".py", ".js", ".mjs", ".json", ".md"}
         and not any(part in {".git", ".venv", "node_modules", "__pycache__",
-                             ".pytest_cache", ".ruff_cache"} for part in chemin.parts)
+                             ".pytest_cache", ".ruff_cache"}
+                             for part in chemin.relative_to(racine).parts)
         and signature in chemin.read_text(encoding="utf-8", errors="ignore")
     ]
     assert not copies, (

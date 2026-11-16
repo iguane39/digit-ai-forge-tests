@@ -41,7 +41,7 @@ def modules_non_compilables(racine: Path) -> list[tuple[str, int, str]]:
     """
     fautifs: list[tuple[str, int, str]] = []
     for chemin in sorted(racine.rglob("*.py")):
-        if "__pycache__" in chemin.parts:
+        if "__pycache__" in chemin.relative_to(racine).parts:
             continue
         try:
             ast.parse(chemin.read_text(encoding="utf-8"), filename=str(chemin))

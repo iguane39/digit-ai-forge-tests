@@ -19,13 +19,14 @@ tout accès `.parts` ou `.parents` qui ne soit pas :
 Une entrée de la liste qui ne correspond plus à aucun site est refusée elle aussi : une exemption
 qui survit à son site couvrirait le prochain.
 
-Portée : le code de la forge. `tests/` lit sa propre position
-(`Path(__file__).resolve().parents[1]`) sur des dépôts qu'il fabrique ; il reste hors du contrôle,
-comme `fixtures/` (données d'acceptation).
+Portée : le code de la forge ET `tests/` (TF-2593 : deux tests, `test_tf_0866` et `test_tf_0409`,
+jugeaient encore `chemin.parts` d'un chemin issu de `rglob`). Un accès pris sur `__file__` (la
+position du fichier depuis lui-même, par son rang : `Path(__file__).resolve().parents[1]`) est de
+structure immédiate et passe. `fixtures/` (données d'acceptation) reste hors du contrôle.
 
 Deux sens, chacun avec sa fixture : ROUGE — l'ancien code de `noyau`, de `prompts` et de `chaine`
-(avant TF-2577), et un `.parents` jugé par nom ; VERT — le correctif que le message propose
-(`exclusions.parties_du_projet`), et le dépôt tel qu'il est.
+(avant TF-2577), un `.parents` jugé par nom, et les deux sites de `tests/` d'avant TF-2593 ; VERT —
+le correctif que le message propose (`exclusions.parties_du_projet`), et le dépôt tel qu'il est.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parents[1]
 
 #: Le code de la forge : ce qui juge des chemins de projets audités.
-PAQUETS_DU_CODE = ("forge_tests", "recette")
+PAQUETS_DU_CODE = ("forge_tests", "recette", "tests")
 
 #: La source unique de l'exclusion de périmètre, seule à lire les segments d'un chemin comme tels.
 FICHIER_EXEMPTE = "forge_tests/exclusions.py"
@@ -64,6 +65,14 @@ SITES_STRUCTURE_IMMEDIATE: dict[tuple[str, str], str] = {
         "`cible not in application.parents` : le dossier d'application est-il DANS le projet ? "
         "Compare deux chemins entiers entre eux, aucun nom de dossier."
     ),
+    ("tests/test_tf_2523_exclusions_chemin_du_clone.py", "ailleurs.parts"): (
+        "`parties_du_projet(ailleurs, racine) == ailleurs.parts` : le test compare deux tuples de "
+        "segments (chemin hors de la racine rendu entier), aucun nom de dossier n'est jugé."
+    ),
+    ("tests/test_tf_2524_demon_et_cache.py", "cwd.parents"): (
+        "`cwd.parents[2]` : remonte, par son rang, du dossier d'une étape de préparation "
+        "(`fixtures/<banc>/<dossier>`) à la racine du projet ; aucun nom de dossier n'est comparé."
+    ),
     ("forge_tests/livrables/__init__.py", "depot.parents"): (
         "`racine in depot.parents` (G-1) : le dépôt des livrables est-il DANS le projet audité ? "
         "Compare deux chemins entiers entre eux, aucun nom de dossier."
@@ -84,6 +93,24 @@ def _est_un_chemin_relatif(noeud: ast.AST) -> bool:
         if noeud.func.attr == "relative_to":
             return True
         noeud = noeud.func.value
+    return False
+
+
+def _issu_de_son_fichier(noeud: ast.AST) -> bool:
+    """`Path(__file__)`, puis `.resolve()`, `.absolute()` ou `.parent` : la position du fichier."""
+    while isinstance(noeud, (ast.Call, ast.Attribute)):
+        if isinstance(noeud, ast.Call):
+            if isinstance(noeud.func, ast.Name) and noeud.func.id == "Path":
+                return (
+                    len(noeud.args) == 1
+                    and isinstance(noeud.args[0], ast.Name)
+                    and noeud.args[0].id == "__file__"
+                )
+            noeud = noeud.func
+        elif noeud.attr in ("resolve", "absolute", "parent"):
+            noeud = noeud.value
+        else:
+            return False
     return False
 
 
@@ -130,7 +157,7 @@ def sites_refuses(source: str, fichier: str) -> list[tuple[int, str]]:
         if not (isinstance(noeud, ast.Attribute) and noeud.attr in ("parts", "parents")):
             continue
         recepteur = noeud.value
-        if _est_un_chemin_relatif(recepteur):
+        if _est_un_chemin_relatif(recepteur) or _issu_de_son_fichier(recepteur):
             continue
         portee: ast.AST = noeud
         while portee in parents and not isinstance(
@@ -243,6 +270,54 @@ def test_rouge_un_nom_relatif_reaffecte_dans_une_autre_fonction_ne_couvre_pas() 
         "    return relatif.parts\n"
     )
     assert sites_refuses(source, "forge_tests/x.py") == [(6, "relatif.parts")]
+
+
+# --- TF-2593 : `tests/` est dans la portée, et les deux anciens sites y sont refusés -------------
+def test_le_controle_lit_aussi_tests() -> None:
+    assert "tests" in PAQUETS_DU_CODE
+    assert any(f.startswith("tests/") for f, _ in _sources_du_code())
+
+
+def test_rouge_l_ancien_test_0866_est_refuse() -> None:
+    """`test_tf_0866_suite_collectable.py:44` d'avant TF-2593."""
+    source = (
+        "def modules_non_compilables(racine):\n"
+        "    for chemin in sorted(racine.rglob('*.py')):\n"
+        "        if '__pycache__' in chemin.parts:\n"
+        "            continue\n"
+    )
+    assert sites_refuses(source, "tests/test_tf_0866_suite_collectable.py") == [(3, "chemin.parts")]
+
+
+def test_rouge_l_ancien_test_0409_est_refuse() -> None:
+    """`test_tf_0409_contraste_clavier.py:151` d'avant TF-2593."""
+    source = (
+        "def copies(racine):\n"
+        "    return [c for c in sorted(racine.rglob('*'))\n"
+        "            if not any(p in {'.git'} for p in c.parts)]\n"
+    )
+    assert sites_refuses(source, "tests/test_tf_0409_contraste_clavier.py") == [(3, "c.parts")]
+
+
+def test_vert_le_remede_applique_aux_deux_sites_de_tests_passe() -> None:
+    source = (
+        "def modules_non_compilables(racine):\n"
+        "    for chemin in sorted(racine.rglob('*.py')):\n"
+        "        if '__pycache__' in chemin.relative_to(racine).parts:\n"
+        "            continue\n"
+    )
+    assert sites_refuses(source, "tests/test_tf_0866_suite_collectable.py") == []
+
+
+def test_vert_la_position_du_fichier_par_son_rang_passe() -> None:
+    source = "RACINE = Path(__file__).resolve().parents[1]\n"
+    assert sites_refuses(source, "tests/test_x.py") == []
+
+
+def test_rouge_un_chemin_joint_a_la_position_du_fichier_est_refuse() -> None:
+    """Seule la position du fichier lui-même est exemptée, pas un chemin qu'on y joint."""
+    source = "def f(nom):\n    return (Path(__file__).parent / nom).parts\n"
+    assert sites_refuses(source, "tests/test_x.py") == [(2, "(Path(__file__).parent / nom).parts")]
 
 
 # --- VERT : ce que la règle laisse passer, et le remède qu'elle recommande -----------------------
