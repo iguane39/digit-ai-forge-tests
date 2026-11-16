@@ -244,6 +244,8 @@ def _sources_du_produit(
     bancs: list[str] | None = None,
     aspires: list[str] | None = None,
     gabarits: list[str] | None = None,
+    projet: Path | None = None,
+    ignores_git: list[str] | None = None,
 ) -> Path:
     """Copie FILTRÉE de `application`, sans les dossiers de dépendances.
 
@@ -258,6 +260,10 @@ def _sources_du_produit(
     `bancs` fait de même pour la matière de test de la forge (TF-0291), et pour la même raison.
     L exclusion est ANCRÉE à la racine de l application : un `tests\\` niché dans le paquet reste
     scanné, seule la matière déclarée à la racine du dépôt de la forge sort du périmètre.
+
+    `projet` (la racine du projet audité) et `ignores_git` portent le périmètre exclu par git
+    (TF-2654) : un dossier que le dépôt ignore n'est pas copié, et son nom, relatif à `projet`,
+    est ajouté à `ignores_git`. Sans `projet`, rien n'est écarté de ce chef.
     """
     cible = tmp / "sources"
     filtre = shutil.ignore_patterns(*_EXCLUS_DEPENDANCES)
@@ -265,6 +271,20 @@ def _sources_du_produit(
 
     def tracant(dossier: str, noms: list[str]) -> set[str]:
         exclus = set(filtre(dossier, noms))
+        # TF-2654 : le périmètre que le rapport déclare exclu (`perimetre_exclu_git`, TF-1767)
+        # l'est AUSSI pour les oracles délégués. Ce pan copie le projet avant de le tendre aux
+        # oracles, et ne leur appliquait pas le filtre que les autres pans appliquent à leur
+        # parcours : 631 constats bloquants sur 701 venaient de dossiers que git ignore
+        # (`vendor-check` 614, sauvegardes 21, clients 6, runtime 2 — Produit-82, 13/11/2026).
+        if projet is not None:
+            for nom in noms:
+                chemin = Path(dossier) / nom
+                if nom not in exclus and chemin.is_dir() and exclusions.ignore_par_git(
+                    chemin, projet
+                ):
+                    exclus.add(nom)
+                    if ignores_git is not None:
+                        ignores_git.append(os.path.relpath(chemin, projet).replace(os.sep, "/"))
         # LE MARQUEUR PLUTOT QUE LE NOM (TF-0537). Un `saved_resource` sans extension, ou un
         # fichier renomme a la main, echappe a tout motif de nom. Les navigateurs ecrivent
         # « saved from url » en tete d une page sauvegardee : sa presence dit d ou vient le
@@ -334,7 +354,12 @@ def _manifestes_du_produit(
             exclus = set(ecartes(dossier, sous_dossiers))
             if forge and Path(dossier) == racine:
                 exclus.update(n for n in sous_dossiers if n in _MATIERE_DE_TEST_DE_LA_FORGE)
-            sous_dossiers[:] = [n for n in sous_dossiers if n not in exclus]
+            # TF-2654 : un manifeste sous un dossier que git ignore (`vendor-check/package.json`)
+            # n'est pas celui du produit ; le périmètre exclu l'est aussi pour oracle-sca.
+            sous_dossiers[:] = [
+                n for n in sous_dossiers
+                if n not in exclus and not exclusions.ignore_par_git(Path(dossier, n), racines[0])
+            ]
             for nom in fichiers:
                 if nom not in _MANIFESTES_DE_DEPENDANCES:
                     continue
@@ -588,11 +613,24 @@ def analyser(cible: Path) -> SortieAdaptateur:
     aspires: list[str] = []
     bancs: list[str] = []
     gabarits: list[str] = []
+    ignores_git: list[str] = []
     ecartes_vides: list[str] = []
     with tempfile.TemporaryDirectory(prefix="forge-tests-securite-") as brouillon:
         scan = _sources_du_produit(
-            application, Path(brouillon), vendorises, bancs, aspires, gabarits
+            application, Path(brouillon), vendorises, bancs, aspires, gabarits, cible, ignores_git
         )
+        # TF-2654 : le périmètre exclu par git se DIT, comme les autres exclusions de ce pan — et
+        # le rapport porte déjà ces dossiers sous `perimetre_exclu_git` : ici, ce que CE scan a
+        # réellement écarté. Un lecteur ne distingue pas « rien à signaler dans `vendor-check` »
+        # de « `vendor-check` n'a pas été lu » sans cette phrase.
+        if ignores_git:
+            non_juge.append(
+                "securite : dossiers ignorés par git écartés de ce scan — "
+                + ", ".join(sorted(ignores_git))
+                + " — non versionnés, donc hors produit : leurs constats ne sont ni comptés ni "
+                "bloquants (`perimetre_exclu_git`, TF-1767). Réclamer un dossier : son nom dans "
+                "FORGE_TESTS_INCLURE"
+            )
         # TF-0291 : la MESURE de l exclusion — ce que CE scan a reellement ecarte parce que le
         # projet audite est la forge elle-meme. La regle vit dans `NON_JUGE` ; ici on nomme les
         # dossiers, et seulement s il y en a. Un lecteur doit pouvoir distinguer « rien a

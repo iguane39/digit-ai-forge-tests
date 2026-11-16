@@ -1231,6 +1231,12 @@ nominative : le rapport la publie sous `perimetre_exclu_git`. Les noms déjà g�
 politique de chaque pan (`node_modules`, `dist`, `build`…) n'y entrent pas. Pour réclamer un
 dossier ignoré : son nom dans `FORGE_TESTS_INCLURE`.
 
+Le pan `securite` copie le projet avant de le tendre aux oracles délégués : le filtre s'applique à
+cette copie (TF-2654), pour les secrets, le SAST et les manifestes de dépendances. *Mesuré le
+13/11/2026 chez Produit-82 : le rapport déclarait ces dossiers exclus et comptait pourtant 631
+constats bloquants sur 701 dans `vendor-check` (614), des sauvegardes (21), des clients (6) et un
+dossier d'exécution (2).* Les dossiers écartés sont nommés dans le non-jugé du pan.
+
 ### Ce que git ne suit pas n'est pas jugé par le pan `prompts` (TF-2118)
 
 Dans un dépôt git, le pan `prompts` n'inventorie que les sources **suivies** (`git ls-files`,
