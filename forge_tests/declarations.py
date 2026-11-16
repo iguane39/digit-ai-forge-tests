@@ -43,6 +43,21 @@ est rapprochée du seul constat libre de même forme, et le rapprochement est pu
 (`declarations.rapprochees`). Plusieurs candidats : rien n est deviné, la déclaration reste
 inconnue et ses candidats sont nommés (`declarations.ambigues`).
 
+**Ancrage par empreinte de ligne (TF-2664).** Quand plusieurs constats partagent le MÊME message
+(cinq constats SAST de même règle dans un fichier), `texte` ne distingue plus rien : après trois
+commits qui décalent des lignes, les cinq déclarations rendaient chacune cinq candidats, et les
+cinq constats contestés le matin revenaient comme nouveaux. Le champ facultatif `empreinte` porte
+l empreinte de la LIGNE VISÉE (`empreinte_de_ligne` : son texte, blancs normalisés, seize
+caractères hexadécimaux) ; le rapport publie celle des constats qu un même message ne distingue
+pas (`declarations.empreintes`). La déclaration vise alors le constat dont la ligne a cette
+empreinte, quel que soit son numéro, et ne vise plus une ancienne ligne qu occupe un autre
+constat. Une ligne réécrite ne se suit pas : la déclaration reste sans constat, et le rapport la
+nomme (`declarations.inconnues`).
+
+**Deux constats, un identifiant (TF-2658).** Deux constats SAST distincts sur la même ligne
+partagent un identifiant et ne diffèrent que par leur message : le doublon se juge sur le couple
+`constat` + `texte` quand `texte` est fourni, et leurs deux déclarations sont retenues.
+
 **Quatre règles, toutes vérifiées, sans lesquelles ce canal deviendrait un bouton « faire
 taire » :**
 
@@ -72,6 +87,7 @@ mutation, pas d une déclaration.
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -163,7 +179,7 @@ def charger(cible: Path, aujourdhui: _dt.date | None = None) -> dict[str, dict]:
         if not ligne.strip():
             continue
         base = {"ligne": rang, "constat": "", "motif": "", "preuve": "", "par": "", "date": "",
-                "expire_le": "", "explication": "", "classe": "", "texte": ""}
+                "expire_le": "", "explication": "", "classe": "", "texte": "", "empreinte": ""}
         try:
             brut = json.loads(ligne)
         except json.JSONDecodeError:
@@ -181,19 +197,34 @@ def charger(cible: Path, aujourdhui: _dt.date | None = None) -> dict[str, dict]:
             **{
                 cle: str(brut.get(cle) or "").strip()
                 for cle in ("constat", "motif", "preuve", "par", "date", "expire_le",
-                            "explication", "classe", "texte")
+                            "explication", "classe", "texte", "empreinte")
             },
         }
         cle = entree["constat"] or f"(ligne {rang})"
-        if cle in declarations:
-            # Le doublon ne remplace pas silencieusement : deux déclarations sur un même constat
-            # sont un désaccord interne au projet, et il se lit.
-            declarations[f"(ligne {rang})"] = _refus(
-                entree,
-                f"doublon : « {entree['constat']} » est deja declare ligne "
-                f"{declarations[cle].get('ligne')} — la premiere declaration fait foi",
-            )
-            continue
+        # TF-2658 : le doublon se juge sur le COUPLE `constat` + `texte` quand `texte` est fourni.
+        # Deux constats SAST distincts sur la même ligne partagent un identifiant et ne se
+        # distinguent que par leur message : leurs deux déclarations, de `texte` différents, sont
+        # deux déclarations, pas un doublon. Sans `texte` d'un côté ou de l'autre, la déclaration
+        # vise tout message du constat : la seconde la recoupe, et reste refusée.
+        voisines = [
+            e for k, e in declarations.items()
+            if entree["constat"] and e.get("constat") == entree["constat"]
+            and not k.startswith("(ligne ")
+        ]
+        if voisines:
+            texte = _texte(entree["texte"])
+            if not texte or any(_texte(v.get("texte")) in ("", texte) for v in voisines):
+                # Le doublon ne remplace pas silencieusement : deux déclarations sur un même
+                # constat sont un désaccord interne au projet, et il se lit.
+                declarations[f"(ligne {rang})"] = _refus(
+                    entree,
+                    f"doublon : « {entree['constat']} » est deja declare"
+                    + (" avec le meme texte" if texte else "")
+                    + f" ligne {voisines[0].get('ligne')} — la premiere declaration fait foi",
+                )
+                continue
+            # Le constat est déjà une clé : la déclaration à `texte` distinct prend la clé composée.
+            cle = f"{entree['constat']} · {texte}"
         declarations[cle] = _verifier(entree, Path(cible), jour)
     return declarations
 
@@ -304,35 +335,103 @@ def _texte(valeur: object) -> str:
     return " ".join(str(valeur or "").split())
 
 
-def _convient(entree: dict, finding: dict) -> bool:
-    """La déclaration s applique-t-elle à CE constat ? Classe et `texte`, s ils sont déclarés."""
+def empreinte_de_ligne(texte: str) -> str:
+    """L empreinte d une LIGNE de source — TF-2664 : son texte, blancs et fin de ligne normalisés.
+
+    Seize caractères hexadécimaux. Le champ `empreinte` d une déclaration porte celle de la ligne
+    visée ; le rapport publie celle des constats que leur message seul ne distingue pas
+    (`declarations.empreintes`).
+    """
+    return hashlib.sha256(" ".join(str(texte).split()).encode("utf-8")).hexdigest()[:16]
+
+
+#: La position d un constat : `<chemin>:<ligne>`, éventuellement suivie d un détail.
+_POSITION = re.compile(r"^(?P<chemin>.+?):(?P<ligne>\d+)(?=$|[:\s·])")
+
+
+def lecteur_de_lignes(cible: Path):
+    """Un lecteur `constat -> empreinte de sa ligne`, ou `None` quand la ligne n est pas lisible.
+
+    La ligne se lit à la `localisation` du constat (`app/requetes.py:12`, relative à la racine
+    auditée ou absolue), et seulement SOUS cette racine : une localisation qui en sort n est pas
+    lue. Lecture seule (G-1), un fichier lu une fois.
+    """
+    racine = Path(cible).resolve()
+    cache: dict[Path, list[str] | None] = {}
+
+    def lire(finding: dict) -> str | None:
+        trouve = _POSITION.match(str(finding.get("localisation") or ""))
+        if trouve is None:
+            return None
+        chemin = Path(trouve["chemin"])
+        chemin = (chemin if chemin.is_absolute() else racine / chemin).resolve()
+        try:
+            chemin.relative_to(racine)
+        except ValueError:
+            return None
+        if chemin not in cache:
+            try:
+                cache[chemin] = chemin.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                cache[chemin] = None
+        lignes = cache[chemin]
+        rang = int(trouve["ligne"])
+        if lignes is None or not 1 <= rang <= len(lignes):
+            return None
+        return empreinte_de_ligne(lignes[rang - 1])
+
+    return lire
+
+
+def _convient(entree: dict, finding: dict, lecteur=None) -> bool:
+    """La déclaration s applique-t-elle à CE constat ? Classe, `texte` et `empreinte` déclarés.
+
+    `empreinte` (TF-2664) : la ligne que le constat occupe AUJOURD HUI doit avoir l empreinte de
+    celle que la déclaration a visée. Une ligne illisible ne confirme rien : rien n est deviné.
+    """
     classe = entree.get("classe") or ""
     if classe and classe != str(finding.get("classe") or ""):
         return False
     texte = _texte(entree.get("texte"))
-    return not texte or texte == _texte(finding.get("message"))
+    if texte and texte != _texte(finding.get("message")):
+        return False
+    empreinte = entree.get("empreinte") or ""
+    return not empreinte or (lecteur is not None and lecteur(finding) == empreinte)
 
 
-def statut(declarations: dict[str, dict], finding: dict) -> dict:
+def _entrees_du_constat(declarations: dict[str, dict], cle: str):
+    """Les déclarations qui visent `cle` : la première (clé du constat), puis celles de `texte`
+    distinct (TF-2658), sous une clé composée. Les refus de doublon (`(ligne n)`) n en font pas
+    partie."""
+    premiere = declarations.get(cle)
+    if premiere is not None:
+        yield premiere
+    for autre, entree in declarations.items():
+        if autre != cle and not autre.startswith("(ligne ") and entree.get("constat") == cle:
+            yield entree
+
+
+def statut(declarations: dict[str, dict], finding: dict, lecteur=None) -> dict:
     """Déclaration qui vise ce constat, ou `{"statut": "aucune"}`. La clé longue prime."""
     for cle in cles_du_finding(finding):
-        entree = declarations.get(cle)
-        if entree is None:
-            continue
-        if not _convient(entree, finding):
-            continue
-        return entree
+        for entree in _entrees_du_constat(declarations, cle):
+            if _convient(entree, finding, lecteur):
+                return entree
     return {"statut": AUCUNE, "motif": "", "preuve": "", "par": "", "date": "",
             "motif_du_refus": ""}
 
 
 def rapprocher(
-    declarations: dict[str, dict], orphelines: list[str], libres: list[dict]
+    declarations: dict[str, dict], orphelines: list[str], libres: list[dict], lecteur=None
 ) -> tuple[dict[str, dict], dict[str, list[str]]]:
     """Rapproche les déclarations ORPHELINES d un constat dont seule la ligne a changé — TF-1672.
 
-    Rend `({clé déclarée: constat retenu}, {clé déclarée: candidats})`. Deux ancrages :
+    Rend `({clé déclarée: constat retenu}, {clé déclarée: candidats})`. Trois ancrages :
 
+      - **`empreinte`** déclarée (TF-2664) : parmi les constats libres de même forme stable (et de
+        même message si `texte`), celui dont la ligne a l empreinte déclarée. C est ce qui suit
+        cinq constats de même message dont les lignes se décalent ; deux lignes identiques
+        restent ambiguës ;
       - **`texte`** déclaré : le constat libre de même forme stable et de même message. Un seul
         candidat est retenu ; plusieurs (deux liens identiques dans le même fichier) restent
         ambigus ;
@@ -345,28 +444,38 @@ def rapprocher(
     pris: set[int] = set()
 
     def _candidats(cle: str, entree: dict) -> list[dict]:
-        forme = forme_stable(cle)
+        forme = forme_stable(entree["constat"])
         return [
             f for f in libres
             if id(f) not in pris
             and forme in {forme_stable(k) for k in cles_du_finding(f)}
-            and _convient(entree, f)
+            and _convient(entree, f, lecteur)
         ]
 
-    # Les déclarations ancrées par `texte` d abord : elles sont exactes, les autres prennent ce
-    # qui reste.
-    rangees = sorted(orphelines, key=lambda c: (not declarations[c].get("texte"), c))
+    def _ancre(entree: dict) -> bool:
+        return bool(entree.get("texte") or entree.get("empreinte"))
+
+    # Les déclarations ancrées (`empreinte`, puis `texte`) d abord : elles sont exactes, les
+    # autres prennent ce qui reste.
+    rangees = sorted(
+        orphelines,
+        key=lambda c: (
+            0 if declarations[c].get("empreinte") else 1 if declarations[c].get("texte") else 2, c
+        ),
+    )
     formes_sans_texte: dict[str, int] = {}
     for cle in rangees:
-        if not declarations[cle].get("texte"):
-            formes_sans_texte[forme_stable(cle)] = formes_sans_texte.get(forme_stable(cle), 0) + 1
+        if not _ancre(declarations[cle]):
+            forme = forme_stable(declarations[cle]["constat"])
+            formes_sans_texte[forme] = formes_sans_texte.get(forme, 0) + 1
     for cle in rangees:
-        if forme_stable(cle) == cle:
-            continue  # aucun numéro de ligne dans la clé : rien à rapprocher
         entree = declarations[cle]
+        constat = entree["constat"]
+        if forme_stable(constat) == constat:
+            continue  # aucun numéro de ligne dans la clé : rien à rapprocher
         candidats = _candidats(cle, entree)
         unique = len(candidats) == 1 and (
-            bool(entree.get("texte")) or formes_sans_texte[forme_stable(cle)] == 1
+            _ancre(entree) or formes_sans_texte[forme_stable(constat)] == 1
         )
         if unique:
             retenus[cle] = candidats[0]
@@ -450,48 +559,70 @@ def appliquer(rapport: dict, cible: Path, aujourdhui: _dt.date | None = None) ->
             "libelle", entree.get("motif", "")
         )
 
+    # TF-2664 — la ligne que chaque constat occupe aujourd hui, pour les déclarations ancrées par
+    # `empreinte` : lue chez l audité, en lecture seule.
+    lecteur = lecteur_de_lignes(cible)
     ecartes = 0
-    servies: set[str] = set()
+    servies: set[int] = set()
     for finding in findings:
-        entree = statut(declarations, finding)
+        entree = statut(declarations, finding, lecteur)
         if entree["statut"] == AUCUNE:
             continue
         _poser(finding, entree)
-        servies.add(entree.get("constat", ""))
+        servies.add(id(entree))
         ecartes += entree["statut"] == RETENUE
 
     # TF-1672 — une déclaration qui ne vise plus aucun constat est d abord RAPPROCHÉE, si seul le
     # numéro de ligne a changé ; le rapprochement est publié, avec la clé à recopier.
     orphelines = [
         cle for cle, entree in declarations.items()
-        if not cle.startswith("(ligne ") and entree.get("constat") and cle not in servies
+        if not cle.startswith("(ligne ") and entree.get("constat") and id(entree) not in servies
     ]
     retenus, ambigues = rapprocher(
-        declarations, orphelines, [f for f in findings if "declaration" not in f]
+        declarations, orphelines, [f for f in findings if "declaration" not in f], lecteur
     )
     rapprochees = []
     for cle, finding in sorted(retenus.items()):
         entree = declarations[cle]
         _poser(finding, entree)
         retrouve = cles_du_finding(finding)[0]
-        ancrage = "texte" if entree.get("texte") else "forme-sans-ligne"
-        finding["declaration"]["rapprochee_de"] = cle
+        ancrage = (
+            "empreinte" if entree.get("empreinte")
+            else "texte" if entree.get("texte") else "forme-sans-ligne"
+        )
+        finding["declaration"]["rapprochee_de"] = entree["constat"]
         finding["declaration"]["ancrage"] = ancrage
         entree["rapprochee_vers"] = retrouve
         rapprochees.append(
             {
-                "declare": cle,
+                "declare": entree["constat"],
                 "retrouve": retrouve,
                 "ancrage": ancrage,
-                "a_faire": f"remplacer `{cle}` par `{retrouve}` dans `{FICHIER}`"
+                "a_faire": f"remplacer `{entree['constat']}` par `{retrouve}` dans `{FICHIER}`"
                 + (
                     ""
-                    if entree.get("texte")
+                    if ancrage != "forme-sans-ligne"
                     else " et y ajouter `texte` (le message du constat) pour un ancrage exact"
                 ),
             }
         )
         ecartes += entree["statut"] == RETENUE
+
+    # TF-2664 — de quoi écrire `empreinte` sans la calculer à la main : l empreinte de la ligne
+    # des constats qu un même message ne distingue pas (même forme sans numéro de ligne).
+    groupes: dict[tuple[str, str], list[dict]] = {}
+    for finding in findings:
+        groupes.setdefault(
+            (forme_stable(cles_du_finding(finding)[0]), _texte(finding.get("message"))), []
+        ).append(finding)
+    empreintes: dict[str, str] = {}
+    for membres in groupes.values():
+        if len(membres) < 2:
+            continue
+        for finding in membres:
+            lue = lecteur(finding)
+            if lue is not None:
+                empreintes[cles_du_finding(finding)[0]] = lue
 
     # L action d un constat écarté n a plus de destinataire : elle est MISE À PART, jamais
     # perdue. Un constat non déclaré qui partagerait la même référence garde la sienne.
@@ -524,6 +655,7 @@ def appliquer(rapport: dict, cible: Path, aujourdhui: _dt.date | None = None) ->
         "inconnues": inconnus,
         "rapprochees": rapprochees,
         "ambigues": ambigues,
+        "empreintes": empreintes,
         "entrees": sorted(declarations.values(), key=lambda e: (e.get("ligne") or 0)),
         # Ce que le projet doit écrire pour se servir du canal — au rapport, pas dans une doc
         # qu il faudrait connaître d avance.
@@ -532,9 +664,14 @@ def appliquer(rapport: dict, cible: Path, aujourdhui: _dt.date | None = None) ->
             '{"constat": "<pan>/<id du finding>", "motif": "<'
             + "|".join(sorted(MOTIFS))
             + '>", "preuve": "<chemin qui existe>", "par": "<qui declare>", '
-            '"date": "AAAA-MM-JJ", "texte": "<message du constat, facultatif>"}. La preuve '
+            '"date": "AAAA-MM-JJ", "texte": "<message du constat, facultatif>", '
+            '"empreinte": "<empreinte de la ligne visee, facultatif>"}. La preuve '
             "est verifiee ; sans elle le constat reste au decompte. `texte` ancre la "
-            "declaration sur le message : elle suit le constat quand sa ligne change"
+            "declaration sur le message : elle suit le constat quand sa ligne change ; deux "
+            "constats de meme identifiant et de textes differents portent chacun leur "
+            "declaration. Quand plusieurs constats partagent le meme message, `empreinte` (celle "
+            "de la ligne visee, publiee dans `declarations.empreintes`) ancre la declaration sur "
+            "SA ligne : elle la suit quand les lignes se decalent"
         ),
     }
     return rapport
