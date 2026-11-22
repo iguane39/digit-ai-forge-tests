@@ -78,9 +78,12 @@ NON_JUGE = [
     "s ils sont exerces et si le modele est epingle, jamais si le prompt est bon (cela releve "
     "de `prompt-analyzer-l99` et de la revue humaine)",
     "prompts : la decouverte est bornee aux formes ADRESSABLES reconnues (suffixe `.prompt`, "
-    "dossier `prompts/` ou `gabarits/`, `SKILL.md`, constante Python nommee `*PROMPT*` / "
-    "`*INSTRUCTIONS*`) — un prompt assemble a l execution par concatenation, ou stocke en base, "
-    "n est pas inventoriable statiquement et le deviner serait mentir",
+    "dossier `prompts/` ou `gabarits/`, `SKILL.md`, constante Python en MAJUSCULES dont le nom "
+    "porte `PROMPT`, `INSTRUCTIONS`, `SYSTEM` ou `SYSTEME`, en tete de nom comprise — TF-2780) "
+    "— un prompt assemble a l execution par concatenation, ou stocke en base, n est pas "
+    "inventoriable statiquement et le deviner serait mentir ; une constante qui porte ce mot "
+    "sous une autre forme (`_SYSTEM_PROMPT`, `system_prompt`) est NOMMEE au rapport, jamais "
+    "inventoriee",
     "prompts : l epinglage juge la FORME du nom (suffixe date `-AAAAMMJJ`, `-AAAA-MM-JJ` ou "
     "`-AAMM`), pas la disponibilite reelle du modele — aucun appel reseau n est fait et aucun "
     "calendrier de depreciation fournisseur n est consulte ici",
@@ -138,7 +141,15 @@ _EXTENSIONS_EN_DOSSIER = (".prompt", ".md", ".txt", ".tmpl")
 _NOMS_PROMPT = ("SKILL.md",)
 
 # Constante Python qui PORTE un prompt système : le nom le dit, et la valeur est un littéral.
-_NOM_CONSTANTE = re.compile(r"^[A-Z][A-Z0-9_]*(?:PROMPT|INSTRUCTIONS|SYSTEME|SYSTEM)[A-Z0-9_]*$")
+# TF-2780 : le mot-clé peut OUVRIR le nom (`INSTRUCTIONS_REDACTION`). L'ancien motif exigeait une
+# majuscule AVANT lui, et écartait en silence une consigne légitime (pan à 1/19 au lieu de 3/21).
+_MOTS_CLES = ("PROMPT", "INSTRUCTIONS", "SYSTEME", "SYSTEM")
+_NOM_CONSTANTE = re.compile(
+    r"^(?:[A-Z][A-Z0-9_]*)?(?:" + "|".join(_MOTS_CLES) + r")[A-Z0-9_]*$"
+)
+# Un nom qui PORTE un mot-clé sous une autre forme (`_SYSTEM_PROMPT`, `system_prompt`) n'est pas
+# reconnu, mais il est PUBLIÉ au non-jugé : une candidate écartée se nomme, elle ne disparaît pas.
+_MOT_CLE_ANYCASE = re.compile("|".join(_MOTS_CLES), re.IGNORECASE)
 _LONGUEUR_MINIMALE = 40
 
 # --- Ce qui fait qu une chaîne est un NOM DE MODÈLE --------------------------------------------
@@ -369,8 +380,8 @@ def modeles_cites(texte: str) -> list[str]:
     return trouves
 
 
-def _constantes_de_prompt(chemin: Path, texte: str) -> list[tuple[str, str]]:
-    """(nom, valeur) des constantes Python qui portent un prompt système, lues par AST."""
+def _constantes_chaine(chemin: Path, texte: str) -> list[tuple[str, str]]:
+    """(nom, valeur) des constantes Python à valeur littérale assez longue, lues par AST."""
     try:
         arbre = ast.parse(texte, filename=str(chemin))
     except SyntaxError:
@@ -388,9 +399,30 @@ def _constantes_de_prompt(chemin: Path, texte: str) -> list[tuple[str, str]]:
         if len(valeur.value) < _LONGUEUR_MINIMALE:
             continue
         for element in cibles:
-            if isinstance(element, ast.Name) and _NOM_CONSTANTE.match(element.id):
+            if isinstance(element, ast.Name):
                 trouves.append((element.id, valeur.value))
     return trouves
+
+
+def _constantes_de_prompt(chemin: Path, texte: str) -> list[tuple[str, str]]:
+    """(nom, valeur) des constantes Python qui portent un prompt système, lues par AST."""
+    return [(nom, v) for nom, v in _constantes_chaine(chemin, texte) if _NOM_CONSTANTE.match(nom)]
+
+
+def _constantes_ecartees(cible: Path) -> list[str]:
+    """`chemin:NOM` des constantes littérales qui portent un mot-clé de prompt sans que le nom soit
+    reconnu (TF-2780) : candidates écartées, publiées plutôt que tues."""
+    trouvees: list[str] = []
+    for chemin in _fichiers(cible):
+        if chemin.suffix.lower() != ".py":
+            continue
+        texte = _texte(chemin)
+        if not texte or est_un_artefact_d_auditeur(texte):
+            continue
+        for nom, _valeur in _constantes_chaine(chemin, texte):
+            if _MOT_CLE_ANYCASE.search(nom) and not _NOM_CONSTANTE.match(nom):
+                trouvees.append(f"{_relatif(chemin, cible)}:{nom}")
+    return trouvees
 
 
 # --- Collecte ----------------------------------------------------------------------------------
@@ -811,13 +843,33 @@ def _mention_non_suivis(non_suivis: list[str]) -> list[str]:
     ]
 
 
+def _mention_ecartees(ecartees: list[str]) -> list[str]:
+    """La ligne `non_juge` qui publie les constantes écartées par la FORME de leur nom (TF-2780)."""
+    if not ecartees:
+        return []
+    total = len(ecartees)
+    nommees = ", ".join(ecartees[:_MAX_NON_SUIVIS_NOMMES])
+    reste = total - _MAX_NON_SUIVIS_NOMMES
+    suite = f" et {reste} autres" if reste > 0 else ""
+    pluriel = "s" if total > 1 else ""
+    verbe = "portent" if total > 1 else "porte"
+    sort = "sont ecartees" if total > 1 else "est ecartee"
+    return [
+        f"prompts : {total} constante{pluriel} Python a valeur litterale longue {verbe} un "
+        "mot-cle de prompt (PROMPT, INSTRUCTIONS, SYSTEM, SYSTEME) sous une forme de nom non "
+        f"reconnue (minuscules, ou tiret bas en tete) et {sort} de l inventaire : "
+        f"{nommees}{suite} — si l une porte un prompt, la renommer en MAJUSCULES sans tiret "
+        "bas en tete"
+    ]
+
+
 def analyser(cible: Path) -> SortieAdaptateur:
     non_testables = _non_testables(cible)
     elements = inventaire(cible)
     findings_modeles = _findings_modeles(cible)
     findings_appels = _findings_appels_reels(cible)
     non_suivis = _non_suivis_porteurs(cible)
-    mention = _mention_non_suivis(non_suivis)
+    mention = [*_mention_non_suivis(non_suivis), *_mention_ecartees(_constantes_ecartees(cible))]
     if not elements:
         # Un test qui appelle le fournisseur prouve le CONTRAIRE d « aucun modèle appelé » : un
         # appel HTTP direct n a besoin d aucun client déclaré au manifeste (TF-2110). Il en va de

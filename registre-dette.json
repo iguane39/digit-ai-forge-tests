@@ -628,7 +628,7 @@
     {
       "id": "prompts-statique-003",
       "domaine": "prompts-statique",
-      "enonce": "prompts : la decouverte est bornee aux formes ADRESSABLES reconnues (suffixe `.prompt`, dossier `prompts/` ou `gabarits/`, `SKILL.md`, constante Python nommee `*PROMPT*` / `*INSTRUCTIONS*`) — un prompt assemble a l execution par concatenation, ou stocke en base, n est pas inventoriable statiquement et le deviner serait mentir",
+      "enonce": "prompts : la decouverte est bornee aux formes ADRESSABLES reconnues (suffixe `.prompt`, dossier `prompts/` ou `gabarits/`, `SKILL.md`, constante Python en MAJUSCULES dont le nom porte `PROMPT`, `INSTRUCTIONS`, `SYSTEM` ou `SYSTEME`, en tete de nom comprise — TF-2780) — un prompt assemble a l execution par concatenation, ou stocke en base, n est pas inventoriable statiquement et le deviner serait mentir ; une constante qui porte ce mot sous une autre forme (`_SYSTEM_PROMPT`, `system_prompt`) est NOMMEE au rapport, jamais inventoriee",
       "statut": "assume",
       "note": "Limite de l analyse STATIQUE, assumee a la v0 (14/08/2026) : un prompt assemble a l execution n a pas d adresse ; l inventer serait une surface fausse."
     },
