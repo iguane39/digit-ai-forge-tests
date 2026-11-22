@@ -928,6 +928,12 @@
       "statut": "retiree"
     },
     {
+      "id": "contraste-wcag-006",
+      "domaine": "contraste-wcag",
+      "enonce": "contraste : la mesure attend la fin des animations et transitions FINIES, 5 s au plus ; une animation SANS FIN (spinner, pulsation) ou en pause n est pas attendue — un texte qui la porte est mesure a la phase atteinte — et une page qui porte encore une animation finie apres 5 s est mesuree dans cet etat, ce que le rapport dit route par route",
+      "statut": "retiree"
+    },
+    {
       "id": "data-sql-004",
       "domaine": "data-sql",
       "enonce": "data : une contrainte est réputée exercée si son nom ou sa colonne apparaît dans un test attendant un rejet ; l oracle ne vérifie pas que le rejet porte bien sur cette contrainte",
@@ -1186,9 +1192,9 @@
       "statut": "todo"
     },
     {
-      "id": "contraste-wcag-006",
+      "id": "contraste-wcag-007",
       "domaine": "contraste-wcag",
-      "enonce": "contraste : la mesure attend la fin des animations et transitions FINIES, 5 s au plus ; une animation SANS FIN (spinner, pulsation) ou en pause n est pas attendue — un texte qui la porte est mesure a la phase atteinte — et une page qui porte encore une animation finie apres 5 s est mesuree dans cet etat, ce que le rapport dit route par route",
+      "enonce": "contraste : la mesure attend la fin des animations et transitions FINIES, 5 s au plus ; une animation SANS FIN (spinner, pulsation) ou en pause n est pas attendue, elle est ANNULEE (TF-2698) : le verdict est celui de la page figee a son style de repos, et un texte qui n echoue que pendant la boucle est nomme au non-juge (« mesure en cours de transition »), jamais compte bloquant — une page qui porte encore une animation finie apres 5 s est mesuree dans cet etat, ce que le rapport dit route par route",
       "statut": "todo"
     },
     {

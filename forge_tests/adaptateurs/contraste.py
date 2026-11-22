@@ -29,7 +29,11 @@ from forge_tests.disposition import racine_front
 from forge_tests.execution import motif_front_non_servi
 from forge_tests.noyau import Element, Finding, SortieAdaptateur
 from forge_tests.risque import coter
-from forge_tests.stabilite import attendre_animations_finies, note_si_instable
+from forge_tests.stabilite import (
+    attendre_animations_finies,
+    figer_animations_infinies,
+    note_si_instable,
+)
 
 NOM, PAN = "contraste-wcag", "contraste"
 
@@ -68,10 +72,34 @@ NON_JUGE = [
     # TF-2313 : un contraste lu au milieu d une transition CSS (1,53:1 mesure sur un toast qui en
     # tient 7,16 affiche) est celui de l image prise, pas de la page.
     "contraste : la mesure attend la fin des animations et transitions FINIES, 5 s au plus ; "
-    "une animation SANS FIN (spinner, pulsation) ou en pause n est pas attendue — un texte qui "
-    "la porte est mesure a la phase atteinte — et une page qui porte encore une animation finie "
+    "une animation SANS FIN (spinner, pulsation) ou en pause n est pas attendue, elle est "
+    "ANNULEE (TF-2698) : le verdict est celui de la page figee a son style de repos, et un "
+    "texte qui n echoue que pendant la boucle est nomme au non-juge (« mesure en cours de "
+    "transition »), jamais compte bloquant — une page qui porte encore une animation finie "
     "apres 5 s est mesuree dans cet etat, ce que le rapport dit route par route",
 ]
+
+# TF-2698 : constats lus pendant une animation sans fin et absents de la page figee.
+_CLE_EN_MOUVEMENT = "en_mouvement"
+
+
+def reconcilier_mouvement(en_boucle: Any, figee: Any) -> Any:
+    """Mesure de la page figée à son repos, plus ce que la lecture en boucle a vu en plus.
+
+    Le verdict est celui de la page FIGÉE (`figee`) : un texte qui échoue à son repos échoue.
+    Un écart lu seulement pendant la boucle (même élément, absent des écarts de la page figée) est
+    rangé sous `en_mouvement`, pour être nommé au non-jugé : « mesure en cours de transition ».
+    Une lecture illisible de l'un des deux côtés rend l'autre telle quelle, rien n'est assoupli.
+    """
+    if not isinstance(figee, dict):
+        return en_boucle
+    if not isinstance(en_boucle, dict):
+        return figee
+    au_repos = {str(e.get("what", "element")) for e in figee.get("v2_contrast", [])}
+    vus_en_boucle = [
+        e for e in en_boucle.get("v2_contrast", []) if str(e.get("what", "element")) not in au_repos
+    ]
+    return {**figee, _CLE_EN_MOUVEMENT: vus_en_boucle}
 
 
 def _mesure_js() -> str | None:
@@ -145,7 +173,21 @@ def analyser(cible: Path) -> SortieAdaptateur:
         if note is not None:
             limites.append(note)
         page.wait_for_timeout(150)  # styles et polices posees avant de mesurer
-        return page.evaluate(mesure), None
+        en_boucle = page.evaluate(mesure)
+        # TF-2698 : une animation SANS FIN n'a pas d'etat final a attendre ; un texte qu'elle porte
+        # se lisait a la phase de l'image prise (« projet » a 1,01:1). On l'annule, et la mesure se
+        # rejoue sur la page figee a son repos : c'est elle qui juge.
+        figees = figer_animations_infinies(page)
+        if figees is None:
+            limites.append(
+                f"contraste : route {route} — les animations sans fin n'ont pas pu etre figees, la "
+                "mesure est celle de la page en mouvement"
+            )
+            return en_boucle, None
+        if not figees:
+            return en_boucle, None
+        page.wait_for_timeout(50)
+        return reconcilier_mouvement(en_boucle, page.evaluate(mesure)), None
 
     resultats, motifs = parcourir(cible, routes, action, prefixe="contraste")
     socle = [
@@ -183,6 +225,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
                     severite="bloquant",
                     risque=coter(PAN, identifiant, str(racine_front(cible))),
                 )
+            )
+        # TF-2698 : lu en boucle, absent a l'arret — nomme, jamais bloquant, jamais tu.
+        for ecart in issues.get(_CLE_EN_MOUVEMENT, []):
+            non_juge.append(
+                f"contraste : [{route}] {ecart.get('what', 'element')} — {ecart.get('detail', '')} "
+                "— mesure en cours de transition : texte porte par une animation SANS FIN, lu "
+                "pendant la boucle ; la page figee a son repos ne porte pas cet ecart, il n'est "
+                "pas compte bloquant"
             )
         # `unmeasured` est la part HONNETE de la mesure : ce que le calcul ne peut pas trancher
         # (texte sur image de fond). La taire ferait lire le PASS comme « tout est conforme ».

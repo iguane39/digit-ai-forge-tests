@@ -85,6 +85,39 @@ def attendre_animations_finies(page: Any, plafond_ms: int | None = None) -> dict
                 "erreur": type(erreur).__name__}
 
 
+#: TF-2698 — exécuté dans la page. Annule les animations SANS FIN (en marche ou en pause) :
+#: l'élément retombe sur son style de repos, celui que la feuille de style lui donne hors
+#: animation. Une animation sans fin n'a pas d'état final à attendre ; son image « de repos » est
+#: celle de la page sans mouvement (l'équivalent de `prefers-reduced-motion`, sans dépendre du
+#: soin que la feuille de style y met).
+_SCRIPT_FIGER = """
+() => {
+  const infinie = (a) => {
+    const t = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming() : null;
+    return t !== null && (t.iterations === Infinity || !Number.isFinite(t.endTime));
+  };
+  const visees = document.getAnimations().filter(infinie);
+  visees.forEach((a) => a.cancel());
+  return visees.length;
+}
+"""
+
+
+def figer_animations_infinies(page: Any) -> int | None:
+    """Annule les animations sans fin de `page` et rend leur nombre ; `None` si elle ne répond pas.
+
+    TF-2698 : un texte porté par une animation CSS infinie (fondu en boucle, cycle de couleur) se
+    mesurait à la phase atteinte par l'image prise : « projet » à 1,01:1, « agent » à 1,76:1, sur
+    une page dont le style de repos tient le contraste. La mesure se rejoue sur la page figée à son
+    repos, et le pan nomme au non-jugé ce que la première lecture avait vu. Ne lève JAMAIS : la
+    mesure ne doit pas tomber avec le gel, elle se déclare alors non figée.
+    """
+    try:
+        return int(page.evaluate(_SCRIPT_FIGER))
+    except Exception:  # noqa: BLE001 — le gel ne doit jamais emporter la mesure
+        return None
+
+
 def note_si_instable(constat: dict, pan: str, route: str) -> str | None:
     """La ligne de non-jugé quand la page n'a PAS été vue stable, ou None si elle l'était."""
     if constat.get("stable") is False:
