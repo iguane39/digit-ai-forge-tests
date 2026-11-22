@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from forge_tests.adaptateurs import PANS_ATTENDUS, REGISTRE
-from forge_tests.noyau import RapportRefuse, rapport
+from forge_tests.noyau import VARIABLE_PANS_CENTRAUX, RapportRefuse, lire_pans_centraux, rapport
 
 # Codes de sortie du CDC : 0 conforme · 1 défauts bloquants · 2 refus ou erreur d exécution ·
 # 3 diagnostic partiel (un pan sans adaptateur, non bloquant par décision `s` de la spec).
@@ -112,6 +112,9 @@ def analyser(cible: Path, pans: list[str] | None = None) -> dict:
                   essais=_essais,
                   scripts_node=_section_scripts,
                   residus_instance=_residus_instance,
+                  # TF-2769 : les pans que le projet tient pour centraux (lus à l'entrée, avec
+                  # le reste de la configuration d'audit) ; un pan central à 0 % rend FAIL.
+                  pans_centraux=lire_pans_centraux(os.environ.get(VARIABLE_PANS_CENTRAUX)),
                   instance=instance_au_rapport(cible),
                   boucle=_boucle.verdict(_boucle.lire(cible)),
                   gabarit_env={**_depot, "protection_gitignore": _protection},
@@ -149,6 +152,9 @@ def _resume(rap: dict) -> str:
         f"verdict global : {rap['verdict']}",
         "",
     ]
+    # TF-2769 : un pan central à 0 % rend le verdict FAIL, et le verdict ne se lit pas sans motif.
+    for bloquant in rap.get("pans_bloquants") or []:
+        lignes.insert(-1, f"PAN BLOQUANT : {bloquant['motif']}")
     lignes.append("couverture de surface par pan")
     for pan, surface in sorted(rap["couverture_par_pan"].items()):
         etat = "OK" if surface["ratio"] >= surface["seuil"] else "SOUS SEUIL"

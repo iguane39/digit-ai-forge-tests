@@ -25,7 +25,13 @@ import json
 from pathlib import Path
 
 from forge_tests.actions import classifier
-from forge_tests.noyau import DELAI_DEPASSE, POUR_COUVRIR_DEFAUT, bande, entree_non_couverte
+from forge_tests.noyau import (
+    DELAI_DEPASSE,
+    POUR_COUVRIR_DEFAUT,
+    bande,
+    entree_non_couverte,
+    pans_bloquants,
+)
 
 NON_JUGE = [
     "reprise : la re-execution a la granularite du PAN — un pan qui doit etre rejoue l est en "
@@ -223,6 +229,11 @@ def fusionner(
         else ancien.get("essais")
     ) or {"cas": [], "totaux": {}, "signales": [], "fourni": False}
 
+    # TF-2769 : les pans centraux déclarés par le projet sont repris du rapport qui les portait (le
+    # neuf d abord) ; un pan central à 0 % APRÈS fusion rend FAIL, avant PARTIEL.
+    centraux = list(nouveau.get("pans_centraux") or ancien.get("pans_centraux") or [])
+    bloquants = pans_bloquants(couverture, centraux)
+
     return {
         "adaptateurs": [adaptateurs[p] for p in sorted(adaptateurs)],
         "couverture_par_pan": couverture,
@@ -260,8 +271,12 @@ def fusionner(
             ),
             "provenance": provenance,
         },
+        "pans_centraux": centraux,
+        "pans_bloquants": bloquants,
         "verdict": (
-            "PARTIEL"
+            "FAIL"
+            if bloquants
+            else "PARTIEL"
             if non_couverts or (essais.get("totaux") or {}).get("non_execute")
             else (
                 "FAIL"

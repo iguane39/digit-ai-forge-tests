@@ -415,6 +415,76 @@ def entree_non_couverte(pan: str, motif: str, chemin: str, verdict: str | None) 
     return {"pan": pan, "motif": motif, "pour_couvrir": chemin}
 
 
+#: TF-2769 — la clé de configuration d audit qui nomme les pans CENTRAUX du produit : une liste de
+#: pans, séparés par des virgules ou des espaces.
+VARIABLE_PANS_CENTRAUX = "FORGE_TESTS_PANS_CENTRAUX"
+
+
+def lire_pans_centraux(valeur: str | None) -> list[str]:
+    """Les pans que le projet déclare centraux, dans l ordre où il les écrit, sans doublon.
+
+    Le projet seul sait quelle fonction porte son produit : la forge ne le devine jamais (un pan
+    déclaré central par défaut ferait échouer tout audit PARTIEL, et un pan jamais déclaré laisse
+    le verdict inchangé).
+    """
+    vus: list[str] = []
+    for mot in (valeur or "").replace(";", ",").replace(",", " ").split():
+        pan = mot.strip().lower()
+        if pan and pan not in vus:
+            vus.append(pan)
+    return vus
+
+
+def pans_bloquants(couverture: dict[str, dict], pans_centraux: list[str]) -> list[dict]:
+    """Les pans centraux MESURÉS à 0 % : de la surface inventoriée, aucun élément exercé.
+
+    TF-2769 : le 08/11, l audit d un produit inventoriait 15 modèles d IA au pan `prompts` et n en
+    exerçait aucun (0 sur 15, seuil 1) ; le verdict PARTIEL (sortie 3), porté par d autres pans non
+    couverts, a été accepté, et la version est partie en production alors que la rédaction par IA
+    n avait jamais tourné. Un pan central à 0 % n est pas un manque de mesure, c est une fonction
+    que rien n atteint : il rend ÉCHEC, et le rapport le nomme. Un pan non mesuré (SKIP, NA, absent)
+    n est pas à 0 % : il reste un manque, nommé à part.
+    """
+    bloquants = []
+    for pan in pans_centraux:
+        surface = couverture.get(pan) or {}
+        inventorie = int(surface.get("inventorie") or 0)
+        if inventorie > 0 and int(surface.get("exerce") or 0) == 0:
+            bloquants.append({
+                "pan": pan,
+                "inventorie": inventorie,
+                "exerce": 0,
+                "ratio": 0.0,
+                "seuil": surface.get("seuil"),
+                "motif": (
+                    f"pan central « {pan} » à 0 % : {inventorie} élément(s) inventorié(s), aucun "
+                    "exercé — la fonction que ce pan porte n a jamais tourné sous test"
+                ),
+            })
+    return bloquants
+
+
+def mention_pans_centraux(
+    pans_centraux: list[str], couverture: dict[str, dict], pans_attendus: list[str]
+) -> list[str]:
+    """Les lignes `non_juge` d une déclaration sans effet : pan inconnu, pan non mesuré."""
+    lignes = []
+    for pan in pans_centraux:
+        if pan not in pans_attendus:
+            lignes.append(
+                f"pans centraux : « {pan} » n est pas un pan connu de forge-tests "
+                f"({', '.join(pans_attendus)}) — déclaration sans effet, à corriger dans "
+                f"{VARIABLE_PANS_CENTRAUX}"
+            )
+        elif pan not in couverture:
+            lignes.append(
+                f"pans centraux : « {pan} » est déclaré central mais n a aucune couverture mesurée "
+                "dans ce rapport (pan non joué, sans objet ou sans surface) — le verdict ÉCHEC ne "
+                "s applique qu à un pan mesuré à 0 %"
+            )
+    return lignes
+
+
 def rapport(
     sorties: list[SortieAdaptateur],
     pans_attendus: list[str],
@@ -427,6 +497,7 @@ def rapport(
     vendorisation: list[dict] | None = None,
     scripts_node: dict | None = None,
     residus_instance: dict | None = None,
+    pans_centraux: list[str] | None = None,
 ) -> dict:
     """Assemble le rapport. Un pan sans adaptateur est NOMME, jamais omis.
 
@@ -441,6 +512,11 @@ def rapport(
     se lit plus PASS. Sans lui, la section reste PRÉSENTE mais déclare son absence :
     un rapport qui l omettrait silencieusement serait indiscernable d un rapport qui l a
     mesurée et n a rien trouvé, exactement le silence que ce framework interdit ailleurs.
+
+    TF-2769 : `pans_centraux` (clé `FORGE_TESTS_PANS_CENTRAUX`) nomme les pans que le projet tient
+    pour centraux. Un pan central mesuré à 0 % rend le verdict FAIL, avant PARTIEL que d autres
+    pans non couverts ne doivent plus pouvoir faire accepter, et le rapport le nomme en
+    `pans_bloquants`.
     """
     from forge_tests.actions import classifier
     from forge_tests.risque import NON_JUGE as NON_JUGE_RISQUE
@@ -463,6 +539,9 @@ def rapport(
         if s.verdict in ("SKIP", DELAI_DEPASSE)
     }
     verdicts_par_pan = {s.pan: s.verdict for s in sorties}
+    centraux = list(pans_centraux or [])
+    couverture = {s.pan: s.surface for s in sorties if s.surface is not None}
+    bloquants = pans_bloquants(couverture, centraux)
     essais_non_executes = sorted(e.id for e in essais or [] if e.verdict == "non_execute")
     non_couverts = [
         entree_non_couverte(
@@ -536,6 +615,7 @@ def rapport(
             {n for s in sorties for n in s.non_juge}
             | set(NON_JUGE_RISQUE)
             | set(_mention_essais_non_executes(essais_non_executes))
+            | set(mention_pans_centraux(centraux, couverture, pans_attendus))
             | set((scripts_node or {}).get("non_juge", []))
             | set((residus_instance or {}).get("non_juge", []))
         ),
@@ -577,8 +657,14 @@ def rapport(
                      "(`rapport(..., residus_instance=...)`) — l état de l instance n a pas été "
                      "confronté avant et après la campagne",
         },
+        # TF-2769 : les pans centraux déclarés par le projet, et ceux qui sont mesurés à 0 %.
+        # Section toujours présente : « aucun pan central déclaré » se lit, il ne se devine pas.
+        "pans_centraux": centraux,
+        "pans_bloquants": bloquants,
         "verdict": (
-            "PARTIEL"
+            "FAIL"
+            if bloquants
+            else "PARTIEL"
             if non_couverts or essais_non_executes
             else (
                 "FAIL"

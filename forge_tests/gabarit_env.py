@@ -84,6 +84,10 @@ GLOSES: dict[str, str] = {
                                    "sans package.json, en secondes (défaut 900, TF-2387)",
     "FORGE_TESTS_DELAI_MIGRATIONS_S": "délai du rejeu des migrations sur base neuve, en secondes "
                                       "(défaut 900, TF-2389)",
+    "FORGE_TESTS_PANS_CENTRAUX": "pans que le produit tient pour centraux, séparés par des "
+                                 "virgules ou des espaces (`prompts api`) : un pan central "
+                                 "mesuré à 0 % rend le verdict FAIL, même si d'autres pans "
+                                 "restent non couverts (TF-2769)",
 }
 
 
