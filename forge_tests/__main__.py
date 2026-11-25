@@ -155,6 +155,12 @@ def _resume(rap: dict) -> str:
     # TF-2769 : un pan central à 0 % rend le verdict FAIL, et le verdict ne se lit pas sans motif.
     for bloquant in rap.get("pans_bloquants") or []:
         lignes.insert(-1, f"PAN BLOQUANT : {bloquant['motif']}")
+    # TF-2862 : d'où vient un constat neuf ? La ligne le dit avant la couverture.
+    from forge_tests.nouveaute import lignes_du_resume
+
+    detail_nouveaute = lignes_du_resume(rap)
+    if detail_nouveaute:
+        lignes.extend([*detail_nouveaute, ""])
     lignes.append("couverture de surface par pan")
     for pan, surface in sorted(rap["couverture_par_pan"].items()):
         etat = "OK" if surface["ratio"] >= surface["seuil"] else "SOUS SEUIL"
@@ -506,6 +512,16 @@ def main(argv: list[str] | None = None) -> int:
         from forge_tests.declarations import appliquer as appliquer_declarations
 
         appliquer_declarations(rap, args.cible.resolve())
+        # TF-2862 — la nouveauté de chaque constat se DATE : par la règle (fichier inchangé depuis
+        # le rapport précédent) ou par le code. Sans rapport précédent, la section le dit.
+        from forge_tests import nouveaute
+
+        precedent_rapport, precedent_fichier, precedent_refus = nouveaute.lire_precedent(
+            args.precedent, args.reprendre
+        )
+        nouveaute.dater(
+            rap, args.cible.resolve(), precedent_rapport, precedent_fichier, refus=precedent_refus
+        )
         if args.generer is not None:
             from forge_tests.execution import schema_openapi
             from forge_tests.generateur import ecrire

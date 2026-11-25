@@ -96,7 +96,22 @@ uv run python -m forge_tests <projet> --json   # rapport machine
 | `--reprendre <rapport.json>` | relit un rapport antérieur et **ne rejoue que ce qui n'était pas vert** ; le rapport produit fusionne l'ancien et le neuf avec la provenance de chaque élément — voir « Audit de qualification avec reprise » |
 | `--livrables <dossier>` | produit les **livrables dérivés** dans ce dossier de dépôt, **hors du projet audité** : deux cahiers de tests, un jeu de données synthétique, un dashboard HTML autonome. Régénérés à chaque audit, `--reprendre` compris. Messages sur stderr — voir « Cahiers de tests dérivés et dashboard d'exécution » |
 | `--copie-output` | avec `--livrables` : dépose aussi une copie du **dashboard daté** dans `<projet>/output/`, la pièce que `ETAPE-MEP.md` § 4 du pilot exige au dossier de MEP (TF-1808). Seul ce fichier entre dans le projet, sous `output/`, que l'audit exclut ; une copie existante de contenu différent est refusée, jamais écrasée |
-| `--precedent <rapport.json>` | rapport antérieur servant de **point de comparaison** : le dashboard affiche alors la tendance de chaque compteur. Sans lui, l'onglet Synthèse le déclare |
+| `--precedent <rapport.json>` | rapport antérieur servant de **point de comparaison** : le dashboard affiche alors la tendance de chaque compteur, et le rapport **date la nouveauté** de chaque constat (voir ci-dessous). Sans lui, l'onglet Synthèse le déclare, et la section `nouveaute` du rapport dit « non mesurée » |
+
+### Nouveauté d'un constat : la règle ou le code (TF-2862)
+
+Un constat bloquant qui apparaît d'une passe à l'autre sans que le fichier ait changé vient de la règle ou de l'outil, pas du code. Le 23/11/2026, chez Produit-12 (RS-56), deux constats `incomplete-sanitization` de semgrep sont apparus sur un fichier inchangé depuis des jours, et le rapport ne le disait pas. Avec `--precedent <rapport.json>` (ou `--reprendre`), chaque constat du rapport JSON porte un champ `nouveaute.origine`, et la section racine `nouveaute` les compte :
+
+| Origine | Sens |
+|---|---|
+| `deja_present` | le constat (même identifiant) figurait au rapport précédent |
+| `nouveau_par_la_regle` | constat neuf, et son fichier n'a pas changé depuis le rapport précédent (dernier commit du fichier, `git log`, antérieur au rapport précédent, aucune modification non commitée) : la règle, l'outil ou sa configuration a changé |
+| `nouveau_par_le_code` | constat neuf, et son fichier a été commité ou modifié depuis le rapport précédent |
+| `non_datable` | localisation qui n'est pas un fichier, fichier non versionné, `git` absent, ou rapport précédent sans date : le motif est dit sur le constat |
+
+La date du rapport précédent est son champ `genere_le` (écrit par chaque rapport depuis TF-2862), à défaut la date de son fichier, et la section le dit. « Nouveau par la règle » est une **inférence** (aucun oracle ne publie la version de sa règle) : la limite est au registre de dette. Le rapport lisible porte une ligne de synthèse et nomme jusqu'à dix constats nouveaux par la règle.
+
+Dans le même retour, le pan `securite` ne classe plus **bloquant** un constat `incomplete-sanitization` dont la ligne est un `replace` dont le résultat part à `parseFloat`, `parseInt` ou `Number` : on y convertit, on n'assainit pas. Le constat reste signalé (identifiant inchangé), son reclassement se dit au `non_juge`, et un `replace` dont le résultat ne part pas à une conversion reste bloquant.
 
 ### Codes de sortie
 

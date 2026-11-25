@@ -94,6 +94,15 @@ NON_JUGE = [
     "le constat est ECARTE et dit au rapport, et le gabarit `.env.forge-tests.exemple` depose "
     "par la forge sort du scan tant qu aucune valeur n y est renseignee. Un secret ecrit SOUS "
     "une cle vide, sur la ligne suivante, reste signale ; un gabarit renseigne reste scanne",
+    # TF-2862 : la regle `incomplete-sanitization` prend pour un assainissement le `replace` dont le
+    # resultat part a une conversion numerique (`parseFloat(x.replace(',', '.'))`).
+    "securite/sast : un constat `incomplete-sanitization` dont la ligne accusee est un `replace` "
+    "converti en nombre (`parseFloat`, `parseInt`, `Number`) est reclasse NON BLOQUANT et reste "
+    "signale. La reconnaissance est de FORME : la conversion enveloppe le `replace`, ou le "
+    "resultat est affecte a une variable que l une des 3 lignes suivantes convertit. Une "
+    "conversion plus lointaine reste bloquante ; en revanche un resultat converti ET employe "
+    "ailleurs (chemin, HTML, requete) dans la fenetre lue n est PAS distingue d une simple "
+    "conversion, et la reconnaissance ne lit que le JavaScript de la ligne accusee",
 ]
 
 # --- TF-0291, le LARSEN du pan securite -------------------------------------------------------
@@ -171,6 +180,114 @@ def _sur_une_affectation_vide(lieu: str, scan: Path) -> bool:
         return False
     suivante = next((ligne for ligne in lignes[rang + 1:] if ligne.strip()), "")
     return _ligne_sans_valeur(suivante)
+
+
+# --- TF-2862 : `incomplete-sanitization` sur un `replace` dont le résultat part à un nombre ---
+# Fait (Produit-12, RS-56, 23/11/2026) : deux constats « bloquants » semgrep
+# `incomplete-sanitization` sur `table-filters.js` l. 126-127, fichier inchangé depuis `6660e50`.
+# La ligne visée est
+# `parseFloat(String(va).replace(',', '.').replace('%', ''))` : le résultat part à `parseFloat` pour
+# trier une colonne. La règle prend un `replace` à chaîne littérale pour un assainissement
+# incomplet (il n'ôte que la première occurrence : lecture de son nom, source de la règle non relue
+# ici) ; ici personne n'assainit, on convertit. Un faux bloquant entraîne à ignorer la classe des
+# bloquants.
+# Le constat reste SIGNALÉ (sévérité `signale`, identifiant inchangé) et se dit au rapport : seul
+# son caractère bloquant tombe. La reconnaissance est CONSERVATRICE, par la forme de la ligne : la
+# conversion enveloppe le `replace` (`parseFloat(x.replace(…))`), ou le résultat est affecté à une
+# variable que l'une des trois lignes suivantes convertit. Au moindre doute, le constat reste
+# bloquant : masquer un vrai assainissement incomplet coûterait plus qu'un faux positif visible.
+_REGLE_ASSAINISSEMENT_INCOMPLET = re.compile(r"\bincomplete-sanitization\b")
+_CONVERSION_NUMERIQUE = re.compile(r"\b(?:parseFloat|parseInt|Number)\s*\(")
+_APPEL_REPLACE = re.compile(r"\.replace\s*\(")
+_AFFECTATION_DE_REPLACE = re.compile(
+    r"(?:\b(?:const|let|var)\s+)?(?P<nom>[A-Za-z_$][\w$]*)\s*=(?!=)\s*[^;=]*\.replace\s*\("
+)
+_LIGNES_AVANT, _LIGNES_APRES = 2, 3
+
+
+def _fichier_du_lieu(fichier: str, scan: Path, application: Path) -> Path | None:
+    """Le fichier qu'un lieu `oracle-sast` désigne : absolu, sous la copie filtrée, ou relocalisé.
+
+    Un chemin RELATIF ne se lit jamais depuis le dossier courant (il désignerait un autre fichier) :
+    il se lit sous la copie filtrée, puis sous l'arbre réel du projet (cf. `_relocaliser`).
+    """
+    brut = Path(fichier)
+    candidats = [brut] if brut.is_absolute() else [scan / fichier]
+    candidats.append(Path(_relocaliser(fichier, scan, application)))
+    for chemin in candidats:
+        try:
+            if chemin.is_absolute() and chemin.is_file():
+                return chemin
+        except OSError:
+            continue
+    return None
+
+
+def _fin_de_parenthese(texte: str, ouvrante: int) -> int:
+    """Rang de la parenthèse qui ferme celle de `ouvrante` ; un littéral ne compte pas. -1 sinon."""
+    profondeur = 0
+    guillemet = ""
+    i = ouvrante
+    while i < len(texte):
+        c = texte[i]
+        if guillemet:
+            if c == "\\":
+                i += 1
+            elif c == guillemet:
+                guillemet = ""
+        elif c in "'\"`":
+            guillemet = c
+        elif c == "(":
+            profondeur += 1
+        elif c == ")":
+            profondeur -= 1
+            if profondeur == 0:
+                return i
+        i += 1
+    return -1
+
+
+def _replace_converti_en_nombre(lignes: list[str], rang: int) -> bool:
+    """La ligne accusée porte-t-elle un `replace` dont le résultat part à `parseFloat`, `parseInt`
+    ou `Number` ? Voir TF-2862 ci-dessus."""
+    ligne = lignes[rang]
+    if not _APPEL_REPLACE.search(ligne):
+        return False
+    debut = max(0, rang - _LIGNES_AVANT)
+    fenetre = lignes[debut:rang + _LIGNES_APRES + 1]
+    texte = "\n".join(fenetre)
+    debut_ligne = sum(len(precedente) + 1 for precedente in fenetre[:rang - debut])
+    fin_ligne = debut_ligne + len(ligne)
+    replaces = [
+        m.start() for m in _APPEL_REPLACE.finditer(texte) if debut_ligne <= m.start() < fin_ligne
+    ]
+    for conversion in _CONVERSION_NUMERIQUE.finditer(texte):
+        ouvrante = conversion.end() - 1
+        fermante = _fin_de_parenthese(texte, ouvrante)
+        if fermante != -1 and any(ouvrante < position < fermante for position in replaces):
+            return True
+    affectation = _AFFECTATION_DE_REPLACE.search(ligne)
+    if affectation is None:
+        return False
+    suite = "\n".join(lignes[rang + 1:rang + 1 + _LIGNES_APRES])
+    nom = re.escape(affectation["nom"])
+    return re.search(rf"\b(?:parseFloat|parseInt|Number)\s*\(\s*{nom}(?![\w$])", suite) is not None
+
+
+def _sur_un_replace_converti(lieu: str, scan: Path, application: Path) -> bool:
+    """Le constat `fichier:ligne` de semgrep tombe-t-il sur un `replace` converti en nombre ?"""
+    trouve = _LIEU_GITLEAKS.match(lieu)
+    if trouve is None:
+        return False
+    chemin = _fichier_du_lieu(trouve["fichier"], scan, application)
+    if chemin is None:
+        return False
+    try:
+        lignes = chemin.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return False
+    rang = int(trouve["ligne"]) - 1
+    return 0 <= rang < len(lignes) and _replace_converti_en_nombre(lignes, rang)
 
 
 def est_la_forge_elle_meme(application: Path) -> bool:
@@ -596,6 +713,7 @@ def analyser(cible: Path) -> SortieAdaptateur:
     # remontees par oracle-sast sont des faux positifs sur ce projet et sont ECARTEES plus bas.
     django_present = _depend_de_django(application, cible)
     ecartes_django: list[str] = []
+    reclasses_conversion: list[str] = []
 
     findings_identite = _findings_identite_assignee(application)
     findings: list[Finding] = list(findings_identite)
@@ -761,13 +879,30 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 else:
                     ou = _relocaliser(str(brut.get("where") or application), scan, application)
                 identifiant = f"securite:{nom}:{ou}"
+                # TF-2862 : un `replace` dont le résultat part à une conversion numérique n'est pas
+                # un assainissement — le constat reste SIGNALÉ, il n'est plus bloquant.
+                convertit = (
+                    nom == "sast"
+                    and _REGLE_ASSAINISSEMENT_INCOMPLET.search(message) is not None
+                    and _sur_un_replace_converti(lieu, scan, application)
+                )
+                if convertit:
+                    reclasses_conversion.append(ou)
                 findings.append(
                     Finding(
                         id=identifiant,
                         classe=classes.SECURITE,
                         localisation=ou,
-                        message=f"[{nom}] {message}",
-                        severite="bloquant" if brut.get("sev") == "bloquant" else "signale",
+                        message=f"[{nom}] {message}" + (
+                            " — non bloquant (TF-2862) : le résultat du `replace` part à une "
+                            "conversion numérique (parseFloat, parseInt, Number), ce n'est pas "
+                            "un assainissement"
+                            if convertit else ""
+                        ),
+                        severite=(
+                            "bloquant" if brut.get("sev") == "bloquant" and not convertit
+                            else "signale"
+                        ),
                         risque=coter(PAN, identifiant, str(application)),
                     )
                 )
@@ -778,6 +913,14 @@ def analyser(cible: Path) -> SortieAdaptateur:
                 "suivante n en porte aucune : gitleaks franchit le saut de ligne et prend la "
                 "cle d apres pour la valeur (TF-2418). Ecartes : "
                 + ", ".join(sorted(ecartes_vides)[:6])
+            )
+        if reclasses_conversion:
+            non_juge.append(
+                f"securite/sast : {len(reclasses_conversion)} constat(s) `incomplete-sanitization` "
+                "classé(s) NON BLOQUANT(S) — la ligne accusée est un `replace` dont le résultat "
+                "part à `parseFloat`, `parseInt` ou `Number` : on convertit, on n'assainit pas "
+                "(TF-2862). Ils restent signalés, identifiant inchangé. Reclassés : "
+                + ", ".join(sorted(set(reclasses_conversion))[:6])
             )
         if ecartes_django:
             non_juge.append(

@@ -1552,6 +1552,18 @@
       "statut": "todo"
     },
     {
+      "id": "nouveaute-001",
+      "domaine": "nouveaute",
+      "enonce": "nouveauté : « nouveau par la règle » est une INFÉRENCE (constat neuf, fichier inchangé depuis le rapport précédent) : aucun oracle ne publie la version de sa règle ni de son outil ; un fichier renommé entre les deux rapports se lit nouveau, et un changement du code voisin (un fichier importé) n'est pas vu",
+      "statut": "todo"
+    },
+    {
+      "id": "nouveaute-002",
+      "domaine": "nouveaute",
+      "enonce": "nouveauté : la date d'un rapport qui ne porte pas `genere_le` est celle de son fichier, que toute copie réécrit ; un rapport précédent sans date ne date aucun constat",
+      "statut": "todo"
+    },
+    {
       "id": "orphelins-002",
       "domaine": "orphelins",
       "enonce": "orphelins : les six accusations mesurees sont le MEME fait dans six locales — « grande piece de vie avec espace repas (12 personnes) ». Ce n est pas un nombre orphelin, c est un DENOMBRABLE HOMONYME : 12 places a table, pas 12 couchages. Le discriminant n est donc ni le nombre ni le nom commun, c est le SUJET que le nom qualifie — et la declaration ne le porte pas. C est ce qui manque pour rendre le controle bloquant",
@@ -1802,6 +1814,12 @@
       "id": "securite-oracles-008",
       "domaine": "securite-oracles",
       "enonce": "securite/secrets : une affectation VIDE (`CLE=`) dont la ligne suivante ne porte aucune valeur (autre affectation vide, commentaire, fin de fichier) n est pas jugee un secret : le constat est ECARTE et dit au rapport, et le gabarit `.env.forge-tests.exemple` depose par la forge sort du scan tant qu aucune valeur n y est renseignee. Un secret ecrit SOUS une cle vide, sur la ligne suivante, reste signale ; un gabarit renseigne reste scanne",
+      "statut": "todo"
+    },
+    {
+      "id": "securite-oracles-009",
+      "domaine": "securite-oracles",
+      "enonce": "securite/sast : un constat `incomplete-sanitization` dont la ligne accusee est un `replace` converti en nombre (`parseFloat`, `parseInt`, `Number`) est reclasse NON BLOQUANT et reste signale. La reconnaissance est de FORME : la conversion enveloppe le `replace`, ou le resultat est affecte a une variable que l une des 3 lignes suivantes convertit. Une conversion plus lointaine reste bloquante ; en revanche un resultat converti ET employe ailleurs (chemin, HTML, requete) dans la fenetre lue n est PAS distingue d une simple conversion, et la reconnaissance ne lit que le JavaScript de la ligne accusee",
       "statut": "todo"
     },
     {
